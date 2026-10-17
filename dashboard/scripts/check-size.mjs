@@ -24,7 +24,6 @@
 // Next's refusal and the fit search): 432.4 KB. 434 KB with its two window steppers on top (the ladder,
 // typed 128k and 1m, the limits named): 433.6 KB. 435 KB with the verify phase on top (SRV-532: the
 // harness's check card, the Checked / Not checked block, the composer's switch): 434.2 KB.
-// 448 KB with the shell hardware rail on top (PR #45; the number is re-measured on this base)
 // 445 KB with the Setup Guide's restart card, finished screen, Retry and diagnostics and its weights list
 // on top (VIS-209, VIS-211, VIS-213, VIS-215, 2026-10-17: 442.5 KB).
 // 456 KB with a main agent's workers (VIS-217, VIS-219, 2026-10-17: 455.1 KB from 442.7): the Task card,
@@ -34,6 +33,9 @@
 // 458 KB with each running worker's live figures (SRV-579, VIS-219, 2026-10-17: 457.3 KB from
 // 455.1): its own Now in the Context panel, a row per worker in the Now dock, the rate on its card,
 // and the mock's two workers at once.
+// 462 KB with the shell hardware rail on top (PR #45: 461.3 KB from 457.3, 2026-10-18,
+// re-measured on the 0.11.4 base:
+// six tiles, four ribbons, their two-line legend)
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -52,7 +54,8 @@ const walk = (d, rel = '') => {
   }
 };
 walk(dist);
-console.log(`${(total / 1024).toFixed(1).padStart(7)} KB  total gzip (budget 458 KB)`);
+console.log(`${(total / 1024).toFixed(1).padStart(7)} KB  total gzip (budget 462 KB)`);
+if (total > 462 * 1024) {
   console.error('over budget');
   process.exit(1);
 }
