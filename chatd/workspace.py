@@ -392,24 +392,38 @@ class Workspace:
         except re.error as exc:
             raise PathError(f"bad pattern: {exc}") from None
         out = []
-        for p in self.walk(start):
-            if include and not fnmatch.fnmatch(os.path.basename(p), include):
+        # `start` may be a FILE — the tool's own contract ("path: file or directory"). A directory
+        # walks; a file is searched alone. Streaming the lines fixes two lies the old bulk-read
+        # told: files past MAX_READ silently returned nothing, and a 200-hit cap on an early file
+        # never reached the one the model was asking about.
+        rel = self.rel(start)
+        try:
+            import stat as _stat
+            single = _stat.S_ISREG(self.dir.stat(rel).st_mode)
+        except PathError:
+            single = False
+        if single:
+            targets = [rel]
+        else:
+            targets = [os.path.relpath(p, self.root) for p in self.walk(start)]
+        for relp in targets:
+            if include and not fnmatch.fnmatch(os.path.basename(relp), include):
                 continue
             try:
-                fh, st = self.dir.open(os.path.relpath(p, self.root))
-                with fh:
-                    if st.st_size > MAX_READ:
-                        continue
-                    data = fh.read(MAX_READ + 1)
+                fh, _st = self.dir.open(relp)
             except (PathError, OSError):
                 continue
-            if b"\0" in data[:4096]:
-                continue
-            for n, line in enumerate(data.decode("utf-8", "replace").splitlines(), 1):
-                if rx.search(line):
-                    out.append(f"{self.show(p)}:{n}: {line[:300]}")
-                    if len(out) >= limit:
-                        return out
+            with fh:
+                head = fh.read(4096)
+                if b"\0" in head:
+                    continue                      # binary
+                fh.seek(0)
+                for n, raw in enumerate(fh, 1):   # streamed: no MAX_READ cliff
+                    line = raw.decode("utf-8", "replace").rstrip("\r\n")
+                    if rx.search(line):
+                        out.append(f"{self.dir.show(relp)}:{n}: {line[:300]}")
+                        if len(out) >= limit:
+                            return out
         return out
 
 
