@@ -3,7 +3,8 @@
 // the Chat tab's own pane, for the chat its bar names (the last one opened on this device, until
 // another is picked): the sandbox is the one shell and file tree a box offers today. Terminal and
 // Files may name a Spark instead; that path runs through the Spark's TandemNode agent (SRV-725),
-// which nothing reaches yet, so the window says so and keeps the Spark in its ref for when it does.
+// which has no shell or file channel yet, so the window says so and keeps the Spark in its ref for
+// when it does.
 // On Chat itself these kinds are the open chat's own panes (chat/view.ts); here they are windows
 // of the page.
 
@@ -137,7 +138,7 @@ export class QseWinSandbox extends WindowBody {
       return html`<div class="wm-pane">
         <div class="wm-bar">${this.targetSelect()}<span class="muted small">through its TandemNode agent</span></div>
         <div class="wm-notice" data-unreachable=${node}>
-          <p>${icon('info')} <span>${what} come${kind === 'terminal' ? 's' : ''} through its TandemNode agent (SRV-725), which TandemApp does not reach yet. The window keeps ${alias} for when it does.</span></p>
+          <p>${icon('info')} <span>${what} come${kind === 'terminal' ? 's' : ''} through its TandemNode agent, which has no shell or file channel yet. The window keeps ${alias} for when it does.</span></p>
           <p class="muted small">The chat sandbox has a ${kind === 'terminal' ? 'shell' : 'file tree'} on this box today.</p>
           <button type="button" class="btn btn-sm" @click=${() => this.setRef({ node: 'sandbox' })}>${icon(kind === 'terminal' ? 'terminal' : 'folder')} Use the chat sandbox</button>
         </div>

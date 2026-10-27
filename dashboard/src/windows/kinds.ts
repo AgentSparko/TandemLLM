@@ -4,9 +4,9 @@
 // the first time a window of it shows (`load`), so a page carries only the kinds it has open.
 //
 // What a kind reaches today: Logs, Chart and the Node inspector read TandemApp's controller (the fleet
-// API); Terminal and Files on a Spark go through its TandemNode agent (SRV-725), which nothing reaches
-// yet, so they say so and offer the chat sandbox, the one shell and file tree a box has today; the file
-// and code kinds show a chat's sandbox; Chat and Playground talk to the one API.
+// API); Terminal and Files on a Spark go through its TandemNode agent (SRV-725), which has no shell
+// or file channel yet, so they say so and offer the chat sandbox, the one shell and file tree a box
+// has today; the file and code kinds show a chat's sandbox; Chat and Playground talk to the one API.
 
 import type { WindowKind } from '../api/fleet';
 import type { Ref } from '../lib/wm';

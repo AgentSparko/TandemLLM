@@ -117,7 +117,7 @@ describe('a sandbox window', () => {
   });
   it('a Terminal or Files on a Spark names it and keeps it, and offers the chat sandbox; no shell is faked', () => {
     const s = src('windows/sandbox.ts');
-    expect(s).toContain('through its TandemNode agent (SRV-725), which TandemApp does not reach yet');
+    expect(s).toContain('through its TandemNode agent, which has no shell or file channel yet');
     expect(s).toContain('Use the chat sandbox');
     expect(s).toMatch(/data-unreachable=\$\{node\}/);
     expect(s).not.toMatch(/nvidia-smi|termExec/);
