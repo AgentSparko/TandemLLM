@@ -5,7 +5,7 @@ agent later (SRV-725).
     local.identity()                 {id, alias, hw, dmi, serial, address}: what the machine says
     local.sync(backends)             the engine backends on this machine, one EngineProbe each
     local.is_node()                  a box with an NVIDIA GPU or an engine of its own
-    local.sample(now)                {"node": {metric: value | None}, "backends": {id: {...}}}
+    local.sample(now, watched)       {"node": {metric: value | None}, "backends": {id: [points]}}
     local.inventory()                the contract's inventory block, read again every 10 minutes
     local.memory()                   the unified memory split in GiB, or None
     local.logs(level, q, limit)      this box's log lines (tandem-app's, its engines'), oldest first
@@ -23,15 +23,17 @@ ConnectX ports' own counters (an interface under /sys/class/net whose driver is 
 A figure no source gives is None, never 0.
 
 ENGINES. Each engine backend on this machine (`tandemllm`, `vllm`, `sglang`, `generic`) gets an
-`EngineProbe`, read every sample. A TandemLLM engine: its live snapshot
-(`/v1/dashboard/live?follow=0`, the Performance view's source, a millisecond to answer): decode
-tok/s from the rise of its token count between two of its one-a-second samples, requests in
-flight, TTFT p50 of the requests that ended since the last read. Not its /metrics page: its
-generation counter rises only when a request ends, and the page takes half a second to render.
-vLLM and SGLang: their /metrics pages through proxy/engines.py's tables. Besides, a TandemLLM
-engine's model cards every 30 s (the models it serves itself, apart from those it relays to a
-cloud), its `/v1/dashboard/system` memory split every 10 s and its log on demand. The engine
-trusts a request from loopback without proxy headers (server/auth.py), where these come from.
+`EngineProbe`. A TandemLLM engine: its live snapshot (`/v1/dashboard/live?follow=0`, the
+Performance view's source, a millisecond to answer), whose history holds its last 300
+one-a-second samples: decode tok/s from the rise of the token count between two samples, requests
+running and waiting, each request's TTFT at its end. Read every 2 s while a dashboard reads the
+fleet, every 30 s otherwise (each read is a line in a verbose engine's log); the first read brings
+the last five minutes. Not its /metrics page: its generation counter rises only when a request
+ends, and the page takes half a second to render. vLLM and SGLang: their /metrics pages at each
+sample, through proxy/engines.py's tables. Besides, a TandemLLM engine's model cards every 30 s
+(the models it serves itself, apart from those it relays to a cloud), its `/v1/dashboard/system`
+memory split every 10 s and its log on demand. The engine trusts a request from loopback without
+proxy headers (server/auth.py), where these come from.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ from __future__ import annotations
 import datetime as _dt
 import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -56,6 +59,7 @@ ENGINE_KINDS = ("tandemllm", "vllm", "sglang", "generic")
 INVENTORY_EVERY_S = 600.0
 CARDS_EVERY_S = 30.0
 SYSTEM_EVERY_S = 10.0
+IDLE_EVERY_S = 30.0
 TIMEOUT_S = 2.0
 
 # the parts of the engine's memory split (server/dashboard_api.py) under the contract's names
@@ -102,7 +106,9 @@ class EngineProbe:
         self.root = engines.root_of(backend["url"])
         self.fetch, self.key = fetch, key
         self._lock = threading.Lock()
-        self._prev: tuple | None = None
+        self._last: tuple | None = None          # the newest sample read: (t, tokens or page)
+        self._seen: float | None = None          # when the last live snapshot was taken
+        self._idle_due = -math.inf
         self.version: str | None = None
         self._cards: list[dict] | None = None
         self._cards_at = -CARDS_EVERY_S
@@ -113,11 +119,22 @@ class EngineProbe:
         status, body = self.fetch(self.root + path, self.key, TIMEOUT_S)
         return body if status == 200 else None
 
-    def sample(self, now: float) -> dict:
-        """{tps, req, ttft}: decode tok/s and TTFT p50 (ms) since the previous sample, requests
-        in flight now; None for each the engine cannot give."""
+    def points(self, now: float, watched: bool = True) -> list[tuple[float, dict]]:
+        """[(t, {tps, req, ttft})]: the engine's figures since the last read, each at its own
+        time (None where it gives none). A TandemLLM engine: its one-a-second samples, read at
+        every call while a dashboard reads the fleet and every 30 s otherwise (its history holds
+        the last 300, so nothing is missed, and its log gets a line per read, not per second);
+        the first read brings its last five minutes. vLLM, SGLang: their /metrics now."""
         if self.kind == "tandemllm":
-            return self._sample_live()
+            with self._lock:
+                if not watched and now < self._idle_due:
+                    return []
+                self._idle_due = now + IDLE_EVERY_S
+            return self._live_points(now)
+        p = self._metrics_point(now)
+        return [(now, p)] if any(v is not None for v in p.values()) else []
+
+    def _metrics_point(self, now: float) -> dict:
         out = {"tps": None, "req": None, "ttft": None}
         if self.kind not in engines.TABLES:
             return out
@@ -127,11 +144,11 @@ class EngineProbe:
             body = None
         with self._lock:
             if body is None:
-                self._prev = None
+                self._last = None
                 return out
             page = engines.map_page(self.kind, body.decode("utf-8", "replace"))
             out["req"] = engines.value(page, "requests_running")
-            prev, self._prev = self._prev, (now, page)
+            prev, self._last = self._last, (now, page)
         if prev is not None and now > prev[0]:
             a = engines.value(prev[1], "generation_tokens_total")
             b = engines.value(page, "generation_tokens_total")
@@ -144,8 +161,7 @@ class EngineProbe:
                 out["ttft"] = None if q is None else round(q * 1000.0, 1)
         return out
 
-    def _sample_live(self) -> dict:
-        out = {"tps": None, "req": None, "ttft": None}
+    def _live_points(self, now: float) -> list[tuple[float, dict]]:
         try:
             body = self._get("/v1/dashboard/live?follow=0")
             doc = json.loads(body) if body is not None else None
@@ -153,29 +169,35 @@ class EngineProbe:
             doc = None
         with self._lock:
             if not isinstance(doc, dict):
-                self._prev = None
-                return out
+                self._last = None
+                return []
             self.version = (doc.get("engine") or {}).get("version") or self.version
-            s = doc.get("sample") or {}
-            t, n = _num(s.get("t")), _num(s.get("tokens"))
-            out["req"] = _num((doc.get("counts") or {}).get("in_flight"))
-            at = _epoch(doc.get("generated_at"))
-            prev, self._prev = self._prev, (t, n, at)
-        if prev is None or None in (t, n, prev[0], prev[1]):
-            return out
-        if t > prev[0] and n >= prev[1]:                 # a restart starts the count again
-            out["tps"] = round((n - prev[1]) / (t - prev[0]), 3)
-        elif t == prev[0] and not out["req"]:
-            out["tps"] = 0.0                             # its sampler rests while nothing runs
-        if at is not None and prev[2] is not None:
-            ttfts = sorted(r["ttft_ms"] for r in doc.get("recent") or []
-                           if isinstance(r, dict) and _num(r.get("ttft_ms")) is not None
-                           and _num(r.get("ended_ms_ago")) is not None
-                           and at - r["ended_ms_ago"] / 1000.0 > prev[2])
-            if ttfts:
-                mid = len(ttfts) // 2
-                out["ttft"] = round(ttfts[mid] if len(ttfts) % 2 else
-                                    (ttfts[mid - 1] + ttfts[mid]) / 2, 1)
+            at = _epoch(doc.get("generated_at")) or now
+            rows = [x for x in (doc.get("history") or []) + [doc.get("sample")]
+                    if isinstance(x, dict) and _num(x.get("t")) is not None
+                    and _num(x.get("tokens")) is not None]
+            last, seen = self._last, self._seen
+            out = []
+            for x in sorted({x["t"]: x for x in rows}.values(), key=lambda x: x["t"]):
+                t, n = x["t"], x["tokens"]
+                if last is not None and t <= last[0]:
+                    continue
+                tps = round((n - last[1]) / (t - last[0]), 3) if last is not None and \
+                    n >= last[1] else None                       # a restart counts from 0 again
+                out.append((t, {"tps": tps, "req": (_num(x.get("running")) or 0)
+                                + (_num(x.get("waiting")) or 0), "ttft": None}))
+                last = (t, n)
+            if not out and last is not None and \
+                    not _num((doc.get("counts") or {}).get("in_flight")):
+                out.append((at, {"tps": 0.0, "req": 0.0, "ttft": None}))   # its sampler rests
+            for r in doc.get("recent") or []:
+                if not isinstance(r, dict) or _num(r.get("ttft_ms")) is None or \
+                        _num(r.get("ended_ms_ago")) is None:
+                    continue
+                end = at - r["ended_ms_ago"] / 1000.0
+                if seen is None or end > seen:
+                    out.append((end, {"tps": None, "req": None, "ttft": float(r["ttft_ms"])}))
+            self._last, self._seen = last, at
         return out
 
     def cards(self, now: float) -> list[dict] | None:
@@ -376,7 +398,9 @@ class LocalNode:
         return self.version_of() or ""
 
     # ------------------------------------------------------------------ figures
-    def sample(self, now: float) -> dict:
+    def sample(self, now: float, watched: bool = True) -> dict:
+        """{"node": the hardware figures now, "backends": {id: [(t, {tps, req, ttft})]}}; the
+        node's decode rate, requests and TTFT are its engines' (the fleet adds them up)."""
         h = self.host() or {}
         gpus = [g for g in h.get("gpus") or [] if isinstance(g, dict)]
 
@@ -409,13 +433,7 @@ class LocalNode:
             "fabric": self._fabric_rate(now, fabric_if),
             "rtt": None,                     # the controller runs here: no link to time
         }
-        per = {p.id: p.sample(now) for p in self.engines()}
-        for k in ("tps", "req"):
-            vals = [v[k] for v in per.values() if v[k] is not None]
-            node[k] = round(sum(vals), 3) if vals else None
-        ttfts = [v["ttft"] for v in per.values() if v["ttft"] is not None]
-        node["ttft"] = round(sum(ttfts) / len(ttfts), 1) if ttfts else None
-        return {"node": node, "backends": per}
+        return {"node": node, "backends": {p.id: p.points(now, watched) for p in self.engines()}}
 
     def fabric_ports(self) -> dict:
         """{interface: up} of the ConnectX ports (driver mlx5_core)."""
@@ -585,7 +603,7 @@ class Unreachable:
     def status(self) -> tuple[str, str]:
         return "off", self.why
 
-    def sample(self, now: float) -> dict:
+    def sample(self, now: float, watched: bool = True) -> dict:
         return {"node": {}, "backends": {}}
 
     def memory(self, now: float) -> None:

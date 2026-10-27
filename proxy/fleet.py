@@ -31,10 +31,12 @@ other is a remote node, `off` until its agent (SRV-725) and pairing (SEC-4) give
 THE DEPLOYMENTS. Each model an engine backend on a node serves itself is a Single deployment on that
 node; its id is the model's public id at this gateway, its status the backend's health.
 
-METRICS. The sampler keeps each figure of each node, and decode tok/s, requests and TTFT per engine
-backend for a deployment's scope, in memory (`Ring`: 2 s slots for 10 minutes, 30 s slots for 7
-days). An answer's sample i is the mean of the samples in (t_i - step, t_i]; with none it is null.
-History starts with the process: before it, and while a node gave nothing, the answer says null.
+METRICS. The sampler keeps each hardware figure of each node, and decode tok/s, requests and TTFT
+per engine backend, in memory (`Ring`: 2 s slots for 10 minutes, 30 s slots for 7 days). A node's
+tok/s and requests are the sum of its engines', its TTFT their mean; a deployment's are its
+engine's. An answer's sample i is the mean of the samples in (t_i - step, t_i]; with none it is
+null. History starts with the process (a TandemLLM engine's own five minutes before it): earlier,
+and while a node gave nothing, the answer says null.
 """
 
 from __future__ import annotations
@@ -53,6 +55,8 @@ from proxy import nodesource
 
 CONTRACT = "1.0"
 SAMPLE_S = 2.0
+# a dashboard read the fleet this recently: the engines are read at every sample
+WATCHED_S = 60.0
 # fleet-v1's metric keys: unit and how nodes combine (the page aggregates, never the controller)
 METRICS = {"tps": ("tok/s", "sum"), "req": ("req", "sum"), "ttft": ("ms", "mean"),
            "gpu": ("%", "mean"), "power": ("W", "sum"), "temp": ("°C", "maxmean"),
@@ -229,6 +233,7 @@ class Fleet:
         self._lock = threading.Lock()
         self._reg = threading.Lock()            # one registration, whichever thread asks first
         self._local_id: str | None = None
+        self._read_at = -math.inf               # the last /v1/fleet request
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -261,16 +266,17 @@ class Fleet:
         lid = self.ensure_local()
         if lid is None:
             return
-        got = self.local.sample(now)
+        got = self.local.sample(now, watched=now - self._read_at < WATCHED_S)
         self.local.inventory()                   # read here, so a request finds it ready
         with self._lock:
             for k, v in got["node"].items():
                 if v is not None:
                     self._ring(("node", lid, k)).add(now, v)
-            for bid, vals in got["backends"].items():
-                for k, v in vals.items():
-                    if v is not None:
-                        self._ring(("backend", bid, k)).add(now, v)
+            for bid, points in got["backends"].items():
+                for t, vals in points:
+                    for k, v in vals.items():
+                        if v is not None:
+                            self._ring(("backend", bid, k)).add(t, v)
 
     def _ring(self, key: tuple) -> Ring:
         r = self.rings.get(key)
@@ -493,32 +499,41 @@ class Fleet:
         kind, _, sid = source.partition(":")
         if source != "all" and (kind not in ("node", "deployment") or not sid):
             raise FleetError(400, f'source is all, node:<id> or deployment:<id>, not "{source}"')
-        self.ensure_local()
+        lid = self.ensure_local()
         ids = [n["id"] for n in self.cfg.nodes()]
+        engine = metric in DEPLOYMENT_METRICS
+
+        def of(node):                            # the rings of a node's figure
+            if not engine:
+                return [("node", node, metric)]
+            bids = [p.id for p in self.local.engines()] if node == lid else []
+            return [("backend", b, metric) for b in bids]
         if kind == "node":
             if sid not in ids:
                 raise FleetError(404, f"no node {sid}")
-            keys = [(sid, ("node", sid, metric))]
+            keys = [(sid, of(sid))]
         elif kind == "deployment":
             deps = self._deployment_backends()
             if sid not in deps:
                 raise FleetError(404, f"no deployment {sid}")
             bid, member = deps[sid]
-            keys = [(member, ("backend", bid, metric) if metric in DEPLOYMENT_METRICS
-                     else ("node", member, metric))]
+            keys = [(member, [("backend", bid, metric)] if engine else of(member))]
         else:
-            keys = [(i, ("node", i, metric)) for i in ids]
+            keys = [(i, of(i)) for i in ids]
         step, t0, count = window(rng, now)
         res = 2 if step < 30 else 30
         per = int(round(step / res))
         series = []
         with self._lock:
-            for node, key in keys:
-                r = self.rings.get(key)
+            for node, rkeys in keys:
+                rings = [self.rings[k] for k in rkeys if k in self.rings]
                 vals = []
                 for i in range(count):
                     k_hi = int(round((t0 + i * step) / res))
-                    v = r.mean(res, k_hi - per + 1, k_hi) if r is not None else None
+                    got = [v for v in (r.mean(res, k_hi - per + 1, k_hi) for r in rings)
+                           if v is not None]
+                    v = None if not got else (sum(got) / len(got) if metric == "ttft"
+                                              else sum(got))
                     vals.append(None if v is None else round(v, 3))
                 series.append({"node": node, "values": vals})
         cap = self.local.usable() if metric == "mem" and self._local_id else None
@@ -564,7 +579,7 @@ class Fleet:
     def handle(self, method: str, path: str, q: dict, body, who: str = "gui") -> tuple[int, dict]:
         """One /v1/fleet request, after the caller's guard: (status, body)."""
         parts = [unquote(p) for p in path[len("/v1/fleet"):].split("/") if p]
-        now = self.clock()
+        now = self._read_at = self.clock()
         try:
             return 200, self._route(method, parts, q, body, who, now)
         except FleetError as exc:

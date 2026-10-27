@@ -153,7 +153,7 @@ On one box the fleet has one node: the machine `tandem-app` runs on, when it has
 | `PATCH nodes/{id}` | `{alias?, colour?, icon?, tags?}`; an alias or colour another node has is refused |
 | `GET deployments` | each model an engine on the node serves itself, `single`, status from the backend's health |
 | `GET links`, `GET topology` | the LAN of the default route; the internet when a cloud backend exists |
-| `GET metrics?source=&metric=&range=` | decode tok/s, requests and TTFT from each engine (a TandemLLM engine's live snapshot, a vLLM's or SGLang's `/metrics`), the hardware from the host collector; sampled every 2 s into memory (10 min at 2 s, 7 days at 30 s); null where no sample exists, history starts with the process |
+| `GET metrics?source=&metric=&range=` | decode tok/s, requests and TTFT from each engine (a TandemLLM engine's live snapshot, a vLLM's or SGLang's `/metrics`), the hardware from the host collector. Kept in memory (10 min at 2 s, 7 days at 30 s); the hardware sampled every 2 s, a TandemLLM engine's own one-second samples read every 2 s while a dashboard reads the fleet and every 30 s otherwise (the first read brings its last five minutes); null where no sample exists |
 | `GET memory` | the engine's split (weights, KV, caches), the rest of the machine's use, the page cache, GiB |
 | `GET logs?node=&level=&q=&limit=` | `tandem-app`'s own log (`gateway`) and its TandemLLM engines' (`engine`), merged by time |
 | `GET`/`PUT layouts/{page}?device=` | a page's window layout per device class in the config database; `saved_at` is the controller's clock, the last write wins |
