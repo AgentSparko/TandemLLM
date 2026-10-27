@@ -182,7 +182,7 @@ def test_check_secrets_and_backends_commands():
     try:
         db = os.path.join(d, "conf", "config.sqlite3")
         base = {"HOME": d, "PATH": os.environ.get("PATH", "")}
-        envf = os.path.join(d, "dash.env")
+        envf = os.path.join(d, "app.env")
         with open(envf, "w") as f:
             f.write("TANDEM_BACKENDS=ds,v1\nTANDEM_BACKEND_DS_KIND=deepseek\n"
                     "TANDEM_BACKEND_DS_KEY=sk-fixture-CLI-0001\n"

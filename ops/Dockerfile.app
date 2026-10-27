@@ -1,8 +1,8 @@
-# The dashboard and the OpenAI-compatible proxy as an image: no engine, no GPU, no torch.
+# TandemApp, the dashboard and the OpenAI-compatible proxy, as an image: no engine, no GPU, no torch.
 #
-#   docker build -f ops/Dockerfile.dash -t tandemllm-dash .        (from the repository's root)
-#   docker run -d --name tandem-dash -p 127.0.0.1:8080:8080 -v tandem-dash:/data \
-#       --env-file ops/dash.env tandemllm-dash
+#   docker build -f ops/Dockerfile.app -t tandemllm-app .          (from the repository's root)
+#   docker run -d --name tandem-app -p 127.0.0.1:8080:8080 -v tandem-app:/data \
+#       --env-file ops/app.env tandemllm-app
 #
 # Everything the proxy keeps (the config database, the usage ledger, the key file when no
 # TANDEM_SECRETS_KEY is given) lives in the /data volume. The server binds 0.0.0.0 inside the
@@ -12,7 +12,7 @@
 #
 # The System view's host collector sees the container, not the machine. For the machine and the
 # processes behind backends on it, run the container with `--pid=host` (and `--gpus all` for
-# NVML), or run `tandem-dash hostcollect` on that machine and point the backend's host at it.
+# NVML), or run `tandem-app hostcollect` on that machine and point the backend's host at it.
 
 FROM python:3.12-slim AS build
 WORKDIR /src
@@ -41,5 +41,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/health', timeout=4)"
 STOPSIGNAL SIGTERM
-ENTRYPOINT ["tandem-dash"]
+ENTRYPOINT ["tandem-app"]
 CMD ["serve", "--no-keychain"]

@@ -1,6 +1,6 @@
 #!/bin/bash
 # The installable package, checked as a stranger would use it: build the wheel, install it into a
-# clean venv with no torch, run `tandem-dash check`, start `tandem-dash serve` from an env file
+# clean venv with no torch, run `tandem-app check`, start `tandem-app serve` from an env file
 # with a fake backend, and read /v1/models, the page and the System body.
 #
 #   bash tools/package_check.sh [--extras host] [--out DIR]
@@ -60,21 +60,27 @@ echo "PASS install without torch ($(wc -l < "$OUT/pip-freeze.txt") packages)" | 
 FPORT=$((19100 + $$ % 400)); PORT=$((19600 + $$ % 300))
 $PY "$REPO/tests/fake_backend.py" --port $FPORT --models fake-a >"$OUT/fake.log" 2>&1 &
 FAKE=$!
-cat > "$T/dash.env" <<EOF
+cat > "$T/app.env" <<EOF
 TANDEM_BACKENDS=fake
 TANDEM_BACKEND_FAKE_KIND=generic
 TANDEM_BACKEND_FAKE_URL=http://127.0.0.1:$FPORT/v1
 TANDEM_SECRETS_KEY=a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=
 EOF
 cd "$T"                                     # nowhere near the checkout: the wheel alone
-DASH="$T/venv/bin/tandem-dash"
-"$DASH" version | tee -a "$OUT/summary.txt"
-"$DASH" check --env-file "$T/dash.env" --config-db "$T/data/config.sqlite3" >"$OUT/check.log" 2>&1 \
-  || fail "tandem-dash check (check.log)"
+APP="$T/venv/bin/tandem-app"
+"$APP" version | tee -a "$OUT/summary.txt"
+OLD="$T/venv/bin/tandem-dash"               # the old name (OPS-238): one line on stderr, the same answer
+"$OLD" version 2>"$OUT/alias.err" | cmp -s - <("$APP" version) \
+  || fail "the old name answered differently"
+[ "$(wc -l < "$OUT/alias.err")" -eq 1 ] && grep -q "is now tandem-app" "$OUT/alias.err" \
+  || fail "the old name did not say its new one (alias.err)"
+echo "PASS the old name" | tee -a "$OUT/summary.txt"
+"$APP" check --env-file "$T/app.env" --config-db "$T/data/config.sqlite3" >"$OUT/check.log" 2>&1 \
+  || fail "tandem-app check (check.log)"
 grep -q "^page .*proxy/dashboard$" "$OUT/check.log" || fail "check did not find the packaged page"
 [ -e "$T/data/config.sqlite3" ] && fail "check wrote the config database"
 echo "PASS check" | tee -a "$OUT/summary.txt"
-QSE_TEST=1 "$DASH" serve --env-file "$T/dash.env" --config-db "$T/data/config.sqlite3" \
+QSE_TEST=1 "$APP" serve --env-file "$T/app.env" --config-db "$T/data/config.sqlite3" \
   --usage-ledger "$T/data/ledger.sqlite3" --port $PORT --no-keychain >"$OUT/serve.log" 2>&1 &
 SRV=$!
 "$T/venv/bin/python" - "$PORT" "$OUT" <<'EOF' || fail "serve (serve.log, $OUT/serve-check.log)"

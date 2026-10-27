@@ -26,8 +26,8 @@
 #                its own CPU cost
 #   P1.5 + P5    tests/test_hostcollect.py and tests/test_package.py with the unit steps, and
 #                tools/package_check.sh: the wheel built and installed into a clean venv without
-#                torch, `tandem-dash check` and `serve` against a fake backend (needs pip's
-#                network); the docker image builds in CI only (ops/Dockerfile.dash)
+#                torch, `tandem-app check` and `serve` against a fake backend (needs pip's
+#                network); the docker image builds in CI only (ops/Dockerfile.app)
 #   P6           tests/test_proxy_plugins.py (the vLLM and SGLang plugins against stand-ins shaped
 #                as v0.30.0 and v0.5.21 define their stats and hooks) and tests/test_proxy_collect.py
 #                (the collect route, the join, the launcher) with the unit steps; with --box
