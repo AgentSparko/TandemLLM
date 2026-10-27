@@ -1,5 +1,5 @@
 """Where a fleet node's figures come from (SRV-723): this machine, read in-process; a TandemNode
-agent later (SRV-725).
+agent (SRV-725).
 
     local = LocalNode(hosts=fn, draining=fn, version=fn)
     local.identity()                 {id, alias, hw, dmi, serial, address}: what the machine says
@@ -11,9 +11,10 @@ agent later (SRV-725).
     local.logs(level, q, limit)      this box's log lines (tandem-app's, its engines'), oldest first
     local.status()                   (status, status text)
 
-`Unreachable` stands for a node with no source yet (a remote Spark before its agent): status
-`off`, no figure. The fleet (proxy/fleet.py) reads a node only through these methods, so the
-agent's client (SRV-725, over the pinned mTLS of SEC-4) is one more class beside these two.
+`AgentNode` is a node read through its TandemNode agent (proxy/nodeagent.py) with the same
+methods: its one-second stream feeds the fleet's rings, sample by sample at each sample's time.
+`Unreachable` stands for a node with no source yet: status `off`, no figure. The fleet
+(proxy/fleet.py) reads a node only through these methods.
 
 THIS MACHINE. The id is a hash of the DMI serial (/etc/dgx-release, or /sys/class/dmi when it is
 readable), else of /etc/machine-id, else of the macOS platform UUID: the same across restarts, an
@@ -100,8 +101,10 @@ def _fetch(url: str, key: str | None = None, timeout: float = TIMEOUT_S) -> tupl
 class EngineProbe:
     """One engine backend on this machine. Thread safe (one lock)."""
 
-    def __init__(self, backend: dict, *, fetch=_fetch, key=None):
+    def __init__(self, backend: dict, *, fetch=_fetch, key=None,
+                 system_every: float = SYSTEM_EVERY_S):
         self.backend = backend
+        self.system_every = system_every
         self.id, self.kind = backend["id"], backend["kind"]
         self.root = engines.root_of(backend["url"])
         self.fetch, self.key = fetch, key
@@ -113,7 +116,7 @@ class EngineProbe:
         self._cards: list[dict] | None = None
         self._cards_at = -CARDS_EVERY_S
         self._system: dict | None = None
-        self._system_at = -SYSTEM_EVERY_S
+        self._system_at = -math.inf
 
     def _get(self, path: str):
         status, body = self.fetch(self.root + path, self.key, TIMEOUT_S)
@@ -232,11 +235,12 @@ class EngineProbe:
         return out
 
     def system(self, now: float) -> dict | None:
-        """A TandemLLM engine's `/v1/dashboard/system` memory block and limits, every 10 s."""
+        """A TandemLLM engine's `/v1/dashboard/system` memory block and limits, every 10 s (the
+        engine takes 0.1 to 0.6 s to answer it; an always-on reader asks less often)."""
         if self.kind != "tandemllm":
             return None
         with self._lock:
-            if now - self._system_at < SYSTEM_EVERY_S:
+            if now - self._system_at < self.system_every:
                 return self._system
             self._system_at = now
         try:
@@ -274,7 +278,7 @@ class LocalNode:
 
     def __init__(self, *, hosts, draining=lambda: False, version=lambda: "", logbuf=None,
                  fetch=_fetch, key=lambda bid: None, root: str = "/", run=None,
-                 address=None, clock=time.time):
+                 address=None, clock=time.time, system_every: float = SYSTEM_EVERY_S):
         self.hosts = hosts                   # () -> this machine's hostcollect entry, or None
         self.draining, self.version_of = draining, version
         self.logbuf = logbuf
@@ -283,6 +287,7 @@ class LocalNode:
         self.run = run or _run
         self._address = address
         self.clock = clock
+        self.system_every = system_every
         self.probes: dict[str, EngineProbe] = {}
         self._lock = threading.Lock()
         self._ident: dict | None = None
@@ -361,7 +366,7 @@ class LocalNode:
                         key = self.key(b["id"])
                     except Exception:                                # noqa: BLE001
                         key = None
-                    p = EngineProbe(b, fetch=self.fetch, key=key)
+                    p = EngineProbe(b, fetch=self.fetch, key=key, system_every=self.system_every)
                 keep[b["id"]] = p
             self.probes = keep
 
@@ -401,7 +406,12 @@ class LocalNode:
     def sample(self, now: float, watched: bool = True) -> dict:
         """{"node": the hardware figures now, "backends": {id: [(t, {tps, req, ttft})]}}; the
         node's decode rate, requests and TTFT are its engines' (the fleet adds them up)."""
-        h = self.host() or {}
+        return {"node": self.figures(now, self.host() or {}),
+                "backends": {p.id: p.points(now, watched) for p in self.engines()}}
+
+    def figures(self, now: float, h: dict) -> dict:
+        """The fleet's hardware keys from one host collector entry (TandemNode's stream carries
+        the same, proxy/nodemetrics.py)."""
         gpus = [g for g in h.get("gpus") or [] if isinstance(g, dict)]
 
         def col(k, scale=1.0):
@@ -418,7 +428,7 @@ class LocalNode:
                 and (r.get("rx_bps") is not None or r.get("tx_bps") is not None)]
         used = _num(mem.get("used_bytes"))
         util = _num(cpu.get("utilization"))
-        node = {
+        return {
             "gpu": mean(col("utilization", 100.0)),
             "power": round(sum(col("power_w")), 2) if col("power_w") else None,
             "temp": max(col("temperature_c")) if col("temperature_c") else None,
@@ -433,7 +443,6 @@ class LocalNode:
             "fabric": self._fabric_rate(now, fabric_if),
             "rtt": None,                     # the controller runs here: no link to time
         }
-        return {"node": node, "backends": {p.id: p.points(now, watched) for p in self.engines()}}
 
     def fabric_ports(self) -> dict:
         """{interface: up} of the ConnectX ports (driver mlx5_core)."""
@@ -541,11 +550,11 @@ class LocalNode:
                      .get("total_bytes"))
         return None if total is None else round(total / GIB, 2)
 
-    def memory(self, now: float) -> dict | None:
+    def memory(self, now: float, h: dict | None = None) -> dict | None:
         """{weights, kv, cache, other, page, ceiling, usable} in GiB: the engines' own split
         (TandemLLM's `/v1/dashboard/system`), the rest of what the machine uses as `other`, the
-        page cache apart; None without a memory reading."""
-        h = self.host() or {}
+        page cache apart; None without a memory reading. `h`: a host entry already read."""
+        h = h if h is not None else (self.host() or {})
         mem = h.get("memory") or {}
         total, used = _num(mem.get("total_bytes")), _num(mem.get("used_bytes"))
         if total is None or used is None:
@@ -591,9 +600,303 @@ class LocalNode:
         return out[-limit:]
 
 
+# ====================================================================== a node's agent
+
+FLEET_KEYS = ("gpu", "power", "temp", "sm", "memclk", "mem", "cpu", "disk", "lan", "fabric")
+IDENTITY_EVERY_S = 60.0
+ENGINES_EVERY_S = 30.0
+STALE_S = 5.0
+
+
+class AgentNode:
+    """A node read through its TandemNode agent (SRV-725), at `url` with a client (proxy/
+    nodeclient.py: the loopback secret, or the pinned mTLS of pairing).
+
+    The metrics stream is opened at the first sample and kept open (reconnecting after 2 s, up to
+    30 s between tries); every sample it brings goes into the fleet's rings at its own second. The
+    identity is read every minute (its round trip is the node's `rtt`), the inventory every ten,
+    the agent's engine list every 30 s. Each engine backend on the node is read through the
+    agent's relay of the engine's own routes (`/node/engines/{id}/...`), so the controller needs no
+    route to the engine's port; a backend whose port the agent does not list is read directly."""
+
+    def __init__(self, url: str, *, client=None, secret=None, ssl_context=None, clock=time.time,
+                 draining=lambda: False, logbuf=None, reconnect_s: float = 2.0):
+        from proxy import nodeclient
+        self.endpoint = url
+        self.client = client or nodeclient.Client(url, secret=secret, ssl_context=ssl_context)
+        self.clock, self.draining, self.logbuf = clock, draining, logbuf
+        self.reconnect_s = reconnect_s
+        self.probes: dict[str, EngineProbe] = {}
+        self._lock = threading.Lock()
+        self._buf: list = []
+        self._latest: dict | None = None
+        self._seen: float | None = None          # when the last sample arrived (the clock)
+        self._error: str | None = None
+        self._thread: threading.Thread | None = None
+        self._halt = threading.Event()
+        self._conn = None
+        self._ident: dict | None = None
+        self._ident_at = -math.inf
+        self._ident_err: str | None = None
+        self.rtt: float | None = None
+        self._inv: dict | None = None
+        self._inv_at = -INVENTORY_EVERY_S
+        self._eng: list | None = None
+        self._eng_at = -ENGINES_EVERY_S
+
+    # ------------------------------------------------------------------ the stream
+    def _ensure_stream(self) -> None:
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                return
+            self._halt.clear()
+            self._thread = threading.Thread(target=self._pump, name="agent-metrics", daemon=True)
+            self._thread.start()
+
+    def _pump(self) -> None:
+        wait = self.reconnect_s
+        while not self._halt.is_set():
+            try:
+                for ev, data in self.client.events("/node/metrics", timeout=15.0,
+                                                   on_open=self._opened):
+                    if ev == "sample" and isinstance(data, dict) and _num(data.get("t")):
+                        with self._lock:
+                            self._buf.append(data)
+                            del self._buf[:-900]
+                            self._latest, self._seen, self._error = data, self.clock(), None
+                        wait = self.reconnect_s
+                    if self._halt.is_set():
+                        return
+                err = "its metrics stream ended"
+            except Exception as exc:                                 # noqa: BLE001
+                err = f"{type(exc).__name__}: {exc}"[:160]
+            with self._lock:
+                self._error = err
+            if self._halt.wait(wait):
+                return
+            wait = min(30.0, wait * 2)
+
+    def _opened(self, conn) -> None:
+        self._conn = conn
+
+    def close(self) -> None:
+        self._halt.set()
+        c = self._conn
+        if c is not None:
+            try:
+                c.close()
+            except Exception:                                        # noqa: BLE001
+                pass
+
+    # ------------------------------------------------------------------ who it is
+    def _identity(self) -> dict | None:
+        now = self.clock()
+        if self._ident is not None and now - self._ident_at < IDENTITY_EVERY_S:
+            return self._ident
+        t0 = time.perf_counter()
+        try:
+            st, doc = self.client.json("GET", "/node/identity", timeout=TIMEOUT_S)
+        except Exception as exc:                                     # noqa: BLE001
+            st, doc = 0, None
+            self._ident_err = f"{type(exc).__name__}: {exc}"[:160]
+        self._ident_at = now
+        if st == 200 and isinstance(doc, dict) and isinstance(doc.get("id"), str):
+            self.rtt = round((time.perf_counter() - t0) * 1000.0, 2)
+            self._ident, self._ident_err = doc, None
+        elif st:
+            self._ident_err = f"HTTP {st}"
+        return self._ident
+
+    def identity(self) -> dict | None:
+        d = self._identity()
+        if d is None:
+            return None
+        return {"id": d["id"], "alias": d.get("hostname") or d["id"], "serial": d.get("serial"),
+                "hw": d.get("hw") or "unknown", "dmi": d.get("dmi") or "unknown",
+                "address": d.get("address") or self.client.host}
+
+    def alive(self) -> bool:
+        """The agent answered its identity at the last try."""
+        self._identity()
+        return self._ident is not None and self._ident_err is None
+
+    def healthy(self) -> bool:
+        """A sample in the last 5 s; before the first, an identity answer and no stream error."""
+        self._ensure_stream()
+        with self._lock:
+            fresh = self._seen is not None and self.clock() - self._seen <= STALE_S
+            err = self._error
+        return fresh or (err is None and self.alive())
+
+    def address(self) -> str:
+        return (self._ident or {}).get("address") or self.client.host
+
+    def is_node(self) -> bool:
+        return True
+
+    def status(self) -> tuple[str, str]:
+        self._ensure_stream()
+        if self.draining():
+            return "draining", "draining: no new requests"
+        if self.healthy():
+            return "up", "up"
+        return "off", f"the node agent does not answer: {self._error or self._ident_err}"
+
+    def version(self) -> str:
+        for p in self.engines():
+            if p.version:
+                return p.version
+        return (self._identity() or {}).get("tandemllm") or ""
+
+    # ------------------------------------------------------------------ what it runs
+    def agent_engines(self) -> list[dict]:
+        now = self.clock()
+        if self._eng is None or now - self._eng_at >= ENGINES_EVERY_S:
+            self._eng_at = now
+            try:
+                st, doc = self.client.json("GET", "/node/engines", timeout=TIMEOUT_S)
+                if st == 200 and isinstance(doc, dict):
+                    self._eng = [e for e in doc.get("engines") or [] if isinstance(e, dict)]
+            except Exception:                                        # noqa: BLE001
+                pass
+        return self._eng or []
+
+    def sync(self, backends: list[dict]) -> None:
+        by_port = {e.get("port"): e.get("id") for e in self.agent_engines()}
+        with self._lock:
+            keep = {}
+            for b in backends:
+                try:
+                    port = urllib.parse.urlsplit(b["url"]).port
+                except ValueError:
+                    port = None
+                eid = by_port.get(port)
+                p = self.probes.get(b["id"])
+                if p is None or p.backend["url"] != b["url"] or p.kind != b["kind"] or \
+                        getattr(p, "via", None) != eid:
+                    p = EngineProbe(b, fetch=self._relay(eid) if eid else _fetch)
+                    p.via = eid
+                keep[b["id"]] = p
+            self.probes = keep
+
+    def _relay(self, eid: str):
+        def fetch(url: str, key=None, timeout: float = TIMEOUT_S) -> tuple[int, bytes]:
+            u = urllib.parse.urlsplit(url)
+            path = u.path + (f"?{u.query}" if u.query else "")
+            return self.client.raw("GET", f"/node/engines/{urllib.parse.quote(eid)}{path}",
+                                   timeout=timeout)
+        return fetch
+
+    def engines(self) -> list[EngineProbe]:
+        with self._lock:
+            return list(self.probes.values())
+
+    # ------------------------------------------------------------------ figures
+    def sample(self, now: float, watched: bool = True) -> dict:
+        """The node's samples since the last call, each at its own second (`node_points`), the
+        newest as `node`; the engines' points as LocalNode gives them."""
+        self._ensure_stream()
+        with self._lock:
+            got, self._buf = self._buf, []
+        pts = [(s["t"], self._keys(s)) for s in got]
+        return {"node": pts[-1][1] if pts else {}, "node_points": pts,
+                "backends": {p.id: p.points(now, watched) for p in self.engines()}}
+
+    def _keys(self, s: dict) -> dict:
+        n = s.get("node") or {}
+        out = {k: _num(n.get(k)) for k in FLEET_KEYS}
+        out["rtt"] = self.rtt
+        return out
+
+    def _inventory(self) -> dict:
+        now = self.clock()
+        if self._inv is None or now - self._inv_at >= INVENTORY_EVERY_S:
+            try:
+                st, doc = self.client.json("GET", "/node/inventory", timeout=TIMEOUT_S * 3)
+                if st == 200 and isinstance(doc, dict):
+                    self._inv, self._inv_at = doc, now
+            except Exception:                                        # noqa: BLE001
+                pass
+        return self._inv or {}
+
+    def inventory(self) -> dict:
+        f = self._inventory().get("fleet") or {}
+        return {k: f.get(k) for k in ("serial", "os", "kernel", "driver", "cuda", "cx7", "disk",
+                                      "nics")}
+
+    def lan(self) -> dict | None:
+        return self._inventory().get("lan")
+
+    def usable(self) -> float | None:
+        with self._lock:
+            m = (self._latest or {}).get("memory") or {}
+        return _num(m.get("total"))
+
+    def memory(self, now: float) -> dict | None:
+        with self._lock:
+            m = (self._latest or {}).get("memory") or {}
+        if _num(m.get("total")) is None or _num(m.get("other")) is None:
+            return None
+        return {"weights": m.get("weights", 0.0), "kv": m.get("kv", 0.0),
+                "cache": m.get("cache", 0.0), "other": m["other"], "page": m.get("page", 0.0),
+                "ceiling": m.get("ceiling", m["total"]), "usable": m["total"]}
+
+    def logs(self, level: str | None, q: str | None, limit: int) -> list[dict]:
+        """The agent's lines (source `agent`) and its engines' (`engine`); on the controller's
+        own box tandem-app's too (`gateway`), merged by time."""
+        qs = {"follow": "0", "backlog": str(limit), "level": level or "debug"}
+        if q:
+            qs["q"] = q
+        out = []
+        try:
+            st, doc = self.client.json("GET", "/node/logs?" + urllib.parse.urlencode(qs),
+                                       timeout=TIMEOUT_S * 3)
+        except Exception:                                            # noqa: BLE001
+            st, doc = 0, None
+        if st == 200 and isinstance(doc, dict):
+            for e in doc.get("lines") or []:
+                if isinstance(e, dict) and _num(e.get("t")) is not None:
+                    out.append({"t": e["t"], "level": e.get("level"),
+                                "source": "agent" if e.get("source") == "agent" else "engine",
+                                "msg": str(e.get("msg") or "")})
+        if self.logbuf is not None:
+            for e in self.logbuf.lines(level=LEVEL_OUT.get(level, level), grep=q or None,
+                                       limit=limit):
+                out.append({"t": _epoch(e.get("ts")), "level": LEVEL_IN.get(e["level"],
+                                                                            e["level"]),
+                            "source": "gateway", "msg": e["msg"]})
+        out = [x for x in out if x["t"] is not None and x["level"] in
+               ("debug", "info", "warn", "error")]
+        out.sort(key=lambda x: x["t"])
+        return out[-limit:]
+
+
+def agent_for(row: dict, clock=time.time):
+    """The source of a node record whose endpoint is an agent: the trust it names, else
+    Unreachable. `{"kind": "loopback-secret", "file": path}` for an agent on this machine's
+    loopback; `{"kind": "mtls", "cert": path, "key": path, "pin": PEM}` (the controller's own
+    certificate and the node's pinned one, written by pairing, SEC-4)."""
+    from proxy import nodetrust
+    t = row.get("trust") or {}
+    ep = row["endpoint"]
+    host = urllib.parse.urlsplit(ep).hostname or ""
+    kind = t.get("kind")
+    try:
+        if kind == "loopback-secret" and ep.startswith("http://") and \
+                nodetrust.parse_ip(host).is_loopback and t.get("file"):
+            f = t["file"]
+            return AgentNode(ep, secret=lambda: nodetrust.load_secret(f), clock=clock)
+        if kind == "mtls" and ep.startswith("https://") and t.get("pin"):
+            ctx = nodetrust.client_context(t.get("cert"), t.get("key"), t["pin"])
+            return AgentNode(ep, ssl_context=ctx, clock=clock)
+    except (nodetrust.BindRefused, nodetrust.TrustError, OSError, ValueError) as exc:
+        return Unreachable(f"not reachable: its trust does not load ({exc})")
+    return Unreachable("not paired: no trust for its agent yet (SEC-4)")
+
+
 class Unreachable:
-    """A node whose source does not exist yet (a remote Spark before its TandemNode agent,
-    SRV-725): `off`, every figure None."""
+    """A node with no source: no agent endpoint yet, or one the controller has no trust for
+    (SEC-4). `off`, every figure None."""
 
     endpoint = None
 
@@ -602,6 +905,19 @@ class Unreachable:
 
     def status(self) -> tuple[str, str]:
         return "off", self.why
+
+    def version(self) -> str:
+        return ""
+
+    def inventory(self) -> dict:
+        return {k: None for k in ("serial", "os", "kernel", "driver", "cuda", "cx7", "disk",
+                                  "nics")}
+
+    def lan(self) -> None:
+        return None
+
+    def usable(self) -> None:
+        return None
 
     def sample(self, now: float, watched: bool = True) -> dict:
         return {"node": {}, "backends": {}}

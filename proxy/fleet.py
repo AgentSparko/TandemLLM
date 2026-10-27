@@ -25,8 +25,15 @@ A FLEET OF ONE. The machine tandem-app runs on is a node when it is Spark-class 
 engine of its own, proxy/nodesource.py): at the first start it is registered with its hostname as
 the alias, an id from the machine (never its address) and the first free identity colour, and kept
 from then on. A Mac in front of cloud APIs only is the controller's host and no node. A node record
-carries `transport`, `endpoint`, `address` and `trust`: `endpoint` `local` reads this process; any
-other is a remote node, `off` until its agent (SRV-725) and pairing (SEC-4) give it a source.
+carries `transport`, `endpoint`, `address` and `trust`: `endpoint` `local` is this machine; an
+`http(s)://` endpoint is a node's TandemNode agent (SRV-725), read with the trust the record names
+(nodesource.agent_for: the loopback secret, or pinned mTLS from pairing, SEC-4); a record without
+either is `off`.
+
+THIS MACHINE THROUGH ITS AGENT. When a TandemNode agent runs on this machine (its loopback address
+and secret file, `agent`), the machine is read through it: the same stream, relay and code as a
+remote node's, so one path feeds every node's figures. While it does not answer, the machine is read
+in-process (LocalNode) as before, and the log says each switch.
 
 THE DEPLOYMENTS. Each model an engine backend on a node serves itself is a Single deployment on that
 node; its id is the model's public id at this gateway, its status the backend's health.
@@ -41,13 +48,14 @@ and while a node gave nothing, the answer says null.
 
 from __future__ import annotations
 
+import json
 import math
 import socket
 import sys
 import threading
 import time
 from array import array
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 from proxy import config as config_mod
 from proxy import hostcollect
@@ -222,9 +230,13 @@ def check_layout(b, page: str, device: str) -> dict:
 
 class Fleet:
     def __init__(self, svc, local, *, port: int | None = None, bind: str = "127.0.0.1",
-                 clock=time.time, log=None, locality=None):
+                 clock=time.time, log=None, locality=None, agent=None, agent_for=None):
         self.svc, self.cfg = svc, svc.cfg
         self.local = local
+        self.agent = agent                      # this machine's TandemNode agent, or None
+        self.agent_for = agent_for or nodesource.agent_for
+        self.agents: dict = {}                  # node id -> (endpoint and trust, source)
+        self._via_agent = False
         self.port, self.bind = port, bind
         self.clock = clock
         self.log = log or (lambda msg: print(msg, flush=True))
@@ -245,6 +257,9 @@ class Fleet:
 
     def stop(self) -> None:
         self._stop.set()
+        for src in [a for _, a in self.agents.values()] + [self.agent]:
+            if hasattr(src, "close"):
+                src.close()
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -261,22 +276,29 @@ class Fleet:
                 self.log(f"[fleet] sample failed: {type(exc).__name__}: {exc}")
 
     def tick(self, now: float | None = None) -> None:
-        """One sample of every node with a source into the rings."""
+        """One sample of every node with a source into the rings: an agent's samples each at its
+        own second, this process's reading at `now`."""
         now = self.clock() if now is None else now
-        lid = self.ensure_local()
-        if lid is None:
-            return
-        got = self.local.sample(now, watched=now - self._read_at < WATCHED_S)
-        self.local.inventory()                   # read here, so a request finds it ready
-        with self._lock:
-            for k, v in got["node"].items():
-                if v is not None:
-                    self._ring(("node", lid, k)).add(now, v)
-            for bid, points in got["backends"].items():
+        self.ensure_local()
+        watched = now - self._read_at < WATCHED_S
+        for row, src in self.sources():
+            if not hasattr(src, "sample"):
+                continue
+            got = src.sample(now, watched=watched)
+            src.inventory()                      # read here, so a request finds it ready
+            points = got.get("node_points")
+            if points is None:
+                points = [(now, got["node"])]
+            with self._lock:
                 for t, vals in points:
                     for k, v in vals.items():
                         if v is not None:
-                            self._ring(("backend", bid, k)).add(t, v)
+                            self._ring(("node", row["id"], k)).add(t, v)
+                for bid, pts in got["backends"].items():
+                    for t, vals in pts:
+                        for k, v in vals.items():
+                            if v is not None:
+                                self._ring(("backend", bid, k)).add(t, v)
 
     def _ring(self, key: tuple) -> Ring:
         r = self.rings.get(key)
@@ -285,18 +307,57 @@ class Fleet:
         return r
 
     # ------------------------------------------------------------------ the registry
-    def engine_backends(self) -> list[dict]:
-        """The engine backends on this machine (the URL is), enabled."""
-        return [b for b in self.cfg.backends()
-                if b["enabled"] and not b["cloud"] and b["kind"] in nodesource.ENGINE_KINDS
-                and self.locality.is_local(b["url"])]
+    def engine_backends(self, address: str | None = None) -> list[dict]:
+        """The engine backends, enabled, on this machine (the URL is), or on the node at
+        `address` (the URL's host is that address)."""
+        out = []
+        for b in self.cfg.backends():
+            if not b["enabled"] or b["cloud"] or b["kind"] not in nodesource.ENGINE_KINDS:
+                continue
+            if address is None and self.locality.is_local(b["url"]):
+                out.append(b)
+            elif address is not None and _host_of(b["url"]) == address:
+                out.append(b)
+        return out
 
     def ensure_local(self) -> str | None:
         """This machine's node id; registered here the first time it is a node. Its address,
         hardware and serial follow the machine; a new address is said in the log."""
-        self.local.sync(self.engine_backends())
+        backends = self.engine_backends()
+        self.local.sync(backends)
         with self._reg:
-            return self._ensure_local()
+            lid = self._ensure_local()
+        if lid is not None:
+            src = self.here()
+            if src is not self.local:
+                src.sync(backends)
+        return lid
+
+    def here(self):
+        """This machine's source: its TandemNode agent while it answers (and is this machine),
+        else this process."""
+        a = self.agent
+        use = False
+        if a is not None and self._local_id is not None:
+            ident = a.identity() if a.healthy() else None
+            use = ident is not None and ident["id"] == self._local_id
+        if use != self._via_agent:
+            self._via_agent = use
+            self.log(f"[fleet] this machine is read through its TandemNode agent at "
+                     f"{a.endpoint}" if use else
+                     "[fleet] this machine is read in-process: its TandemNode agent does not "
+                     "answer")
+        return a if use else self.local
+
+    def sources(self) -> list[tuple[dict, object]]:
+        """(row, source) of every node; engine backends synced for the agents' nodes."""
+        out = []
+        for row in self.cfg.nodes():
+            src = self.source(row)
+            if isinstance(src, nodesource.AgentNode) and src is not self.agent:
+                src.sync(self.engine_backends(row["address"] or src.address()))
+            out.append((row, src))
+        return out
 
     def _ensure_local(self) -> str | None:
         ident = self.local.identity()
@@ -328,25 +389,32 @@ class Fleet:
         return row["id"]
 
     def source(self, row: dict):
-        if row["endpoint"] == "local" and row["id"] == self._local_id:
-            return self.local
-        return nodesource.Unreachable()
+        if row["endpoint"] == "local":
+            return self.here() if row["id"] == self._local_id else nodesource.Unreachable()
+        ep = row["endpoint"] or ""
+        if not ep.startswith(("http://", "https://")):
+            return nodesource.Unreachable()
+        key = (ep, json.dumps(row["trust"], sort_keys=True))
+        got = self.agents.get(row["id"])
+        if got is None or got[0] != key:
+            if got is not None and hasattr(got[1], "close"):
+                got[1].close()
+            got = self.agents[row["id"]] = (key, self.agent_for(row, clock=self.clock))
+        return got[1]
 
     def node_view(self, row: dict, now: float) -> dict:
         src = self.source(row)
         status, text = src.status()
-        local = src is self.local
-        inv = self.local.inventory() if local else \
-            {k: None for k in ("serial", "os", "kernel", "driver", "cuda", "cx7", "disk", "nics")}
-        if not local:
+        inv = src.inventory()
+        if inv.get("serial") is None:
             inv["serial"] = row["serial"]
         lease = row["lease_end_ms"]
         return {"id": row["id"], "alias": row["alias"], "colour": row["colour"],
                 "icon": row["icon"], "tags": row["tags"], "class": row["class"],
                 "hw": row["hw"] or "unknown", "dmi": row["dmi"] or "unknown",
                 "owned": lease is None, "transport": row["transport"],
-                "address": row["address"] or "", "version": self.local.version() if local
-                else "", "status": status, "status_text": text, "since": row["added_at"] / 1000,
+                "address": row["address"] or "", "version": src.version(),
+                "status": status, "status_text": text, "since": row["added_at"] / 1000,
                 "lease_end": None if lease is None else lease / 1000,
                 "cost_per_hour": row["cost_per_hour"], "inventory": inv}
 
@@ -398,13 +466,11 @@ class Fleet:
 
     # ------------------------------------------------------------------ what runs where
     def deployments(self) -> list[dict]:
-        lid = self.ensure_local()
-        if lid is None:
-            return []
+        self.ensure_local()
         now = self.clock()
         snap = self.svc.table.snapshot()["by_backend"]
         out = []
-        for p in self.local.engines():
+        for node, p in self._engines():
             rows = snap.get(p.id) or {}
             h = self.svc.health.view(p.id)
             cards = p.cards(now) if p.kind == "tandemllm" else None
@@ -425,28 +491,35 @@ class Fleet:
                     st, txt = "starting", "waiting for the first health check"
                 pub = row["public_id"] or row["model"]
                 out.append({"id": pub, "name": card["name"], "model": card["model"],
-                            "pack": card["pack"], "type": "single", "members": [lid],
+                            "pack": card["pack"], "type": "single", "members": [node],
                             "api_id": pub, "ctx": int(card["ctx"] or row["context_length"] or 0),
                             "status": st, "status_text": txt})
         return out
 
+    def _engines(self) -> list[tuple[str, object]]:
+        """(node id, engine probe) of every node with a source."""
+        return [(row["id"], p) for row, src in self.sources() if hasattr(src, "engines")
+                for p in src.engines()]
+
     def _deployment_backends(self) -> dict:
         """{deployment id: (backend id, member node)}."""
-        lid = self._local_id
         out = {}
         snap = self.svc.table.snapshot()["by_backend"]
+        engines = self._engines()
         for d in self.deployments():
-            for p in self.local.engines():
+            for node, p in engines:
                 if any((r["public_id"] or r["model"]) == d["id"]
                        for r in (snap.get(p.id) or {}).values()):
-                    out[d["id"]] = (p.id, lid)
+                    out[d["id"]] = (p.id, node)
         return out
 
     def links_infra(self) -> tuple[list[dict], list[dict]]:
         """(infra, links): the LAN (the default route's interface) and, with a cloud backend, the
-        internet. The controller runs on node #1 here, so the node is the host."""
+        internet. The controller runs on node #1 here, so the node is the host. A node read
+        through its agent elsewhere joins the LAN by its own interface, the agent's round trip
+        as the link's RTT."""
         lid = self.ensure_local()
-        lan = self.local.lan()
+        lan = (self.here() if lid else self.local).lan()
         infra, links = [], []
         at = lid
         if lid is None:
@@ -459,6 +532,16 @@ class Fleet:
                           "state": lan["state"], "note": f"{lan['iface']}; the controller runs "
                                                          f"on {'this node' if lid else 'it'}"})
             at = "lan"
+            for row, src in self.sources():
+                if row["id"] == lid or not isinstance(src, nodesource.AgentNode):
+                    continue
+                nl = src.lan()
+                if nl is None:
+                    continue
+                links.append({"id": f"lan-{row['id']}", "a": "lan", "b": row["id"], "kind": "lan",
+                              "speed": nl.get("speed") or "speed unknown", "rtt_ms": src.rtt,
+                              "mtu": nl.get("mtu"), "state": nl.get("state") or "down",
+                              "note": f"{nl.get('iface')}; through its TandemNode agent"})
         cloud = [b for b in self.cfg.backends() if b["enabled"] and b["cloud"]]
         if cloud:
             up = [b for b in cloud if self.svc.health.view(b["id"])["state"] == "up"]
@@ -499,14 +582,16 @@ class Fleet:
         kind, _, sid = source.partition(":")
         if source != "all" and (kind not in ("node", "deployment") or not sid):
             raise FleetError(400, f'source is all, node:<id> or deployment:<id>, not "{source}"')
-        lid = self.ensure_local()
-        ids = [n["id"] for n in self.cfg.nodes()]
+        self.ensure_local()
+        srcs = {row["id"]: src for row, src in self.sources()}
+        ids = list(srcs)
         engine = metric in DEPLOYMENT_METRICS
 
         def of(node):                            # the rings of a node's figure
             if not engine:
                 return [("node", node, metric)]
-            bids = [p.id for p in self.local.engines()] if node == lid else []
+            src = srcs.get(node)
+            bids = [p.id for p in src.engines()] if hasattr(src, "engines") else []
             return [("backend", b, metric) for b in bids]
         if kind == "node":
             if sid not in ids:
@@ -536,24 +621,29 @@ class Fleet:
                                               else sum(got))
                     vals.append(None if v is None else round(v, 3))
                 series.append({"node": node, "values": vals})
-        cap = self.local.usable() if metric == "mem" and self._local_id else None
+        caps = [srcs[n].usable() for n, _ in keys] if metric == "mem" else []
+        cap = round(sum(c for c in caps if c is not None), 2) if any(
+            c is not None for c in caps) else None
         unit, agg = METRICS[metric]
         return {"contract_version": CONTRACT, "source": source, "metric": metric, "unit": unit,
                 "agg": agg, "range": rng, "step_s": step, "t0": t0, "cap": cap,
                 "series": series}
 
     def memory(self, now: float) -> dict:
-        lid = self.ensure_local()
+        self.ensure_local()
         out = []
-        m = self.local.memory(now) if lid else None
-        if m is not None:
+        for row, src in self.sources():
+            m = src.memory(now) if hasattr(src, "memory") else None
+            if m is None:
+                continue
             with self._lock:
-                r = self.rings.get(("node", lid, "mem"))
+                r = self.rings.get(("node", row["id"], "mem"))
                 peak = r.peak(now, 86400) if r is not None else None
             used = m["weights"] + m["kv"] + m["cache"] + m["other"]
-            out.append({"node": lid, "weights": m["weights"], "kv": m["kv"], "cache": m["cache"],
-                        "other": m["other"], "page": m["page"], "ceiling": m["ceiling"],
-                        "peak": round(max(peak or 0.0, used), 2), "usable": m["usable"]})
+            out.append({"node": row["id"], "weights": m["weights"], "kv": m["kv"],
+                        "cache": m["cache"], "other": m["other"], "page": m["page"],
+                        "ceiling": m["ceiling"], "peak": round(max(peak or 0.0, used), 2),
+                        "usable": m["usable"]})
         return {"contract_version": CONTRACT, "unit": "GiB", "nodes": out}
 
     def logs(self, q: dict) -> dict:
@@ -563,7 +653,7 @@ class Fleet:
             limit = int(q.get("limit") or 200)
         except ValueError:
             limit = 0
-        lid = self.ensure_local()
+        self.ensure_local()
         if node != "all" and self.cfg.node(node) is None:
             raise FleetError(404, f"no node {node}")
         if level is not None and level not in LEVELS:
@@ -571,9 +661,12 @@ class Fleet:
         if not 1 <= limit <= 1000:
             raise FleetError(400, "limit is a whole number from 1 to 1000")
         lines = []
-        if lid is not None and node in ("all", lid):
-            lines = [dict(x, node=lid) for x in self.local.logs(level, q.get("q") or None, limit)]
-        return {"contract_version": CONTRACT, "node": node, "lines": lines}
+        for row, src in self.sources():
+            if node in ("all", row["id"]) and hasattr(src, "logs"):
+                lines += [dict(x, node=row["id"]) for x in src.logs(level, q.get("q") or None,
+                                                                   limit)]
+        lines.sort(key=lambda x: x["t"])
+        return {"contract_version": CONTRACT, "node": node, "lines": lines[-limit:]}
 
     # ------------------------------------------------------------------ the routes
     def handle(self, method: str, path: str, q: dict, body, who: str = "gui") -> tuple[int, dict]:
@@ -637,3 +730,10 @@ class Fleet:
             self.cfg.set_layout(doc)
             return doc
         raise FleetError(404, f"no route {method} /v1/fleet/{'/'.join(parts)}")
+
+
+def _host_of(url: str) -> str | None:
+    try:
+        return urlsplit(url).hostname
+    except ValueError:
+        return None

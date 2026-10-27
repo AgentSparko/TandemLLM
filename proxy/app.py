@@ -698,12 +698,26 @@ def build(args, env=None) -> Service:
         version=lambda: STATE.get("version", ""), logbuf=logbuf.BUFFER,
         key=lambda bid: svc.cfg.key_for(bid)),
         port=getattr(args, "port", None), bind=getattr(args, "host", "127.0.0.1"),
-        log=lambda m: print(m, flush=True))
+        log=lambda m: print(m, flush=True), agent=node_agent(env))
     # the sampler: it sleeps while nothing is in flight (the live stream and the parallel view's
     # once-a-second sample; before 0.3.32 the standalone proxy never started it)
     live.start()
     STATE.pop("dashboard_api", None)
     return svc
+
+
+def node_agent(env):
+    """This machine's TandemNode agent (SRV-725): TANDEM_NODE_AGENT (default
+    http://127.0.0.1:7700; `off` for none) with the loopback secret TANDEM_NODE_SECRET (default
+    ~/.tandemllm/node/secret). The fleet reads this machine through it while it answers."""
+    url = env.get("TANDEM_NODE_AGENT", "http://127.0.0.1:7700")
+    if url == "off":
+        return None
+    from proxy import nodetrust
+    path = os.path.expanduser(env.get("TANDEM_NODE_SECRET", "~/.tandemllm/node/secret"))
+    return nodesource.AgentNode(url, secret=lambda: nodetrust.load_secret(path),
+                                draining=lambda: bool(STATE.get("draining")),
+                                logbuf=logbuf.BUFFER)
 
 
 def conductor_of(args, led, env) -> tuple:
