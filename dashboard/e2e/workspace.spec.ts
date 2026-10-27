@@ -33,6 +33,18 @@ const right = (page: Page) => page.locator('.wm-dock-right');
 const tabs = (dock: Locator) => dock.locator('.wm-tab .wm-tab-b');
 const shown = (dock: Locator) => dock.locator('.wm-body:not([hidden])');
 
+/** the left panel and its content, the page and the bottom dock, as laid out (left edges, widths) */
+const columns = (page: Page) =>
+  page.evaluate(() => {
+    const r = (sel: string) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+    const panel = r('.lpanel')!;
+    const inner = r('.lpanel-in')!;
+    const main = r('main.content')!;
+    const dock = r('.wm-dock-bottom');
+    const neu = document.querySelector<HTMLElement>('.lpanel .ch-new');
+    return { panel: Math.round(panel.width), inner: Math.round(inner.width), main: Math.round(main.left), mainRight: Math.round(main.right), dock: dock ? Math.round(dock.left) : null, dockRight: dock ? Math.round(dock.right) : null, newClipped: neu ? neu.scrollWidth > neu.clientWidth + 1 || neu.getBoundingClientRect().right > panel.right + 1 : null };
+  });
+
 async function addWindow(page: Page, kind: string, target?: 'Right' | 'Bottom' | 'Float'): Promise<void> {
   await page.locator('.btn-win').click();
   const menu = page.locator('.wm-menu');
@@ -92,10 +104,50 @@ test.describe('workspace on a desk (VIS-256)', () => {
     await page.getByRole('button', { name: 'Hide the chats' }).click();
     await expect(page.locator('.shell')).toHaveClass(/rail-closed/);
     await page.getByRole('button', { name: 'Show the chats' }).click();
+    // the panel settles at Chat's list width before the shot
+    await expect.poll(async () => (await columns(page)).panel).toBeGreaterThanOrEqual(272);
     // the chat's terminal pane is a window below the thread
     await expect(tabs(bottom(page))).toHaveText(['Terminal']);
     await expect(bottom(page).locator('qse-chat-pane .xterm-rows')).toContainText('sandbox', { timeout: 15_000 });
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/chat-desk.png` });
+  });
+
+  test('Chat’s list and its windows keep to the page’s column: laid out to the panel’s width, the dock under the thread, open, collapsed and on a tablet', async ({ page }) => {
+    await login(page, '#/chat/c_sync', '?chat=mock');
+    await expect(tabs(bottom(page))).toHaveText(['Terminal']);
+    const check = async (open: boolean) => {
+      await expect.poll(async () => {
+        const c = await columns(page);
+        return open ? c.panel === c.inner && c.panel >= 272 : c.panel === 0;
+      }).toBe(true);
+      const c = await columns(page);
+      expect(c.dock, JSON.stringify(c)).toBe(c.main);
+      expect(c.dockRight, JSON.stringify(c)).toBe(c.mainRight);
+      if (open) expect(c.newClipped, JSON.stringify(c)).toBe(false);
+    };
+    await check(true);
+    // collapsed: the thread and the dock start at the strip's edge
+    await page.getByRole('button', { name: 'Hide the chats' }).click();
+    await check(false);
+    await page.getByRole('button', { name: 'Show the chats' }).click();
+    await check(true);
+    // the context sidebar closed: the dock follows the page's right edge too
+    await page.locator('.side-btn[data-side="right"]').click();
+    await expect.poll(async () => (await columns(page)).dockRight).toBe((await columns(page)).mainRight);
+    // a tablet: the panel is a drawer over the page, its content at the drawer's width
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expect(page.locator('.shell')).toHaveAttribute('data-w', 'tablet');
+    await expect.poll(async () => {
+      const c = await columns(page);
+      return c.dock === c.main && c.dockRight === c.mainRight;
+    }).toBe(true);
+    await page.getByRole('button', { name: 'Show the chats' }).click();
+    await expect(page.locator('.lpanel qse-chat-rail .ch-new')).toBeInViewport();
+    await expect.poll(async () => {
+      const c = await columns(page);
+      // the drawer's own right rule is the 1 px between them
+      return c.panel - c.inner <= 1 && c.panel >= 272 && !c.newClipped;
+    }).toBe(true);
   });
 
   test('Hardware: a Terminal on R-1 and Logs on R-3 side by side, the same places and targets after a reload', async ({ page }) => {
