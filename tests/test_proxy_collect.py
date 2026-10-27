@@ -4,7 +4,7 @@ The collect route and its token, the tag the relay puts on a request to vLLM (X-
 SGLang (the body's rid), the join in both orders (the row first, the item first), the approximate
 join and its refusal when two rows fit, the waits and their counts, the ledger amended in place,
 the backend's plugin block (L2, then "L1 only" after 60 s) valid against the contract, the pull
-route of vLLM, and `tandem-dash launch` from nothing to a registered backend with a stand-in
+route of vLLM, and `tandem-app launch` from nothing to a registered backend with a stand-in
 engine.
 
 Run: python tests/test_proxy_collect.py

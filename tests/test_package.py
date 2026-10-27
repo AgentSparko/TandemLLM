@@ -1,5 +1,5 @@
 """P5, the installable package: pyproject.toml against the tree, the version mapping, the page in
-an installed layout, and the `tandem-dash` commands besides `serve`. The wheel itself is built and
+an installed layout, and the `tandem-app` commands besides `serve`. The wheel itself is built and
 installed into a clean venv by tools/package_check.sh (CI and the night pass).
 
     python tests/test_package.py
@@ -41,8 +41,9 @@ def test_pyproject_matches_the_tree():
     assert not any(d.split(">")[0].split("=")[0].strip().lower() in ("torch", "numpy",
                                                                     "transformers")
                    for d in p["dependencies"] + p["optional-dependencies"]["host"])
-    assert p["scripts"]["tandem-dash"] == "proxy.__main__:main"
-    assert callable(cli_main.main)
+    assert p["scripts"]["tandem-app"] == "proxy.__main__:main"
+    assert p["scripts"]["tandem-dash"] == "proxy.__main__:main_old_name"   # the old name, OPS-238
+    assert callable(cli_main.main) and callable(cli_main.main_old_name)
     dirs = st.get("package-dir", {})
     for pkg in st["packages"]:
         d = dirs.get(pkg, pkg.replace(".", "/"))
@@ -84,7 +85,7 @@ def test_the_dash_image_copies_every_package():
 def test_the_shipped_texts_are_in_the_wheel():
     """The standalone proxy runs the conductor (P4), whose schema reads packages/seed.json at
     import: every file under packages/ must be package data of the wheel (2026-10-04 night pass:
-    `tandem-dash serve` died on a missing seed.json)."""
+    `serve` from the wheel died on a missing seed.json)."""
     import fnmatch
     st = _toml()["tool"]["setuptools"]
     assert "proxy.packages" in st["packages"]

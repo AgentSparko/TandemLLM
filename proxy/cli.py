@@ -1,4 +1,4 @@
-"""The `tandem-dash` commands other than `serve` (proxy/__main__.py): check, secrets, backends.
+"""The `tandem-app` commands other than `serve` (proxy/__main__.py): check, secrets, backends.
 
 Each returns the process's exit code. `check` and `backends list` read a copy of the config
 database (SQLite's backup API), so they never write to the real one; `secrets init` is the one
@@ -28,7 +28,7 @@ def _copy_of(path: str, env):
     """A ConfigDB opened on a copy of `path` (or on a fresh file when there is none), with the
     environment applied. The copy and its directory are removed afterwards."""
     real = os.path.realpath(os.path.expanduser(path))
-    d = tempfile.mkdtemp(prefix="tandem-dash-")
+    d = tempfile.mkdtemp(prefix="tandem-app-")
     try:
         tmp = os.path.join(d, "config.sqlite3")
         if os.path.exists(real):

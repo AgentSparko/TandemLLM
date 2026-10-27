@@ -7,7 +7,7 @@
         -> 200 {"accepted": {"requests": n, "steps": n}, "joined": n}
 
 THE TOKEN. One shared token per proxy: `TANDEM_COLLECT_TOKEN` when set, else a random one made at
-the first need and kept in the config database's settings (`collect_token`); `tandem-dash launch`
+the first need and kept in the config database's settings (`collect_token`); `tandem-app launch`
 hands the same one to the engine. Every batch needs it, from loopback too; a wrong one is a 401.
 It only lets its holder post numbers for a backend that exists.
 

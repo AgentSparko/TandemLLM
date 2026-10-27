@@ -1,22 +1,23 @@
-"""`tandem-dash` / `python -m proxy`: the standalone proxy and dashboard (docs/proxy.md).
+"""`tandem-app` / `python -m proxy`: TandemApp, the standalone proxy and dashboard (docs/proxy.md).
 
-    tandem-dash [serve]                              ~/.tandemllm/config.sqlite3, 127.0.0.1:8080
-    tandem-dash serve --env-file proxy.env --host 0.0.0.0 --port 8080
-    tandem-dash serve --config-db /data/config.sqlite3 --usage-ledger /data/ledger.sqlite3
-    tandem-dash check [--env-file F]                 the schema over the env and the database,
+    tandem-app [serve]                               ~/.tandemllm/config.sqlite3, 127.0.0.1:8080
+    tandem-app serve --env-file proxy.env --host 0.0.0.0 --port 8080
+    tandem-app serve --config-db /data/config.sqlite3 --usage-ledger /data/ledger.sqlite3
+    tandem-app check [--env-file F]                  the schema over the env and the database,
                                                      and what would run; writes nothing
-    tandem-dash secrets init | status                the master key for keys at rest
-    tandem-dash backends list                        the backends, their keys' hints and locks
-    tandem-dash hostcollect [--host 0.0.0.0 ...]     the remote host collector (P1.5)
-    tandem-dash launch vllm|sglang --model M --port P [-- engine args]
+    tandem-app secrets init | status                 the master key for keys at rest
+    tandem-app backends list                         the backends, their keys' hints and locks
+    tandem-app hostcollect [--host 0.0.0.0 ...]      the remote host collector (P1.5)
+    tandem-app launch vllm|sglang --model M --port P [-- engine args]
                                                      the engine with TandemLLM's plugin, registered
                                                      as a backend (P6, proxy/launch.py)
-    tandem-dash version
+    tandem-app version
 
 `python -m proxy` takes the same commands; with none it serves, so `python -m proxy --port 8080`
-works as before. Needs Python 3.11 or newer, the standard library and `cryptography` (for keys
-at rest); `pip install 'tandemllm[host]'` adds psutil and NVML for the System view's hosts. No
-torch, no GPU. A fresh `--config-db` path is created at schema version 1.
+works as before. `tandem-dash`, the old name, prints one line on stderr and runs `tandem-app`
+(OPS-238; removed in 0.17.0). Needs Python 3.11 or newer, the standard library and `cryptography`
+(for keys at rest); `pip install 'tandemllm[host]'` adds psutil and NVML for the System view's
+hosts. No torch, no GPU. A fresh `--config-db` path is created at schema version 1.
 """
 
 from __future__ import annotations
@@ -154,7 +155,7 @@ def main(argv=None) -> None:
             raise SystemExit(f"[proxy] configuration error: {exc.message}")
         return
     ap = parser()
-    ap.prog = f"tandem-dash {cmd}"
+    ap.prog = f"tandem-app {cmd}"
     if cmd == "secrets":
         ap.add_argument("action", choices=("init", "status"))
     elif cmd == "backends":
@@ -162,6 +163,13 @@ def main(argv=None) -> None:
     args = ap.parse_args(argv)
     from proxy import cli
     raise SystemExit(getattr(cli, cmd)(args))
+
+
+def main_old_name(argv=None) -> None:
+    """`tandem-dash`, the old name: one line on stderr, then `tandem-app` with the same arguments."""
+    print("tandem-dash is now tandem-app; the old name is removed in 0.17.0", file=sys.stderr,
+          flush=True)
+    return main(argv)
 
 
 if __name__ == "__main__":

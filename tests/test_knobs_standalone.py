@@ -1,4 +1,4 @@
-"""#108: the standalone proxy (`tandem-dash`, its image) ships `proxy` and `server` without the engine, so
+"""#108: the standalone proxy (`tandem-app`, its image) ships `proxy` and `server` without the engine, so
 neither may need the engine to import.
 
   1  server/knobs.py's defaults are engine/settings.py's for every knob the conductor and the proxy read,

@@ -1,7 +1,7 @@
 """The knobs the conductor and the proxy read (#108), with or without the engine installed.
 
 A box that runs the engine reads them through engine/settings.py's registry, as every other read does.
-The standalone proxy (`tandem-dash`, its image) ships `proxy` and `server` only: there the same names
+The standalone proxy (`tandem-app`, its image) ships `proxy` and `server` only: there the same names
 are read from the environment (prefix QWEN38_) with the defaults below, which
 tests/test_knobs_standalone.py holds equal to the registry's.
 """

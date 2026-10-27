@@ -1,6 +1,6 @@
 # The installable part of TandemLLM: the dashboard and the OpenAI-compatible proxy (docs/proxy.md).
 #
-#   pip install .                  the proxy, the dashboard, `tandem-dash`; cryptography only
+#   pip install .                  TandemApp (the proxy and the dashboard, `tandem-app`); cryptography only
 #   pip install '.[host]'          plus psutil and NVML for the System view's hosts
 #
 # The wheel never pulls torch. It carries `proxy/`, the `server/` modules the dashboard uses
@@ -45,7 +45,8 @@ dependencies = ["cryptography>=42"]
 host = ["nvidia-ml-py>=12", "psutil>=5.9"]
 
 [project.scripts]
-tandem-dash = "proxy.__main__:main"
+tandem-app = "proxy.__main__:main"
+tandem-dash = "proxy.__main__:main_old_name"
 
 [tool.setuptools]
 include-package-data = false

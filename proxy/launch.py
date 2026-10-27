@@ -1,7 +1,7 @@
-"""`tandem-dash launch vllm|sglang`: start an engine with TandemLLM's plugin, registered as a backend (L3).
+"""`tandem-app launch vllm|sglang`: start an engine with TandemLLM's plugin, registered as a backend (L3).
 
-    tandem-dash launch vllm --model Qwen/Qwen3.5-4B --port 8100 [--id vllm1] [-- vllm args]
-    tandem-dash launch sglang --model Qwen/Qwen3.5-4B --port 30000 [--id sglang1] [-- sglang args]
+    tandem-app launch vllm --model Qwen/Qwen3.5-4B --port 8100 [--id vllm1] [-- vllm args]
+    tandem-app launch sglang --model Qwen/Qwen3.5-4B --port 30000 [--id sglang1] [-- sglang args]
 
 One command from nothing to a backend with L2 data:
 
@@ -56,7 +56,7 @@ ENGINES = {
 
 
 def parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="tandem-dash launch", description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(prog="tandem-app launch", description=__doc__.split("\n")[0])
     ap.add_argument("engine", choices=sorted(ENGINES))
     ap.add_argument("--model", required=True, help="the model id or path the engine serves")
     ap.add_argument("--port", type=int, default=None, help="the engine's port")
