@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/node-patch.schema.json",
+  "title": "the body of PATCH /v1/fleet/nodes/{id}: what the user names and colours, at least one field",
+  "type": "object",
+  "properties": {
+    "alias": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "colour": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "icon": {
+      "type": "string",
+      "enum": [
+        "desk",
+        "cloud",
+        "rack"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32
+      }
+    }
+  },
+  "minProperties": 1,
+  "additionalProperties": false
+}

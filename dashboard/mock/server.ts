@@ -724,7 +724,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
       }
 
       if (path.startsWith('/v1/fleet/')) {
-        const raw = req.method === 'PUT' || req.method === 'POST' ? await readBody(req) : '';
+        const raw = req.method === 'PUT' || req.method === 'POST' || req.method === 'PATCH' ? await readBody(req) : '';
         let body: unknown = null;
         try {
           body = raw ? JSON.parse(raw) : null;

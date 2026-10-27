@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/node.schema.json",
+  "title": "GET and PATCH /v1/fleet/nodes/{id} (200): one node",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "alias": {
+      "type": "string"
+    },
+    "colour": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "icon": {
+      "type": "string",
+      "enum": [
+        "desk",
+        "cloud",
+        "rack"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "class": {
+      "type": "string",
+      "enum": [
+        "spark"
+      ]
+    },
+    "hw": {
+      "type": "string"
+    },
+    "dmi": {
+      "type": "string"
+    },
+    "owned": {
+      "type": "boolean"
+    },
+    "transport": {
+      "type": "string",
+      "enum": [
+        "lan",
+        "tunnel"
+      ]
+    },
+    "address": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "up",
+        "draining",
+        "off",
+        "alert"
+      ]
+    },
+    "status_text": {
+      "type": "string"
+    },
+    "since": {
+      "type": "number"
+    },
+    "lease_end": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "cost_per_hour": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "inventory": {
+      "type": "object",
+      "properties": {
+        "serial": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "os": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kernel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "driver": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cuda": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cx7": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "disk": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nics": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "serial",
+        "os",
+        "kernel",
+        "driver",
+        "cuda",
+        "cx7",
+        "disk",
+        "nics"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "id",
+    "alias",
+    "colour",
+    "icon",
+    "tags",
+    "class",
+    "hw",
+    "dmi",
+    "owned",
+    "transport",
+    "address",
+    "version",
+    "status",
+    "status_text",
+    "since",
+    "lease_end",
+    "cost_per_hour",
+    "inventory"
+  ],
+  "additionalProperties": false
+}

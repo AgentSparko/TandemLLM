@@ -30,6 +30,7 @@ import type {
   MetricKey,
   MetricSeries,
   NodeMemory,
+  NodePatch,
   NodeStatus,
   Range,
 } from '../src/api/fleet.ts';
@@ -594,6 +595,19 @@ export class MockFleet {
         }
       }
     }
+    if (parts.length === 2 && parts[0] === 'nodes' && (method === 'GET' || method === 'PATCH')) {
+      const id = decodeURIComponent(parts[1]);
+      const n = this.f.nodes.find((x) => x.node.id === id && x.node.since <= now);
+      if (!n) return bad(404, 'not_found', `no node ${id}`);
+      if (method === 'PATCH') {
+        const others = this.f.nodes.filter((x) => x !== n).map((x) => x.node);
+        const why = nodePatchError(body, others);
+        if (why) return bad(400, 'bad_request', why);
+        const p = body as NodePatch;
+        n.node = { ...n.node, ...p, ...(p.alias != null ? { alias: p.alias.trim() } : {}), ...(p.tags ? { tags: [...new Set(p.tags.map((t) => t.trim()))] } : {}) };
+      }
+      return { status: 200, body: this.nodes(now).find((x) => x.id === id) };
+    }
     if (method === 'POST' && parts.length === 3 && parts[0] === 'alerts' && parts[2] === 'ack') {
       const id = decodeURIComponent(parts[1]);
       if (!this.alerts(now).some((a) => a.id === id)) return bad(404, 'not_found', `no active alert ${id}`);
@@ -616,6 +630,29 @@ export class MockFleet {
     }
     return bad(404, 'not_found', `no route ${method} ${path}`);
   }
+}
+
+/** what is wrong with a node's PATCH body (null: nothing), as the controller says it (proxy/fleet.py) */
+export function nodePatchError(b: unknown, others: Pick<FleetNode, 'alias' | 'colour'>[]): string | null {
+  const p = b as Record<string, unknown> | null;
+  if (!p || typeof p !== 'object' || Array.isArray(p) || !Object.keys(p).length) return 'the body is an object with alias, colour, icon or tags';
+  const extra = Object.keys(p).find((k) => !['alias', 'colour', 'icon', 'tags'].includes(k));
+  if (extra) return `node: unknown field '${extra}'`;
+  if ('alias' in p) {
+    const a = typeof p.alias === 'string' ? p.alias.trim() : '';
+    if (!a || a.length > 40 || [...a].some((ch) => ch.charCodeAt(0) < 32)) return 'alias is 1 to 40 characters';
+    if (others.some((o) => o.alias.toLowerCase() === a.toLowerCase())) return `another node is called ${a}`;
+  }
+  if ('colour' in p) {
+    const c = p.colour;
+    if (typeof c !== 'number' || !Number.isInteger(c) || c < 1 || c > 8) return 'colour is a whole number from 1 to 8';
+    const held = others.find((o) => o.colour === c);
+    if (held) return `colour ${c} is ${held.alias}'s`;
+  }
+  if ('icon' in p && !['desk', 'cloud', 'rack'].includes(p.icon as string)) return 'icon is desk, cloud or rack';
+  if ('tags' in p && (!Array.isArray(p.tags) || p.tags.length > 16 || !p.tags.every((t) => typeof t === 'string' && t.trim().length > 0 && t.trim().length <= 32)))
+    return 'tags is a list of at most 16 words of 1 to 32 characters';
+  return null;
 }
 
 /** what is wrong with a layout body (null: nothing); the schema says the rest */

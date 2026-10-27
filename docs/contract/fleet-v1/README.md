@@ -5,6 +5,8 @@ These files are the truth for `/v1/fleet/*`, the API of TandemApp's controller: 
 | file | endpoint |
 |-|-|
 | `nodes.schema.json` | `GET /v1/fleet/nodes`: every paired Spark with its alias, identity colour, transport, status and inventory |
+| `node.schema.json` | `GET /v1/fleet/nodes/{id}`: one node (404 for an id the fleet does not have); the answer of its `PATCH` too |
+| `node-patch.schema.json` | the body of `PATCH /v1/fleet/nodes/{id}`: `alias`, `colour`, `icon`, `tags`, any of them; answers the node as changed |
 | `links.schema.json` | `GET /v1/fleet/links`: management (`lan`), remote (`wan`) and `fabric` links; a fabric link carries its last test, RoCE, its logical interfaces and the switch port |
 | `topology.schema.json` | `GET /v1/fleet/topology`: the controller host, the infrastructure between it and the nodes (LAN, internet, gateway, switch), the nodes, the links and one group per deployment (drawn as a hull over its members) |
 | `deployments.schema.json` | `GET /v1/fleet/deployments`: `single`, `replicas`, `split` (with its stages in pipeline order) and `role` (with `role_of`) |
@@ -26,11 +28,13 @@ The schemas use the same JSON Schema 2020-12 subset as `dashboard-v1`; each file
 - The controller sends every metric per node and never aggregates: the page computes Total, Stacked, Lines, Split and Table from `series` with `agg`. `sum` metrics add up (tok/s, requests, power, memory, disk, network), `mean` and `max` do not, `maxmean` (temperatures) shows the max with the mean dashed. A `null` value is no sample (the node was off or not yet paired, or has no fabric port): aggregates skip it, they never count it as zero.
 - `source=all` gives one series per paired node, `node:<id>` one, `deployment:<id>` one per member; with a deployment, `tps` and `req` count that deployment's tokens and requests only, the hardware metrics the whole member. A Split's tokens count once per stage at half, so the members add up to the deployment's total. `cap` is the per-node capacity of the metric (`mem`: the usable unified memory), else `null`.
 - A node's `colour` is its identity, 1 to 8: 1 to 4 are the four node hues, 5 to 8 the same hues drawn hollow and dashed. Node ids are stable (certificate fingerprint and DMI serial); an address or tunnel port may change, the id does not.
+- A `PATCH` of a node is refused (400) for an alias another node has (letter case aside) or a colour another node has: the alias and the colour name one node each. A new node gets the first colour no node has.
 - A node's `status` is never only a colour in the UI: `up` ●, `draining` ◐, `off` ○, `alert` ⚠, each with `status_text`.
 - An event's and an alert's `node` is a node id, `all` (the whole fleet) or `host` (the controller's machine).
-- A layout is one page on one device class (VIS-256). A window's `at` is its dock (`right`, `bottom`), `float` or `min`; `prev` is where a minimised one returns to; `x`, `y`, `w`, `h` place it while it floats (pixels in the page's work area) and `z` orders the floating ones. A dock's `f` is its share of the work area, `act` the window its tabs show. `saved_at` is null for the default a page answers before its first save; the page then lays out its own default windows.
+- A layout is one page on one device class (VIS-256). A `PUT` stores the body with `saved_at` set to the controller's clock, whatever the body said: the last write wins. A window's `at` is its dock (`right`, `bottom`), `float` or `min`; `prev` is where a minimised one returns to; `x`, `y`, `w`, `h` place it while it floats (pixels in the page's work area) and `z` orders the floating ones. A dock's `f` is its share of the work area, `act` the window its tabs show. `saved_at` is null for the default a page answers before its first save; the page then lays out its own default windows.
 - Metric keys: `tps` decode tok/s (sum), `req` active requests (sum), `ttft` TTFT p50 ms (mean), `gpu` GPU % (mean), `power` W (sum), `temp` GPU °C (maxmean), `sm` and `memclk` MHz (mean), `mem` unified memory used GiB (sum), `cpu` % (mean), `disk` MB/s (sum), `lan` MB/s (sum), `fabric` Gb/s (sum), `rtt` ms from the controller (max).
 
 ## Changes
 
 - v1.0, first version (VIS-244): the routes above, served by the dashboard's mock before the controller exists.
+- v1.0, `GET` and `PATCH /v1/fleet/nodes/{id}` (SRV-723): a node's alias, colour, icon and tags, set by the user; served by tandem-app (`proxy/fleet.py`) and the mock.

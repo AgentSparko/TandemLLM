@@ -47,6 +47,15 @@ export interface FleetNode {
   inventory: NodeInventory;
 }
 
+/** What the user sets on a node (PATCH /v1/fleet/nodes/{id}): any of these; an alias or a colour
+ *  another node has is refused. */
+export interface NodePatch {
+  alias?: string;
+  colour?: number;
+  icon?: FleetNode['icon'];
+  tags?: string[];
+}
+
 export type LinkKind = 'lan' | 'wan' | 'fabric';
 export type LinkState = 'up' | 'degraded' | 'down';
 
@@ -288,6 +297,13 @@ export interface FleetLogs {
 
 export const fleet = {
   nodes: () => request<{ contract_version: string; nodes: FleetNode[] }>('/v1/fleet/nodes'),
+  node: (id: string) => request<FleetNode>(`/v1/fleet/nodes/${encodeURIComponent(id)}`),
+  patchNode: (id: string, p: NodePatch) =>
+    request<FleetNode>(`/v1/fleet/nodes/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(p),
+    }),
   links: () => request<{ contract_version: string; links: FleetLink[] }>('/v1/fleet/links'),
   topology: () => request<FleetTopology>('/v1/fleet/topology'),
   deployments: () => request<{ contract_version: string; deployments: FleetDeployment[] }>('/v1/fleet/deployments'),

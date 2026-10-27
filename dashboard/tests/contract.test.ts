@@ -279,7 +279,10 @@ describe('fleet contract', () => {
   const q = (s = '') => new URLSearchParams(s);
 
   it('has a schema per route, and they are strict', () => {
-    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'layout', 'links', 'logs', 'memory', 'metrics', 'nodes', 'rules', 'topology']);
+    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'layout', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'rules', 'topology']);
+    expect(fleet['node-patch']({})).toBe(false);
+    expect(fleet['node-patch']({ colour: 9 })).toBe(false);
+    expect(fleet['node-patch']({ owner: 'x' })).toBe(false);
     expect(fleet.nodes({ contract_version: '1.0', nodes: [{ id: 'x' }] })).toBe(false);
     expect(fleet.metrics({ contract_version: '1.0', source: 'all', metric: 'watts', unit: 'W', agg: 'sum', range: '6h', step_s: 150, t0: 0, cap: null, series: [] })).toBe(false);
     expect(fleet.layout({ page: 'overview', device: 'watch', rail: { open: true, w: 1 }, ctx: { open: true, w: 1 }, windows: [], docks: { right: { f: 0.3, act: null }, bottom: { f: 0.3, act: null } } })).toBe(false);
@@ -295,6 +298,7 @@ describe('fleet contract', () => {
           return r.body as Record<string, unknown>;
         };
         fcheck('nodes', get('/v1/fleet/nodes'));
+        for (const n of get('/v1/fleet/nodes').nodes as { id: string }[]) fcheck('node', get(`/v1/fleet/nodes/${n.id}`));
         fcheck('links', get('/v1/fleet/links'));
         fcheck('topology', get('/v1/fleet/topology'));
         const deps = get('/v1/fleet/deployments');
@@ -340,6 +344,34 @@ describe('fleet contract', () => {
       expect(r.status, `${method} ${path}?${qs}`).toBe(status);
       fcheck('error', r.body);
     }
+  });
+
+  it('a node’s alias, colour, icon and tags: set, shown everywhere, refused when taken', () => {
+    const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    const body = { alias: '  Rental East ', colour: 6, icon: 'rack', tags: ['rented', 'rented', 'east'] };
+    fcheck('node-patch', body);
+    const r = m.handle('PATCH', '/v1/fleet/nodes/r1', q(), body, T0);
+    expect(r.status).toBe(200);
+    fcheck('node', r.body);
+    expect(r.body).toMatchObject({ id: 'r1', alias: 'Rental East', colour: 6, icon: 'rack', tags: ['rented', 'east'] });
+    expect(m.handle('GET', '/v1/fleet/nodes/r1', q(), null, T0).body).toEqual(r.body);
+    expect((m.handle('GET', '/v1/fleet/topology', q(), null, T0).body as { nodes: { id: string; alias: string }[] }).nodes.find((n) => n.id === 'r1')?.alias).toBe('Rental East');
+    for (const [id, wrong, status] of [
+      ['r1', { alias: 'desk' }, 400],
+      ['r1', { colour: 1 }, 400],
+      ['r1', { colour: 9 }, 400],
+      ['r1', { alias: '' }, 400],
+      ['r1', { icon: 'tower' }, 400],
+      ['r1', { tags: 'rented' }, 400],
+      ['r1', { owner: 'me' }, 400],
+      ['r1', {}, 400],
+      ['r9', { alias: 'x' }, 404],
+    ] as const) {
+      const e = m.handle('PATCH', `/v1/fleet/nodes/${id}`, q(), wrong, T0);
+      expect(e.status, JSON.stringify(wrong)).toBe(status);
+      fcheck('error', e.body);
+    }
+    expect(m.handle('GET', '/v1/fleet/nodes/r9', q(), null, T0).status).toBe(404);
   });
 
   it('logs: a node’s own, oldest first, filtered by level and text, the same for the same instant', () => {
