@@ -78,7 +78,7 @@ export function pluginPill(p: PluginBlock | null | undefined): TemplateResult {
   const pair = p ? `${p.plugin ?? 'plugin'} ${p.plugin_version ?? '?'} on ${p.engine ?? 'engine'} ${p.engine_version ?? '?'}` : '';
   if (p && p.state === 'l2')
     return html`<span class="pill is-ok eng-layer" data-layer="L2" title=${`${pair}; last batch ${p.age_s.toFixed(0)} s ago${p.via === 'pull' ? ' (pulled)' : ''}`}>L2 plugin</span>`;
-  const title = p ? `no batch for ${p.age_s.toFixed(0)} s; last seen: ${pair}` : 'no plugin in this engine: install tandemllm-vllm-plugin or tandemllm-sglang-plugin (tandem-dash launch does it in one command)';
+  const title = p ? `no batch for ${p.age_s.toFixed(0)} s; last seen: ${pair}` : 'no plugin in this engine: install tandemllm-vllm-plugin or tandemllm-sglang-plugin (tandem-app launch does it in one command)';
   return html`<span class="pill eng-layer" data-layer="L1" title=${title}>L1 only</span>`;
 }
 
