@@ -63,8 +63,9 @@ describe("the preview pane's wiring", () => {
     expect(src).toMatch(/sandbox="allow-scripts allow-forms allow-popups allow-modals"/);
     expect(src).not.toMatch(/sandbox="[^"]*allow-same-origin/);
   });
-  it('offers the plus menu the newest running server first', () => {
-    const pick = src.slice(src.indexOf('private async pick('), src.indexOf('private async newestPage('));
+  it('offers the add menu the newest running server first (chat/view.ts, VIS-256)', () => {
+    const view = readFileSync(new URL('../src/chat/view.ts', import.meta.url), 'utf8');
+    const pick = view.slice(view.indexOf('private async previewPane('), view.indexOf('private async newestPage('));
     expect(pick.indexOf('sandboxPorts')).toBeGreaterThan(0);
     expect(pick.indexOf('sandboxPorts')).toBeLessThan(pick.indexOf('latestPage'));
   });

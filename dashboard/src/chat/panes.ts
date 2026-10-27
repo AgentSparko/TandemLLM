@@ -1,18 +1,17 @@
-// <qse-chat-panes>: the sub-windows beside or below the thread. A tab strip (the open panes, a
-// plus menu, the dock toggle, close), and one pane at a time: Terminal (xterm.js, loaded on
+// <qse-chat-pane>: one pane of a chat, as the body of a window (VIS-256: the window manager draws the
+// tabs, the docks and the phone's tray; lib/wm.ts, ui/workspace.ts). Terminal (xterm.js, loaded on
 // demand from xterm-pane.ts, attached to the sandbox's shell or a tool call's output; on a phone a
-// key row with Esc, Tab, Ctrl and the arrows), Preview (a sandboxed
-// iframe for an html or svg artifact, with a 390 px and a 1200 px width), Files (the sandbox's tree
-// and a viewer), Diff (unified, coloured), Markdown, Image, and a video, audio, PDF or binary file in
-// <qse-media-view> (its own chunk, loaded on first use; VIS-159). On a phone the view wraps this in
-// a full-screen sheet. A preview shows the server that runs when what it was asked for cannot show,
-// waits for one when none runs, and a server that starts listening opens in a Preview tab (the rules:
-// preview.ts, SRV-511).
+// key row with Esc, Tab, Ctrl and the arrows), Preview (a sandboxed iframe for an html or svg
+// artifact, with a 390 px and a 1200 px width), Files (the sandbox's tree and a viewer), Editor, Diff
+// (unified, coloured), Markdown, Plan, Image, the Context panel, and a video, audio, PDF or binary
+// file in <qse-media-view> (its own chunk, loaded on first use; VIS-159). A preview shows the server
+// that runs when what it was asked for cannot show and waits for one when none runs (the rules:
+// preview.ts, SRV-511); the chat view opens a new server's Preview itself. The element stays as its
+// window moves between a dock, a float and the tray, so a terminal keeps its session and scrollback.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { bytes } from '../lib/format';
-import { stripEdge, type Edge } from '../lib/phone';
 import { renderMarkdown } from '../playground/markdown';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -23,8 +22,8 @@ import type { Artifact, ChatBackend, TerminalSession } from './backend';
 import { diffCounts, parseDiff, type DiffRow } from './terminal';
 import type { XtermHandle } from './xterm-pane';
 import { paneIcon, paneWord } from './thread';
-import { MEDIA_KINDS, filePane, latestPage, loadMediaView } from './file-panes';
-import { PORT_POLL_MS, WAIT_POLL_MS, freshServers, newestServer, portPane, readReport, reportWords } from './preview';
+import { MEDIA_KINDS, filePane, loadMediaView } from './file-panes';
+import { WAIT_POLL_MS, readReport, reportWords } from './preview';
 import type { Conversation, PaneKind, PaneRef, SandboxFile } from './types';
 import './context-panel';
 
@@ -34,23 +33,18 @@ export interface OpenPane extends PaneRef {
   inline?: { content: string; lang: string } | null;
 }
 
-export type Dock = 'bottom' | 'right';
-
 /** the file the Files pane shows; `kind` and `url` from chatd (VIS-159) */
 type FileView = { path: string; content: string; mime: string; bytes: number; etag?: string; kind?: string; url?: string };
 
-@customElement('qse-chat-panes')
-export class QseChatPanes extends LightElement {
-  @property({ attribute: false }) panes: OpenPane[] = [];
-  @property({ type: String }) active: string | null = null;
-  @property({ type: String }) dock: Dock = 'bottom';
+@customElement('qse-chat-pane')
+export class QseChatPane extends LightElement {
+  @property({ attribute: false }) pane: OpenPane | null = null;
   @property({ attribute: false }) backend: ChatBackend | null = null;
   @property({ type: String }) convId: string | null = null;
+  /** on a phone, in the tray: the terminal's key row */
   @property({ type: Boolean }) sheet = false;
-  @state() private plus = false;
-  /** the plus menu's left edge in the panes box: under the plus button, inside the box */
-  @state() private plusLeft = 6;
-  @state() private plusTop = 40;
+  /** for the context pane, the plan and the page the chat made */
+  @property({ attribute: false }) conv: Conversation | null = null;
   @state() private artifacts = new Map<string, Artifact>();
   /** a preview's state from its page's own report ("2 errors"), by ref */
   @state() private reports = new Map<string, string>();
@@ -58,10 +52,6 @@ export class QseChatPanes extends LightElement {
   @state() private starting = new Map<string, string>();
   /** bumped by a reload: a new iframe, even when its address stays */
   @state() private reloads = 0;
-  /** the ports that listened at the last look (null: not looked yet), for the chat `portConv` */
-  private portSeen: Set<number> | null = null;
-  private portConv: string | null = null;
-  private portTimer: ReturnType<typeof setInterval> | null = null;
   private waitTimer: ReturnType<typeof setTimeout> | null = null;
   /** the conversation these screens/files/artifacts belong to; a switch drops them all */
   private lastConv: string | null = null;
@@ -69,14 +59,10 @@ export class QseChatPanes extends LightElement {
   @state() private file: FileView | null = null;
   @state() private previewWidth: 'fit' | 'phone' | 'desktop' = 'fit';
   @state() private ctrlArmed = false;
-  /** where the tab strip stands when it scrolls sideways: its edge with more behind it fades */
-  @state() private tabEdge: Edge = 'none';
   @state() private editText = '';
   @state() private editNote: { ok: boolean; text: string } | null = null;
   private loadingFile = false;
-  /** for the context pane */
-  @property({ attribute: false }) conv: Conversation | null = null;
-  /** one per terminal pane: its session, and its xterm once loaded (data before that waits) */
+  /** the terminal's session, and its xterm once loaded (data before that waits), by pane id */
   private screens = new Map<string, TermEntry>();
   private resizeObs: ResizeObserver | null = null;
   private onTheme = () => {
@@ -87,111 +73,53 @@ export class QseChatPanes extends LightElement {
     super.connectedCallback();
     window.addEventListener('qse-theme', this.onTheme);
     window.addEventListener('message', this.onMessage);
-    document.addEventListener('pointerdown', this.onDocDown, true);
-    this.portTimer = setInterval(() => void this.watchPorts(), PORT_POLL_MS);
-    void this.watchPorts();
+    // back after a while away (a minimised window): its terminal opens again
+    this.requestUpdate();
   }
 
   disconnectedCallback(): void {
     window.removeEventListener('qse-theme', this.onTheme);
     window.removeEventListener('message', this.onMessage);
-    document.removeEventListener('pointerdown', this.onDocDown, true);
-    if (this.portTimer) clearInterval(this.portTimer);
     if (this.waitTimer) clearTimeout(this.waitTimer);
-    this.portTimer = this.waitTimer = null;
-    this.resizeObs?.disconnect();
-    for (const s of this.screens.values()) {
-      s.session?.close();
-      s.term?.dispose();
-    }
-    this.screens.clear();
+    this.waitTimer = null;
+    // a window that moves is taken out and put back in the same task: its session stays
+    queueMicrotask(() => {
+      if (this.isConnected) return;
+      this.resizeObs?.disconnect();
+      this.resizeObs = null;
+      for (const s of this.screens.values()) {
+        s.session?.close();
+        s.term?.dispose();
+      }
+      this.screens.clear();
+    });
     super.disconnectedCallback();
-  }
-
-  /** a press outside the plus menu and its button closes it */
-  private onDocDown = (e: Event) => {
-    const t = e.target as HTMLElement | null;
-    if (t && !t.closest('.ch-pane-menu, .ch-pane-plus')) this.plus = false;
-  };
-
-  /** The plus menu sits in the panes box, not in the tab strip: the strip scrolls sideways
-   *  (overflow-x: auto), which clips anything that drops below it. */
-  private togglePlus(btn: HTMLElement): void {
-    if (this.plus) {
-      this.plus = false;
-      return;
-    }
-    const box = this.querySelector<HTMLElement>('.ch-panes')?.getBoundingClientRect();
-    const b = btn.getBoundingClientRect();
-    const width = Math.min(240, (box?.width ?? 252) - 12);
-    this.plusLeft = box ? Math.max(6, Math.min(b.left - box.left, box.width - width - 6)) : 6;
-    const strip = this.querySelector<HTMLElement>('.ch-pane-tabs')?.getBoundingClientRect();
-    this.plusTop = box && strip ? Math.round(strip.bottom - box.top + 4) : 40;
-    this.plus = true;
-  }
-
-  /** a kind from the plus menu; Preview opens the newest running server, else the page the chat
-   *  made last, else the Files pane */
-  private async pick(k: PaneKind): Promise<void> {
-    this.plus = false;
-    if (k !== 'preview') {
-      this.fire('ch-pane-open', { pane: defaultPane(k) });
-      return;
-    }
-    const server = this.backend && this.convId ? newestServer(await this.backend.sandboxPorts(this.convId).catch(() => [])) : null;
-    if (server) {
-      this.fire('ch-pane-open', { pane: portPane(server) });
-      return;
-    }
-    const page = latestPage(this.conv?.messages ?? []) ?? (await this.newestPage());
-    this.fire('ch-pane-open', { pane: page ? filePane(page)! : defaultPane('files') });
-  }
-
-  /** the newest HTML or SVG file at the top of the sandbox's working directory */
-  private async newestPage(): Promise<string | null> {
-    if (!this.backend || !this.convId) return null;
-    const list = await this.backend.sandboxFiles(this.convId, this.root).catch(() => [] as SandboxFile[]);
-    const pages = list.filter((f) => f.kind === 'file' && filePane(f.path)?.kind === 'preview');
-    pages.sort((a, b) => (b.modified_at ?? '').localeCompare(a.modified_at ?? ''));
-    return pages[0]?.path ?? null;
   }
 
   private fire(name: string, detail: unknown = {}): void {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 
-  /** A server that started listening opens in a Preview tab (preview.ts rule 2): not when a
-   *  preview already shows that port, and a waiting preview takes it itself. */
-  private async watchPorts(): Promise<void> {
-    if (!this.backend || !this.convId || document.hidden) return;
-    const id = this.convId;
-    const ports = await this.backend.sandboxPorts(id).catch(() => null);
-    if (!ports || id !== this.convId) return;
-    if (this.portConv !== id) {
-      this.portConv = id;
-      this.portSeen = null;
-    }
-    const { seen, fresh } = freshServers(this.portSeen, ports);
-    this.portSeen = seen;
-    const server = newestServer(fresh);
-    if (!server) return;
-    const active = this.panes.find((x) => x.id === this.active);
-    if (active?.kind === 'preview' && this.artifacts.get(active.ref)?.waiting) return void this.loadArtifact(active.ref);
-    const shown = this.panes.some((x) => x.kind === 'preview' && (x.ref === `port:${server.port}` || this.artifacts.get(x.ref)?.port === server.port));
-    if (!shown) this.fire('ch-pane-open', { pane: portPane(server) });
-  }
-
-  /** a previewed page's report (chatd/preview.py's shim) from the active preview's iframe: shown in
-   *  the pane's bar and passed to chatd, where `present` waits for it */
+  /** a previewed page's report (chatd/preview.py's shim) from this preview's iframe: shown in the
+   *  pane's bar and passed to chatd, where `present` waits for it */
   private onMessage = (e: MessageEvent) => {
     const r = readReport(e.data);
     if (!r) return;
     const frame = this.querySelector<HTMLIFrameElement>('.ch-preview iframe');
-    const p = this.panes.find((x) => x.id === this.active);
+    const p = this.pane;
     if (!frame || e.source !== frame.contentWindow || p?.kind !== 'preview' || p.inline) return;
     this.reports = new Map(this.reports).set(p.ref, reportWords(r));
     if (this.backend && this.convId) void this.backend.previewReport(this.convId, { ref: p.ref, ...r }).catch(() => undefined);
   };
+
+  /** a preview that waits for a server to listen */
+  get waiting(): boolean {
+    return !!this.pane && !!this.artifacts.get(this.pane.ref)?.waiting;
+  }
+  /** the port a preview shows */
+  get port(): number | undefined {
+    return this.pane ? this.artifacts.get(this.pane.ref)?.port : undefined;
+  }
 
   /** a preview resolved again and loaded anew: the Reload button, and the model presenting it again */
   refresh(ref: string): void {
@@ -223,22 +151,20 @@ export class QseChatPanes extends LightElement {
       this.lastConv = this.convId;
       this.dropConversation();
     }
-    if (changed.has('active') || changed.has('panes')) this.showActiveTab();
-    if (!changed.has('tabEdge')) this.measureTabs();
-    const p = this.panes.find((x) => x.id === this.active);
+    const p = this.pane;
     if (!p || !this.backend || !this.convId) return;
     if (p.kind === 'preview' && !p.inline && this.artifacts.get(p.ref)?.waiting && !this.waitTimer) {
       // a waiting preview asks again until a server listens
       this.waitTimer = setTimeout(() => {
         this.waitTimer = null;
-        if (this.panes.find((x) => x.id === this.active)?.ref === p.ref) void this.loadArtifact(p.ref);
+        if (this.pane?.ref === p.ref) void this.loadArtifact(p.ref);
       }, WAIT_POLL_MS);
     }
     if (p.kind === 'preview' || p.kind === 'diff' || p.kind === 'markdown' || p.kind === 'image' || (MEDIA_KINDS.has(p.kind) && p.ref.startsWith('file:'))) {
       if (!p.inline && !this.artifacts.has(p.ref)) void this.loadArtifact(p.ref);
     } else if (p.kind === 'files') {
       if (!this.files.has(this.root)) void this.loadDir(this.root);
-      if (p.ref && p.ref.startsWith('/') && this.file?.path !== p.ref && changed.has('active')) void this.openFile(p.ref);
+      if (p.ref && p.ref.startsWith('/') && this.file?.path !== p.ref && changed.has('pane')) void this.openFile(p.ref);
     } else if (p.kind === 'terminal') {
       this.ensureTerminal(p);
       this.placeTerminal(p);
@@ -336,33 +262,12 @@ export class QseChatPanes extends LightElement {
     if (entry.term.el.parentElement !== host) {
       host.replaceChildren(entry.term.el);
       entry.term.fit();
-      if (!entry.readOnly && !this.sheet) entry.term.focus();
+      // a tab behind another is not shown: it takes no focus
+      if (!entry.readOnly && !this.sheet && host.offsetParent) entry.term.focus();
     }
-    if (!this.resizeObs) this.resizeObs = new ResizeObserver(() => this.fitActive());
+    if (!this.resizeObs) this.resizeObs = new ResizeObserver(() => this.screens.get(p.id)?.term?.fit());
     this.resizeObs.disconnect();
     this.resizeObs.observe(host);
-  }
-
-  private fitActive(): void {
-    const p = this.panes.find((x) => x.id === this.active);
-    if (p?.kind === 'terminal') this.screens.get(p.id)?.term?.fit();
-  }
-
-  /** the open tab in view inside the strip (it scrolls on its own, never the page) */
-  private showActiveTab(): void {
-    const strip = this.querySelector<HTMLElement>('.ch-pane-tabs');
-    const tab = strip?.querySelector<HTMLElement>('.ch-pane-tab.is-on');
-    if (!strip || !tab) return;
-    const left = tab.offsetLeft - strip.offsetLeft;
-    if (left < strip.scrollLeft) strip.scrollLeft = left - 8;
-    else if (left + tab.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = left + tab.offsetWidth - strip.clientWidth + 8;
-  }
-
-  private measureTabs(): void {
-    const strip = this.querySelector<HTMLElement>('.ch-pane-tabs');
-    if (!strip) return;
-    const e = stripEdge(strip.scrollLeft, strip.scrollWidth, strip.clientWidth);
-    if (e !== this.tabEdge) this.tabEdge = e;
   }
 
   /** the phone's key row: what each key sends to the shell */
@@ -381,24 +286,8 @@ export class QseChatPanes extends LightElement {
   // ---- render ---------------------------------------------------------------------------------
 
   render() {
-    const p = this.panes.find((x) => x.id === this.active) ?? this.panes[0];
-    return html`<div class="ch-panes ${this.sheet ? 'is-sheet' : ''}" data-dock=${this.dock}>
-      <div class="ch-pane-strip">
-        <div class="ch-pane-tabs" role="tablist" aria-label="panes" data-edge=${this.tabEdge} @scroll=${() => this.measureTabs()}>
-          ${this.panes.map((x) => html`<span class="ch-pane-tab ${x.id === p?.id ? 'is-on' : ''}" role="tab" aria-selected=${x.id === p?.id} title=${x.title ?? paneWord(x.kind)}><button type="button" class="ch-pane-tab-btn" @click=${() => this.fire('ch-pane-activate', { id: x.id })}>${icon(paneIcon(x.kind))}<span>${x.title ?? paneWord(x.kind)}</span></button><button type="button" class="ch-pane-tab-x" aria-label=${`Close ${x.title ?? paneWord(x.kind)}`} @click=${() => this.fire('ch-pane-close', { id: x.id })}>${icon('x')}</button></span>`)}
-        </div>
-        <span class="ch-pane-plus">
-          <button type="button" class="btn btn-ghost btn-sm" aria-label="Open a pane" aria-haspopup="menu" aria-expanded=${this.plus} @click=${(e: Event) => this.togglePlus(e.currentTarget as HTMLElement)}>${icon('plus')}</button>
-        </span>
-        <span class="grow"></span>
-        ${this.sheet ? nothing : html`<button type="button" class="btn btn-ghost btn-sm ch-dock-btn" title=${this.dock === 'bottom' ? 'Dock to the right' : 'Dock below'} aria-label=${this.dock === 'bottom' ? 'Dock to the right' : 'Dock below'} @click=${() => this.fire('ch-pane-dock', { dock: this.dock === 'bottom' ? 'right' : 'bottom' })}>${icon(this.dock === 'bottom' ? 'dock-right' : 'dock-bottom')}</button>`}
-        <button type="button" class="btn btn-ghost btn-sm" aria-label="Close panes" title="Close" @click=${() => this.fire('ch-panes-close')}>${icon('x')}</button>
-      </div>
-      ${this.plus
-        ? html`<div class="ch-pop ch-pane-menu" role="menu" aria-label="open a pane" style=${`left:${this.plusLeft}px;top:${this.plusTop}px`} @keydown=${(e: KeyboardEvent) => e.key === 'Escape' && (this.plus = false)}>${PLUS_KINDS.map((k) => html`<button type="button" role="menuitem" class="ch-pop-item" @click=${() => this.pick(k)}>${icon(paneIcon(k))}<span class="ch-pop-name">${paneWord(k)}</span></button>`)}</div>`
-        : nothing}
-      <div class="ch-pane-body" data-kind=${p?.kind ?? ''}>${p ? this.renderPane(p) : html`<p class="muted small ch-pane-empty">No pane open. Press + to open the terminal, the files, or a preview.</p>`}</div>
-    </div>`;
+    const p = this.pane;
+    return html`<div class="ch-pane-body" data-kind=${p?.kind ?? ''}>${p ? this.renderPane(p) : html`<p class="muted small ch-pane-empty">No pane open.</p>`}</div>`;
   }
 
   private renderPane(p: OpenPane): TemplateResult {
@@ -632,8 +521,8 @@ export function defaultPane(k: PaneKind): PaneRef {
   }
 }
 
-/** what the plus menu offers */
-const PLUS_KINDS: PaneKind[] = ['terminal', 'files', 'preview', 'diff', 'plan', 'context'];
+/** what the add menu offers a chat as its own panes */
+export const PLUS_KINDS: PaneKind[] = ['terminal', 'files', 'preview', 'diff', 'plan', 'context'];
 
 interface TermEntry {
   session: TerminalSession | null;

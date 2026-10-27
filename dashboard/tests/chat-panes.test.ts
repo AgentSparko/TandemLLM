@@ -58,28 +58,20 @@ describe("the plus menu's Preview", () => {
   });
 });
 
-describe("the plus menu's place", () => {
-  const src = readFileSync(new URL('../src/chat/panes.ts', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../src/styles/chat.css', import.meta.url), 'utf8');
+describe("the add menu's place (VIS-256: the window manager's)", () => {
+  const src = readFileSync(new URL('../src/ui/workspace.ts', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/styles/workspace.css', import.meta.url), 'utf8');
   it('is drawn outside the tab strip, which scrolls sideways and clips what drops below it', () => {
-    const strip = src.indexOf('<div class="ch-pane-tabs"');
-    const body = src.indexOf('<div class="ch-pane-body"');
-    const menu = src.indexOf('class="ch-pop ch-pane-menu"');
-    // the strip's closing tag: the last one before the menu's own `${this.plus ? ... }` block
-    const menuBlock = src.indexOf('${this.plus\n', strip);
-    const stripEnd = src.lastIndexOf('</div>', menuBlock);
-    expect(menuBlock).toBeGreaterThan(strip);
-    expect(src.slice(strip, stripEnd)).not.toContain('ch-pane-menu');
-    expect(strip).toBeGreaterThan(0);
-    expect(menu).toBeGreaterThan(stripEnd);
-    expect(menu).toBeLessThan(body);
-    expect(css).toMatch(/\.ch-pane-tabs \{[^}]*overflow-x: auto/);
+    const dock = src.slice(src.indexOf('private renderDock('), src.indexOf('private renderFloat('));
+    expect(dock).toContain('<div class="wm-tabs"');
+    expect(dock).not.toContain('renderMenu');
+    expect(src.slice(src.indexOf('  render() {'), src.indexOf('private renderDock('))).toContain('this.renderMenu(menu)');
+    expect(css).toMatch(/\.wm-tabs \{[^}]*overflow-x: auto/);
   });
-  it('outranks the phone rule that pins every popover above the composer', () => {
-    const rule = css.match(/\.ch-panes > \.ch-pane-menu\.ch-pop \{([^}]*)\}/);
+  it('sits over everything, fixed at its button, above a popover pinned over the composer', () => {
+    const rule = css.match(/\.wm-menu \{([^}]*)\}/);
     expect(rule).not.toBeNull();
-    expect(rule![1]).toMatch(/bottom: auto/);
-    expect(rule![1]).toMatch(/right: auto/);
-    expect(css).toMatch(/\.ch-panes \{\s*position: relative;/);
+    expect(rule![1]).toMatch(/position: fixed/);
+    expect(rule![1]).toMatch(/z-index: 90/);
   });
 });
