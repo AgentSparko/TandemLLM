@@ -3,7 +3,7 @@
 // page with its own sidebars (Chat) keeping its own open state, and a storage that throws on read,
 // on write or on the property itself leaving the defaults and a working page.
 import { describe, expect, it } from 'vitest';
-import { BOTH_OPEN_MIN, CTX_W, DEFAULT_LAYOUT, RAIL_W, currentWidthClass, defaultLayout, isOpen, loadLayout, opened, resized, saveLayout, toggled, widthClass } from '../src/lib/layout';
+import { CTX_OPEN_MIN, CTX_W, DEFAULT_LAYOUT, RAIL_OPEN_MIN, RAIL_W, currentWidthClass, defaultLayout, isOpen, loadLayout, opened, resized, saveLayout, toggled, widthClass } from '../src/lib/layout';
 
 const mem = () => {
   const m = new Map<string, string>();
@@ -27,16 +27,31 @@ describe('the sidebars', () => {
     expect(isOpen(DEFAULT_LAYOUT, 'ctx', false)).toBe(true);
     expect(isOpen(DEFAULT_LAYOUT, 'ctx', true)).toBe(false);
   });
-  it('below the design’s 1440 px both start as strips, so today’s pages keep their width; saved state wins', () => {
-    expect(BOTH_OPEN_MIN).toBe(1440);
-    expect(defaultLayout(1440)).toEqual(DEFAULT_LAYOUT);
+  it('a first visit opens a sidebar only where today’s pages keep about 1000 px; saved state wins', () => {
+    expect([RAIL_OPEN_MIN, CTX_OPEN_MIN]).toEqual([1400, 1700]);
+    expect(defaultLayout(1920)).toEqual(DEFAULT_LAYOUT);
     expect(loadLayout(mem(), 1920)).toEqual(DEFAULT_LAYOUT);
-    const narrow = loadLayout(mem(), 1200);
-    expect([narrow.rail.open, narrow.ctx.open, narrow.rail.w, narrow.ctx.w]).toEqual([false, false, 248, 340]);
+    const at = (w: number) => {
+      const l = loadLayout(mem(), w);
+      return [l.rail.open, l.ctx.open];
+    };
+    expect([at(1700), at(1440), at(1400), at(1200)]).toEqual([
+      [true, true],
+      [true, false],
+      [true, false],
+      [false, false],
+    ]);
+    // the page keeps at least the width of a 1101 px window beside the old 76 px rail
+    for (const w of [1200, 1400, 1440, 1700, 1920]) {
+      const l = loadLayout(mem(), w);
+      const content = w - 57 - (l.rail.open ? l.rail.w : 0) - (l.ctx.open ? l.ctx.w : 44) - 48;
+      expect(content, String(w)).toBeGreaterThanOrEqual(1101 - 76 - 48);
+    }
     const s = mem();
+    const narrow = loadLayout(s, 1200);
     saveLayout(toggled(narrow, 'ctx', false), s);
     expect(loadLayout(s, 1200).ctx.open).toBe(true);
-    expect(loadLayout(s, 1200).rail.open).toBe(false);
+    expect(loadLayout(s, 1920).rail.open).toBe(false);
   });
   it('a toggle and a resize are saved and read back', () => {
     const s = mem();

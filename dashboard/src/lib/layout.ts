@@ -38,15 +38,15 @@ export interface ShellLayout {
 
 export const DEFAULT_LAYOUT: ShellLayout = { rail: { open: true, w: RAIL_W.def }, ctx: { open: true, w: CTX_W.def }, full: { rail: false, ctx: false } };
 
-/** the narrowest desk on which both sidebars start open (the design's 1440 px): on a narrower one
- *  they start as the strip and the 44 px title, so today's pages keep the width they were laid out
- *  for; opened once, they stay open */
-export const BOTH_OPEN_MIN = 1440;
+/** A first visit opens a sidebar only where today's pages keep about the 1000 px they were laid
+ *  out for (a 1101 px window less the old 76 px rail): the panel from 1400 px, the context from
+ *  1700 px. Below, they start as the strip and the 44 px title; opened once, they stay open. */
+export const RAIL_OPEN_MIN = 1400;
+export const CTX_OPEN_MIN = 1700;
 
 /** The layout of a first visit on a window this wide. */
-export function defaultLayout(width = BOTH_OPEN_MIN): ShellLayout {
-  const open = width >= BOTH_OPEN_MIN;
-  return { rail: { open, w: RAIL_W.def }, ctx: { open, w: CTX_W.def }, full: { rail: false, ctx: false } };
+export function defaultLayout(width = CTX_OPEN_MIN): ShellLayout {
+  return { rail: { open: width >= RAIL_OPEN_MIN, w: RAIL_W.def }, ctx: { open: width >= CTX_OPEN_MIN, w: CTX_W.def }, full: { rail: false, ctx: false } };
 }
 
 const KEY = 'tandemapp.layout';
