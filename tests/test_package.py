@@ -43,6 +43,7 @@ def test_pyproject_matches_the_tree():
                    for d in p["dependencies"] + p["optional-dependencies"]["host"])
     assert p["scripts"]["tandem-app"] == "proxy.__main__:main"
     assert p["scripts"]["tandem-dash"] == "proxy.__main__:main_old_name"   # the old name, OPS-238
+    assert p["scripts"]["tandem-node"] == "proxy.nodeagent:main"          # TandemNode, SRV-725
     assert callable(cli_main.main) and callable(cli_main.main_old_name)
     dirs = st.get("package-dir", {})
     for pkg in st["packages"]:
