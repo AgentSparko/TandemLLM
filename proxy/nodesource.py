@@ -23,11 +23,15 @@ ConnectX ports' own counters (an interface under /sys/class/net whose driver is 
 A figure no source gives is None, never 0.
 
 ENGINES. Each engine backend on this machine (`tandemllm`, `vllm`, `sglang`, `generic`) gets an
-`EngineProbe`: its /metrics page every sample (decode tok/s from the rise of the generation
-counter, requests running, TTFT p50 over the interval from the histogram), its model cards every
-30 s (the models a TandemLLM engine serves itself, apart from those it relays to a cloud), its
-`/v1/dashboard/system` memory split every 10 s and its log on demand. The engine trusts a request
-from loopback without proxy headers (server/auth.py), which is where these come from.
+`EngineProbe`, read every sample. A TandemLLM engine: its live snapshot
+(`/v1/dashboard/live?follow=0`, the Performance view's source, a millisecond to answer): decode
+tok/s from the rise of its token count between two of its one-a-second samples, requests in
+flight, TTFT p50 of the requests that ended since the last read. Not its /metrics page: its
+generation counter rises only when a request ends, and the page takes half a second to render.
+vLLM and SGLang: their /metrics pages through proxy/engines.py's tables. Besides, a TandemLLM
+engine's model cards every 30 s (the models it serves itself, apart from those it relays to a
+cloud), its `/v1/dashboard/system` memory split every 10 s and its log on demand. The engine
+trusts a request from loopback without proxy headers (server/auth.py), where these come from.
 """
 
 from __future__ import annotations
@@ -54,14 +58,6 @@ CARDS_EVERY_S = 30.0
 SYSTEM_EVERY_S = 10.0
 TIMEOUT_S = 2.0
 
-# the TandemLLM engine's own families (server/metrics.py), read with proxy/engines.py's mapper
-TANDEM = (
-    engines.Fam("requests_running", "gauge", "qse_requests_running", "generations running"),
-    engines.Fam("generation_tokens_total", "counter", "qse_generation_tokens_total",
-                "tokens written by the engine"),
-    engines.Fam("ttft_seconds", "histogram", "qse_time_to_first_token_seconds",
-                "arrival to the first token"),
-)
 # the parts of the engine's memory split (server/dashboard_api.py) under the contract's names
 WEIGHT_PARTS = ("weights", "mtp_weights", "vision", "deciders")
 KV_PARTS = ("kv_pool", "drafter_kv", "gdn_state")
@@ -106,7 +102,7 @@ class EngineProbe:
         self.root = engines.root_of(backend["url"])
         self.fetch, self.key = fetch, key
         self._lock = threading.Lock()
-        self._prev: tuple[float, dict] | None = None
+        self._prev: tuple | None = None
         self.version: str | None = None
         self._cards: list[dict] | None = None
         self._cards_at = -CARDS_EVERY_S
@@ -119,10 +115,11 @@ class EngineProbe:
 
     def sample(self, now: float) -> dict:
         """{tps, req, ttft}: decode tok/s and TTFT p50 (ms) since the previous sample, requests
-        running now; None for each the page cannot give."""
+        in flight now; None for each the engine cannot give."""
+        if self.kind == "tandemllm":
+            return self._sample_live()
         out = {"tps": None, "req": None, "ttft": None}
-        table = TANDEM if self.kind == "tandemllm" else engines.TABLES.get(self.kind)
-        if table is None:
+        if self.kind not in engines.TABLES:
             return out
         try:
             body = self._get("/metrics")
@@ -132,11 +129,7 @@ class EngineProbe:
             if body is None:
                 self._prev = None
                 return out
-            text = body.decode("utf-8", "replace")
-            page = engines.map_page(self.kind, text, table)
-            if self.kind == "tandemllm":
-                m = re.search(r'^qse_build_info\{[^}]*version="([^"]*)"', text, re.M)
-                self.version = m.group(1) if m else self.version
+            page = engines.map_page(self.kind, body.decode("utf-8", "replace"))
             out["req"] = engines.value(page, "requests_running")
             prev, self._prev = self._prev, (now, page)
         if prev is not None and now > prev[0]:
@@ -149,6 +142,40 @@ class EngineProbe:
             if h and h["count"] > 0:
                 q = engines.quantile(h, 0.5)
                 out["ttft"] = None if q is None else round(q * 1000.0, 1)
+        return out
+
+    def _sample_live(self) -> dict:
+        out = {"tps": None, "req": None, "ttft": None}
+        try:
+            body = self._get("/v1/dashboard/live?follow=0")
+            doc = json.loads(body) if body is not None else None
+        except Exception:                                            # noqa: BLE001
+            doc = None
+        with self._lock:
+            if not isinstance(doc, dict):
+                self._prev = None
+                return out
+            self.version = (doc.get("engine") or {}).get("version") or self.version
+            s = doc.get("sample") or {}
+            t, n = _num(s.get("t")), _num(s.get("tokens"))
+            out["req"] = _num((doc.get("counts") or {}).get("in_flight"))
+            at = _epoch(doc.get("generated_at"))
+            prev, self._prev = self._prev, (t, n, at)
+        if prev is None or None in (t, n, prev[0], prev[1]):
+            return out
+        if t > prev[0] and n >= prev[1]:                 # a restart starts the count again
+            out["tps"] = round((n - prev[1]) / (t - prev[0]), 3)
+        elif t == prev[0] and not out["req"]:
+            out["tps"] = 0.0                             # its sampler rests while nothing runs
+        if at is not None and prev[2] is not None:
+            ttfts = sorted(r["ttft_ms"] for r in doc.get("recent") or []
+                           if isinstance(r, dict) and _num(r.get("ttft_ms")) is not None
+                           and _num(r.get("ended_ms_ago")) is not None
+                           and at - r["ended_ms_ago"] / 1000.0 > prev[2])
+            if ttfts:
+                mid = len(ttfts) // 2
+                out["ttft"] = round(ttfts[mid] if len(ttfts) % 2 else
+                                    (ttfts[mid - 1] + ttfts[mid]) / 2, 1)
         return out
 
     def cards(self, now: float) -> list[dict] | None:

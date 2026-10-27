@@ -184,12 +184,11 @@ def _key(lab: dict, keep: dict) -> tuple:
     return tuple((ours, lab.get(theirs, "")) for theirs, ours in sorted(keep.items()))
 
 
-def map_page(kind: str, text: str, table: tuple | None = None) -> dict:
+def map_page(kind: str, text: str) -> dict:
     """A page of the engine's own families as {name: {"kind", "series": {key: value}}}; a
     histogram's value is {"buckets": [(le, cumulative)], "sum", "count"}. `key` is a tuple of
-    (label, value) pairs from `keep` (usually empty). Families the page lacks are absent.
-    `table` reads a page with a table of the caller's (the fleet's TandemLLM engines)."""
-    table = table or TABLES.get(kind)
+    (label, value) pairs from `keep` (usually empty). Families the page lacks are absent."""
+    table = TABLES.get(kind)
     if not table:
         return {}
     by_name: dict = collections.defaultdict(list)
