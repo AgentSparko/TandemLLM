@@ -19,6 +19,20 @@ export async function login(page: Page, hash = '#/usage', query = ''): Promise<v
   await expect(page.locator('.shell')).toBeVisible({ timeout: 8000 });
 }
 
+/** Open a section of the menu as a person would (VIS-242): the left panel on a desk, the left drawer
+ *  on a tablet, the menu sheet behind More on a phone. */
+export async function goSection(page: Page, label: string): Promise<void> {
+  const more = page.locator('.bottombar .bb-more');
+  if (await more.isVisible()) {
+    await more.click();
+    await page.locator('.more-sheet .more-item', { hasText: label }).click();
+    return;
+  }
+  const item = page.locator('.lpanel .nav-i', { hasText: label });
+  if (!(await item.isVisible())) await page.locator('.side-btn[data-side="left"]').click();
+  await item.click();
+}
+
 /** Flip the mock engine's failure switch (mock tier only). */
 export async function setMode(request: APIRequestContext, mode: string, extra: Record<string, unknown> = {}): Promise<void> {
   const res = await request.post('/__mock/mode', { data: { mode, ...extra } });

@@ -1,4 +1,5 @@
-// Performance → Parallel: every request in flight on every backend at once. On the mock's
+// Performance → Requests (Parallel before VIS-242; #/performance?tab=parallel still opens it): every
+// request in flight on every backend at once. On the mock's
 // simulator (mock/parallel.ts, 14 streams over six backends): the aggregate, the per-backend cards,
 // the stacked chart, the lanes; rows keep their place between polls; "not reported" where a
 // backend gives no live count; idle; no horizontal scroll at 390 px; the hero does not move.
@@ -16,8 +17,8 @@ test.describe('parallel view', () => {
 
   test('the tab, the aggregate, the backends, the chart and the lanes', async ({ page }) => {
     await login(page, '#/performance');
-    await page.getByRole('tab', { name: 'Parallel' }).click();
-    await expect(page).toHaveURL(/tab=parallel/);
+    await page.getByRole('tab', { name: 'Requests' }).click();
+    await expect(page).toHaveURL(/tab=requests/);
     const par = page.locator('.par');
     await expect(par).toHaveAttribute('data-in-flight', '14');
     await expect(page.locator('[data-total-tps] .num')).toHaveText(/^\d[\d,.]*$/, { timeout: 10_000 });
@@ -36,7 +37,7 @@ test.describe('parallel view', () => {
     await expect(page.locator('[data-kpi="ttft"] .stat-value')).toContainText(/ms|s/, { timeout: 15_000 });
     expect(await noHorizontalOverflow(page)).toBe(true);
     // back to the engine's page
-    await page.getByRole('tab', { name: 'Engine' }).click();
+    await page.getByRole('tab', { name: 'Live' }).click();
     await expect(page.locator('qse-performance')).toBeVisible();
   });
 

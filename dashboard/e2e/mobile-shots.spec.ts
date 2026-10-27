@@ -1,5 +1,5 @@
-// The phone fix of 2026-10-13 (an iPhone pass): the bottom bar of four slots with the rest
-// behind More, the composer's two rows with every control in view, and the bar stepping aside
+// The phone fix of 2026-10-13 (an iPhone pass), in TandemApp's shell (VIS-242): the bottom bar of
+// five slots (Chat, Overview, Performance, Windows, More) with the grouped menu behind More, the composer's two rows with every control in view, and the bar stepping aside
 // while typing. iPhone sizes 390x844 and 320x568, dark and light, against the in-browser mock.
 // Picked up by the `shots` project into screenshots/mobile-*.png (PW_SHOTS_DIR overrides it).
 // Chromium's emulation raises no keyboard: the typing scene shows the focused composer with the
@@ -31,9 +31,9 @@ for (const size of [390, 320] as Size[]) {
       await open(page, theme, '#/chat/c_sync');
       await page.locator('.ch-now').waitFor();
       await page.waitForTimeout(2200);
-      // four slots in the bar, every label whole
-      const bar = page.locator('.rail-tab:visible');
-      await expect(bar).toHaveText(['Chat', 'Usage', 'Performance', 'More']);
+      // five slots in the bar, every label whole
+      const bar = page.locator('.bottombar .bb-i:visible .nav-label');
+      await expect(bar).toHaveText(['Chat', 'Overview', 'Performance', 'Windows', 'More']);
       // every control of the composer is in the document and reachable
       for (const t of ['model', 'thinking effort', 'tools, skills and MCP servers']) await expect(page.locator(`.ch-pill[title="${t}"]`)).toBeVisible();
       await expect(page.locator('.ch-pill', { hasText: 'plan' })).toBeAttached();
@@ -64,7 +64,7 @@ for (const size of [390, 320] as Size[]) {
       await expect(page.locator('.shell')).toHaveClass(/is-typing/);
       await page.waitForTimeout(400); // the bar's slide
       // the bar is off the screen while a field has focus
-      const railTop = await page.locator('.rail').evaluate((el) => el.getBoundingClientRect().top);
+      const railTop = await page.locator('.bottombar').evaluate((el) => el.getBoundingClientRect().top);
       expect(railTop).toBeGreaterThanOrEqual(SIZES[size].height - 1);
       // the thread column runs to the screen's bottom edge: the bar's room is the thread's
       const chBottom = await page.locator('.ch').evaluate((el) => el.getBoundingClientRect().bottom);
@@ -76,13 +76,14 @@ for (const size of [390, 320] as Size[]) {
       await page.setViewportSize(SIZES[size]);
       await open(page, theme, '#/chat/c_explain');
       await page.locator('.ch-foot').first().waitFor();
-      await page.locator('.rail-more').click();
+      await page.locator('.bb-more').click();
       await expect(page.locator('.more-sheet')).toBeVisible();
       await page.waitForTimeout(350);
       await shot(page, `more-${size}-${theme}`);
       // Escape closes it; the opener has focus again
       await page.keyboard.press('Escape');
       await expect(page.locator('.more-sheet')).toBeHidden();
+      await expect(page.locator('.bb-more')).toBeFocused();
     });
 
     test(`phone ${size} ${theme}: the composer's options`, async ({ page }) => {
@@ -106,7 +107,7 @@ for (const size of [390, 320] as Size[]) {
 }
 
 // the other phone screens, at the narrow size, for the same overflow
-test('phone 320 dark: a view behind More takes the More slot; the context sheet, settings, setup, usage', async ({ page }) => {
+test('phone 320 dark: a section behind More takes the More slot; the context sheet, settings, setup, usage', async ({ page }) => {
   await page.setViewportSize(SIZES[320]);
   await open(page, 'dark', '#/chat/c_sync');
   await page.locator('.ch-now').waitFor();
@@ -121,8 +122,9 @@ test('phone 320 dark: a view behind More takes the More slot; the context sheet,
   await page.goto('./?chat=mock#/setup');
   await page.locator('qse-setup').waitFor();
   await page.waitForTimeout(800);
-  await expect(page.locator('.rail-more')).toHaveText('Setup');
-  await expect(page.locator('.rail-more')).toHaveClass(/is-on/);
+  // the setup guide is Models → Serve a model
+  await expect(page.locator('.bb-more')).toHaveText('Models');
+  await expect(page.locator('.bb-more')).toHaveClass(/is-on/);
   await shot(page, 'setup-320-dark');
   await page.goto('./?chat=mock#/usage');
   await page.locator('qse-usage').waitFor();
@@ -130,18 +132,21 @@ test('phone 320 dark: a view behind More takes the More slot; the context sheet,
   await shot(page, 'usage-320-dark');
 });
 
-test('phone 390 light: the Setup guide and the System view behind More', async ({ page }) => {
+test('phone 390 light: the Setup guide and Hardware behind More', async ({ page }) => {
   await page.setViewportSize(SIZES[390]);
   await open(page, 'light', '#/setup');
   await page.locator('qse-setup').waitFor();
   await page.waitForTimeout(800);
   await shot(page, 'setup-390-light');
-  await page.locator('.rail-more').click();
+  await page.locator('.bb-more').click();
   await expect(page.locator('.more-sheet')).toBeVisible();
-  await page.locator('.more-item', { hasText: 'System' }).click();
-  await expect(page).toHaveURL(/#\/system/);
+  await page.locator('.more-item', { hasText: 'Hardware' }).click();
+  await expect(page).toHaveURL(/#\/hardware/);
   await expect(page.locator('.more-sheet')).toBeHidden();
-  await expect(page.locator('.rail-more')).toHaveText('System');
+  await expect(page.locator('.bb-more')).toHaveText('Hardware');
+  // the System view is Hardware's second page
+  await page.goto('./?chat=mock#/hardware/system');
+  await page.locator('qse-system').waitFor();
   await page.waitForTimeout(600);
   await shot(page, 'system-390-light');
 });

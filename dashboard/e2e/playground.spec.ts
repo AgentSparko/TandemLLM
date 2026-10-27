@@ -2,7 +2,7 @@
 // send only what changed, presets, function calling, the readout, JSON and exports.
 // Scenarios that assert on the mock's scripted answers are tagged @mock and skip on a real engine.
 import { expect, test, type Page, type Request } from '@playwright/test';
-import { IS_MOCK, login, noHorizontalOverflow, setMode } from './helpers';
+import { IS_MOCK, goSection, login, noHorizontalOverflow, setMode } from './helpers';
 
 type Body = Record<string, unknown> & { messages: { role: string; content: string; tool_calls?: unknown[]; tool_call_id?: string }[] };
 
@@ -65,11 +65,11 @@ test.describe('playground', () => {
   });
 
   // ---- chat ----------------------------------------------------------------------------
-  test('the fifth tab: #/playground renders, the tab is current, reload keeps it', async ({ page }) => {
+  test('Tune → Playground: #/playground renders, the menu marks it, reload keeps it', async ({ page }) => {
     await open(page, '#/usage');
-    await page.getByRole('link', { name: 'Playground' }).click();
+    await goSection(page, 'Playground');
     await expect(page.locator('qse-playground')).toBeVisible();
-    await expect(page.locator('.rail a.rail-tab.is-on')).toHaveText(/Playground/);
+    await expect(page.locator('.istrip a.strip-i.is-on')).toHaveAttribute('data-section', 'playground');
     await page.reload();
     await expect(page.locator('qse-playground')).toBeVisible();
     expect(page.url()).toContain('#/playground');
