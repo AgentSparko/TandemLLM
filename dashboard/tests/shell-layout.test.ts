@@ -1,13 +1,13 @@
-// The shell's layout (VIS-242, src/lib/layout.ts): the width classes at the prototype's breakpoints,
-// the two sidebars' open state and width saved and read back, every field checked, limits kept, a
-// page with its own sidebars (Chat) keeping its own open state, and a storage that throws on read,
-// on write or on the property itself leaving the defaults and a working page.
+// The shell's measures (VIS-242, VIS-256, src/lib/layout.ts): the width classes at the prototype's
+// breakpoints, the sidebars a first visit opens (Chat's list always, its Context from 1180 px; every
+// other page from 1400 and 1700 px), and what a device saved before layouts were per page, read once
+// so it keeps what it had: every field checked, a storage that throws read as nothing.
 import { describe, expect, it } from 'vitest';
-import { CTX_OPEN_MIN, CTX_W, DEFAULT_LAYOUT, RAIL_OPEN_MIN, RAIL_W, currentWidthClass, defaultLayout, isOpen, loadLayout, opened, resized, saveLayout, toggled, widthClass } from '../src/lib/layout';
+import { CHAT_CTX_OPEN_MIN, CTX_OPEN_MIN, CTX_W, RAIL_OPEN_MIN, RAIL_W, currentWidthClass, defaultSides, legacySides, widthClass } from '../src/lib/layout';
 
-const mem = () => {
-  const m = new Map<string, string>();
-  return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), m };
+const mem = (o: Record<string, string> = {}) => {
+  const m = new Map<string, string>(Object.entries(o));
+  return { getItem: (k: string) => m.get(k) ?? null, m };
 };
 
 describe('width class', () => {
@@ -20,22 +20,15 @@ describe('width class', () => {
   });
 });
 
-describe('the sidebars', () => {
-  it('open on a first visit at the prototype’s widths; Chat’s own state starts closed', () => {
-    expect(loadLayout(mem())).toEqual(DEFAULT_LAYOUT);
-    expect(DEFAULT_LAYOUT).toEqual({ rail: { open: true, w: 248 }, ctx: { open: true, w: 340 }, full: { rail: false, ctx: false } });
-    expect(isOpen(DEFAULT_LAYOUT, 'ctx', false)).toBe(true);
-    expect(isOpen(DEFAULT_LAYOUT, 'ctx', true)).toBe(false);
-  });
-  it('a first visit opens a sidebar only where today’s pages keep about 1000 px; saved state wins', () => {
+describe('the sidebars of a first visit', () => {
+  it('open only where today’s pages keep about 1000 px', () => {
     expect([RAIL_OPEN_MIN, CTX_OPEN_MIN]).toEqual([1400, 1700]);
-    expect(defaultLayout(1920)).toEqual(DEFAULT_LAYOUT);
-    expect(loadLayout(mem(), 1920)).toEqual(DEFAULT_LAYOUT);
     const at = (w: number) => {
-      const l = loadLayout(mem(), w);
-      return [l.rail.open, l.ctx.open];
+      const s = defaultSides(w);
+      return [s.rail.open, s.ctx.open];
     };
-    expect([at(1700), at(1440), at(1400), at(1200)]).toEqual([
+    expect([at(1920), at(1700), at(1440), at(1400), at(1200)]).toEqual([
+      [true, true],
       [true, true],
       [true, false],
       [true, false],
@@ -43,77 +36,38 @@ describe('the sidebars', () => {
     ]);
     // the page keeps at least the width of a 1101 px window beside the old 76 px rail
     for (const w of [1200, 1400, 1440, 1700, 1920]) {
-      const l = loadLayout(mem(), w);
-      const content = w - 57 - (l.rail.open ? l.rail.w : 0) - (l.ctx.open ? l.ctx.w : 44) - 48;
+      const s = defaultSides(w);
+      const content = w - 57 - (s.rail.open ? s.rail.w : 0) - (s.ctx.open ? s.ctx.w : 44) - 48;
       expect(content, String(w)).toBeGreaterThanOrEqual(1101 - 76 - 48);
     }
-    const s = mem();
-    const narrow = loadLayout(s, 1200);
-    saveLayout(toggled(narrow, 'ctx', false), s);
-    expect(loadLayout(s, 1200).ctx.open).toBe(true);
-    expect(loadLayout(s, 1920).rail.open).toBe(false);
   });
-  it('a toggle and a resize are saved and read back', () => {
-    const s = mem();
-    let l = toggled(loadLayout(s), 'ctx', false);
-    l = resized(l, 'rail', 300);
-    expect(saveLayout(l, s)).toBe(true);
-    expect(loadLayout(s)).toEqual({ rail: { open: true, w: 300 }, ctx: { open: false, w: 340 }, full: { rail: false, ctx: false } });
+  it('on Chat: the list always, the Context panel from 1180 px, as before it moved into the shell', () => {
+    expect(CHAT_CTX_OPEN_MIN).toBe(1180);
+    expect(defaultSides(1440, true)).toEqual({ rail: { open: true, w: RAIL_W.def }, ctx: { open: true, w: CTX_W.def } });
+    expect(defaultSides(1179, true).ctx.open).toBe(false);
+    expect(defaultSides(1179, true).rail.open).toBe(true);
   });
-  it('on a full page the toggle is that page’s own', () => {
-    const l = toggled(DEFAULT_LAYOUT, 'rail', true);
-    expect(l.full.rail).toBe(true);
-    expect(l.rail.open).toBe(true);
-    expect(isOpen(toggled(l, 'rail', false), 'rail', true)).toBe(true);
+  it('take the device’s widths', () => {
+    expect(defaultSides(1920, false, { rail: 300, ctx: 420 })).toEqual({ rail: { open: true, w: 300 }, ctx: { open: true, w: 420 } });
   });
-  it('a selection opens the context sidebar, and leaves an open one as it is', () => {
-    const closed = toggled(DEFAULT_LAYOUT, 'ctx', false);
-    expect(opened(closed, 'ctx', false).ctx.open).toBe(true);
-    expect(opened(DEFAULT_LAYOUT, 'ctx', false)).toBe(DEFAULT_LAYOUT);
+});
+
+describe('what a device saved before', () => {
+  it('2.2’s one layout and Chat’s own list and Context, each field checked', () => {
+    expect(legacySides(mem())).toBeNull();
+    expect(legacySides(null)).toBeNull();
+    const s = mem({ 'tandemapp.layout': JSON.stringify({ rail: { open: false, w: 2000 }, ctx: { open: true, w: 300 }, full: { rail: true, ctx: false } }), 'qse.chat.rail': 'closed', 'qse.chat.ctx': 'open' });
+    expect(legacySides(s)).toEqual({ all: { rail: { open: false, w: RAIL_W.max }, ctx: { open: true, w: 300 } }, chat: { rail: false, ctx: true } });
+    expect(legacySides(mem({ 'tandemapp.layout': JSON.stringify({ rail: { open: 'yes', w: 1 }, ctx: { w: 300 } }) }))).toBeNull();
+    for (const raw of ['not json', 'null', '"x"', '42']) expect(legacySides(mem({ 'tandemapp.layout': raw })), raw).toBeNull();
+    expect(legacySides(mem({ 'qse.chat.rail': 'maybe' }))).toBeNull();
   });
-  it('widths stay within their limits', () => {
-    expect(resized(DEFAULT_LAYOUT, 'rail', 10).rail.w).toBe(RAIL_W.min);
-    expect(resized(DEFAULT_LAYOUT, 'rail', 9999).rail.w).toBe(RAIL_W.max);
-    expect(resized(DEFAULT_LAYOUT, 'ctx', 100).ctx.w).toBe(CTX_W.min);
-    expect(resized(DEFAULT_LAYOUT, 'ctx', 333.6).ctx.w).toBe(334);
-  });
-  it('what is saved is checked: a wrong or missing field reads as its default, a width is clamped', () => {
-    const s = mem();
-    s.m.set('tandemapp.layout', JSON.stringify({ rail: { open: 'yes', w: 2000 }, ctx: { w: Number.NaN }, full: { ctx: true } }));
-    expect(loadLayout(s)).toEqual({ rail: { open: true, w: RAIL_W.max }, ctx: { open: true, w: 340 }, full: { rail: false, ctx: true } });
-    for (const raw of ['not json', 'null', '"x"', '42']) {
-      s.m.set('tandemapp.layout', raw);
-      expect(loadLayout(s), raw).toEqual(DEFAULT_LAYOUT);
-    }
-  });
-  it('a storage that throws leaves the defaults and a working page', () => {
+  it('a storage that throws is read as nothing', () => {
     const throwing = {
       getItem: () => {
         throw new Error('SecurityError');
       },
-      setItem: () => {
-        throw new Error('QuotaExceededError');
-      },
     };
-    expect(loadLayout(throwing)).toEqual(DEFAULT_LAYOUT);
-    expect(saveLayout(DEFAULT_LAYOUT, throwing)).toBe(false);
-    expect(loadLayout(null)).toEqual(DEFAULT_LAYOUT);
-    expect(saveLayout(DEFAULT_LAYOUT, null)).toBe(false);
-  });
-  it('a browser whose localStorage property itself throws', () => {
-    const d = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
-    Object.defineProperty(globalThis, 'localStorage', {
-      configurable: true,
-      get() {
-        throw new Error('SecurityError');
-      },
-    });
-    try {
-      expect(loadLayout()).toEqual(DEFAULT_LAYOUT);
-      expect(saveLayout(DEFAULT_LAYOUT)).toBe(false);
-    } finally {
-      if (d) Object.defineProperty(globalThis, 'localStorage', d);
-      else delete (globalThis as { localStorage?: unknown }).localStorage;
-    }
+    expect(legacySides(throwing)).toBeNull();
   });
 });

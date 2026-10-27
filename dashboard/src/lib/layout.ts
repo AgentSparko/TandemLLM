@@ -1,8 +1,7 @@
-// The shell's layout (VIS-242): the width class from the window's width, and the two sidebars' state
-// -- the left panel and the right context sidebar, open or not and how wide -- kept per device in
-// localStorage until the fleet's layouts route holds it (VIS-256). Storage that throws (a private
-// window, a full quota, a browser that refuses the property itself) leaves the defaults and the
-// page working. Kept pure so it can be tested.
+// The shell's measures (VIS-242, VIS-256): the width class from the window's width, the two sidebars'
+// limits and the open state a first visit gets. The sidebars' state itself is part of each page's
+// layout on each device (lib/wm.ts, lib/workspace.ts); 2.2 kept one for every page under
+// `tandemapp.layout`, read here once so a device keeps what it had. Kept pure so it can be tested.
 
 export type WidthClass = 'desk' | 'tablet' | 'phone';
 
@@ -28,83 +27,58 @@ export interface Side {
   w: number;
 }
 
-export interface ShellLayout {
+export interface Sides {
   rail: Side;
   ctx: Side;
-  /** the open state on a page that brings its own sidebars (Chat: its list and its Context
-   *  panel, until VIS-254 moves them into the shell's): closed until you open them there */
-  full: { rail: boolean; ctx: boolean };
 }
-
-export const DEFAULT_LAYOUT: ShellLayout = { rail: { open: true, w: RAIL_W.def }, ctx: { open: true, w: CTX_W.def }, full: { rail: false, ctx: false } };
 
 /** A first visit opens a sidebar only where today's pages keep about the 1000 px they were laid
  *  out for (a 1101 px window less the old 76 px rail): the panel from 1400 px, the context from
  *  1700 px. Below, they start as the strip and the 44 px title; opened once, they stay open. */
 export const RAIL_OPEN_MIN = 1400;
 export const CTX_OPEN_MIN = 1700;
-
-/** The layout of a first visit on a window this wide. */
-export function defaultLayout(width = CTX_OPEN_MIN): ShellLayout {
-  return { rail: { open: width >= RAIL_OPEN_MIN, w: RAIL_W.def }, ctx: { open: width >= CTX_OPEN_MIN, w: CTX_W.def }, full: { rail: false, ctx: false } };
-}
-
-const KEY = 'tandemapp.layout';
+/** Chat's list is how you move between chats, so it starts open; its Context panel opened from
+ *  1180 px before it moved into the shell, and still does. */
+export const CHAT_CTX_OPEN_MIN = 1180;
 
 export const clampW = (w: number, lim: { min: number; max: number }) => Math.round(Math.min(lim.max, Math.max(lim.min, w)));
 
-const side = (o: unknown, d: Side, lim: { min: number; max: number }): Side => {
-  const s = o as Partial<Side> | null;
-  return { open: typeof s?.open === 'boolean' ? s.open : d.open, w: typeof s?.w === 'number' && Number.isFinite(s.w) ? clampW(s.w, lim) : d.w };
-};
+/** The sidebars of a first visit to a page on a window this wide. */
+export function defaultSides(width = CTX_OPEN_MIN, chat = false, w = { rail: RAIL_W.def, ctx: CTX_W.def }): Sides {
+  if (chat) return { rail: { open: true, w: w.rail }, ctx: { open: width >= CHAT_CTX_OPEN_MIN, w: w.ctx } };
+  return { rail: { open: width >= RAIL_OPEN_MIN, w: w.rail }, ctx: { open: width >= CTX_OPEN_MIN, w: w.ctx } };
+}
 
-/** The saved layout, every field checked; what is missing or wrong reads as the default for a
- *  window this wide. */
-export function loadLayout(store?: Pick<Storage, 'getItem'> | null, width?: number): ShellLayout {
-  const d = defaultLayout(width);
+const OLD_KEY = 'tandemapp.layout';
+const OLD_CHAT = { rail: 'qse.chat.rail', ctx: 'qse.chat.ctx' };
+
+/** What a device saved before layouts were per page: 2.2's one layout for every page, and Chat's
+ *  own list and Context panel. Missing or unreadable, null; a field that is wrong is left out. */
+export function legacySides(store: Pick<Storage, 'getItem'> | null): { all: Partial<Sides>; chat: { rail?: boolean; ctx?: boolean } } | null {
+  if (!store) return null;
   let o: Record<string, unknown> | null = null;
+  let rail: string | null = null;
+  let ctx: string | null = null;
   try {
-    o = JSON.parse((store === undefined ? localStorage : store)?.getItem(KEY) ?? 'null');
+    o = JSON.parse(store.getItem(OLD_KEY) ?? 'null');
+    rail = store.getItem(OLD_CHAT.rail);
+    ctx = store.getItem(OLD_CHAT.ctx);
   } catch {
-    /* unreadable: the defaults */
+    /* unreadable: nothing to carry over */
   }
-  if (!o || typeof o !== 'object') return d;
-  const f = o.full as Partial<ShellLayout['full']> | null;
-  return {
-    rail: side(o.rail, d.rail, RAIL_W),
-    ctx: side(o.ctx, d.ctx, CTX_W),
-    full: { rail: typeof f?.rail === 'boolean' ? f.rail : false, ctx: typeof f?.ctx === 'boolean' ? f.ctx : false },
+  const side = (v: unknown, lim: { min: number; max: number }): Side | undefined => {
+    const s = v as Partial<Side> | null;
+    return typeof s?.open === 'boolean' && typeof s.w === 'number' && Number.isFinite(s.w) ? { open: s.open, w: clampW(s.w, lim) } : undefined;
   };
-}
-
-/** Saves the layout; false when the storage refused it (the layout holds for this page load). */
-export function saveLayout(l: ShellLayout, store?: Pick<Storage, 'setItem'> | null): boolean {
-  try {
-    const s = store === undefined ? localStorage : store;
-    s?.setItem(KEY, JSON.stringify(l));
-    return !!s;
-  } catch {
-    return false;
+  const all: Partial<Sides> = {};
+  if (o && typeof o === 'object') {
+    const r = side(o.rail, RAIL_W);
+    const c = side(o.ctx, CTX_W);
+    if (r) all.rail = r;
+    if (c) all.ctx = c;
   }
-}
-
-/** Whether a sidebar shows open on a desk: a full page keeps its own state. */
-export function isOpen(l: ShellLayout, which: 'rail' | 'ctx', full: boolean): boolean {
-  return full ? l.full[which] : l[which].open;
-}
-
-/** The layout with a sidebar toggled (on a full page, its own state). */
-export function toggled(l: ShellLayout, which: 'rail' | 'ctx', full: boolean): ShellLayout {
-  if (full) return { ...l, full: { ...l.full, [which]: !l.full[which] } };
-  return { ...l, [which]: { ...l[which], open: !l[which].open } };
-}
-
-/** The layout with a sidebar opened (a selection shows in the context sidebar). */
-export function opened(l: ShellLayout, which: 'rail' | 'ctx', full: boolean): ShellLayout {
-  return isOpen(l, which, full) ? l : toggled(l, which, full);
-}
-
-/** The layout with a sidebar's width set, kept within its limits. */
-export function resized(l: ShellLayout, which: 'rail' | 'ctx', w: number): ShellLayout {
-  return { ...l, [which]: { ...l[which], w: clampW(w, which === 'rail' ? RAIL_W : CTX_W) } };
+  const chat: { rail?: boolean; ctx?: boolean } = {};
+  if (rail === 'open' || rail === 'closed') chat.rail = rail === 'open';
+  if (ctx === 'open' || ctx === 'closed') chat.ctx = ctx === 'open';
+  return all.rail || all.ctx || chat.rail != null || chat.ctx != null ? { all, chat } : null;
 }
