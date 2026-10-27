@@ -2,8 +2,9 @@
    stream cursor, the running tool, the prefill tip); cobalt is the engine's data and the warm
    cache; violet is thinking; aqua a tool that finished well; red a failure. The user's bubble is a
    neutral grey. One instrument carries the design: the context-window ribbon in the Context panel.
-   One breakpoint, 768 px (the shell's): the rail becomes a drawer, the Context panel and the
-   panes become sheets. Between 768 and 1180 px the Context panel is an overlay.
+   The list of chats, the Context panel and the panes live in the shell since VIS-256: its left
+   panel, its right sidebar and the page's windows (shell.css, workspace.css); `.ch-side` carries the
+   chat's tokens there. One breakpoint, 768 px, narrows the header and the composer for a phone.
    The design pass (VIS-185): three radii by rank (6 px controls, 10 px cards and code, 16 px the
    bubble and the composer), hairline rules for cards and strong rules for inputs only, state on a
    dot and a word rather than a coloured bar, the figures line one quiet row of numbers, and nothing
@@ -13,7 +14,7 @@ qse-chat,
 qse-chat-rail,
 qse-chat-composer,
 qse-chat-context,
-qse-chat-panes,
+qse-chat-pane,
 qse-chat-settings {
   display: block;
   min-width: 0;
@@ -37,10 +38,8 @@ qse-chat-thread {
   margin: 10px 14px 0;
 }
 
-.ch {
-  --ch-rail-w: 280px;
-  --ch-ctx-w: 320px;
-  --ch-pane-size: 40%;
+.ch,
+.ch-side {
   --ch-measure: 76ch;
   --ch-user: color-mix(in srgb, var(--ink) 7%, var(--bg));
   --ch-think: var(--series-violet);
@@ -49,29 +48,30 @@ qse-chat-thread {
   --ch-r: 10px;
   --ch-r-lg: 16px;
   --ch-gap: 12px;
+}
+/* the thread takes the page's height, less a dock below it (the page's windows, VIS-256) */
+.ch {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas: 'rail main ctx';
-  height: calc(100vh - var(--topbar-h));
-  height: calc(100dvh - var(--topbar-h));
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'main';
+  height: calc(100vh - var(--topbar-h) - var(--dock-b, 0px));
+  height: calc(100dvh - var(--topbar-h) - var(--dock-b, 0px));
   min-height: 480px;
   overflow: hidden;
   background: var(--bg);
 }
 
-/* ---- the rail --------------------------------------------------------------------------------- */
-.ch-rail {
-  grid-area: rail;
-  width: var(--ch-rail-w);
-  border-right: 1px solid var(--rule);
-  background: var(--bg-2);
+/* ---- the rail: the shell's left panel on Chat --------------------------------------------------- */
+.ch-side-rail,
+.ch-side-rail > qse-chat-rail {
+  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
-.ch-rail[hidden] {
-  display: none;
+.ch-side-rail > qse-chat-rail {
+  flex: 1;
 }
 .ch-rail-inner {
   display: flex;
@@ -465,9 +465,6 @@ qse-chat-thread {
   display: flex;
   flex-direction: column;
 }
-.dock-right .ch-body {
-  flex-direction: row;
-}
 .ch-threadwrap {
   flex: 1;
   min-height: 0;
@@ -476,42 +473,6 @@ qse-chat-thread {
   flex-direction: column;
   position: relative;
   overflow: hidden;
-}
-.is-panes qse-chat-panes {
-  flex: 0 0 var(--ch-pane-size);
-  min-height: 120px;
-  min-width: 240px;
-  display: flex;
-  flex-direction: column;
-}
-.ch-split {
-  flex: none;
-  background: var(--rule);
-  cursor: row-resize;
-  position: relative;
-  z-index: 2;
-}
-.dock-bottom .ch-split {
-  height: 1px;
-}
-.dock-bottom .ch-split::before {
-  content: '';
-  position: absolute;
-  inset: -4px 0;
-}
-.dock-right .ch-split {
-  width: 1px;
-  cursor: col-resize;
-}
-.dock-right .ch-split::before {
-  content: '';
-  position: absolute;
-  inset: 0 -4px;
-}
-.ch-split:hover,
-.ch-split:focus-visible {
-  background: var(--cobalt);
-  box-shadow: none;
 }
 .ch-loading {
   position: absolute;
@@ -2230,30 +2191,9 @@ qse-chat-composer {
   border-color: var(--cobalt);
 }
 
-/* ---- the Context panel -------------------------------------------------------------------------- */
-.ch-ctx {
-  grid-area: ctx;
-  width: var(--ch-ctx-w);
-  border-left: 1px solid var(--rule);
-  background: var(--bg-2);
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.ch-ctx[hidden] {
-  display: none;
-}
-.ch-ctx-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 8px 8px 16px;
-  border-bottom: 1px solid var(--rule);
-  min-height: 48px;
-}
-.ch-ctx-head h2 {
-  font-size: var(--fs-md);
-  font-weight: 600;
+/* ---- the Context panel: the shell's right sidebar on Chat (its own sections' padding) ----------- */
+.ctx-b > .ch-side-ctx {
+  margin: -12px -14px -40px;
 }
 qse-chat-context {
   flex: 1;
@@ -2656,135 +2596,18 @@ qse-chat-context {
   margin-top: 8px;
 }
 
-/* ---- the panes ---------------------------------------------------------------------------------- */
-qse-chat-panes {
-  background: var(--bg-2);
-}
-.dock-bottom qse-chat-panes {
-  border-top: 1px solid var(--rule);
-}
-.dock-right qse-chat-panes {
-  border-left: 1px solid var(--rule);
-}
-.ch-panes {
-  display: flex;
-  flex-direction: column;
+/* ---- a pane: the body of a window (ui/workspace.ts draws the tabs, the docks and the tray) ------ */
+.ch-pane-host,
+.ch-pane-host > qse-chat-pane {
   height: 100%;
   min-height: 0;
-}
-/* the panes' strip: the tabs scroll sideways in their own box (the open one kept in view, the
-   edge with more behind it fading), the plus right after them, dock and close fixed at the end */
-.ch-pane-strip {
   display: flex;
-  align-items: center;
-  gap: 2px;
-  min-height: 40px;
-  padding: 0 4px 0 6px;
-  border-bottom: 1px solid var(--rule);
-  flex: none;
-  min-width: 0;
+  flex-direction: column;
 }
-.ch-pane-tabs {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  overscroll-behavior-x: contain;
-}
-.ch-pane-tabs::-webkit-scrollbar {
-  display: none;
-}
-.ch-pane-tabs[data-edge='start'] {
-  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
-}
-.ch-pane-tabs[data-edge='end'] {
-  mask-image: linear-gradient(to right, transparent, #000 24px);
-}
-.ch-pane-tabs[data-edge='mid'] {
-  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
-}
-.ch-pane-strip > .btn,
-.ch-pane-plus {
-  flex: none;
-}
-.ch-pane-tab {
-  display: inline-flex;
-  align-items: center;
-  height: 30px;
-  border-radius: var(--ch-r-sm);
-  color: var(--ink-2);
-  flex: none;
-  max-width: 200px;
-}
-.ch-pane-tab.is-on {
-  background: var(--bg-3);
-  color: var(--ink);
-}
-.ch-pane-tab-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  height: 100%;
-  padding: 0 4px 0 9px;
-  border: 0;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  font-size: var(--fs-sm);
-  white-space: nowrap;
-}
-.ch-pane-tab-btn > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ch-pane-tab-btn .icon {
-  width: 14px;
-  height: 14px;
-  color: var(--ink-3);
-}
-.ch-pane-tab.is-on .ch-pane-tab-btn .icon {
-  color: var(--cobalt-hi);
-}
-.ch-pane-tab-x {
-  display: inline-flex;
-  flex: none;
-  padding: 3px;
-  margin-right: 4px;
-  border: 0;
-  background: none;
-  color: var(--ink-3);
-  cursor: pointer;
-  border-radius: 50%;
-}
-.ch-pane-tab-x .icon {
-  width: 12px;
-  height: 12px;
-}
-.ch-pane-tab-x:hover {
-  color: var(--ink);
-  background: var(--bg-3);
-}
-.ch-pane-plus {
-  position: relative;
-}
-.ch-panes {
-  position: relative;
-}
-/* the plus menu: a child of the panes box, below the tab strip (which scrolls sideways and would
-   clip it), at the plus button's left (an inline style), on a phone as on a desktop */
-.ch-panes > .ch-pane-menu.ch-pop {
-  position: absolute;
-  top: 40px;
-  bottom: auto;
-  right: auto;
-  z-index: 40;
-  min-width: min(220px, calc(100% - 12px));
-  max-width: calc(100% - 12px);
-  max-height: calc(100% - 48px);
+.ch-pane-host > qse-chat-pane,
+.wm-pane > qse-chat-pane {
+  flex: 1;
+  background: var(--bg-2);
 }
 .ch-pane-body {
   flex: 1;
@@ -3595,67 +3418,14 @@ qse-chat-panes {
   border-color: var(--warn);
   color: var(--warn-ink);
 }
-.ch-scrim {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 29;
-  background: rgba(0, 0, 0, 0.45);
-}
-.ch.is-sheet .ch-scrim {
-  display: block;
-}
-
-/* ---- between 768 and 1180 px: the Context panel is an overlay ---------------------------------- */
-@media (max-width: 1180px) {
-  .ch {
-    --ch-rail-w: 240px;
-  }
-  .ch-ctx {
-    position: fixed;
-    top: var(--topbar-h);
-    right: 0;
-    bottom: 0;
-    z-index: 30;
-    width: min(360px, 92vw);
-    box-shadow: var(--shadow-pop);
-    transform: translateX(102%);
-    transition: transform 0.22s ease-out;
-  }
-  .ch-ctx[hidden] {
-    display: flex;
-  }
-  .ch.is-sheet-ctx .ch-ctx {
-    transform: translateX(0);
-  }
-}
 
 /* ---- the phone ------------------------------------------------------------------------------------ */
 @media (max-width: 768px) {
   .ch {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'main';
     /* the bar's room (--tabbar-space, the shell's) is gone while typing: the thread takes it */
-    height: calc(100vh - var(--topbar-h) - var(--tabbar-space));
-    height: calc(100dvh - var(--topbar-h) - var(--tabbar-space));
+    height: calc(100vh - var(--topbar-h) - var(--tabbar-space) - var(--dock-b, 0px));
+    height: calc(100dvh - var(--topbar-h) - var(--tabbar-space) - var(--dock-b, 0px));
     min-height: 240px;
-  }
-  .ch-rail {
-    position: fixed;
-    top: var(--topbar-h);
-    left: 0;
-    bottom: 0;
-    z-index: 30;
-    width: min(320px, 84vw);
-    box-shadow: var(--shadow-pop);
-    transform: translateX(-102%);
-    transition: transform 0.22s ease-out;
-  }
-  .ch-rail[hidden] {
-    display: flex;
-  }
-  .ch.is-sheet-rail .ch-rail {
-    transform: translateX(0);
   }
   .ch-rail-close {
     display: inline-flex;
@@ -3842,45 +3612,9 @@ qse-chat-panes {
     max-width: none;
     max-height: min(60vh, calc(100dvh - var(--topbar-h) - 150px));
   }
-  .ch-ctx {
-    width: 100vw;
-    bottom: var(--tabbar-space);
-  }
-  /* the panes: a full-screen sheet from the bottom. The shell's bar steps down while it is open
-     (the sheet is modal: its close button leads back), so the pane has the screen's height */
-  .shell:has(.ch.is-sheet-panes) {
-    --tabbar-space: 0px;
-  }
-  .shell:has(.ch.is-sheet-panes) .bottombar {
-    transform: translateY(110%);
-  }
-  qse-chat-panes.is-sheet,
-  .is-panes qse-chat-panes {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: var(--tabbar-space);
-    top: var(--topbar-h);
-    z-index: 30;
-    display: flex;
-    flex-direction: column;
-    border-top: 0;
-    border-left: 0;
-    transform: translateY(102%);
-    transition: transform 0.22s ease-out;
-    box-shadow: var(--shadow-pop);
-  }
-  .ch.is-sheet-panes qse-chat-panes {
-    transform: translateY(0);
-  }
+  /* a pane in the phone's tray: clear of the home indicator */
   .ch-pane-body:not([data-kind='terminal']) {
     padding-bottom: env(safe-area-inset-bottom);
-  }
-  .ch.is-panes:not(.is-sheet-panes) qse-chat-panes {
-    display: none;
-  }
-  .ch-split {
-    display: none;
   }
   .ch-files {
     grid-template-columns: minmax(0, 1fr);
@@ -3969,9 +3703,6 @@ qse-chat-panes {
   .ch-rib-tip {
     animation: none;
   }
-  .ch-rail,
-  .ch-ctx,
-  qse-chat-panes,
   .ch-tools,
   .md-code-tools,
   .ch-think summary::before,

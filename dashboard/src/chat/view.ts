@@ -1,10 +1,14 @@
 // <qse-chat>: the Chat tab. Picks the backend (the server's /v1/chat-app; the in-browser mock with
 // a badge for ?chat=mock and the dev server; without the chat API the panel that names why, VIS-179), loads the capabilities and the conversation list, opens the chat in the route and
 // tails its event stream (a catch-up from the last seen event id, then live), and lays out the
-// rail, the thread with its composer, the panes workspace and the Context panel. One breakpoint at
-// 768 px (the shell's) turns the rail, the Context panel and the panes into a drawer and sheets;
-// between 768 and 1180 px the Context panel starts closed. The pane layout is server state
-// (Conversation.ui); the sizes and the open/closed chrome stay in this browser.
+// thread with its composer. The shell holds the rest (VIS-256): the list of chats is the left panel
+// (lib/context.ts registerPanel), the Context panel with its eight sections the right sidebar
+// (registerContext), and the chat's panes are windows of the page (lib/workspace.ts registerWindows):
+// docked below the thread or beside it, floating, minimised, or a tray of sheets on a phone. Which
+// panes a chat has open is server state per chat (Conversation.ui); where they sit is the page's
+// layout per device. Both sidebars and the panes keep elements this view owns and updates, so a
+// terminal keeps its session as its window moves. A server that starts listening opens in a Preview
+// pane (preview.ts rule 2) while the panes show.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
@@ -22,6 +26,15 @@ import './composer';
 import './context-panel';
 import './panes';
 import './settings';
+import type { QseChatRail } from './rail';
+import type { QseChatContext } from './context-panel';
+import { registerContext, registerPanel, onSidebars, sidebarShown, toggleSidebar } from '../lib/context';
+import { currentPage, registerWindows, setTray, showInTray, trayOpen, windowsChanged, type WindowSource } from '../lib/workspace';
+import { CHAT_DEFAULTS } from '../lib/wm';
+import type { WindowKind } from '../api/fleet';
+import { paneIcon, paneWord } from './thread';
+import { latestPage, filePane } from './file-panes';
+import { PORT_POLL_MS, freshServers, newestServer, portPane } from './preview';
 import { isChatDown, pickBackend, probeChat, VersionConflict, type ChatBackend, type ChatDown, type Subscription } from './backend';
 import { downBanner, Reprobe } from './chat-down';
 import { attachLabel, initialAttachment, onEvent as attachEvent, onStreamState, onTick, type Attachment as Attach } from './connection';
@@ -29,17 +42,15 @@ import { adopt, adoptTask, applyEvent, mergeTasks, messageText } from './store';
 import { agentsDone } from './tasks';
 import { badge, notify, notifyKind } from './notify';
 import type { QseChatComposer } from './composer';
-import { defaultPane, type OpenPane, type Dock, type QseChatPanes } from './panes';
+import { PLUS_KINDS, defaultPane, type OpenPane, type QseChatPane } from './panes';
 import type { SettingsSection } from './settings';
 import { SECTIONS } from './settings';
-import { clientMsgId, localId, type Attachment, type Capabilities, type ChatSettings, type Conversation, type ConversationSummary, type ConversationUi, type Folder, type PaneRef, type Preset, type PackageInfo, type Prompt, type StampedEvent, type ToolInfo, type WebSearchProvider } from './types';
+import { clientMsgId, localId, type Attachment, type Capabilities, type ChatSettings, type Conversation, type ConversationSummary, type ConversationUi, type Folder, type PaneKind, type PaneRef, type Preset, type PackageInfo, type Prompt, type SandboxFile, type StampedEvent, type ToolInfo, type WebSearchProvider } from './types';
 import { RunToken } from '../lib/run-token';
 
 const LS = {
-  rail: 'qse.chat.rail',
-  ctx: 'qse.chat.ctx',
+  /** where the panes docked before they were windows: a new pane goes there */
   dock: 'qse.chat.dock',
-  size: 'qse.chat.panesize',
   last: 'qse.chat.last',
   draft: (id: string) => `qse.chat.draft.${id}`,
 };
@@ -88,27 +99,34 @@ export class QseChat extends LightElement {
   @state() private prompts: Prompt[] = [];
   @state() private unread = new Set<string>();
   // chrome
-  @state() private railOpen = lsGet(LS.rail) !== 'closed';
-  @state() private ctxOpen = lsGet(LS.ctx) == null ? window.innerWidth >= 1180 : lsGet(LS.ctx) === 'open';
-  @state() private sheet: 'none' | 'rail' | 'ctx' | 'panes' = 'none';
-  @state() private phone = matchMedia('(max-width: 768px)').matches;
-  @state() private narrow = matchMedia('(max-width: 1180px)').matches;
-  @state() private dock: Dock = (lsGet(LS.dock) as Dock) || 'bottom';
-  /** the panes' share of the thread column, 0.2..0.8 */
-  @state() private paneSize = Number(lsGet(LS.size) ?? 0.4);
   @state() private more = false;
+  /** the shell's sidebars opened or closed: the header's toggles show it */
+  @state() private sidesTick = 0;
   @state() private notice: { kind: 'ok' | 'warn'; text: string } | null = null;
   /** VIS-219: what the Agents switch did, under the composer until the next send */
   @state() private agentsNote: string | null = null;
   @query('qse-chat-composer') private composer!: QseChatComposer | null;
+
+  /** the list of chats in the shell's left panel, the Context panel in its right sidebar, and each
+   *  open pane's body: elements this view keeps and updates (the shell does not draw them again) */
+  private railEl: QseChatRail | null = null;
+  private railHost: HTMLElement | null = null;
+  private ctxEl: QseChatContext | null = null;
+  private ctxHost: HTMLElement | null = null;
+  private paneEls = new Map<string, { host: HTMLElement; el: QseChatPane }>();
+  private unhook: (() => void)[] = [];
+  /** what the page's windows were at the last draw: a change is told to the window manager */
+  private shownPanes = '';
+  /** the ports that listened at the last look (null: not looked yet), for the chat `portConv` */
+  private portSeen: Set<number> | null = null;
+  private portConv: string | null = null;
+  private portTimer: ReturnType<typeof setInterval> | null = null;
 
   private sub: Subscription | null = null;
   private tick: ReturnType<typeof setInterval> | null = null;
   private listPoll: Poller | null = null;
   private globalSub: Subscription | null = null;
   private listSoon: ReturnType<typeof setTimeout> | null = null;
-  private mq768 = matchMedia('(max-width: 768px)');
-  private mq1180 = matchMedia('(max-width: 1180px)');
   private noticeTimer: ReturnType<typeof setTimeout> | null = null;
   private resuming = false;
   private wantId: string | null = null;
@@ -126,20 +144,26 @@ export class QseChat extends LightElement {
   connectedCallback(): void {
     super.connectedCallback();
     this.boots.start();
-    this.mq768.addEventListener('change', this.onMedia);
-    this.mq1180.addEventListener('change', this.onMedia);
+    this.makeSides();
+    this.unhook.push(
+      registerPanel('chat', () => this.railHost!),
+      registerContext('chat', () => ({ title: 'Context', body: this.ctxHost! })),
+      registerWindows('chat', this.source),
+      onSidebars(() => this.sidesTick++),
+    );
+    this.portTimer = setInterval(() => void this.watchPorts(), PORT_POLL_MS);
     window.addEventListener('keydown', this.onKey);
-    window.addEventListener('popstate', this.onPop);
     document.addEventListener('click', this.onDocClick);
     window.addEventListener('qse-signed-in', this.onSignedIn);
     void this.boot();
   }
   disconnectedCallback(): void {
     this.boots.stop();
-    this.mq768.removeEventListener('change', this.onMedia);
-    this.mq1180.removeEventListener('change', this.onMedia);
+    this.unhook.forEach((u) => u());
+    this.unhook = [];
+    if (this.portTimer) clearInterval(this.portTimer);
+    this.portTimer = null;
     window.removeEventListener('keydown', this.onKey);
-    window.removeEventListener('popstate', this.onPop);
     document.removeEventListener('click', this.onDocClick);
     window.removeEventListener('qse-signed-in', this.onSignedIn);
     this.sub?.close();
@@ -153,7 +177,93 @@ export class QseChat extends LightElement {
   updated(changed: Map<string, unknown>): void {
     if ((changed.has('path') || changed.has('params')) && this.backend) void this.openFromRoute();
     if (changed.has('list') || changed.has('unread')) badge(this.list.filter((x) => x.status === 'waiting' || x.unread || this.unread.has(x.id)).length);
+    this.updateSides();
   }
+
+  // ---- the shell's sidebars and windows ---------------------------------------------------------
+
+  /** the list and the Context panel, made once; the shell shows them, this view feeds them */
+  private makeSides(): void {
+    if (this.railHost) return;
+    this.railHost = Object.assign(document.createElement('div'), { className: 'ch-side ch-side-rail' });
+    this.railEl = document.createElement('qse-chat-rail') as QseChatRail;
+    this.railHost.append(this.railEl);
+    const on = <T>(el: HTMLElement, name: string, fn: (d: T) => void) => el.addEventListener(name, (e) => fn((e as CustomEvent<T>).detail));
+    on<{ id: string }>(this.railEl, 'ch-open', (d) => this.goto(d.id));
+    on(this.railEl, 'ch-new', () => void this.newChat());
+    on<{ id: string; title: string }>(this.railEl, 'ch-rename', (d) => void this.rename(d.id, d.title));
+    on<{ id: string; pinned: boolean }>(this.railEl, 'ch-pin', (d) => void this.pin(d.id, d.pinned));
+    on<{ id: string; folder_id: string | null }>(this.railEl, 'ch-move', (d) => void this.move(d.id, d.folder_id));
+    on<{ id: string }>(this.railEl, 'ch-delete', (d) => void this.removeChat(d.id));
+    on<{ name: string }>(this.railEl, 'ch-folder-new', (d) => void this.guard(() => this.backend!.createFolder(d.name).then((f) => (this.folders = [...this.folders, f])), 'New folder'));
+    on<{ section: SettingsSection }>(this.railEl, 'ch-open-settings', (d) => this.openSettings(d.section));
+    on(this.railEl, 'ch-close-rail', () => this.closeDrawer());
+    this.ctxHost = Object.assign(document.createElement('div'), { className: 'ch-side ch-side-ctx' });
+    this.ctxEl = document.createElement('qse-chat-context') as QseChatContext;
+    this.ctxHost.append(this.ctxEl);
+    this.ctxEl.addEventListener('ch-compact', () => this.conv && void this.guard(() => this.backend!.compact(this.conv!.id), 'Compact'));
+    on<{ section: SettingsSection }>(this.ctxEl, 'ch-open-settings', (d) => this.openSettings(d.section));
+  }
+
+  /** the shell's sidebars and the panes' bodies follow this view's state */
+  private updateSides(): void {
+    const c = this.conv;
+    if (this.railEl) Object.assign(this.railEl, { list: this.list, folders: this.folders, active: c?.id ?? null, mock: this.backend?.kind === 'mock' ? this.mockNote : '', unread: this.unread });
+    if (this.ctxEl) Object.assign(this.ctxEl, { conv: c, attach: this.attach, now: this.now });
+    const sheet = currentPage().device === 'phone';
+    const panes = this.openPanes;
+    for (const [id, p] of this.paneEls) {
+      const pane = panes.find((x) => x.id === id);
+      if (!pane) {
+        this.paneEls.delete(id);
+        continue;
+      }
+      Object.assign(p.el, { pane: { ...pane, inline: this.inline.get(pane.id) ?? null }, backend: this.backend, convId: c?.id ?? null, conv: c, sheet });
+    }
+    const shown = JSON.stringify([c?.id, this.section, c?.ui.active, panes.map((p) => [p.id, p.kind, p.title])]);
+    if (shown !== this.shownPanes) {
+      this.shownPanes = shown;
+      windowsChanged();
+    }
+  }
+
+  /** a phone's drawer closes after a pick in it */
+  private closeDrawer(): void {
+    if (currentPage().device !== 'desk' && sidebarShown('rail')) toggleSidebar('rail');
+  }
+
+  /** The chat's panes as the page's windows: shown while the chat shows them (ui.active), each one's
+   *  body an element kept per pane. */
+  private source: WindowSource = {
+    windows: () => {
+      const c = this.conv;
+      if (!c || this.section || !c.ui.active) return [];
+      return this.openPanes.map((p) => ({ id: `chat:${p.id}`, kind: p.kind as WindowKind, title: p.title ?? paneWord(p.kind), icon: paneIcon(p.kind) }));
+    },
+    body: (id, sheet) => {
+      const pid = id.replace(/^chat:/, '');
+      let p = this.paneEls.get(pid);
+      if (!p) {
+        const host = Object.assign(document.createElement('div'), { className: 'ch-side ch-pane-host' });
+        const el = document.createElement('qse-chat-pane') as QseChatPane;
+        el.addEventListener('ch-pane-open', (e) => void this.openPane((e as CustomEvent<{ pane: PaneRef }>).detail.pane));
+        host.append(el);
+        p = { host, el };
+        this.paneEls.set(pid, p);
+      }
+      const pane = this.openPanes.find((x) => x.id === pid);
+      Object.assign(p.el, { pane: pane ? { ...pane, inline: this.inline.get(pid) ?? null } : null, backend: this.backend, convId: this.conv?.id ?? null, conv: this.conv, sheet });
+      return p.host;
+    },
+    dock: () => (lsGet(LS.dock) === 'right' ? 'right' : 'bottom'),
+    activate: (id) => this.conv && void this.saveUi({ ...this.conv.ui, active: id.replace(/^chat:/, '') }),
+    close: (id) => void this.closePane(id.replace(/^chat:/, '')),
+    hide: () => this.conv && void this.saveUi({ ...this.conv.ui, active: null }),
+    kinds: PLUS_KINDS as WindowKind[],
+    open: (kind) => void this.pick(kind as PaneKind),
+    reset: () => void this.openDefaults(true),
+    active: () => (this.conv?.ui.active ? `chat:${this.conv.ui.active}` : null),
+  };
 
   /** the list-level stream: a run ended or asks somewhere; notify this device, refresh the list */
   private async onGlobal(ev: { type: string; conversation_id?: string; status?: string }): Promise<void> {
@@ -170,17 +280,8 @@ export class QseChat extends LightElement {
       }, 400);
   }
 
-  private onMedia = () => {
-    this.phone = this.mq768.matches;
-    this.narrow = this.mq1180.matches;
-    if (!this.phone && this.sheet === 'rail') this.sheet = 'none';
-  };
   private onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && this.sheet !== 'none') this.closeSheet();
-    else if (e.key === 'Escape' && this.more) this.more = false;
-  };
-  private onPop = () => {
-    if (this.sheet !== 'none') this.sheet = 'none';
+    if (e.key === 'Escape' && this.more) this.more = false;
   };
   private onDocClick = (e: Event) => {
     if (this.more && !(e.target as HTMLElement).closest('.ch-more')) this.more = false;
@@ -405,7 +506,9 @@ export class QseChat extends LightElement {
     }
     if (e.type === 'pane.open' && !replay) {
       // a preview the model presents again resolves and loads anew: `present` waits for its report
-      void this.openPane(e.pane).then(() => e.pane.kind === 'preview' && this.querySelector<QseChatPanes>('qse-chat-panes')?.refresh(e.pane.ref));
+      void this.openPane(e.pane).then(() => {
+        if (e.pane.kind === 'preview') for (const p of this.paneEls.values()) if (p.el.pane?.ref === e.pane.ref) p.el.refresh(e.pane.ref);
+      });
       return;
     }
     const next = applyEvent(this.conv, e);
@@ -465,7 +568,7 @@ export class QseChat extends LightElement {
     const hash = id ? `#/chat/${encodeURIComponent(id)}` : '#/chat';
     if (location.hash !== hash) location.hash = hash;
     else void this.openFromRoute();
-    this.closeSheet();
+    this.closeDrawer();
   }
 
   private async newChat(settings?: Partial<ChatSettings>): Promise<Conversation | undefined> {
@@ -477,7 +580,7 @@ export class QseChat extends LightElement {
     this.attachTo(c);
     lsSet(LS.last, c.id);
     location.hash = `#/chat/${encodeURIComponent(c.id)}`;
-    this.closeSheet();
+    this.closeDrawer();
     this.updateComplete.then(() => this.composer?.focusArea());
     return c;
   }
@@ -639,7 +742,8 @@ export class QseChat extends LightElement {
     const id = existing?.id ?? key;
     const panes = existing ? ui.panes : [...ui.panes, { ...pane, id }];
     await this.saveUi({ ...ui, panes, active: id });
-    if (this.phone) this.openSheet('panes');
+    showInTray(null);
+    if (currentPage().device === 'phone') setTray(true);
   }
   private inline = new Map<string, { content: string; lang: string }>();
 
@@ -649,62 +753,95 @@ export class QseChat extends LightElement {
     const panes = ui.panes.filter((p) => (p.id ?? `${p.kind}:${p.ref}`) !== id);
     const active = ui.active === id ? (panes[panes.length - 1]?.id ?? null) : ui.active;
     await this.saveUi({ ...ui, panes, active });
-    if (!panes.length && this.sheet === 'panes') this.closeSheet();
+    if (!panes.length && trayOpen()) setTray(false);
   }
 
-  private setDock(d: Dock): void {
-    this.dock = d;
-    lsSet(LS.dock, d);
+  /** a kind from the add menu; Preview opens the newest running server, else the page the chat
+   *  made last, else the Files pane */
+  private async pick(k: PaneKind): Promise<void> {
+    if (k !== 'preview') return this.openPane(defaultPane(k));
+    return this.openPane((await this.previewPane()) ?? defaultPane('files'));
   }
 
-  private startResize(e: PointerEvent): void {
-    const body = this.querySelector<HTMLElement>('.ch-body');
-    if (!body) return;
-    e.preventDefault();
-    const rect = body.getBoundingClientRect();
-    const move = (ev: PointerEvent) => {
-      const frac = this.dock === 'bottom' ? 1 - (ev.clientY - rect.top) / rect.height : 1 - (ev.clientX - rect.left) / rect.width;
-      this.paneSize = Math.min(0.8, Math.max(0.2, frac));
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      lsSet(LS.size, this.paneSize.toFixed(3));
-      if (this.dock === 'right' && this.conv) void this.saveUi({ ...this.conv.ui, split: Math.min(0.75, Math.max(0.35, 1 - this.paneSize)) });
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+  /** the Preview the add menu opens: the newest server that listens, else the newest page */
+  private async previewPane(): Promise<PaneRef | null> {
+    const b = this.backend;
+    const c = this.conv;
+    if (!b || !c) return null;
+    const server = newestServer(await b.sandboxPorts(c.id).catch(() => []));
+    if (server) return portPane(server);
+    const page = latestPage(c.messages) ?? (await this.newestPage());
+    return page ? filePane(page) : null;
+  }
+
+  /** the newest HTML or SVG file at the top of the sandbox's working directory */
+  private async newestPage(): Promise<string | null> {
+    const c = this.conv;
+    if (!this.backend || !c) return null;
+    const list = await this.backend.sandboxFiles(c.id, c.sandbox?.cwd || '/work/sync').catch(() => [] as SandboxFile[]);
+    const pages = list.filter((f) => f.kind === 'file' && filePane(f.path)?.kind === 'preview');
+    pages.sort((a, b) => (b.modified_at ?? '').localeCompare(a.modified_at ?? ''));
+    return pages[0]?.path ?? null;
+  }
+
+  /** Chat's default windows (lib/wm.ts CHAT_DEFAULTS): the shell, the files and the page the chat
+   *  made (when it made one or runs a server), the shell in front. Opened when the Panes button finds
+   *  none, and by Reset layout, which puts them in place of the chat's panes. A chat never opens
+   *  them by itself: a shell starts the chat's sandbox. */
+  private async openDefaults(replace: boolean): Promise<void> {
+    const c = this.conv;
+    if (!c) return;
+    const want: PaneRef[] = [];
+    for (const k of CHAT_DEFAULTS) {
+      const p = k === 'preview' ? await this.previewPane() : defaultPane(k as PaneKind);
+      if (p) want.push({ ...p, id: `${p.kind}:${p.ref}` });
+    }
+    if (this.conv?.id !== c.id) return;
+    const ui = this.conv.ui;
+    const keep = replace ? [] : ui.panes;
+    const panes = [...keep, ...want.filter((w) => !keep.some((p) => p.kind === w.kind && p.ref === w.ref))];
+    await this.saveUi({ ...ui, panes, active: want[0]?.id ?? panes[0]?.id ?? null });
+  }
+
+  /** A server that started listening opens in a Preview pane (preview.ts rule 2): only while the
+   *  panes show, not when a preview already shows that port; a waiting preview takes it itself. */
+  private async watchPorts(): Promise<void> {
+    const c = this.conv;
+    if (!this.backend || !c || !c.ui.active || document.hidden) return;
+    const id = c.id;
+    const ports = await this.backend.sandboxPorts(id).catch(() => null);
+    if (!ports || id !== this.conv?.id) return;
+    if (this.portConv !== id) {
+      this.portConv = id;
+      this.portSeen = null;
+    }
+    const { seen, fresh } = freshServers(this.portSeen, ports);
+    this.portSeen = seen;
+    const server = newestServer(fresh);
+    if (!server) return;
+    const waiting = [...this.paneEls.values()].find((p) => p.el.pane?.kind === 'preview' && p.el.waiting);
+    if (waiting) return waiting.el.refresh(waiting.el.pane!.ref);
+    const shown = this.openPanes.some((x) => x.kind === 'preview' && (x.ref === `port:${server.port}` || [...this.paneEls.values()].some((p) => p.el.pane?.id === x.id && p.el.port === server.port)));
+    if (!shown) void this.openPane(portPane(server));
   }
 
   // ---- chrome ---------------------------------------------------------------------------------
 
-  private openSheet(s: 'rail' | 'ctx' | 'panes'): void {
-    if (this.sheet === 'none') history.pushState({ sheet: s }, '');
-    this.sheet = s;
-  }
-  private closeSheet(): void {
-    if (this.sheet === 'none') return;
-    this.sheet = 'none';
-    if (history.state?.sheet) history.back();
-  }
-  private toggleRail(): void {
-    if (this.phone) return this.sheet === 'rail' ? this.closeSheet() : this.openSheet('rail');
-    this.railOpen = !this.railOpen;
-    lsSet(LS.rail, this.railOpen ? 'open' : 'closed');
-  }
-  private toggleCtx(): void {
-    if (this.phone || this.narrow) return this.sheet === 'ctx' ? this.closeSheet() : this.openSheet('ctx');
-    this.ctxOpen = !this.ctxOpen;
-    lsSet(LS.ctx, this.ctxOpen ? 'open' : 'closed');
-  }
+  /** the Panes button: the chat's windows shown or put away; with none, the defaults. On a phone,
+   *  the tray. */
   private togglePanes(): void {
-    if (this.phone) return this.sheet === 'panes' ? this.closeSheet() : this.openSheet('panes');
-    if (!this.openPanes.length) void this.openPane({ kind: 'terminal', ref: 'shell', title: 'Terminal' });
-    else void this.saveUi({ ...this.conv!.ui, active: this.conv!.ui.active ? null : (this.openPanes[0]?.id ?? null) });
+    const c = this.conv;
+    if (!c) return;
+    const phone = currentPage().device === 'phone';
+    if (phone && trayOpen() && c.ui.active) return setTray(false);
+    if (!this.openPanes.length) void this.openDefaults(false);
+    else if (!c.ui.active || phone) void this.saveUi({ ...c.ui, active: c.ui.active ?? this.openPanes[0]?.id ?? null });
+    else void this.saveUi({ ...c.ui, active: null });
+    if (phone) setTray(true);
   }
   private openSettings(section: SettingsSection): void {
     location.hash = `#/chat/settings/${section}`;
-    this.closeSheet();
+    this.closeDrawer();
   }
 
   private exportMarkdown(): void {
@@ -736,44 +873,25 @@ export class QseChat extends LightElement {
     const section = this.section;
     const panes = this.openPanes;
     const panesOpen = !!c && panes.length > 0 && !!c.ui.active && !section;
-    const cls = ['view', 'ch', this.railOpen && !this.phone ? 'is-rail' : '', this.ctxOpen && !this.narrow ? 'is-ctx' : '', this.sheet !== 'none' ? `is-sheet is-sheet-${this.sheet}` : '', panesOpen ? 'is-panes' : '', `dock-${this.dock}`].join(' ');
-    const style = `--ch-pane-size:${(this.paneSize * 100).toFixed(1)}%`;
-    return html`<div class=${cls} style=${style} data-backend=${this.backend?.kind ?? ''} @dragover=${(e: DragEvent) => e.preventDefault()} @drop=${(e: DragEvent) => {
+    void this.sidesTick;
+    return html`<div class="view ch ${panesOpen ? 'is-panes' : ''}" data-backend=${this.backend?.kind ?? ''} @dragover=${(e: DragEvent) => e.preventDefault()} @drop=${(e: DragEvent) => {
       e.preventDefault();
       if (e.dataTransfer?.files.length) this.composer?.acceptFiles(e.dataTransfer.files);
     }}>
-      <aside class="ch-rail" aria-label="chats" ?hidden=${!this.phone && !this.railOpen && this.sheet !== 'rail'}>
-        <qse-chat-rail .list=${this.list} .folders=${this.folders} .active=${c?.id ?? null} .mock=${this.backend?.kind === 'mock' ? this.mockNote : ''} .unread=${this.unread}
-          @ch-open=${(e: CustomEvent<{ id: string }>) => this.goto(e.detail.id)}
-          @ch-new=${() => void this.newChat()}
-          @ch-rename=${(e: CustomEvent<{ id: string; title: string }>) => void this.rename(e.detail.id, e.detail.title)}
-          @ch-pin=${(e: CustomEvent<{ id: string; pinned: boolean }>) => void this.pin(e.detail.id, e.detail.pinned)}
-          @ch-move=${(e: CustomEvent<{ id: string; folder_id: string | null }>) => void this.move(e.detail.id, e.detail.folder_id)}
-          @ch-delete=${(e: CustomEvent<{ id: string }>) => void this.removeChat(e.detail.id)}
-          @ch-folder-new=${(e: CustomEvent<{ name: string }>) => void this.guard(() => this.backend!.createFolder(e.detail.name).then((f) => (this.folders = [...this.folders, f])), 'New folder')}
-          @ch-open-settings=${(e: CustomEvent<{ section: SettingsSection }>) => this.openSettings(e.detail.section)}
-          @ch-close-rail=${() => this.closeSheet()}
-        ></qse-chat-rail>
-      </aside>
       <section class="ch-main">
         ${section ? this.renderSettings(section) : this.renderChat(c, panes, panesOpen)}
       </section>
-      <aside class="ch-ctx" aria-label="context" ?hidden=${!(this.ctxOpen && !this.narrow) && this.sheet !== 'ctx'}>
-        <header class="ch-ctx-head"><h2>Context</h2><span class="grow"></span><button type="button" class="btn btn-ghost btn-icon" aria-label="Close the context panel" @click=${() => (this.phone || this.narrow ? this.closeSheet() : this.toggleCtx())}>${icon('x')}</button></header>
-        <qse-chat-context .conv=${c} .attach=${this.attach} .now=${this.now}
-          @ch-compact=${() => c && void this.guard(() => this.backend!.compact(c.id), 'Compact')}
-          @ch-open-settings=${(e: CustomEvent<{ section: SettingsSection }>) => this.openSettings(e.detail.section)}
-        ></qse-chat-context>
-      </aside>
-      <div class="ch-scrim" @click=${() => this.closeSheet()}></div>
       ${this.notice ? html`<div class="ch-toast ch-toast-${this.notice.kind}" role="status">${this.notice.text}</div>` : nothing}
     </div>`;
   }
 
   private renderChat(c: Conversation | null, panes: OpenPane[], panesOpen: boolean): TemplateResult {
+    const rail = sidebarShown('rail');
+    const ctx = sidebarShown('ctx');
+    const panesOn = panesOpen && (currentPage().device !== 'phone' || trayOpen());
     return html`
       <header class="ch-head">
-        <button type="button" class="btn btn-ghost btn-icon ch-head-rail" aria-label=${this.railOpen || this.sheet === 'rail' ? 'Hide the chats' : 'Show the chats'} title="Chats" @click=${() => this.toggleRail()}>${icon('menu')}</button>
+        <button type="button" class="btn btn-ghost btn-icon ch-head-rail" aria-label=${rail ? 'Hide the chats' : 'Show the chats'} title="Chats" aria-pressed=${rail} @click=${() => toggleSidebar('rail')}>${icon('menu')}</button>
         <div class="ch-head-title">
           ${c
             ? html`<h1 class="ch-title" title=${c.title}>${c.title}</h1>
@@ -782,8 +900,8 @@ export class QseChat extends LightElement {
         </div>
         <div class="ch-head-tools">
           ${this.backend?.kind === 'mock' ? html`<span class="ch-mock-badge ch-mock-head" title=${this.mockNote}>mock data</span>` : nothing}
-          <button type="button" class="btn btn-ghost btn-icon ${panesOpen ? 'is-on' : ''}" aria-label="Panes" title="Panes: terminal, preview, files" ?disabled=${!c} aria-pressed=${panesOpen} @click=${() => this.togglePanes()}>${icon('terminal')}${panes.length ? html`<span class="ch-count">${panes.length}</span>` : nothing}</button>
-          <button type="button" class="btn btn-ghost btn-icon ${(this.ctxOpen && !this.narrow) || this.sheet === 'ctx' ? 'is-on' : ''}" aria-label="Context panel" title="Context" aria-pressed=${(this.ctxOpen && !this.narrow) || this.sheet === 'ctx'} @click=${() => this.toggleCtx()}>${icon('panel')}</button>
+          <button type="button" class="btn btn-ghost btn-icon ${panesOn ? 'is-on' : ''}" aria-label="Panes" title="Panes: terminal, files, preview" ?disabled=${!c} aria-pressed=${panesOn} @click=${() => this.togglePanes()}>${icon('terminal')}${panes.length ? html`<span class="ch-count">${panes.length}</span>` : nothing}</button>
+          <button type="button" class="btn btn-ghost btn-icon ${ctx ? 'is-on' : ''}" aria-label="Context panel" title="Context" aria-pressed=${ctx} @click=${() => toggleSidebar('ctx')}>${icon('panel')}</button>
           <span class="ch-more">
             <button type="button" class="btn btn-ghost btn-icon" aria-label="More" aria-haspopup="menu" aria-expanded=${this.more} ?disabled=${!c} @click=${() => (this.more = !this.more)}>${icon('more')}</button>
             ${this.more && c
@@ -811,14 +929,6 @@ export class QseChat extends LightElement {
           ${c ? this.renderThread(c) : this.renderEmpty()}
           ${this.renderComposer(c)}
         </div>
-        ${panesOpen ? html`<div class="ch-split" role="separator" aria-orientation=${this.dock === 'bottom' ? 'horizontal' : 'vertical'} aria-label="resize the panes" tabindex="0" @pointerdown=${(e: PointerEvent) => this.startResize(e)} @keydown=${(e: KeyboardEvent) => {
-          const d = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? 0.05 : e.key === 'ArrowDown' || e.key === 'ArrowRight' ? -0.05 : 0;
-          if (d) {
-            this.paneSize = Math.min(0.8, Math.max(0.2, this.paneSize + d));
-            lsSet(LS.size, this.paneSize.toFixed(3));
-          }
-        }}></div>` : nothing}
-        ${c && (panesOpen || this.sheet === 'panes') ? this.renderPanes(c, panes) : nothing}
       </div>`;
   }
 
@@ -878,17 +988,6 @@ export class QseChat extends LightElement {
       @ch-settings-patch=${(e: CustomEvent<{ patch: Partial<ChatSettings> }>) => (c ? void this.patchSettings(e.detail.patch) : void this.newChat(e.detail.patch))}
       @ch-open-settings=${(e: CustomEvent<{ section: SettingsSection }>) => this.openSettings(e.detail.section)}
     ></qse-chat-composer>`;
-  }
-
-  private renderPanes(c: Conversation, panes: OpenPane[]): TemplateResult {
-    const withInline = panes.map((p) => ({ ...p, inline: this.inline.get(p.id) ?? null }));
-    return html`<qse-chat-panes class=${this.sheet === 'panes' ? 'is-sheet' : ''} .panes=${withInline} .active=${c.ui.active} .dock=${this.dock} .backend=${this.backend} .convId=${c.id} .conv=${c} .sheet=${this.sheet === 'panes'}
-      @ch-pane-activate=${(e: CustomEvent<{ id: string }>) => void this.saveUi({ ...c.ui, active: e.detail.id })}
-      @ch-pane-close=${(e: CustomEvent<{ id: string }>) => void this.closePane(e.detail.id)}
-      @ch-pane-open=${(e: CustomEvent<{ pane: PaneRef }>) => void this.openPane(e.detail.pane)}
-      @ch-pane-dock=${(e: CustomEvent<{ dock: Dock }>) => this.setDock(e.detail.dock)}
-      @ch-panes-close=${() => (this.phone ? this.closeSheet() : void this.saveUi({ ...c.ui, active: null }))}
-    ></qse-chat-panes>`;
   }
 
   private renderSettings(section: SettingsSection): TemplateResult {

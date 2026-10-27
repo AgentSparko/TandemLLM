@@ -75,8 +75,11 @@ describe('nothing in the thread is wider than its column', () => {
     expect(css).toMatch(/@media \(max-width: 360px\) \{\s*\.ch-pills \{\s*flex-wrap: wrap;/);
   });
 
-  it('the panes tabs scroll in their own strip, apart from plus, dock and close', () => {
-    expect(rule('.ch-pane-tabs')).toMatch(/overflow-x: auto/);
-    expect(rule('.ch-pane-strip')).not.toMatch(/overflow-x/);
+  it('the windows’ tabs scroll in their own strip, apart from plus, dock and close (workspace.css, VIS-256)', () => {
+    const wm = readFileSync(new URL('../src/styles/workspace.css', import.meta.url), 'utf8');
+    const at = (sel: string) => wm.slice(wm.indexOf(`\n${sel} {`), wm.indexOf('}', wm.indexOf(`\n${sel} {`)));
+    expect(at('.wm-tabs')).toMatch(/overflow-x: auto/);
+    expect(at('.wm-strip')).not.toMatch(/overflow-x/);
+    expect(at('.wm-tools')).toMatch(/flex: none/);
   });
 });
