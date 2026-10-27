@@ -41,6 +41,10 @@ export const CTX_OPEN_MIN = 1700;
  *  1180 px before it moved into the shell, and still does. */
 export const CHAT_CTX_OPEN_MIN = 1180;
 
+/** Chat's list never shows narrower than its own column was before it moved into the shell: the
+ *  shared width is the device's, this is Chat's floor (titles and New chat keep their room) */
+export const CHAT_RAIL_MIN = 272;
+
 export const clampW = (w: number, lim: { min: number; max: number }) => Math.round(Math.min(lim.max, Math.max(lim.min, w)));
 
 /** The sidebars of a first visit to a page on a window this wide. */

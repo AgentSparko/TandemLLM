@@ -24,6 +24,9 @@ qse-workspace {
 }
 
 /* ---- the docks ------------------------------------------------------------------------------------- */
+/* Both docks sit in the centre's grid, so they keep to the page's column while a sidebar opens, closes
+   or is dragged: the right one beside the page, the bottom one across the page's row, sticky to the
+   window's bottom edge (the page keeps --dock-b of room under its content for it). */
 .wm-dock {
   position: relative;
   min-width: 0;
@@ -50,9 +53,10 @@ qse-workspace {
   border-left: 1px solid var(--rule-strong);
 }
 .wm-dock-bottom {
-  position: fixed;
-  left: var(--wm-l);
-  right: var(--wm-r);
+  grid-row: 2;
+  grid-column: 1 / -1;
+  align-self: end;
+  position: sticky;
   bottom: 0;
   z-index: 18;
   height: var(--dock-b);

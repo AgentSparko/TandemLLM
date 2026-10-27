@@ -41,7 +41,7 @@ import { knownJob, rememberStatusPort } from './lib/restart';
 import { browserTz } from './lib/time';
 import { isTypingTarget, splitTabs } from './lib/phone';
 import { MENU, MONITOR, PHONE_BAR, crumb, sectionHref, sectionOf, subPages, type MenuItem, type Section } from './lib/menu';
-import { CTX_W, RAIL_W, currentWidthClass, type WidthClass } from './lib/layout';
+import { CHAT_RAIL_MIN, CTX_W, RAIL_W, currentWidthClass, type WidthClass } from './lib/layout';
 import { clearSelection, contextFor, currentSelection, onContext, pageKey, panelFor, setDefaultContext, setPage, setSidebarControl, sidebarsChanged } from './lib/context';
 import { flush, onWorkspace, openWindowMenu, setTray, shownLayout, showPage, trayOpen, windowMenu, change, currentLayout, savedLayouts } from './lib/workspace';
 import { resizeSide, setSide } from './lib/wm';
@@ -359,7 +359,7 @@ export class QseApp extends LightElement {
     e.preventDefault();
     const el = e.currentTarget as HTMLElement;
     el.classList.add('is-drag');
-    this.drag = { which, x: e.clientX, w: currentLayout()[which].w, el };
+    this.drag = { which, x: e.clientX, w: which === 'rail' ? this.railW() : currentLayout().ctx.w, el };
   }
   private onDragMove = (e: PointerEvent) => {
     const d = this.drag;
@@ -377,6 +377,11 @@ export class QseApp extends LightElement {
     if (!d) return;
     e.preventDefault();
     change((l) => resizeSide(l, which, l[which].w + (which === 'rail' ? d : -d)));
+  }
+  /** the left panel's width as shown: the device's, and on Chat never under its list's floor */
+  private railW(): number {
+    const w = currentLayout().rail.w;
+    return this.route.view === 'chat' ? Math.max(w, CHAT_RAIL_MIN) : w;
   }
   /** the top bar's and the phone bar's window buttons: their menu, or the tray */
   private winMenu(kind: 'add' | 'layout', e: Event): void {
@@ -600,7 +605,7 @@ export class QseApp extends LightElement {
       ${live ? html`<span title="uptime">up ${duration(live.uptime_s)}</span>` : nothing}`;
     const c = crumb(this.route.view);
     return html`
-      <div class=${cls} data-view=${this.route.view} data-w=${this.wclass} style="--lw:${layout.rail.w}px;--cw:${layout.ctx.w}px">
+      <div class=${cls} data-view=${this.route.view} data-w=${this.wclass} style="--lw:${this.railW()}px;--cw:${layout.ctx.w}px">
         <header class="topbar">
           <button type="button" class="icon-btn side-btn" data-side="left" aria-pressed=${railOpen} aria-label="Show or hide the menu" title="Menu" @click=${(e: Event) => this.toggleSide('rail', e)}>${icon(desk ? 'side-left' : 'menu')}</button>
           <a class="brand" href="#/overview" aria-label="TandemApp home"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span><span class="brand-name">TandemApp</span></a>
@@ -703,7 +708,7 @@ export class QseApp extends LightElement {
           <div class="lp-foot num">${meta}</div>
         </div>
       </div>
-      <div class="rz" role="separator" aria-orientation="vertical" aria-label="Resize the menu" aria-valuemin=${RAIL_W.min} aria-valuemax=${RAIL_W.max} aria-valuenow=${shownLayout().rail.w} tabindex="0" @pointerdown=${(e: PointerEvent) => this.onDragStart('rail', e)} @keydown=${(e: KeyboardEvent) => this.onSepKey('rail', e)}></div>
+      <div class="rz" role="separator" aria-orientation="vertical" aria-label="Resize the menu" aria-valuemin=${RAIL_W.min} aria-valuemax=${RAIL_W.max} aria-valuenow=${this.railW()} tabindex="0" @pointerdown=${(e: PointerEvent) => this.onDragStart('rail', e)} @keydown=${(e: KeyboardEvent) => this.onSepKey('rail', e)}></div>
     </nav>`;
   }
 
