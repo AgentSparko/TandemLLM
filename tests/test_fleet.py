@@ -2,8 +2,8 @@
 
 Every answer is held to docs/contract/fleet-v1 with tools/contract_check.py, the schemas the
 dashboard's mock is held to. The machine is a fake: a directory standing for /etc, /proc and /sys,
-a host collector's entry, and a TandemLLM engine on a loopback port with its /metrics, model list,
-system snapshot and log. Time is injected; nothing sleeps.
+a host collector's entry, and a TandemLLM engine on a loopback port with its live snapshot, model
+list, system snapshot and log. Time is injected; nothing sleeps.
 
   1  a Spark is node #1 at the first start: its hostname as the alias, colour 1, an id from its
      serial; the same id at the next start, a new address logged, no second node
@@ -142,13 +142,15 @@ class FakeBuf:
 # ---------------------------------------------------------------------------- a fake engine
 
 class Engine:
-    """A TandemLLM engine on loopback: what tandem-app reads from it."""
+    """A TandemLLM engine on loopback: what tandem-app reads from it, on the test's clock."""
 
-    def __init__(self):
-        self.gen = 0
+    def __init__(self, clock=time.time):
+        self.clock = clock
+        self.gen = 0                       # tokens decoded so far, the live sample's count
         self.running = 0
-        self.ttft = []                     # seconds of the requests so far
+        self.ended = []                    # (end time, ttft ms) of the requests so far
         self.loaded = True
+        self.rest_at = None                # its sampler's last sample while it rests
         eng = self
 
         class H(BaseHTTPRequestHandler):
@@ -157,10 +159,9 @@ class Engine:
 
             def do_GET(self):
                 p = self.path.split("?")[0]
-                if p == "/metrics":
-                    return self._send(eng.metrics().encode(), "text/plain")
                 q = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
                 doc = {"/v1/models": eng.models, "/v1/dashboard/system": eng.system,
+                       "/v1/dashboard/live": eng.live,
                        "/v1/dashboard/logs": lambda: eng.logs(q)}.get(p)
                 if doc is None:
                     return self._send(b"{}", "application/json", 404)
@@ -182,17 +183,15 @@ class Engine:
         self.srv.shutdown()
         self.srv.server_close()
 
-    def metrics(self) -> str:
-        les = (0.1, 0.5, 1.0, 5.0)
-        rows = ['qse_build_info{version="0.15.0-test",git_sha=""} 1',
-                f"qse_generation_tokens_total {self.gen}", f"qse_requests_running {self.running}"]
-        for le in les:
-            rows.append(f'qse_time_to_first_token_seconds_bucket{{le="{le}"}} '
-                        f"{sum(1 for x in self.ttft if x <= le)}")
-        rows += [f'qse_time_to_first_token_seconds_bucket{{le="+Inf"}} {len(self.ttft)}',
-                 f"qse_time_to_first_token_seconds_sum {sum(self.ttft)}",
-                 f"qse_time_to_first_token_seconds_count {len(self.ttft)}"]
-        return "\n".join(rows) + "\n"
+    def live(self):
+        now = self.clock()
+        at = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now)) + f".{int(now * 1000) % 1000:03d}Z"
+        return {"contract_version": "1.1", "generated_at": at,
+                "engine": {"version": "0.15.0-test", "model": "TandemLLM"},
+                "counts": {"in_flight": self.running},
+                "sample": {"t": self.rest_at or now, "tokens": self.gen},
+                "recent": [{"ttft_ms": ms, "ended_ms_ago": (now - end) * 1000.0}
+                           for end, ms in self.ended if end <= now]}
 
     def models(self):
         return {"object": "list", "data": [
@@ -344,8 +343,8 @@ def test_alias_and_colour():
 
 
 def test_every_route_validates():
-    eng = Engine()
     clock = Clock()
+    eng = Engine(clock)
     try:
         with Proxy(env=engine_env(eng)) as px:
             px.sync()
@@ -420,19 +419,19 @@ def test_every_route_validates():
 
 
 def test_ring_and_ranges():
-    eng = Engine()
     clock = Clock()
+    eng = Engine(clock)
     root = fake_root()
     try:
         with Proxy(env=engine_env(eng)) as px:
             px.sync()
             node = local_node(root, clock=clock)
             f = fleet_on(px, node, clock=clock)
-            # 60 ticks, one per 2 s slot: 100 tokens a tick, one request of 0.3 s at the 10th
+            # 60 ticks, one per 2 s slot: 100 tokens a tick, one request ends before the 10th
             for i in range(60):
                 eng.gen += 100
                 if i == 10:
-                    eng.ttft.append(0.3)
+                    eng.ended.append((T0 + 19.5, 300.0))
                 set_fabric(root, i * 250_000_000)            # 1 Gb/s
                 clock.t = T0 + 2 * i
                 f.tick()
@@ -449,7 +448,7 @@ def test_ring_and_ranges():
             assert tps[-1] == 50.0 and tps[-58] == 50.0 and tps[-59] is None
             assert all(v is None for v in tps[:-59]), "nothing before the process started"
             _, ttft = series("metric=ttft&range=5m")
-            assert [v for v in ttft if v is not None] == [300.0]   # p50 inside (0.1, 0.5]
+            assert [v for v in ttft if v is not None] == [300.0]   # counted once
             _, fab = series("metric=fabric&range=5m")
             assert fab[-1] == 1.0 and fab[-58] == 1.0 and fab[-59] is None
             _, mem = series("metric=mem&range=5m")
@@ -477,6 +476,14 @@ def test_ring_and_ranges():
             f.tick()
             clock.t += 2                                      # that tick's slot is over
             assert series("metric=tps&range=5m")[1][-1] is None
+            # an idle engine's sampler rests: the same sample twice with nothing in flight is
+            # 0 tok/s; with a request in flight it is no sample
+            eng.rest_at = clock.t
+            p = node.probes["eng"]
+            p.sample(clock.t)
+            assert p.sample(clock.t + 2)["tps"] == 0.0
+            eng.running = 1
+            assert p.sample(clock.t + 4)["tps"] is None
     finally:
         eng.close()
 
