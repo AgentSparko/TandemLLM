@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/alerts.schema.json",
+  "title": "GET /v1/fleet/alerts (200): the alerts firing now",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ]
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warn",
+              "err"
+            ]
+          },
+          "node": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "since": {
+            "type": "number"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "action": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "route": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "route"
+            ],
+            "additionalProperties": false
+          },
+          "acked": {
+            "type": "boolean"
+          },
+          "acked_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "severity",
+          "node",
+          "title",
+          "since",
+          "rule",
+          "detail",
+          "action",
+          "acked",
+          "acked_at"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract_version",
+    "alerts"
+  ],
+  "additionalProperties": false
+}

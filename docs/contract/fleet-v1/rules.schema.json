@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/rules.schema.json",
+  "title": "GET /v1/fleet/rules (200): the alert rules",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ]
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "notify": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "app",
+                "system"
+              ]
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "metric",
+          "condition",
+          "scope",
+          "notify",
+          "enabled"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract_version",
+    "rules"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/deployments.schema.json",
+  "title": "GET /v1/fleet/deployments (200): Single, Replicas, Split and Role deployments",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ]
+    },
+    "deployments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "pack": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "single",
+              "replicas",
+              "split",
+              "role"
+            ]
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "type": "string"
+                },
+                "layers": {
+                  "type": "string"
+                },
+                "gib": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "node",
+                "layers",
+                "gib"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "api_id": {
+            "type": "string"
+          },
+          "ctx": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "serving",
+              "starting",
+              "degraded",
+              "down",
+              "stopped"
+            ]
+          },
+          "status_text": {
+            "type": "string"
+          },
+          "role_of": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "warn": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "model",
+          "pack",
+          "type",
+          "members",
+          "api_id",
+          "ctx",
+          "status",
+          "status_text"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract_version",
+    "deployments"
+  ],
+  "additionalProperties": false
+}

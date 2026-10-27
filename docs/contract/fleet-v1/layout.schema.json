@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/layout.schema.json",
+  "title": "GET and PUT /v1/fleet/layouts/{page}?device= (200, and the PUT body): a page's window layout on one device class",
+  "type": "object",
+  "properties": {
+    "page": {
+      "type": "string"
+    },
+    "device": {
+      "type": "string",
+      "enum": [
+        "desk",
+        "tablet",
+        "phone"
+      ]
+    },
+    "rail": {
+      "type": "object",
+      "properties": {
+        "open": {
+          "type": "boolean"
+        },
+        "w": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "open",
+        "w"
+      ],
+      "additionalProperties": false
+    },
+    "ctx": {
+      "type": "object",
+      "properties": {
+        "open": {
+          "type": "boolean"
+        },
+        "w": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "open",
+        "w"
+      ],
+      "additionalProperties": false
+    },
+    "windows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "terminal",
+              "files",
+              "editor",
+              "diff",
+              "markdown",
+              "plan",
+              "preview",
+              "image",
+              "pdf",
+              "video",
+              "audio",
+              "binary",
+              "logs",
+              "chart",
+              "inspector",
+              "chat",
+              "playground",
+              "context"
+            ]
+          },
+          "ref": {
+            "type": "object"
+          },
+          "at": {
+            "type": "string",
+            "enum": [
+              "right",
+              "bottom",
+              "float",
+              "min"
+            ]
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "w": {
+            "type": "number"
+          },
+          "h": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "ref",
+          "at",
+          "x",
+          "y",
+          "w",
+          "h",
+          "z"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "docks": {
+      "type": "object",
+      "properties": {
+        "right": {
+          "type": "object",
+          "properties": {
+            "f": {
+              "type": "number"
+            },
+            "act": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "f",
+            "act"
+          ],
+          "additionalProperties": false
+        },
+        "bottom": {
+          "type": "object",
+          "properties": {
+            "f": {
+              "type": "number"
+            },
+            "act": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "f",
+            "act"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "right",
+        "bottom"
+      ],
+      "additionalProperties": false
+    },
+    "saved_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "page",
+    "device",
+    "rail",
+    "ctx",
+    "windows",
+    "docks"
+  ],
+  "additionalProperties": false
+}
