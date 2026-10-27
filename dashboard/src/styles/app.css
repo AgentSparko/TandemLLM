@@ -1586,7 +1586,7 @@ mark {
   box-shadow: var(--shadow-pop);
   background: var(--orange);
   border-color: var(--orange);
-  color: #fff;
+  color: var(--ink-inverse);
 }
 .console-empty {
   position: absolute;
@@ -2343,10 +2343,10 @@ mark {
 /* one tone per state; colour is never the only signal (every state has a glyph and a word) */
 .tone-idle { --tone: var(--ink-3); }
 .tone-queued { --tone: var(--ink-3); }
-.tone-prefill { --tone: var(--cobalt-hi); --tone-fill: var(--cobalt); --tone-ink: var(--tl-ink-on-dark); }
+.tone-prefill { --tone: var(--cobalt-hi); --tone-fill: var(--cobalt); --tone-ink: var(--tl-ink-on-light); }
 .tone-replay { --tone: var(--series-aqua); --tone-fill: var(--series-aqua); --tone-ink: var(--tl-ink-on-dark); }
 .tone-think { --tone: var(--think); --tone-fill: var(--think); --tone-ink: var(--tl-ink-on-light); }
-.tone-write { --tone: var(--orange-hi); --tone-fill: var(--orange); --tone-ink: var(--tl-ink-on-dark); }
+.tone-write { --tone: var(--orange-hi); --tone-fill: var(--orange); --tone-ink: var(--tl-ink-on-light); }
 .tone-tool { --tone: var(--orange-hi); --tone-fill: var(--orange-hi); --tone-ink: var(--tl-ink-on-light); }
 .tone-finish { --tone: var(--ink-2); --tone-fill: var(--ink-3); --tone-ink: var(--tl-ink-on-dark); }
 .tone-wait { --tone: var(--warn-ink); }
@@ -2354,10 +2354,12 @@ mark {
 .tone-bad { --tone: var(--err); }
 .tone-warn { --tone: var(--warn-ink); }
 .tone-queued { --tone-fill: var(--series-muted); --tone-ink: var(--tl-ink-on-dark); }
+/* the v3 accents are bright on the dark ground: dark ink on them; the light theme's are deep */
 :root[data-theme='light'] .tone-think { --tone-ink: var(--tl-ink-on-dark); }
 :root[data-theme='light'] .tone-tool { --tone-ink: var(--tl-ink-on-dark); }
 :root[data-theme='light'] .tone-queued { --tone-ink: var(--tl-ink-on-light); }
-:root[data-theme='light'] .tone-write { --tone-fill: var(--orange-hi); }
+:root[data-theme='light'] .tone-write { --tone-fill: var(--orange-hi); --tone-ink: var(--tl-ink-on-dark); }
+:root[data-theme='light'] .tone-prefill { --tone-ink: var(--tl-ink-on-dark); }
 .phase.act,
 .stop {
   color: var(--tone);
@@ -3414,7 +3416,7 @@ mark {
   cursor: pointer;
   border: 1px solid var(--orange);
   background: var(--orange);
-  color: #fff;
+  color: var(--ink-inverse);
 }
 .sup-badge.is-shadow {
   background: transparent;
