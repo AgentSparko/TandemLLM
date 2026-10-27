@@ -11,6 +11,10 @@
 // server with a password set and the login on: the data and the conductor's writes then need the
 // bearer token or a session, and a 401 is what the page shows its banner for. 401 and expire answer
 // 401 in either state.
+//
+// The fleet API (/v1/fleet/*, TandemApp's controller, mock/fleet.ts) answers under the same rule.
+// Its scenario: `?fleet=<scenario>` on the page URL (a cookie), else POST /__mock/fleet {"scenario"},
+// else TANDEM_MOCK_FLEET, else fleet4.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
@@ -31,6 +35,7 @@ import { MockConductor } from './conductor.ts';
 import { MockBackends } from './backends.ts';
 import { longSession } from './memory.ts';
 import { MockSetup } from './setup.ts';
+import { isFleetScenario, MockFleet, type FleetScenario } from './fleet.ts';
 
 type Next = (err?: unknown) => void;
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => void;
@@ -442,6 +447,15 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
   const backends = new MockBackends();
   // the setup guide (/v1/setup/*, POST /__mock/setup): mock/setup.ts
   const setup = new MockSetup();
+  // the fleet (/v1/fleet/*, mock/fleet.ts): one per scenario, its clock from its first request
+  const fleets = new Map<FleetScenario, MockFleet>();
+  let fleetDefault: FleetScenario = isFleetScenario(process.env.TANDEM_MOCK_FLEET) ? process.env.TANDEM_MOCK_FLEET : 'fleet4';
+  const fleetFor = (req: IncomingMessage): MockFleet => {
+    const c = cookies(req).qse_fleet;
+    const name = isFleetScenario(c) ? c : fleetDefault;
+    if (!fleets.has(name)) fleets.set(name, new MockFleet({ seed: seed + 31, scenario: name }));
+    return fleets.get(name)!;
+  };
   function proxied(r: Record<string, unknown>): void {
     if (Number(r.id) % 7 !== 0) return;
     Object.assign(r, {
@@ -458,13 +472,16 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
       const path = url.pathname.replace(/\/+$/, '') || '/';
       const q = url.searchParams;
 
-      // The page itself: pick up ?mock=<mode> and remember it in a cookie.
+      // The page itself: pick up ?fleet=<scenario> and ?mock=<mode> and remember them in cookies.
+      if ((path === '/dashboard' || path === '/' || path === '/index.html') && isFleetScenario(q.get('fleet'))) {
+        res.appendHeader('Set-Cookie', `qse_fleet=${q.get('fleet')}; Path=/; SameSite=Strict`);
+      }
       if ((path === '/dashboard' || path === '/' || path === '/index.html') && q.has('mock')) {
         const m = q.get('mock') || 'ok';
         mode = m.startsWith('drop') ? 'drop' : m === 'nologin' ? 'ok' : m;
         if (m.startsWith('drop:')) dropEveryMs = Number(m.slice(5)) * 1000;
         if (mode === '401') sessions.clear();
-        res.setHeader('Set-Cookie', `qse_mock=${encodeURIComponent(m)}; Path=/; SameSite=Strict`);
+        res.appendHeader('Set-Cookie', `qse_mock=${encodeURIComponent(m)}; Path=/; SameSite=Strict`);
         if (path === '/dashboard') req.url = '/' + url.search;
         return next();
       }
@@ -586,6 +603,14 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         else if (typeof b.streams === 'number') parallel.streams = b.streams;
         return json(res, 200, { streams: parallel.streams, engine_slots: parallel.engineSlots });
       }
+      if (path === '/__mock/fleet' && req.method === 'POST') {
+        // the fleet scenario for requests without a `qse_fleet` cookie; {reset: true} starts its clock again
+        const b = JSON.parse((await readBody(req)) || '{}');
+        if (b.scenario != null && !isFleetScenario(b.scenario)) return error(res, 400, 'bad_request', `unknown fleet scenario ${b.scenario}`);
+        if (b.scenario) fleetDefault = b.scenario;
+        if (b.reset) fleets.clear();
+        return json(res, 200, { scenario: fleetDefault, started: [...fleets.keys()] });
+      }
       if (path === '/__mock/backends' && req.method === 'POST') {
         const b = JSON.parse((await readBody(req)) || '{}');
         if (b.reset) backends.reset();
@@ -637,7 +662,8 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         return json(res, 200, { request_id: row.request_id, id: row.id });
       }
 
-      const isData = path.startsWith('/v1/dashboard/') && path !== '/v1/dashboard/session';
+      // the fleet API (TandemApp's controller) answers under the dashboard's rule
+      const isData = (path.startsWith('/v1/dashboard/') && path !== '/v1/dashboard/session') || path.startsWith('/v1/fleet/');
       // the dashboard reads the same page under its own rule at /v1/dashboard/metrics
       const isMetrics = path === '/metrics' || path === '/v1/dashboard/metrics';
 
@@ -695,6 +721,18 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8', 'Cache-Control': 'no-store' });
         const ids = backends.off ? {} : { vllm: backends.backends.find((b) => b.kind === 'vllm')?.id as string | undefined, sglang: backends.backends.find((b) => b.kind === 'sglang')?.id as string | undefined };
         return res.end(renderMetrics(state, Date.now(), { spec: mode !== 'nospec' }) + engineFamilies(Date.now(), ids, mode !== 'nospec'));
+      }
+
+      if (path.startsWith('/v1/fleet/')) {
+        const raw = req.method === 'PUT' || req.method === 'POST' ? await readBody(req) : '';
+        let body: unknown = null;
+        try {
+          body = raw ? JSON.parse(raw) : null;
+        } catch {
+          return error(res, 400, 'bad_request', 'the body is not JSON');
+        }
+        const r = fleetFor(req).handle(req.method ?? 'GET', path, q, body);
+        return json(res, r.status, r.body);
       }
 
       if (path === '/v1/dashboard/summary') {

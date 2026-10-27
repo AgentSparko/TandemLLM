@@ -91,6 +91,18 @@ The mock's login is on unless the page is opened as `?mock=nologin` or the `POST
 
 The model is `mock/setup/qwen3.8-27b.json`, `models/qwen3.8-27b/model.yaml` as `GET /v1/setup/models/{id}` serves it (regenerate it with `server/setup/registry.py` and `wizard_fields` after a registry change). The scripted Wren answers by keyword: "turn off vision" (a tool call), "use 2 slots", "flux" (an unknown tool), "finish" (a tool that does not exist), "loop" (a call every round), "error" (an error mid-stream), "long" (a slow answer for Stop), "other tab" (busy).
 
+### The mock fleet
+
+The mock also answers TandemApp's fleet API (`/v1/fleet/*`, contract in `docs/contract/fleet-v1/`, `mock/fleet.ts`): nodes, links, topology, deployments, per-node metric series, memory, events, alerts with acknowledgement, rules and window layouts. It is seeded (the same seed answers the same at the same instant) and moves with the clock. The scenario is chosen per request, in this order: the `qse_fleet` cookie that `?fleet=<scenario>` on the page URL sets (`/dashboard/?fleet=node-down`), then `POST /__mock/fleet {"scenario": ...}` (`{"reset": true}` starts the scenarios' clocks again), then `TANDEM_MOCK_FLEET=<scenario> npm run dev:mock`, then `fleet4`. A scenario's clock starts at its first request.
+
+| scenario | what it plays |
+|-|-|
+| `fleet1` | one Spark (`Desk`) serving the main model and Wren, the controller on it: today's single box |
+| `fleet4` | the default: `Desk` on the LAN serves Qwen as Replicas with `R-3` and Wren as a Role; `R-1` and `R-2` are rented and serve DeepSeek as a Split over a fabric switch; `R-3` is rented and throttling, with a thermal alert for 14 minutes; leases end in two days; the controller runs on a Mac that may sleep |
+| `fleet2-split` | two Sparks on the LAN joined by one direct fabric cable, one model Split over both, the controller on `Spark 1` |
+| `node-down` | `fleet4`, and `R-3` stops answering 30 s in: it reads `off`, its series end, the Replicas runs degraded and a "not reachable" alert fires 30 s later |
+| `alert-thermal` | `fleet4` without the old alert: `R-3` reaches 84 °C as the scenario starts, throttles, and the thermal alert fires a minute in |
+
 ## Against a real engine
 
     PW_BASE=http://<engine>:8000/dashboard/ PW_TOKEN=<admin token> npx playwright test

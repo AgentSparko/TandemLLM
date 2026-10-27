@@ -16,7 +16,7 @@ describe('dist/', () => {
     expect(files.length).toBeGreaterThan(0);
     for (const f of files) {
       const src = readFileSync(join(DIST, 'assets', f), 'utf8');
-      for (const marker of ['createMockMiddleware', 'generateYear', 'renderMetrics', 'qse_mock', 'mulberry', 'LogRing', '__mock/mode']) {
+      for (const marker of ['createMockMiddleware', 'generateYear', 'renderMetrics', 'qse_mock', 'mulberry', 'LogRing', '__mock/mode', 'MockFleet', 'qse_fleet']) {
         expect(src.includes(marker), `${f} contains ${marker}`).toBe(false);
       }
     }

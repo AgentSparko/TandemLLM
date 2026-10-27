@@ -11,6 +11,8 @@ import { LogRing, reqLine } from '../mock/logs.ts';
 import { MockLive } from '../mock/live.ts';
 import { makeRow } from '../mock/generate.ts';
 import { rng } from '../mock/generate.ts';
+import { FLEET_SCENARIOS, MockFleet } from '../mock/fleet.ts';
+import { METRIC_KEYS, RANGE_KEYS, WINDOW_KINDS } from '../src/api/fleet.ts';
 import { addDays, dayKey } from '../src/lib/time.ts';
 
 const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'dashboard-v1');
@@ -256,5 +258,104 @@ describe('mock responses validate', () => {
     check('session', { contract_version: '1.1', authenticated: true, login: false, password_set: false, expires_at: null });
     check('session', { contract_version: '1.1', authenticated: true, login: true, password_set: true, expires_at: '2026-09-25T04:40:00Z' });
     check('error', { error: { type: 'too_many', message: 'at most 4 log subscribers' } });
+  });
+});
+
+// The fleet API (docs/contract/fleet-v1, VIS-244): every route of the mock fleet in every scenario,
+// at the start, after R-3 went off (node-down) and after the thermal alert fired (alert-thermal).
+describe('fleet contract', () => {
+  const FDIR = join(__dirname, '..', '..', 'docs', 'contract', 'fleet-v1');
+  const fajv = new Ajv2020({ allErrors: true, strict: true });
+  const fleet: Record<string, ReturnType<typeof fajv.compile>> = {};
+  for (const f of readdirSync(FDIR)) {
+    if (f.endsWith('.schema.json')) fleet[f.replace('.schema.json', '')] = fajv.compile(JSON.parse(readFileSync(join(FDIR, f), 'utf8')));
+  }
+  function fcheck(name: string, data: unknown) {
+    const v = fleet[name];
+    expect(v, `schema ${name}`).toBeDefined();
+    if (!v(data)) throw new Error(`${name}: ${fajv.errorsText(v.errors, { separator: '\n' })}`);
+  }
+  const T0 = Date.parse('2026-10-27T16:40:00Z');
+  const q = (s = '') => new URLSearchParams(s);
+
+  it('has a schema per route, and they are strict', () => {
+    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'layout', 'links', 'memory', 'metrics', 'nodes', 'rules', 'topology']);
+    expect(fleet.nodes({ contract_version: '1.0', nodes: [{ id: 'x' }] })).toBe(false);
+    expect(fleet.metrics({ contract_version: '1.0', source: 'all', metric: 'watts', unit: 'W', agg: 'sum', range: '6h', step_s: 150, t0: 0, cap: null, series: [] })).toBe(false);
+    expect(fleet.layout({ page: 'overview', device: 'watch', rail: { open: true, w: 1 }, ctx: { open: true, w: 1 }, windows: [], docks: { right: { f: 0.3, act: null }, bottom: { f: 0.3, act: null } } })).toBe(false);
+  });
+
+  for (const scenario of FLEET_SCENARIOS) {
+    it(`${scenario}: every route validates`, () => {
+      const m = new MockFleet({ seed: 42, scenario, now: T0 / 1000 });
+      for (const at of [T0, T0 + 45_000, T0 + 130_000]) {
+        const get = (path: string, qs = '') => {
+          const r = m.handle('GET', path, q(qs), null, at);
+          expect(r.status, path).toBe(200);
+          return r.body as Record<string, unknown>;
+        };
+        fcheck('nodes', get('/v1/fleet/nodes'));
+        fcheck('links', get('/v1/fleet/links'));
+        fcheck('topology', get('/v1/fleet/topology'));
+        const deps = get('/v1/fleet/deployments');
+        fcheck('deployments', deps);
+        fcheck('memory', get('/v1/fleet/memory'));
+        fcheck('events', get('/v1/fleet/events'));
+        fcheck('events', get('/v1/fleet/events', `since=${at / 1000 - 3600}`));
+        fcheck('alerts', get('/v1/fleet/alerts'));
+        fcheck('rules', get('/v1/fleet/rules'));
+        for (const metric of METRIC_KEYS) for (const range of RANGE_KEYS) fcheck('metrics', get('/v1/fleet/metrics', `source=all&metric=${metric}&range=${range}`));
+        const nodes = (get('/v1/fleet/nodes').nodes as { id: string }[]).map((n) => `node:${n.id}`);
+        const depIds = (deps.deployments as { id: string }[]).map((d) => `deployment:${d.id}`);
+        for (const source of [...nodes, ...depIds]) for (const metric of ['tps', 'temp', 'fabric'] as const) fcheck('metrics', get('/v1/fleet/metrics', `source=${source}&metric=${metric}&range=1h`));
+      }
+    });
+  }
+
+  it('acknowledging an alert, and the errors', () => {
+    const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    const ack = m.handle('POST', '/v1/fleet/alerts/a-therm/ack', q(), null, T0 + 5000);
+    expect(ack.status).toBe(200);
+    fcheck('alert', ack.body);
+    expect(ack.body).toMatchObject({ id: 'a-therm', acked: true, acked_at: T0 / 1000 + 5 });
+    // a second ack keeps the first time
+    expect(m.handle('POST', '/v1/fleet/alerts/a-therm/ack', q(), null, T0 + 9000).body).toMatchObject({ acked_at: T0 / 1000 + 5 });
+    for (const [method, path, qs, status] of [
+      ['POST', '/v1/fleet/alerts/nope/ack', '', 404],
+      ['GET', '/v1/fleet/metrics', 'metric=watts', 400],
+      ['GET', '/v1/fleet/metrics', 'metric=tps&range=3h', 400],
+      ['GET', '/v1/fleet/metrics', 'metric=tps&source=r3', 400],
+      ['GET', '/v1/fleet/metrics', 'metric=tps&source=node:r9', 404],
+      ['GET', '/v1/fleet/metrics', 'metric=tps&source=deployment:nope', 404],
+      ['GET', '/v1/fleet/events', 'since=yesterday', 400],
+      ['GET', '/v1/fleet/layouts/overview', 'device=watch', 400],
+      ['GET', '/v1/fleet/sparks', '', 404],
+    ] as const) {
+      const r = m.handle(method, path, q(qs), null, T0);
+      expect(r.status, `${method} ${path}?${qs}`).toBe(status);
+      fcheck('error', r.body);
+    }
+  });
+
+  it('layouts: the default, a save that comes back, a refused body', () => {
+    const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    const def = m.handle('GET', '/v1/fleet/layouts/overview', q('device=phone'), null, T0).body;
+    fcheck('layout', def);
+    expect(def).toMatchObject({ page: 'overview', device: 'phone', rail: { open: false }, windows: [], saved_at: null });
+    const windows = WINDOW_KINDS.map((kind, i) => ({ id: `w${i}`, kind, ref: { node: 'r3', live: true, n: i, path: null }, at: (['right', 'bottom', 'float', 'min'] as const)[i % 4], x: 60, y: 40, w: 560, h: 360, z: i }));
+    const body = { page: 'overview', device: 'desk', rail: { open: true, w: 248 }, ctx: { open: false, w: 340 }, windows, docks: { right: { f: 0.4, act: 'w0' }, bottom: { f: 0.3, act: 'w1' } } };
+    fcheck('layout', body);
+    const put = m.handle('PUT', '/v1/fleet/layouts/overview', q('device=desk'), body, T0 + 2000);
+    expect(put.status).toBe(200);
+    fcheck('layout', put.body);
+    const back = m.handle('GET', '/v1/fleet/layouts/overview', q('device=desk'), null, T0 + 3000).body;
+    expect(back).toEqual({ ...body, saved_at: T0 / 1000 + 2 });
+    // another device keeps its own
+    expect(m.handle('GET', '/v1/fleet/layouts/overview', q('device=tablet'), null, T0).body).toMatchObject({ saved_at: null });
+    for (const wrong of [null, { ...body, page: 'usage' }, { ...body, windows: [{ ...windows[0], kind: 'clock' }] }, { ...body, windows: [{ ...windows[0], at: 'left' }] }]) {
+      const r = m.handle('PUT', '/v1/fleet/layouts/overview', q('device=desk'), wrong, T0);
+      expect(r.status).toBe(400);
+      fcheck('error', r.body);
+    }
   });
 });
