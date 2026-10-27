@@ -25,6 +25,7 @@ list, system snapshot and log. Time is injected; nothing sleeps.
 from __future__ import annotations
 
 import json
+import math
 import os
 import signal
 import socket
@@ -148,9 +149,10 @@ class Engine:
         self.clock = clock
         self.gen = 0                       # tokens decoded so far, the live sample's count
         self.running = 0
+        self.samples = []                  # its sampler's one-a-second samples (here: per step)
         self.ended = []                    # (end time, ttft ms) of the requests so far
         self.loaded = True
-        self.rest_at = None                # its sampler's last sample while it rests
+        self.live_reads = 0
         eng = self
 
         class H(BaseHTTPRequestHandler):
@@ -183,13 +185,21 @@ class Engine:
         self.srv.shutdown()
         self.srv.server_close()
 
+    def step(self, t, tokens):
+        """One sample of its sampler at t: `tokens` more decoded since the last."""
+        self.gen += tokens
+        self.samples.append({"t": t, "decode_tps": None, "running": self.running,
+                             "waiting": 0, "tokens": self.gen})
+
     def live(self):
+        self.live_reads += 1
         now = self.clock()
         at = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now)) + f".{int(now * 1000) % 1000:03d}Z"
+        hist = self.samples[-300:]
         return {"contract_version": "1.1", "generated_at": at,
                 "engine": {"version": "0.15.0-test", "model": "TandemLLM"},
                 "counts": {"in_flight": self.running},
-                "sample": {"t": self.rest_at or now, "tokens": self.gen},
+                "sample": hist[-1] if hist else None, "history": hist,
                 "recent": [{"ttft_ms": ms, "ended_ms_ago": (now - end) * 1000.0}
                            for end, ms in self.ended if end <= now]}
 
@@ -351,8 +361,8 @@ def test_every_route_validates():
             node = local_node(fake_root(), clock=clock)
             f = fleet_on(px, node, clock=clock)
             for i in range(40):
-                eng.gen += 50
                 clock.t = T0 + 2 * i
+                eng.step(clock.t, 100)
                 f.tick()
             nodes = ok(get(px, "/v1/fleet/nodes")[1], "nodes")["nodes"]
             lid = nodes[0]["id"]
@@ -427,14 +437,18 @@ def test_ring_and_ranges():
             px.sync()
             node = local_node(root, clock=clock)
             f = fleet_on(px, node, clock=clock)
-            # 60 ticks, one per 2 s slot: 100 tokens a tick, one request ends before the 10th
+            # 60 ticks, one per 2 s slot: 100 tokens a tick, one request ends before the 10th;
+            # a dashboard reads the fleet meanwhile, so the engine is read at every tick
             for i in range(60):
-                eng.gen += 100
+                clock.t = T0 + 2 * i
+                if i % 10 == 0:
+                    get(px, "/v1/fleet/nodes")
                 if i == 10:
                     eng.ended.append((T0 + 19.5, 300.0))
                 set_fabric(root, i * 250_000_000)            # 1 Gb/s
-                clock.t = T0 + 2 * i
+                eng.step(clock.t, 100)
                 f.tick()
+            assert eng.live_reads == 60
             lid = f.ensure_local()
 
             def series(q):
@@ -471,19 +485,54 @@ def test_ring_and_ranges():
             m, dtemp = series("source=deployment:TandemLLM&metric=temp&range=5m")
             assert m["series"][0]["node"] == lid and dtemp[-1] == 55.0
             # a counter reset (the engine restarted) is no sample, never a negative rate
-            eng.gen = 0
+            eng.gen = -100
             clock.t = end + 2
+            eng.step(clock.t, 100)
             f.tick()
             clock.t += 2                                      # that tick's slot is over
             assert series("metric=tps&range=5m")[1][-1] is None
-            # an idle engine's sampler rests: the same sample twice with nothing in flight is
-            # 0 tok/s; with a request in flight it is no sample
-            eng.rest_at = clock.t
+            # an idle engine's sampler rests: no new sample and nothing in flight is 0 tok/s;
+            # with a request in flight it is no sample
             p = node.probes["eng"]
-            p.sample(clock.t)
-            assert p.sample(clock.t + 2)["tps"] == 0.0
+            assert [v["tps"] for _, v in p.points(clock.t)] == [0.0]
             eng.running = 1
-            assert p.sample(clock.t + 4)["tps"] is None
+            assert p.points(clock.t + 2) == []
+    finally:
+        eng.close()
+
+
+def test_engine_history_and_cadence():
+    """The first read brings the engine's last five minutes; unread by any dashboard the engine
+    is asked every 30 s, read every 2 s."""
+    clock = Clock()
+    eng = Engine(clock)
+    try:
+        with Proxy(env=engine_env(eng)) as px:
+            px.sync()
+            for k in range(151):                              # five minutes up to the start
+                eng.step(T0 - 300 + 2 * k, 60)
+            f = fleet_on(px, local_node(fake_root(), clock=clock), clock=clock)
+            f.tick()
+            assert eng.live_reads == 1
+            clock.t += 1                                      # the slot of the tick is over
+            tps = get(px, "/v1/fleet/metrics?metric=tps&range=5m")[1]["series"][0]["values"]
+            assert tps == [None] + [30.0] * 150, tps[:4]   # its oldest has no rate before it
+            eng.live_reads = 0
+            f._read_at = -math.inf                            # nobody reads the fleet
+            for i in range(1, 16):
+                clock.t = T0 + 2 * i
+                eng.step(clock.t, 60)
+                f.tick()
+            assert eng.live_reads == 1, "every 30 s"          # at T0 + 30
+            get(px, "/v1/fleet/nodes")                       # a dashboard reads
+            for i in range(16, 20):
+                clock.t = T0 + 2 * i
+                eng.step(clock.t, 60)
+                f.tick()
+            assert eng.live_reads == 5
+            clock.t += 1
+            tps = get(px, "/v1/fleet/metrics?metric=tps&range=5m")[1]["series"][0]["values"]
+            assert tps[-20:] == [30.0] * 20, "the 30 s between reads came with the next one"
     finally:
         eng.close()
 
