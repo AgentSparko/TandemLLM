@@ -90,6 +90,14 @@
               "min"
             ]
           },
+          "prev": {
+            "type": "string",
+            "enum": [
+              "right",
+              "bottom",
+              "float"
+            ]
+          },
           "x": {
             "type": "number"
           },

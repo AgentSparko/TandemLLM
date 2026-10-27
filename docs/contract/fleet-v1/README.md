@@ -14,6 +14,7 @@ These files are the truth for `/v1/fleet/*`, the API of TandemApp's controller: 
 | `alerts.schema.json` | `GET /v1/fleet/alerts`: the alerts firing now, acknowledged or not |
 | `alert.schema.json` | `POST /v1/fleet/alerts/{id}/ack`: the alert after the acknowledgement (404 for an alert that does not fire) |
 | `rules.schema.json` | `GET /v1/fleet/rules` |
+| `logs.schema.json` | `GET /v1/fleet/logs?node=all\|<id>&level=debug\|info\|warn\|error&q=<text>&limit=<n>`: the latest lines of the nodes' logs (each node's agent and engines), oldest first; `level` keeps that level and the ones above it |
 | `layout.schema.json` | `GET /v1/fleet/layouts/{page}?device=desk\|tablet\|phone` and the body of its `PUT`, which answers the layout as saved |
 | `error.schema.json` | every 400, 401 and 404 body |
 
@@ -27,6 +28,7 @@ The schemas use the same JSON Schema 2020-12 subset as `dashboard-v1`; each file
 - A node's `colour` is its identity, 1 to 8: 1 to 4 are the four node hues, 5 to 8 the same hues drawn hollow and dashed. Node ids are stable (certificate fingerprint and DMI serial); an address or tunnel port may change, the id does not.
 - A node's `status` is never only a colour in the UI: `up` ●, `draining` ◐, `off` ○, `alert` ⚠, each with `status_text`.
 - An event's and an alert's `node` is a node id, `all` (the whole fleet) or `host` (the controller's machine).
+- A layout is one page on one device class (VIS-256). A window's `at` is its dock (`right`, `bottom`), `float` or `min`; `prev` is where a minimised one returns to; `x`, `y`, `w`, `h` place it while it floats (pixels in the page's work area) and `z` orders the floating ones. A dock's `f` is its share of the work area, `act` the window its tabs show. `saved_at` is null for the default a page answers before its first save; the page then lays out its own default windows.
 - Metric keys: `tps` decode tok/s (sum), `req` active requests (sum), `ttft` TTFT p50 ms (mean), `gpu` GPU % (mean), `power` W (sum), `temp` GPU °C (maxmean), `sm` and `memclk` MHz (mean), `mem` unified memory used GiB (sum), `cpu` % (mean), `disk` MB/s (sum), `lan` MB/s (sum), `fabric` Gb/s (sum), `rtt` ms from the controller (max).
 
 ## Changes

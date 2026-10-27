@@ -247,6 +247,8 @@ export interface LayoutWindow {
   /** what the window shows (a node, a file, a metric): the kind's own keys */
   ref: Record<string, unknown>;
   at: 'right' | 'bottom' | 'float' | 'min';
+  /** where a minimised window goes back to */
+  prev?: 'right' | 'bottom' | 'float';
   x: number;
   y: number;
   w: number;
@@ -266,6 +268,24 @@ export interface Layout {
   saved_at?: number | null;
 }
 
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+/** A line of a node's log (its agent and its engines), oldest first in an answer. */
+export interface FleetLogLine {
+  t: number;
+  node: string;
+  level: LogLevel;
+  /** what wrote it: `agent`, `engine`, `gateway` */
+  source: string;
+  msg: string;
+}
+
+export interface FleetLogs {
+  contract_version: string;
+  node: string;
+  lines: FleetLogLine[];
+}
+
 export const fleet = {
   nodes: () => request<{ contract_version: string; nodes: FleetNode[] }>('/v1/fleet/nodes'),
   links: () => request<{ contract_version: string; links: FleetLink[] }>('/v1/fleet/links'),
@@ -280,6 +300,13 @@ export const fleet = {
   alerts: () => request<{ contract_version: string; alerts: FleetAlert[] }>('/v1/fleet/alerts'),
   ack: (id: string) => request<FleetAlert>(`/v1/fleet/alerts/${encodeURIComponent(id)}/ack`, { method: 'POST' }),
   rules: () => request<{ contract_version: string; rules: FleetRule[] }>('/v1/fleet/rules'),
+  logs: (p: { node: string; level?: LogLevel | 'all'; q?: string; limit?: number }) => {
+    const q = new URLSearchParams({ node: p.node });
+    if (p.level && p.level !== 'all') q.set('level', p.level);
+    if (p.q) q.set('q', p.q);
+    if (p.limit) q.set('limit', String(p.limit));
+    return request<FleetLogs>(`/v1/fleet/logs?${q}`);
+  },
   layout: (page: string, device: LayoutDevice) => request<Layout>(`/v1/fleet/layouts/${encodeURIComponent(page)}?device=${device}`),
   saveLayout: (l: Layout) =>
     request<Layout>(`/v1/fleet/layouts/${encodeURIComponent(l.page)}?device=${l.device}`, {

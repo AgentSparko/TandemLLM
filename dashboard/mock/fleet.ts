@@ -1,5 +1,5 @@
 // The fleet in the mock (`/v1/fleet/*`, docs/contract/fleet-v1, VIS-244): Sparks, links, deployments,
-// per-node metric series, memory, events, alerts, rules and window layouts, as TandemApp's
+// per-node metric series, memory, events, alerts, rules, each node's log and window layouts, as TandemApp's
 // controller will answer them. Every metric is a function of (seed, node, time): the same seed gives
 // the same answer at the same instant, and the values move as the clock moves. Ranges are what a
 // GB10 shows: up to ~180 W a box, 54-86 °C, 121.6 GiB of usable unified memory, SM clock to 2.4 GHz.
@@ -18,6 +18,7 @@ import type {
   FleetAlert,
   FleetDeployment,
   FleetEvent,
+  FleetLogLine,
   FleetLink,
   FleetNode,
   FleetRule,
@@ -25,6 +26,7 @@ import type {
   InfraItem,
   Layout,
   LayoutDevice,
+  LogLevel,
   MetricKey,
   MetricSeries,
   NodeMemory,
@@ -499,6 +501,44 @@ export class MockFleet {
       .map((a) => ({ ...a.item, since: a.at, acked: this.acked.has(a.item.id), acked_at: this.acked.get(a.item.id) ?? null }));
   }
 
+  // ---- logs ----------------------------------------------------------------------------------
+  /** Each node's log: on a 3 s grid a line or none, the same for the same seed and instant, and
+   *  what it says follows the node (its deployments, a throttle, the agent's metric push). */
+  logs(node: string, level: LogLevel | null, q: string, limit: number, now: number): FleetLogLine[] {
+    const rank = { debug: 0, info: 1, warn: 2, error: 3 } as const;
+    const nodes = this.f.nodes.filter((n) => node === 'all' || n.node.id === node);
+    const lines: FleetLogLine[] = [];
+    const end = Math.floor(now / 3) * 3;
+    const needle = q.toLowerCase();
+    for (let t = end - 30 * MIN; t <= end; t += 3) {
+      for (const n of nodes) {
+        if (!this.alive(n, t)) continue;
+        const r = this.ph(`log:${n.node.id}:${t}`);
+        if (r > 0.42) continue;
+        const l = this.logLine(n, t, r / 0.42);
+        if ((level && rank[l.level] < rank[level]) || (needle && !l.msg.toLowerCase().includes(needle))) continue;
+        lines.push(l);
+      }
+    }
+    return lines.slice(-limit);
+  }
+
+  private logLine(n: NodeSim, t: number, r: number): FleetLogLine {
+    const id = n.node.id;
+    const deps = this.f.deps.filter((d) => d.members.some((m) => m.node === id && m.from <= t)).map((d) => d.dep);
+    const dep = deps[Math.floor(r * 97) % Math.max(1, deps.length)];
+    const tps = Math.round(this.nodeLoad(n, t) * 60);
+    const line = (level: LogLevel, source: string, msg: string): FleetLogLine => ({ t, node: id, level, source, msg });
+    if (this.throttled(n, t) && r < 0.12) return line('warn', 'agent', 'GPU clocks event: HW slowdown (thermal), SW thermal slowdown');
+    if (r < 0.2) return line('debug', 'agent', `metrics push ok, ${58 + Math.floor(r * 40)} series`);
+    if (!dep || t < n.busyFrom) return line('info', 'agent', 'idle: no deployment on this node');
+    if (r < 0.55) return line('info', 'engine', `${dep.api_id}: request done, ${120 + Math.floor(r * 900)} tok at ${tps} tok/s`);
+    if (r < 0.75) return line('info', 'engine', `${dep.api_id}: prefix cache hit ${40 + Math.floor(r * 55)} %`);
+    if (r < 0.9) return line('debug', 'gateway', `route ${dep.api_id} -> ${n.node.alias}`);
+    if (r < 0.97) return line('info', 'engine', `${dep.api_id}: lane ${1 + Math.floor(r * 4)} started, prompt ${2 + Math.floor(r * 30)}k tokens`);
+    return line('error', 'engine', `${dep.api_id}: client closed the stream before the first token`);
+  }
+
   // ---- layouts -------------------------------------------------------------------------------
   defaultLayout(page: string, device: LayoutDevice): Layout {
     const wide = device === 'desk';
@@ -526,6 +566,15 @@ export class MockFleet {
           return { status: 200, body: { contract_version: v, alerts: this.alerts(now) } };
         case 'rules':
           return { status: 200, body: { contract_version: v, rules: this.f.rules } };
+        case 'logs': {
+          const node = q.get('node') ?? 'all';
+          const level = q.get('level');
+          const limit = Number(q.get('limit') ?? 200);
+          if (node !== 'all' && !this.f.nodes.some((n) => n.node.id === node)) return bad(404, 'not_found', `no node ${node}`);
+          if (level != null && !['debug', 'info', 'warn', 'error'].includes(level)) return bad(400, 'bad_request', `level is debug, info, warn or error, not "${level}"`);
+          if (!Number.isInteger(limit) || limit < 1 || limit > 1000) return bad(400, 'bad_request', 'limit is a whole number from 1 to 1000');
+          return { status: 200, body: { contract_version: v, node, lines: this.logs(node, level as LogLevel | null, q.get('q') ?? '', limit, now) } };
+        }
         case 'events': {
           const s = q.get('since');
           if (s != null && !Number.isFinite(Number(s))) return bad(400, 'bad_request', `since is a Unix time in seconds, not "${s}"`);
@@ -578,6 +627,7 @@ export function layoutError(b: unknown, page: string, device: LayoutDevice): str
   for (const w of l.windows) {
     if (!(WINDOW_KINDS as readonly string[]).includes(w?.kind)) return `unknown window kind "${w?.kind}"`;
     if (!['right', 'bottom', 'float', 'min'].includes(w.at)) return `window ${w.id}: at is right, bottom, float or min`;
+    if (w.prev != null && !['right', 'bottom', 'float'].includes(w.prev)) return `window ${w.id}: prev is right, bottom or float`;
   }
   return null;
 }

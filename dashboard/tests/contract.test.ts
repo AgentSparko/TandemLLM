@@ -279,7 +279,7 @@ describe('fleet contract', () => {
   const q = (s = '') => new URLSearchParams(s);
 
   it('has a schema per route, and they are strict', () => {
-    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'layout', 'links', 'memory', 'metrics', 'nodes', 'rules', 'topology']);
+    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'layout', 'links', 'logs', 'memory', 'metrics', 'nodes', 'rules', 'topology']);
     expect(fleet.nodes({ contract_version: '1.0', nodes: [{ id: 'x' }] })).toBe(false);
     expect(fleet.metrics({ contract_version: '1.0', source: 'all', metric: 'watts', unit: 'W', agg: 'sum', range: '6h', step_s: 150, t0: 0, cap: null, series: [] })).toBe(false);
     expect(fleet.layout({ page: 'overview', device: 'watch', rail: { open: true, w: 1 }, ctx: { open: true, w: 1 }, windows: [], docks: { right: { f: 0.3, act: null }, bottom: { f: 0.3, act: null } } })).toBe(false);
@@ -304,6 +304,8 @@ describe('fleet contract', () => {
         fcheck('events', get('/v1/fleet/events', `since=${at / 1000 - 3600}`));
         fcheck('alerts', get('/v1/fleet/alerts'));
         fcheck('rules', get('/v1/fleet/rules'));
+        fcheck('logs', get('/v1/fleet/logs', 'node=all'));
+        fcheck('logs', get('/v1/fleet/logs', 'node=all&level=warn&limit=20'));
         for (const metric of METRIC_KEYS) for (const range of RANGE_KEYS) fcheck('metrics', get('/v1/fleet/metrics', `source=all&metric=${metric}&range=${range}`));
         const nodes = (get('/v1/fleet/nodes').nodes as { id: string }[]).map((n) => `node:${n.id}`);
         const depIds = (deps.deployments as { id: string }[]).map((d) => `deployment:${d.id}`);
@@ -329,6 +331,9 @@ describe('fleet contract', () => {
       ['GET', '/v1/fleet/metrics', 'metric=tps&source=deployment:nope', 404],
       ['GET', '/v1/fleet/events', 'since=yesterday', 400],
       ['GET', '/v1/fleet/layouts/overview', 'device=watch', 400],
+      ['GET', '/v1/fleet/logs', 'node=r9', 404],
+      ['GET', '/v1/fleet/logs', 'node=all&level=loud', 400],
+      ['GET', '/v1/fleet/logs', 'node=all&limit=0', 400],
       ['GET', '/v1/fleet/sparks', '', 404],
     ] as const) {
       const r = m.handle(method, path, q(qs), null, T0);
@@ -337,12 +342,31 @@ describe('fleet contract', () => {
     }
   });
 
+  it('logs: a node’s own, oldest first, filtered by level and text, the same for the same instant', () => {
+    const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    const all = m.handle('GET', '/v1/fleet/logs', q('node=all'), null, T0 + 60_000).body as { lines: { t: number; node: string; level: string; msg: string }[] };
+    expect(all.lines.length).toBe(200);
+    expect(new Set(all.lines.map((l) => l.node)).size).toBeGreaterThan(1);
+    expect(all.lines.map((l) => l.t)).toEqual([...all.lines.map((l) => l.t)].sort((a, b) => a - b));
+    const r3 = m.handle('GET', '/v1/fleet/logs', q('node=r3&limit=50'), null, T0 + 60_000).body as typeof all;
+    expect(r3.lines.length).toBe(50);
+    expect(r3.lines.every((l) => l.node === 'r3')).toBe(true);
+    // R-3 throttles in fleet4: its log says so
+    expect(m.handle('GET', '/v1/fleet/logs', q('node=r3&level=warn&limit=1000'), null, T0 + 60_000).body).toMatchObject({ lines: expect.arrayContaining([expect.objectContaining({ msg: expect.stringContaining('thermal') })]) });
+    const warn = m.handle('GET', '/v1/fleet/logs', q('node=all&level=warn&limit=1000'), null, T0 + 60_000).body as typeof all;
+    expect(warn.lines.every((l) => l.level === 'warn' || l.level === 'error')).toBe(true);
+    const hit = m.handle('GET', '/v1/fleet/logs', q('node=all&q=PREFIX'), null, T0 + 60_000).body as typeof all;
+    expect(hit.lines.length).toBeGreaterThan(0);
+    expect(hit.lines.every((l) => l.msg.toLowerCase().includes('prefix'))).toBe(true);
+    expect(m.handle('GET', '/v1/fleet/logs', q('node=all'), null, T0 + 60_000).body).toEqual(all);
+  });
+
   it('layouts: the default, a save that comes back, a refused body', () => {
     const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
     const def = m.handle('GET', '/v1/fleet/layouts/overview', q('device=phone'), null, T0).body;
     fcheck('layout', def);
     expect(def).toMatchObject({ page: 'overview', device: 'phone', rail: { open: false }, windows: [], saved_at: null });
-    const windows = WINDOW_KINDS.map((kind, i) => ({ id: `w${i}`, kind, ref: { node: 'r3', live: true, n: i, path: null }, at: (['right', 'bottom', 'float', 'min'] as const)[i % 4], x: 60, y: 40, w: 560, h: 360, z: i }));
+    const windows = WINDOW_KINDS.map((kind, i) => ({ id: `w${i}`, kind, ref: { node: 'r3', live: true, n: i, path: null }, at: (['right', 'bottom', 'float', 'min'] as const)[i % 4], ...(i % 4 === 3 ? { prev: 'float' as const } : {}), x: 60, y: 40, w: 560, h: 360, z: i }));
     const body = { page: 'overview', device: 'desk', rail: { open: true, w: 248 }, ctx: { open: false, w: 340 }, windows, docks: { right: { f: 0.4, act: 'w0' }, bottom: { f: 0.3, act: 'w1' } } };
     fcheck('layout', body);
     const put = m.handle('PUT', '/v1/fleet/layouts/overview', q('device=desk'), body, T0 + 2000);
@@ -352,7 +376,7 @@ describe('fleet contract', () => {
     expect(back).toEqual({ ...body, saved_at: T0 / 1000 + 2 });
     // another device keeps its own
     expect(m.handle('GET', '/v1/fleet/layouts/overview', q('device=tablet'), null, T0).body).toMatchObject({ saved_at: null });
-    for (const wrong of [null, { ...body, page: 'usage' }, { ...body, windows: [{ ...windows[0], kind: 'clock' }] }, { ...body, windows: [{ ...windows[0], at: 'left' }] }]) {
+    for (const wrong of [null, { ...body, page: 'usage' }, { ...body, windows: [{ ...windows[0], kind: 'clock' }] }, { ...body, windows: [{ ...windows[0], at: 'left' }] }, { ...body, windows: [{ ...windows[0], prev: 'min' }] }]) {
       const r = m.handle('PUT', '/v1/fleet/layouts/overview', q('device=desk'), wrong, T0);
       expect(r.status).toBe(400);
       fcheck('error', r.body);
