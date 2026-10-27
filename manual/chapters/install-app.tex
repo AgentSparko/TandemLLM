@@ -84,7 +84,7 @@ Inside a container the host collector sees the container, not the machine. Run i
 \toprule
 \hd{file} & \hd{what} & \hd{default} \\
 \midrule
-config database & backends, encrypted keys, models, prices, routing rules, users, an audit table & \code{~/.tandemllm/config.sqlite3} (\code{--config-db}, \code{TANDEM_CONFIG_DB}) \\
+config database & backends, encrypted keys, models, prices, routing rules, users, the fleet's nodes and saved window layouts, an audit table & \code{~/.tandemllm/config.sqlite3} (\code{--config-db}, \code{TANDEM_CONFIG_DB}) \\
 usage ledger & one row per request: tokens, times, cost; no text & \code{~/.tandemllm/ledger.sqlite3} (\code{--usage-ledger}; \code{off} for none) \\
 master key file & the key the backends' keys are encrypted with, when no other source answers & \code{~/.tandemllm/secrets.key}, mode 0600 \\
 conductor documents & the harness's profiles, router, packages and journal & \code{~/.tandemllm/conductor} (\code{--conductor-config}; \code{off} for none) \\
@@ -95,6 +95,33 @@ conductor documents & the harness's profiles, router, packages and journal & \co
 \section{The proxy inside the engine's server}
 
 The engine's own server can relay too. Start it with \code{--backends <config database>} (\code{QSE_BACKENDS}\index{qsebackends@\texttt{QSE\_BACKENDS}} in \code{serve.env}; empty means off). It then serves its own model as before and relays every request whose model belongs to a backend. A relayed request runs on its handler's own thread and never takes the engine's lock or a place in its queue, so a slow cloud answer cannot hold up the engine, and the engine's queue cannot hold up a cloud answer. With \code{--backends}\index{backends@\texttt{-\kern0pt-backends}} off the engine loads none of the proxy's code and serves exactly as without it.
+
+\section{The fleet}\label{sec:fleet}\index{fleet}
+
+TandemApp keeps the registry of the Sparks it manages and answers the fleet API, \code{/v1/fleet/*}, which the dashboard's shell, scope bar and windows read. The contract is \code{docs/contract/fleet-v1}. The browser talks to \code{tandem-app} only: every figure of a node is read on the server.
+
+On one box the fleet has one node: the machine \code{tandem-app} runs on, when it has an NVIDIA GPU or an engine of its own. The first start registers it with its hostname as the alias, the first identity colour and an id from the machine (the DMI serial, else the machine id), never from its address; a new address keeps the node and is noted in the log. A machine in front of cloud APIs only, a Mac for instance, is the controller's host and no node. A node on another machine is listed as off until its node agent and pairing exist.
+
+\begin{table}[htbp]
+\centering\small
+\caption{The fleet API on a fleet of one.}\label{tab:fleet-one}
+\begin{tabularx}{\linewidth}{@{}L{.26\linewidth}Y@{}}
+\toprule
+\hd{route} & \hd{what it answers} \\
+\midrule
+\code{nodes}, \code{nodes/<id>} & the node: status, version and inventory (OS, kernel, driver, CUDA, ConnectX ports, disk, interfaces); \code{PATCH} sets the alias, the colour (1 to 8, one node each), the icon and the tags \\
+\code{deployments} & each model an engine on the node serves itself, as a Single deployment, its status from the backend's health check \\
+\code{links}, \code{topology} & the LAN of the default route, and the internet when a cloud backend exists \\
+\code{metrics} & decode tok/s, requests and TTFT from each engine's \code{/metrics}; GPU, power, temperature, clocks, memory, CPU, disk, LAN and fabric from the host collector. Sampled every 2\,s into memory: 10 minutes at 2\,s, 7 days at 30\,s. History starts with the process; a point without a sample is null \\
+\code{memory} & the engine's split (weights, KV, caches) beside the rest of the machine's use and the page cache, GiB \\
+\code{logs} & \code{tandem-app}'s own log and its TandemLLM engines', merged by time \\
+\code{layouts/<page>} & a page's window layout per device class, in the config database; the last write wins \\
+\code{events}, \code{alerts}, \code{rules} & empty lists until the fleet's event log and alert rules exist \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Reads follow the dashboard rule and writes the admin rule (Section~\ref{sec:access}), as for \code{/v1/config}. The engine's own server, which serves the dashboard on a box without \code{tandem-app}, has no fleet API; the dashboard then shows the box alone.
 
 \section{Access}
 

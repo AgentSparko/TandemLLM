@@ -131,7 +131,7 @@ The collector reads psutil and NVML when they are installed (`pip install 'tande
 
 On a GB10 (the DGX Spark) the CPU and the GPU share one memory pool. The driver reports no memory for the GPU itself, so the view shows "unified" there and `MemAvailable` is the figure to watch. The GPU memory of a process is still reported, and it comes out of the same pool as its RSS: the two overlap.
 
-Nothing is sampled while nobody looks. When the System view asks, the collector reads memory, CPU, GPUs, disks and network at most every 5 s and scans the processes at most every 15 s. One sample with a scan took 4.4 ms of CPU on a Mac with psutil, under 0.1 % of one core at that cadence, and each host's footer shows what its own last sample cost.
+When the System view asks, the collector reads memory, CPU, GPUs, disks and network at most every 5 s and scans the processes at most every 15 s; in `tandem-app` the fleet's sampler (below) reads the same collector every 2 s. One sample with a scan took 4.4 ms of CPU on a Mac with psutil, under 0.1 % of one core at that cadence, and each host's footer shows what its own last sample cost.
 
 On another machine, run the collector next to the backend and give both sides the same token:
 
@@ -140,6 +140,26 @@ On another machine, run the collector next to the backend and give both sides th
 It answers `GET /host` as JSON and `GET /metrics` as Prometheus text (`tandem_host_*`), both behind the bearer token; it refuses to bind beyond loopback without one, because its answer names processes and their command lines. `--watch vllm:8000` reports a port on every answer; the proxy asks for its backends' ports itself. A machine that already runs node_exporter and NVIDIA's DCGM exporter needs nothing new: set the backend's host to `exporter` with both page URLs. That path has no per-process figures, and the panel says so. A remote read runs on its own thread, so a slow or dead host never holds the page; its panel shows the last answer, its age, or the error.
 
 In docker the collector sees the container, not the machine. Run the container with `--pid=host` (and `--gpus all` for NVML) for the machine's view, or run `tandem-app hostcollect` on the machine itself.
+
+## The fleet: `/v1/fleet/*`
+
+TandemApp keeps the registry of the Sparks it manages and answers the fleet API (contract: [`docs/contract/fleet-v1`](contract/fleet-v1/README.md), code: `proxy/fleet.py`, `proxy/nodesource.py`). The dashboard reads it for the shell's fleet readout, the scope bar, the charts and the windows; the browser talks to `tandem-app` only.
+
+On one box the fleet has one node: the machine `tandem-app` runs on, when it has an NVIDIA GPU or an engine of its own. The first start registers it with its hostname as the alias, the first identity colour and an id from the machine (the DMI serial, else `/etc/machine-id`), never its address. A new address keeps the node and is noted in the log. A machine in front of cloud APIs only is the controller's host and no node. A node on another machine is listed `off` until its node agent and pairing exist.
+
+| route | on a fleet of one |
+|-|-|
+| `GET nodes`, `GET nodes/{id}` | the node with status, version and inventory |
+| `PATCH nodes/{id}` | `{alias?, colour?, icon?, tags?}`; an alias or colour another node has is refused |
+| `GET deployments` | each model an engine on the node serves itself, `single`, status from the backend's health |
+| `GET links`, `GET topology` | the LAN of the default route; the internet when a cloud backend exists |
+| `GET metrics?source=&metric=&range=` | decode tok/s, requests and TTFT from each engine's `/metrics`, the hardware from the host collector; sampled every 2 s into memory (10 min at 2 s, 7 days at 30 s); null where no sample exists, history starts with the process |
+| `GET memory` | the engine's split (weights, KV, caches), the rest of the machine's use, the page cache, GiB |
+| `GET logs?node=&level=&q=&limit=` | `tandem-app`'s own log (`gateway`) and its TandemLLM engines' (`engine`), merged by time |
+| `GET`/`PUT layouts/{page}?device=` | a page's window layout per device class in the config database; `saved_at` is the controller's clock, the last write wins |
+| `GET events`, `alerts`, `rules` | empty lists until the fleet's event log and alert rules exist |
+
+Reads follow the dashboard rule, writes the admin rule, as `/v1/config` does. The engine's own server has no fleet API; a dashboard it serves shows the box alone.
 
 ## vLLM and SGLang: their own metrics
 
