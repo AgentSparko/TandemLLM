@@ -78,6 +78,11 @@ export function onFleet(fn: (s: FleetState | null) => void): () => void {
   };
 }
 
+/** Asks the controller again now (an alert acknowledged). */
+export function refreshFleet(): void {
+  void slow?.refresh();
+}
+
 export function fleetNow(): FleetState | null {
   return state;
 }

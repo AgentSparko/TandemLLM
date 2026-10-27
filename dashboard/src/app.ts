@@ -7,10 +7,14 @@
 // panel beside it, resizable and collapsible, with the grouped menu and the sub-pages of the section
 // you are in (a view may put its own panel there); in the middle the scope bar on the Monitor pages
 // and the page; on the right the context sidebar, on every page, resizable, collapsing to a strip
-// with its title, with a selection slot at its top (lib/context.ts). Both sidebars' state is saved
-// per device (lib/layout.ts). A tablet gets both as drawers over the page; a phone gets the strip and
-// the panel in the left drawer, the context in the right one and a bottom bar: Chat, Overview,
-// Performance, Windows and More (the grouped menu as a sheet).
+// with its title, with a selection slot at its top (lib/context.ts) and each page's own content
+// (ui/page-context.ts; Chat's Context panel is Chat's). Around the page sit its windows (VIS-256,
+// ui/workspace.ts): docked beside it and below it, floating or minimised, a tray on a phone. Each
+// page's layout -- its windows and whether its sidebars are open -- is saved per device class, in this
+// browser and on TandemApp's controller (lib/workspace.ts); the sidebars' widths are one per device.
+// A tablet gets both sidebars as drawers over the page; a phone gets the strip and the panel in the
+// left drawer, the context in the right one and a bottom bar: Chat, Overview, Performance, Windows
+// (the tray) and More (the grouped menu as a sheet).
 //
 // The dashboard asks for no password anywhere (AU1, 2026-10-06): with no password set on the server
 // every route is open; once one is set, a 401 shows a banner (text only, no prompt); the setup guide
@@ -30,27 +34,29 @@ import type { Summary, LiveStatus } from './api/types';
 import { duration, shortHash } from './lib/format';
 import { modeWord } from './lib/supervisor';
 import { poll, type Poller } from './lib/poll';
-import { fixHash, navigate, onRoute, parseHash, type Route, type View } from './lib/router';
+import { fixHash, navigate, onRoute, parseHash, type Route } from './lib/router';
 import { currentTheme, toggleTheme, watchSystemTheme, type Theme } from './lib/theme';
 import { registerWorker } from './lib/pwa';
 import { knownJob, rememberStatusPort } from './lib/restart';
 import { browserTz } from './lib/time';
 import { isTypingTarget, splitTabs } from './lib/phone';
 import { MENU, MONITOR, PHONE_BAR, crumb, sectionHref, sectionOf, subPages, type MenuItem, type Section } from './lib/menu';
-import { CTX_W, RAIL_W, currentWidthClass, isOpen, loadLayout, opened, resized, saveLayout, toggled, type ShellLayout, type WidthClass } from './lib/layout';
-import { clearSelection, contextFor, currentSelection, onContext, pageKey, panelFor, setDefaultContext, setPage } from './lib/context';
+import { CTX_W, RAIL_W, currentWidthClass, type WidthClass } from './lib/layout';
+import { clearSelection, contextFor, currentSelection, onContext, pageKey, panelFor, setDefaultContext, setPage, setSidebarControl, sidebarsChanged } from './lib/context';
+import { flush, onWorkspace, openWindowMenu, setTray, shownLayout, showPage, trayOpen, windowMenu, change, currentLayout, savedLayouts } from './lib/workspace';
+import { resizeSide, setSide } from './lib/wm';
+import './ui/workspace';
+import { pageContext } from './ui/page-context';
 import { onFleet, readout, type FleetState } from './lib/fleet-state';
 import { LightElement, type Loadable } from './ui/base';
 import { icon } from './ui/bits';
-import { nodeChip, nodeColour, isHollow } from './ui/node-chip';
+import { nodeColour, isHollow } from './ui/node-chip';
 import './ui/scope-bar';
 import { S } from './setup/strings';
 
 /** the Chat tab is in beta in 0.8.0 (docs/chat.md "known limitations"): a small pill beside it */
 const BETA = html`<span class="beta-pill" title="The Chat tab is in beta">Beta</span>`;
 
-/** a page that brings its own sidebars: the shell's start closed there (lib/layout.ts `full`) */
-const FULL: View[] = ['chat'];
 /** a focus that comes and goes within this window is a tap between two fields, not a keyboard
  *  that closed: the bar waits before it comes back */
 const TYPING_SETTLE_MS = 60;
@@ -94,20 +100,6 @@ function perfTabs(on: 'live' | 'requests', parallel: number | null = null): Temp
   </div>`;
 }
 
-/** the default context: every Spark with what it serves and its rate now */
-function fleetHealth(f: FleetState | null): TemplateResult {
-  if (!f) return html`<p class="muted small">The fleet shows here once TandemApp's controller answers on this server.</p>`;
-  return html`<section class="csec"><div class="eyebrow">Fleet</div>
-    <div class="ctx-nodes">
-      ${f.nodes.map(
-        (n) => html`<a class="mini-now" href=${`#/sparks/${encodeURIComponent(n.id)}`} data-node=${n.id}>
-          <span>${nodeChip(n, { status: true })}<span class="mini-dep">${f.deployments.filter((d) => d.members.includes(n.id)).map((d) => d.name).join(' · ')}</span></span>
-          <span class="num small">${f.tps[n.id] != null ? Math.round(f.tps[n.id]) : '—'} <span class="muted">tok/s</span></span>
-        </a>`,
-      )}
-    </div></section>`;
-}
-
 @customElement('qse-app')
 export class QseApp extends LightElement {
   /** a 401 came back: the server has an admin password set (never while none is) */
@@ -139,7 +131,8 @@ export class QseApp extends LightElement {
   /** a text field has focus: on the phone the bottom bar steps aside and the view takes its room */
   @state() private typing = false;
   @state() private wclass: WidthClass = currentWidthClass();
-  @state() private layout: ShellLayout = loadLayout(undefined, window.innerWidth);
+  /** the page's layout or its windows changed (lib/workspace.ts) */
+  @state() private wsTick = 0;
   /** a tablet's or a phone's open drawer */
   @state() private drawer: 'left' | 'right' | null = null;
   @state() private fleet: FleetState | null = null;
@@ -159,6 +152,10 @@ export class QseApp extends LightElement {
   private drawerFrom: HTMLElement | null = null;
   /** a sidebar's resize in progress */
   private drag: { which: 'rail' | 'ctx'; x: number; w: number; el: HTMLElement } | null = null;
+  /** the sidebars as shown at the last draw: a change is told to the views that show it */
+  private sides = '';
+  /** the phone's tray has a history entry: the back gesture closes it, as it closed Chat's panes */
+  private trayEntry = false;
   private indTop: number | null = null;
   /** a selection was showing at the last change (a new one opens the sidebar) */
   private hadSelection = false;
@@ -170,6 +167,7 @@ export class QseApp extends LightElement {
     registerWorker((apply) => (this.newBuild = apply));
     if (navigator.serviceWorker?.controller) void this.checkRestart();
     setPage(pageKey(this.route.view, this.route.path));
+    showPage(sectionOf(this.route.view), this.wclass, window.innerWidth);
     this.enter();
     this.unsub.push(
       onRoute((r) => {
@@ -178,6 +176,7 @@ export class QseApp extends LightElement {
         if (this.setupMode && r.view !== 'setup') navigate('setup');
         if (this.more && !this.pendingNav) this.closeMore();
         setPage(pageKey(r.view, r.path));
+        showPage(sectionOf(r.view), this.wclass, window.innerWidth);
         if (page) {
           this.enter();
           if (this.drawer) this.closeDrawer(false);
@@ -187,14 +186,46 @@ export class QseApp extends LightElement {
         const sel = currentSelection();
         // a selection opens the sidebar it shows in
         if (sel && !this.hadSelection) {
-          if (this.wclass === 'desk') this.setLayout(opened(this.layout, 'ctx', this.full));
+          if (this.wclass === 'desk') change((l) => setSide(l, 'ctx', true));
           else this.drawer = 'right';
         }
         this.hadSelection = !!sel;
         this.ctxTick++;
       }),
     );
-    setDefaultContext(() => ({ title: 'Fleet health', body: fleetHealth(this.fleet) }));
+    setDefaultContext(() =>
+      pageContext(sectionOf(this.route.view), {
+        route: this.route,
+        fleet: this.fleet,
+        summary: this.summary.state === 'ready' ? this.summary.data : null,
+        meta: { version: this.version, code: this.codeHash },
+        layouts: savedLayouts(),
+        theme: this.theme,
+        toggleTheme: () => (this.theme = toggleTheme()),
+      }),
+    );
+    this.unsub.push(
+      onWorkspace(() => {
+        this.wsTick++;
+        const open = trayOpen();
+        if (open && !this.trayEntry) {
+          history.pushState({ tray: true }, '');
+          this.trayEntry = true;
+        } else if (!open && this.trayEntry) {
+          this.trayEntry = false;
+          if (history.state?.tray) history.back();
+        }
+      }),
+    );
+    setSidebarControl({
+      toggle: (which) => this.toggleSide(which === 'rail' ? 'rail' : 'ctx', null),
+      shown: (which) => (this.wclass === 'desk' ? currentLayout()[which].open : this.drawer === (which === 'rail' ? 'left' : 'right')),
+    });
+    // a change still waiting is saved before the tab goes
+    const onHide = () => document.visibilityState === 'hidden' && flush();
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', flush);
+    this.unsub.push(() => document.removeEventListener('visibilitychange', onHide), () => window.removeEventListener('pagehide', flush), () => setSidebarControl(null));
     const onSetupJob = (e: Event) => {
       const active = !!(e as CustomEvent<{ active: boolean }>).detail?.active;
       // a job that ended: the box may have left setup mode, so the guide no longer holds the page
@@ -265,6 +296,13 @@ export class QseApp extends LightElement {
     super.disconnectedCallback();
   }
   updated(): void {
+    // a view with its own sidebar toggles (Chat's header) hears the sidebars open and close
+    const l = currentLayout();
+    const sides = `${this.wclass}|${this.drawer}|${l.rail.open}|${l.ctx.open}`;
+    if (sides !== this.sides) {
+      this.sides = sides;
+      sidebarsChanged();
+    }
     // the strip's indicator slides from the item it stood on to the one now on
     const on = this.querySelector<HTMLElement>('.istrip a.is-on');
     const ind = this.querySelector<HTMLElement>('.istrip .ind');
@@ -277,18 +315,13 @@ export class QseApp extends LightElement {
 
   // ---- layout: the sidebars, the drawers, the width class -------------------------------------
 
-  private get full(): boolean {
-    return FULL.includes(this.route.view);
-  }
-  private setLayout(l: ShellLayout): void {
-    this.layout = l;
-    saveLayout(l);
-  }
   private onResize = () => {
     const w = currentWidthClass();
     if (w === this.wclass) return;
     this.wclass = w;
     this.drawer = null;
+    if (w !== 'phone') setTray(false);
+    showPage(sectionOf(this.route.view), w, window.innerWidth);
   };
   /** a page's first paint: its blocks rise in, never again on a live re-render */
   private enter(): void {
@@ -296,17 +329,18 @@ export class QseApp extends LightElement {
     if (this.enterTimer) clearTimeout(this.enterTimer);
     this.enterTimer = setTimeout(() => (this.entering = false), ENTER_MS);
   }
-  private toggleSide(which: 'rail' | 'ctx', e: Event): void {
+  private toggleSide(which: 'rail' | 'ctx', e: Event | null): void {
     if (this.wclass === 'desk') {
-      this.setLayout(toggled(this.layout, which, this.full));
+      change((l) => setSide(l, which, !l[which].open));
       return;
     }
     const d = which === 'rail' ? 'left' : 'right';
     if (this.drawer === d) this.closeDrawer();
-    else this.openDrawer(d, e.currentTarget as HTMLElement);
+    else this.openDrawer(d, (e?.currentTarget as HTMLElement | undefined) ?? (document.activeElement as HTMLElement | null));
   }
-  private openDrawer(d: 'left' | 'right', from: HTMLElement): void {
+  private openDrawer(d: 'left' | 'right', from: HTMLElement | null): void {
     if (this.more) this.closeMore();
+    this.dropTray();
     this.drawer = d;
     this.drawerFrom = from;
     this.updateComplete.then(() => this.querySelector<HTMLElement>(d === 'left' ? '.lnav .is-on, .lnav a' : '.ctx-in button, .ctx-in a')?.focus());
@@ -321,24 +355,46 @@ export class QseApp extends LightElement {
     e.preventDefault();
     const el = e.currentTarget as HTMLElement;
     el.classList.add('is-drag');
-    this.drag = { which, x: e.clientX, w: this.layout[which].w, el };
+    this.drag = { which, x: e.clientX, w: currentLayout()[which].w, el };
   }
   private onDragMove = (e: PointerEvent) => {
-    if (!this.drag) return;
-    const dx = e.clientX - this.drag.x;
-    this.layout = resized(this.layout, this.drag.which, this.drag.which === 'rail' ? this.drag.w + dx : this.drag.w - dx);
+    const d = this.drag;
+    if (!d) return;
+    const dx = e.clientX - d.x;
+    change((l) => resizeSide(l, d.which, d.which === 'rail' ? d.w + dx : d.w - dx));
   };
   private onDragEnd = () => {
     if (!this.drag) return;
     this.drag.el.classList.remove('is-drag');
     this.drag = null;
-    saveLayout(this.layout);
   };
   private onSepKey(which: 'rail' | 'ctx', e: KeyboardEvent): void {
     const d = e.key === 'ArrowLeft' ? -16 : e.key === 'ArrowRight' ? 16 : 0;
     if (!d) return;
     e.preventDefault();
-    this.setLayout(resized(this.layout, which, this.layout[which].w + (which === 'rail' ? d : -d)));
+    change((l) => resizeSide(l, which, l[which].w + (which === 'rail' ? d : -d)));
+  }
+  /** the top bar's and the phone bar's window buttons: their menu, or the tray */
+  private winMenu(kind: 'add' | 'layout', e: Event): void {
+    const m = windowMenu();
+    if (m?.kind === kind) return openWindowMenu(null);
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    openWindowMenu({ kind, at: { left: r.left, top: r.top, bottom: r.bottom, right: r.right } });
+  }
+  /** the tray gives way to a drawer or the menu sheet: its history entry stays, emptied */
+  private dropTray(): void {
+    if (!trayOpen()) return;
+    if (this.trayEntry) {
+      this.trayEntry = false;
+      history.replaceState(null, '');
+    }
+    setTray(false);
+  }
+  private toggleTray(): void {
+    if (trayOpen()) return setTray(false);
+    if (this.more) this.closeMore();
+    this.drawer = null;
+    setTray(true);
   }
 
   // ---- the phone's chrome -------------------------------------------------------------------
@@ -356,8 +412,13 @@ export class QseApp extends LightElement {
     if (e.key !== 'Escape') return;
     if (this.more) this.closeMore();
     else if (this.drawer) this.closeDrawer();
+    else if (trayOpen() && !windowMenu()) setTray(false);
   };
   private onPop = () => {
+    if (this.trayEntry && !history.state?.tray) {
+      this.trayEntry = false;
+      setTray(false);
+    }
     if (this.more) this.more = false;
     if (this.pendingNav) {
       const h = this.pendingNav;
@@ -368,6 +429,7 @@ export class QseApp extends LightElement {
   private openMore(): void {
     if (this.more) return;
     this.drawer = null;
+    this.dropTray();
     history.pushState({ more: true }, '');
     this.more = true;
     this.updateComplete.then(() => this.querySelector<HTMLElement>('.more-item:not(.is-off)')?.focus());
@@ -506,8 +568,10 @@ export class QseApp extends LightElement {
     const live = this.summary.state === 'ready' ? this.summary.data.live : null;
     const section = sectionOf(this.route.view);
     const desk = this.wclass === 'desk';
-    const railOpen = desk ? isOpen(this.layout, 'rail', this.full) : this.drawer === 'left';
-    const ctxOpen = desk ? isOpen(this.layout, 'ctx', this.full) : this.drawer === 'right';
+    void this.wsTick;
+    const layout = shownLayout();
+    const railOpen = desk ? layout.rail.open : this.drawer === 'left';
+    const ctxOpen = desk ? layout.ctx.open : this.drawer === 'right';
     const cls = [
       'shell',
       this.typing ? 'is-typing' : '',
@@ -515,6 +579,7 @@ export class QseApp extends LightElement {
       this.drawer ? `drw-${this.drawer}` : '',
       railOpen ? '' : 'rail-closed',
       ctxOpen ? '' : 'ctx-closed',
+      trayOpen() && this.wclass === 'phone' ? 'is-tray' : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -523,7 +588,7 @@ export class QseApp extends LightElement {
       ${live ? html`<span title="uptime">up ${duration(live.uptime_s)}</span>` : nothing}`;
     const c = crumb(this.route.view);
     return html`
-      <div class=${cls} data-view=${this.route.view} data-w=${this.wclass} style="--lw:${this.layout.rail.w}px;--cw:${this.layout.ctx.w}px">
+      <div class=${cls} data-view=${this.route.view} data-w=${this.wclass} style="--lw:${layout.rail.w}px;--cw:${layout.ctx.w}px">
         <header class="topbar">
           <button type="button" class="icon-btn side-btn" data-side="left" aria-pressed=${railOpen} aria-label="Show or hide the menu" title="Menu" @click=${(e: Event) => this.toggleSide('rail', e)}>${icon(desk ? 'side-left' : 'menu')}</button>
           <a class="brand" href="#/overview" aria-label="TandemApp home"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span><span class="brand-name">TandemApp</span></a>
@@ -532,8 +597,8 @@ export class QseApp extends LightElement {
           <nav class="crumb" aria-label="You are here">${c.group ? html`<span>${c.group}</span><span class="crumb-sl" aria-hidden="true">/</span>` : nothing}<b>${c.label}</b></nav>
           <span class="top-sp"></span>
           ${this.readout()}
-          <button type="button" class="btn-win" disabled title="Windows on every page come with the window manager (VIS-256)">${icon('plus')}<span class="btn-win-label">Window</span></button>
-          <button type="button" class="icon-btn btn-layout" disabled aria-label="Layout" title="Saved layouts come with the window manager (VIS-256)">${icon('layout')}</button>
+          <button type="button" class="btn-win" data-wm-menu aria-haspopup="menu" aria-expanded=${windowMenu()?.kind === 'add'} title="Add a window to this page" @click=${(e: Event) => this.winMenu('add', e)}>${icon('plus')}<span class="btn-win-label">Window</span></button>
+          <button type="button" class="icon-btn btn-layout" data-wm-menu aria-haspopup="menu" aria-expanded=${windowMenu()?.kind === 'layout'} aria-label="Layout" title="This page’s layout" @click=${(e: Event) => this.winMenu('layout', e)}>${icon('layout')}</button>
           <button type="button" class="icon-btn side-btn" data-side="right" aria-pressed=${ctxOpen} aria-label="Show or hide the context sidebar" title="Context" @click=${(e: Event) => this.toggleSide('ctx', e)}>${icon('side-right')}</button>
           <button type="button" class="icon-btn btn-theme" aria-label=${this.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title="Theme" @click=${() => (this.theme = toggleTheme())}>${icon(this.theme === 'dark' ? 'sun' : 'moon')}</button>
         </header>
@@ -551,6 +616,7 @@ export class QseApp extends LightElement {
               ${this.setupMode ? html`<div class="banner setup-mode-banner" role="status" data-setup-mode>${icon('info')} ${S.setupModeBanner}</div>` : nothing}
               ${this.renderView()}
             </main>
+            <qse-workspace .device=${this.wclass}></qse-workspace>
           </div>
           ${this.renderCtx(ctxOpen)}
           <div class="drw-scrim" @click=${() => this.closeDrawer()}></div>
@@ -603,7 +669,7 @@ export class QseApp extends LightElement {
     const own = panelFor(this.route.view);
     const subs = subPages(this.route, this.fleet?.nodes);
     const leftInert = this.wclass === 'phone' && this.drawer !== 'left';
-    const panelInert = this.wclass !== 'desk' ? this.drawer !== 'left' : !isOpen(this.layout, 'rail', this.full);
+    const panelInert = this.wclass !== 'desk' ? this.drawer !== 'left' : !shownLayout().rail.open;
     return html`<nav class="lnav" aria-label="Main" ?inert=${leftInert}>
       <div class="istrip">
         <i class="ind" aria-hidden="true"></i>
@@ -625,7 +691,7 @@ export class QseApp extends LightElement {
           <div class="lp-foot num">${meta}</div>
         </div>
       </div>
-      <div class="rz" role="separator" aria-orientation="vertical" aria-label="Resize the menu" aria-valuemin=${RAIL_W.min} aria-valuemax=${RAIL_W.max} aria-valuenow=${this.layout.rail.w} tabindex="0" @pointerdown=${(e: PointerEvent) => this.onDragStart('rail', e)} @keydown=${(e: KeyboardEvent) => this.onSepKey('rail', e)}></div>
+      <div class="rz" role="separator" aria-orientation="vertical" aria-label="Resize the menu" aria-valuemin=${RAIL_W.min} aria-valuemax=${RAIL_W.max} aria-valuenow=${shownLayout().rail.w} tabindex="0" @pointerdown=${(e: PointerEvent) => this.onDragStart('rail', e)} @keydown=${(e: KeyboardEvent) => this.onSepKey('rail', e)}></div>
     </nav>`;
   }
 
@@ -635,7 +701,7 @@ export class QseApp extends LightElement {
     const sel = currentSelection();
     const inert = this.wclass !== 'desk' && this.drawer !== 'right';
     return html`<aside class="ctx" aria-label="Context" ?inert=${inert}>
-      <div class="rz" role="separator" aria-orientation="vertical" aria-label="Resize the context sidebar" aria-valuemin=${CTX_W.min} aria-valuemax=${CTX_W.max} aria-valuenow=${this.layout.ctx.w} tabindex="0" @pointerdown=${(e: PointerEvent) => this.onDragStart('ctx', e)} @keydown=${(e: KeyboardEvent) => this.onSepKey('ctx', e)}></div>
+      <div class="rz" role="separator" aria-orientation="vertical" aria-label="Resize the context sidebar" aria-valuemin=${CTX_W.min} aria-valuemax=${CTX_W.max} aria-valuenow=${shownLayout().ctx.w} tabindex="0" @pointerdown=${(e: PointerEvent) => this.onDragStart('ctx', e)} @keydown=${(e: KeyboardEvent) => this.onSepKey('ctx', e)}></div>
       <div class="ctx-rail">
         <button type="button" class="icon-btn" aria-label="Open the context sidebar" @click=${(e: Event) => this.toggleSide('ctx', e)}>${icon('left')}</button>
         <button type="button" class="ctx-vt" aria-label=${`Open ${c.title}`} @click=${(e: Event) => this.toggleSide('ctx', e)}>${c.title}</button>
@@ -660,9 +726,10 @@ export class QseApp extends LightElement {
 
   private renderBottomBar(section: Section): TemplateResult {
     const split = splitTabs(MENU_ITEMS, PHONE_BAR, section);
+    const wins = shownLayout().windows.filter((w) => w.at !== 'min').length;
     return html`<nav class="bottombar" aria-label="Main">
       ${split.bar.map((it) => this.link(it, 'bb-i', section))}
-      <button type="button" class="bb-i bb-win" disabled title="Windows come with the window manager (VIS-256)">${icon('window')}<span class="nav-label">Windows</span></button>
+      <button type="button" class="bb-i bb-win ${trayOpen() ? 'is-open' : ''}" aria-expanded=${trayOpen()} aria-label=${`Windows, ${wins} open`} @click=${() => this.toggleTray()}>${icon('window')}<span class="nav-label" aria-hidden="true">Windows</span>${wins ? html`<span class="bb-cnt num" aria-hidden="true">${wins}</span>` : nothing}</button>
       <button type="button" class="bb-i bb-more ${split.moreShows ? 'is-on' : ''} ${this.more ? 'is-open' : ''}" aria-haspopup="dialog" aria-expanded=${this.more} aria-label=${split.moreShows ? `Menu, on ${split.moreShows.label}` : 'Menu'} @click=${() => (this.more ? this.closeMore() : this.openMore())}>${icon(split.moreShows ? split.moreShows.id : 'more')}<span class="nav-label" aria-hidden="true">${split.moreShows ? split.moreShows.label : 'More'}</span></button>
     </nav>`;
   }

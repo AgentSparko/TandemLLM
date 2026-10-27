@@ -71,6 +71,10 @@ const ICONS: Record<string, TemplateResult> = {
   'side-right': g(svg`<rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M12.5 3.5v13"/>`),
   window: g(svg`<rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M2.5 7h15"/>`),
   layout: g(svg`<rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M8 3.5v13M8 11h9.5"/>`),
+  float: g(svg`<rect x="2.5" y="6.5" width="11" height="9" rx="1.5"/><path d="M6.5 6.5V4.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-3"/>`),
+  max: g(svg`<path d="M11.5 3.5h5v5M8.5 16.5h-5v-5M16.5 3.5 11 9M3.5 16.5 9 11"/>`),
+  unmax: g(svg`<path d="M16.5 8.5h-5v-5M3.5 11.5h5v5M11.5 8.5l5-5M8.5 11.5l-5 5"/>`),
+  min: g(svg`<path d="M4.5 14.5h11"/>`),
 };
 
 export function skeleton(lines = 3, cls = ''): TemplateResult {

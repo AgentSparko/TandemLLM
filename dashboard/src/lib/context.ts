@@ -3,15 +3,17 @@
 // the default (the fleet's health). At its top sits the selection slot: a row, a node or a link a
 // page opens with `openSelection` shows there, above the page's content, and replaces the right-side
 // drawers of before. A selection belongs to the page it was opened on; leaving the page closes it.
-// The left panel has the same hook: a view may show its own panel there instead of the menu (Chat
-// will put its list of chats there, VIS-254). The shell (app.ts) listens and draws.
+// The left panel has the same hook: a view may show its own panel there instead of the menu (Chat's
+// list of chats, VIS-256). A body may be an element the view keeps and updates itself (Chat's Context
+// panel, every second), so the shell does not draw again for it. The shell (app.ts) listens and draws,
+// and lends its two sidebars' toggles to the views (Chat's header, the layout menu).
 
 import type { TemplateResult } from 'lit';
 import type { View } from './router';
 
 export interface ContextContent {
   title: string;
-  body: TemplateResult | string;
+  body: TemplateResult | string | Node;
   tools?: TemplateResult;
 }
 
@@ -25,7 +27,7 @@ export interface Selection {
 }
 
 const registry = new Map<View, ContextProvider>();
-const panels = new Map<View, () => TemplateResult>();
+const panels = new Map<View, () => TemplateResult | Node>();
 let fallback: ContextProvider = () => ({ title: 'Context', body: '' });
 let selection: Selection | null = null;
 const listeners = new Set<() => void>();
@@ -60,7 +62,7 @@ export function registerContext(view: View, fn: ContextProvider): () => void {
 }
 
 /** A view's own left panel (in place of the menu); returns the unregister. */
-export function registerPanel(view: View, fn: () => TemplateResult): () => void {
+export function registerPanel(view: View, fn: () => TemplateResult | Node): () => void {
   panels.set(view, fn);
   changed();
   return () => {
@@ -71,7 +73,7 @@ export function registerPanel(view: View, fn: () => TemplateResult): () => void 
 }
 
 /** the view's own left panel, or null for the menu */
-export function panelFor(view: View): TemplateResult | null {
+export function panelFor(view: View): TemplateResult | Node | null {
   return panels.get(view)?.() ?? null;
 }
 
@@ -109,3 +111,33 @@ export function onContext(fn: () => void): () => void {
 
 /** content that changed in place (live figures): the shell draws the sidebar again */
 export const refreshContext = changed;
+
+// ---- the sidebars' toggles ---------------------------------------------------------------------
+
+export interface SidebarControl {
+  /** opens or closes a sidebar: on a desk the page's own state, else its drawer */
+  toggle(which: 'rail' | 'ctx'): void;
+  shown(which: 'rail' | 'ctx'): boolean;
+}
+
+let control: SidebarControl | null = null;
+const sideListeners = new Set<() => void>();
+
+/** The shell lends its toggles; it says when a sidebar opened or closed (sidebarsChanged). */
+export function setSidebarControl(c: SidebarControl | null): void {
+  control = c;
+}
+export function toggleSidebar(which: 'rail' | 'ctx'): void {
+  control?.toggle(which);
+}
+export function sidebarShown(which: 'rail' | 'ctx'): boolean {
+  return control?.shown(which) ?? false;
+}
+export function sidebarsChanged(): void {
+  sideListeners.forEach((f) => f());
+}
+/** Hears a sidebar open or close (a view's own toggle shows it pressed). */
+export function onSidebars(fn: () => void): () => void {
+  sideListeners.add(fn);
+  return () => sideListeners.delete(fn);
+}

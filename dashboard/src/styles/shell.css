@@ -548,25 +548,31 @@
   display: none;
 }
 
-/* the centre: the scope bar and the page */
+/* the centre: the scope bar, the page and the page's right dock beside it (VIS-256: the bottom dock,
+   the floating windows and the tray are fixed over it, workspace.css); --wm-cols and --dock-b are
+   set by <qse-workspace> */
 .center {
   flex: 1;
   min-width: 0;
+  min-height: calc(100dvh - var(--topbar-h));
   align-self: stretch;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: var(--wm-cols, minmax(0, 1fr) 0px);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: 'scope scope' 'main dockr';
 }
 .content {
-  flex: 1;
+  grid-area: main;
   min-width: 0;
   width: 100%;
   max-width: var(--content-max);
   margin: 0 auto;
-  padding: var(--gutter) var(--gutter) calc(var(--gutter) + var(--tabbar-space));
+  padding: var(--gutter) var(--gutter) calc(var(--gutter) + var(--tabbar-space) + var(--dock-b, 0px));
 }
 
 /* ---- the scope bar (ui/scope-bar.ts) --------------------------------------------------------------- */
 .scopebar {
+  grid-area: scope;
   position: relative;
   z-index: 15;
   display: flex;
