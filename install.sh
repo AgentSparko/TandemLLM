@@ -908,7 +908,7 @@ else
     fi
 fi
 
-# DIR/bin/tandem: start | stop | restart | status | smoke | logs | env | doctor | chat
+# DIR/bin/tandem: start | stop | restart | status | smoke | logs | env | doctor | node | chat
 write_control() {
     printf '#!/usr/bin/env bash\n# TandemLLM control script, written by install.sh.\nTANDEM_DIR=%q\n' "$DIR"
     cat <<'CTL'
@@ -924,6 +924,14 @@ doctor() {
     (cd "$TANDEM_DIR/src" && PYTHONPATH="$TANDEM_DIR/src" "$py" -m server.setup.doctor "$@")
 }
 if [ "${1:-}" = doctor ]; then shift; doctor "$@"; exit $?; fi
+# tandem node (SRV-725): TandemNode, the agent TandemApp's controller talks to, with this install's
+# engine as its engine (tandem node unit prints a systemd user unit for it)
+if [ "${1:-}" = node ]; then
+    shift
+    py="$TANDEM_DIR/venv/bin/python"
+    [ -x "$py" ] || py=python3
+    cd "$TANDEM_DIR/src" && PYTHONPATH="$TANDEM_DIR/src" exec "$py" -m proxy.nodeagent "$@" --tandem-dir "$TANDEM_DIR"
+fi
 [ -f "$ENV_FILE" ] || { echo "[tandem] no $ENV_FILE; re-run install.sh" >&2; exit 1; }
 # a command that fails in the config (or a file it sources) names its file and line instead of
 # ending this script silently under set -e (OPS-159)
@@ -1075,7 +1083,7 @@ case "${1:-}" in
             logs) tail -n "${3:-100}" -f "$REPO/logs/chatd.log" ;;
             *) echo "usage: $0 chat start | stop | restart | status | logs [n]" >&2; exit 2 ;;
         esac ;;
-    *) echo "usage: $0 start | stop [grace-s] | restart | status | smoke | logs [n] | env | doctor [--check] | chat start|stop|restart|status|logs" >&2; exit 2 ;;
+    *) echo "usage: $0 start | stop [grace-s] | restart | status | smoke | logs [n] | env | doctor [--check] | node [serve|check|unit] | chat start|stop|restart|status|logs" >&2; exit 2 ;;
 esac
 CTL
 }
