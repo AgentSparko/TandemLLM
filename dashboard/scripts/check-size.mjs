@@ -43,6 +43,9 @@
 // 485 KB with TandemApp's shell (VIS-242, VIS-244, 2026-10-27: 481.3 KB from 460.4): the v3 tokens, the fleet
 // contract's client, the scope, node chip and fleet chart, the grouped menu, both sidebars, the scope bar and
 // the phone's bar; the new pages and the fleet chart sit in their own chunk. A split only adds to this total.
+// 508 KB with the window manager (VIS-256, VIS-257, 2026-10-27: 504.7 KB from 481.3): the docks, floating windows,
+// the tray, the menus and each page's layout in the main chunk (9.7 KB) with their CSS (2.5 KB); the Logs, Chart and
+// inspector, the sandbox's and the model's windows in three chunks of their own (8.7 KB), loaded on first use.
 import { BUDGET, distSizes } from './gzip-size.mjs';
 
 const dist = new URL('../dist/', import.meta.url).pathname;
