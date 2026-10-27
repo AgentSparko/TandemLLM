@@ -319,7 +319,7 @@ export class QseApp extends LightElement {
     const w = currentWidthClass();
     if (w === this.wclass) return;
     this.wclass = w;
-    this.drawer = null;
+    this.dropDrawer();
     if (w !== 'phone') setTray(false);
     showPage(sectionOf(this.route.view), w, window.innerWidth);
   };
@@ -341,11 +341,15 @@ export class QseApp extends LightElement {
   private openDrawer(d: 'left' | 'right', from: HTMLElement | null): void {
     if (this.more) this.closeMore();
     this.dropTray();
+    // a drawer has a history entry: the back gesture closes it (Chat's list and Context did)
+    if (!this.drawer) history.pushState({ drawer: d }, '');
+    else history.replaceState({ drawer: d }, '');
     this.drawer = d;
     this.drawerFrom = from;
     this.updateComplete.then(() => this.querySelector<HTMLElement>(d === 'left' ? '.lnav .is-on, .lnav a' : '.ctx-in button, .ctx-in a')?.focus());
   }
   private closeDrawer(refocus = true): void {
+    if (this.drawer && history.state?.drawer) history.back();
     this.drawer = null;
     if (refocus) this.drawerFrom?.focus();
     this.drawerFrom = null;
@@ -381,6 +385,13 @@ export class QseApp extends LightElement {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     openWindowMenu({ kind, at: { left: r.left, top: r.top, bottom: r.bottom, right: r.right } });
   }
+  /** a drawer gives way to the tray, the menu sheet or another width: its history entry stays, emptied */
+  private dropDrawer(): void {
+    if (!this.drawer) return;
+    if (history.state?.drawer) history.replaceState(null, '');
+    this.drawer = null;
+    this.drawerFrom = null;
+  }
   /** the tray gives way to a drawer or the menu sheet: its history entry stays, emptied */
   private dropTray(): void {
     if (!trayOpen()) return;
@@ -393,7 +404,7 @@ export class QseApp extends LightElement {
   private toggleTray(): void {
     if (trayOpen()) return setTray(false);
     if (this.more) this.closeMore();
-    this.drawer = null;
+    this.dropDrawer();
     setTray(true);
   }
 
@@ -415,6 +426,7 @@ export class QseApp extends LightElement {
     else if (trayOpen() && !windowMenu()) setTray(false);
   };
   private onPop = () => {
+    if (this.drawer && !history.state?.drawer) this.closeDrawer(false);
     if (this.trayEntry && !history.state?.tray) {
       this.trayEntry = false;
       setTray(false);
@@ -428,7 +440,7 @@ export class QseApp extends LightElement {
   };
   private openMore(): void {
     if (this.more) return;
-    this.drawer = null;
+    this.dropDrawer();
     this.dropTray();
     history.pushState({ more: true }, '');
     this.more = true;
