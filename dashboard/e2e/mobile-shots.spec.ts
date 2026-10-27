@@ -114,7 +114,7 @@ test('phone 320 dark: a section behind More takes the More slot; the context she
   await page.getByRole('button', { name: 'Context panel', exact: true }).click();
   await page.waitForTimeout(400);
   await shot(page, 'context-320-dark');
-  await page.getByRole('button', { name: 'Close the context panel' }).click();
+  await page.getByRole('button', { name: 'Close the context sidebar' }).click();
   await page.goto('./?chat=mock#/chat/settings/mcp');
   await page.locator('.ch-settings-main').waitFor();
   await page.waitForTimeout(300);

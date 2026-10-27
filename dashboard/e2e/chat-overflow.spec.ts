@@ -1,7 +1,7 @@
 // VIS-185, VIS-186: nothing in the Chat tab is wider than the screen. The thread scrolls up and
 // down only: long words, URLs and inline code wrap, code blocks and tables scroll inside their own
 // box, tool rows cut their argument with an ellipsis inside the card, the composer's pills stay in
-// their row, the panes' tabs scroll inside their strip. Every chat of the mock, with every tool
+// their row, the panes' tabs (the windows' tray on a phone, VIS-256) scroll inside their strip. Every chat of the mock, with every tool
 // card and thinking block open, at 320, 390 and 430 px and on a desktop. Spark only:
 //   npx playwright test e2e/chat-overflow.spec.ts --project=webkit-phone --project=chromium-desktop
 // PW_CHAT_ID=<id> with PW_BASE adds a real conversation (read only: it opens the chat, nothing is sent).
@@ -27,7 +27,7 @@ async function overflow(page: Page): Promise<string[]> {
     // it do not count (the thread clips sideways, so a part past the column would hide there)
     const LAYOUT = /^(ch-scroll|ch-threadwrap|ch-body|ch-main|ch|view)$/;
     for (const el of document.querySelectorAll('.ch-main *')) {
-      if (el.closest('.ch-rail, .ch-ctx, .sr-only, qse-wren-figure, .ch-scrim')) continue;
+      if (el.closest('.sr-only, qse-wren-figure')) continue;
       const r = el.getBoundingClientRect();
       const edge = Math.min(vw, el.closest('.ch-col') && col ? col.right : main ? main.right : vw);
       if (!r.width || (r.right <= edge + 1 && r.left >= -1)) continue;
@@ -89,25 +89,27 @@ test.describe('the Chat tab never scrolls sideways', () => {
     expect(fit).toBe(true);
   });
 
-  test('the panes: the tabs scroll in their strip, the open tab in view, close always reachable', async ({ page }) => {
-    test.skip((page.viewportSize()?.width ?? 1440) >= 768, 'the phone sheet');
+  test('the panes: the tray’s tabs scroll in their strip, the open tab in view, hide always reachable', async ({ page }) => {
+    test.skip((page.viewportSize()?.width ?? 1440) >= 768, 'the phone tray');
     await openChat(page, 'c_exl3', '?chat=mock');
     await page.getByRole('button', { name: 'Panes', exact: true }).click();
-    for (const k of ['Files', 'Terminal', 'Diff', 'Context', 'Preview']) {
-      await page.locator('qse-chat-panes').getByRole('button', { name: 'Open a pane' }).click();
-      await page.locator('.ch-pane-menu [role="menuitem"]', { hasText: k }).first().click();
+    const tray = page.locator('.wm-tray');
+    for (const k of ['files', 'terminal', 'diff', 'context', 'preview']) {
+      await tray.getByRole('button', { name: 'Add a window' }).click();
+      await page.locator(`.wm-menu .wm-mi[data-kind="${k}"]`).click();
     }
     await page.waitForTimeout(300);
     expect(await overflow(page)).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     const vw = page.viewportSize()!.width;
-    const on = await page.locator('.ch-pane-tab.is-on').boundingBox();
-    const strip = await page.locator('.ch-pane-tabs').boundingBox();
+    const on = await tray.locator('.wm-tray-tabs button.is-on').boundingBox();
+    const strip = await tray.locator('.wm-tray-tabs').boundingBox();
     expect(on!.x).toBeGreaterThanOrEqual(strip!.x - 1);
     expect(on!.x + on!.width).toBeLessThanOrEqual(strip!.x + strip!.width + 1);
-    const close = await page.getByRole('button', { name: 'Close panes' }).boundingBox();
-    expect(close!.x + close!.width).toBeLessThanOrEqual(vw);
-    // the sheet has the screen's height: the shell's bar steps down while it is open
-    await expect(page.locator('.rail')).not.toBeInViewport();
+    const hide = await tray.getByRole('button', { name: 'Hide the windows' }).boundingBox();
+    expect(hide!.x + hide!.width).toBeLessThanOrEqual(vw);
+    // the tray sits over the page, the bottom bar's Windows slot under it
+    await expect(page.locator('.bb-win')).toBeInViewport();
   });
 
   test('a real conversation (PW_CHAT_ID)', async ({ page }) => {

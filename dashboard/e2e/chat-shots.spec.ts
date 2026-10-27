@@ -45,7 +45,7 @@ test('chat running with the terminal pane, desktop dark', async ({ page }) => {
   await open(page, 'dark', '#/chat/c_sync');
   await page.locator('.ch-now').waitFor();
   // the seeded layout has the terminal open; wait for the pane and some output
-  await page.locator('qse-chat-panes .xterm-rows').first().waitFor({ timeout: 10_000 });
+  await page.locator('qse-chat-pane .xterm-rows').first().waitFor({ timeout: 10_000 });
   await page.waitForTimeout(3000);
   await shot(page, 'running-terminal-desktop-dark');
 });
@@ -74,11 +74,11 @@ test('chat preview pane and diff pane, desktop dark', async ({ page }) => {
   await page.locator('.ch-preview-frame iframe').waitFor();
   await page.waitForTimeout(1200);
   await shot(page, 'preview-desktop-dark');
-  await page.locator('.ch-dock-btn').click();
+  await page.locator('.wm-dock-bottom').getByRole('button', { name: 'Move to the right dock' }).click();
   await page.waitForTimeout(400);
   await shot(page, 'preview-dock-right-desktop-dark');
-  await page.locator('.ch-pane-plus button').first().click();
-  await page.getByRole('menuitem', { name: 'Diff' }).click();
+  await page.locator('.wm-dock').getByRole('button', { name: 'Add a window' }).first().click();
+  await page.locator('.wm-menu .wm-mi[data-kind="diff"]').click();
   await page.locator('.ch-diff-table').waitFor();
   await page.waitForTimeout(400);
   await shot(page, 'diff-desktop-dark');
@@ -162,19 +162,19 @@ test('chat phone: empty, drawer, context sheet, panes sheet, permission, setting
   await page.locator('.ch-head-rail').click();
   await page.waitForTimeout(400);
   await shot(page, 'drawer-phone-dark');
-  await page.locator('.ch-scrim').click({ position: { x: 370, y: 400 } });
+  await page.keyboard.press('Escape');
   await page.goto('./?chat=mock#/chat/c_sync');
   await page.locator('.ch-now').waitFor();
   await page.getByRole('button', { name: 'Context panel', exact: true }).click();
   await page.waitForTimeout(400);
   await shot(page, 'context-phone-dark');
-  // the context sheet is the full width on a phone: its close button is the way out
-  await page.getByRole('button', { name: 'Close the context panel' }).click();
+  // the context is the shell's right drawer on a phone: its close button is the way out
+  await page.getByRole('button', { name: 'Close the context sidebar' }).click();
   await page.getByRole('button', { name: 'Panes', exact: true }).click();
-  await page.locator('qse-chat-panes .xterm-rows').first().waitFor({ timeout: 10_000 });
+  await page.locator('qse-chat-pane .xterm-rows').first().waitFor({ timeout: 10_000 });
   await page.waitForTimeout(800);
   await shot(page, 'panes-phone-dark');
-  await page.locator('qse-chat-panes').getByRole('button', { name: 'Close panes' }).click();
+  await page.locator('.wm-tray').getByRole('button', { name: 'Hide the windows' }).click();
   await page.goto('./?chat=mock#/chat/c_rename');
   await page.locator('.ch-perm').waitFor();
   await page.waitForTimeout(300);

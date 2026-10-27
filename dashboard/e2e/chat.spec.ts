@@ -17,6 +17,12 @@ async function open(page: Page, hash: string): Promise<void> {
 
 const phone = (page: Page) => (page.viewportSize()?.width ?? 1440) < 768;
 
+/** a pane of the open chat from the windows' add menu (VIS-256: the panes are the page's windows) */
+async function addPane(page: Page, kind: string): Promise<void> {
+  await page.locator(phone(page) ? '.wm-tray' : '.wm-dock').getByRole('button', { name: 'Add a window' }).first().click();
+  await page.locator(`.wm-menu .wm-mi[data-kind="${kind}"]`).click();
+}
+
 test('the compaction divider sits in the thread and opens to the summary', async ({ page }) => {
   await open(page, '#/chat/c_exl3');
   const d = page.locator('.ch-divider').first();
@@ -39,9 +45,8 @@ test('plan mode: the pill, Approve under the answer, the todo list in the plan p
   await page.locator('.ch-planbar').getByRole('button', { name: 'Approve' }).click();
   await expect(pill).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.ch-user .ch-text').last()).toHaveText('Carry out the approved plan.');
-  if (phone(page) || !(await page.locator('.ch-panes').count())) await page.getByRole('button', { name: 'Panes', exact: true }).click();
-  await page.locator('qse-chat-panes').getByRole('button', { name: 'Open a pane' }).click();
-  await page.locator('.ch-pane-menu [role="menuitem"]', { hasText: 'Plan' }).click();
+  if (phone(page) || !(await page.locator('.wm-dock').count())) await page.getByRole('button', { name: 'Panes', exact: true }).click();
+  await addPane(page, 'plan');
   await expect(page.locator('.ch-todos .ch-todo')).toHaveText(['Read the list, pending', 'Pick dinners, pending', 'Shop once, pending']);
 });
 
@@ -83,7 +88,7 @@ test('the terminal pane is xterm.js; a phone gets the key row', async ({ page })
   await open(page, '#/chat/c_sync');
   await page.locator('.ch-now').waitFor();
   if (phone(page)) await page.getByRole('button', { name: 'Panes', exact: true }).click();
-  await expect(page.locator('qse-chat-panes .xterm-rows')).toContainText('sandbox', { timeout: 15_000 });
+  await expect(page.locator('qse-chat-pane .xterm-rows')).toContainText('sandbox', { timeout: 15_000 });
   await expect(page.locator('.ch-term-keys')).toHaveCount(phone(page) ? 1 : 0);
   if (phone(page)) await expect(page.locator('.ch-term-keys button')).toHaveCount(9);
 });

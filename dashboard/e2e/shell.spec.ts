@@ -168,6 +168,8 @@ test.describe('TandemApp shell (VIS-242)', () => {
     test.skip(!IS_MOCK, 'the mock fleet');
     test.skip(info.project.name === 'webkit-phone', 'desk and tablet; the phone has its own tests below');
     await setMode(request, 'ok');
+    // a page's sidebars are saved on the controller too (VIS-256): each test starts from none
+    await request.post('/__mock/fleet', { data: { reset: true } });
   });
 
   test('every item of the icon strip opens its page, marked in the strip, the panel and the crumb', async ({ page }) => {
@@ -176,7 +178,9 @@ test.describe('TandemApp shell (VIS-242)', () => {
       await page.locator(`.istrip a.strip-i[data-section="${id}"]`).click();
       await expect(page.locator(sel).first(), id).toBeVisible();
       await expect(page.locator('.istrip a.strip-i.is-on')).toHaveAttribute('data-section', id);
-      await expect(page.locator('.lpanel .nav-i.is-on')).toHaveAttribute('data-section', id);
+      // on Chat the panel holds the list of chats (VIS-256), elsewhere the menu
+      if (id === 'chat') await expect(page.locator('.lpanel qse-chat-rail')).toHaveCount(1);
+      else await expect(page.locator('.lpanel .nav-i.is-on')).toHaveAttribute('data-section', id);
       await expect(page.locator('.crumb')).toHaveText(crumb);
     }
     // the indicator stands on the item that is on
@@ -272,15 +276,17 @@ test.describe('TandemApp shell (VIS-242)', () => {
     const ctx = page.locator('aside.ctx');
     // at 1440 px a first visit keeps today's pages their width: the context starts as its strip
     await expect(page.locator('.shell')).toHaveClass(/ctx-closed/);
-    await expect(ctx.locator('.ctx-vt')).toHaveText('Fleet health');
+    await expect(ctx.locator('.ctx-vt')).toHaveText('Fleet now');
     await expect.poll(() => ctx.evaluate((el) => el.getBoundingClientRect().width)).toBe(44);
     for (const id of ['usage', 'dev', 'conductor', 'events']) {
       await page.locator(`.istrip a.strip-i[data-section="${id}"]`).click();
       await expect(ctx.locator('.ctx-vt'), id).toBeVisible();
     }
+    // each page keeps its own open state (VIS-256): Overview's
+    await page.locator('.istrip a.strip-i[data-section="overview"]').click();
     await ctx.locator('.ctx-vt').click();
     await expect(page.locator('.shell')).not.toHaveClass(/ctx-closed/);
-    await expect(ctx.locator('.ctx-t')).toHaveText('Fleet health');
+    await expect(ctx.locator('.ctx-t')).toHaveText('Fleet now');
     await expect(ctx.locator('.mini-now')).toHaveCount(4);
     await expect.poll(() => ctx.evaluate((el) => el.getBoundingClientRect().width)).toBe(340);
     await page.reload();
@@ -315,19 +321,22 @@ test.describe('TandemApp shell (VIS-242)', () => {
     await expect(page.locator('.shell')).not.toHaveClass(/rail-closed/);
   });
 
-  test('Chat brings its own sidebars: the shell’s start closed there, and its own state is kept', async ({ page }) => {
+  test('Chat’s sidebars are the shell’s: its list on the left, its Context on the right, open; each page keeps its own', async ({ page }) => {
     await login(page, '#/chat/c_sync', '?chat=mock');
-    await expect(page.locator('.shell')).toHaveClass(/rail-closed/);
-    await expect(page.locator('.shell')).toHaveClass(/ctx-closed/);
-    await page.locator('.side-btn[data-side="right"]').click();
+    await expect(page.locator('.shell')).not.toHaveClass(/rail-closed/);
     await expect(page.locator('.shell')).not.toHaveClass(/ctx-closed/);
+    await expect(page.locator('.lpanel qse-chat-rail')).toBeVisible();
+    await expect(page.locator('aside.ctx qse-chat-context')).toBeVisible();
+    await page.locator('.side-btn[data-side="right"]').click();
+    await expect(page.locator('.shell')).toHaveClass(/ctx-closed/);
     // the other pages keep theirs (at 1440 px: the panel open, the context a strip)
     await page.locator('.istrip a.strip-i[data-section="overview"]').click();
     await expect(page.locator('.shell')).toHaveClass(/ctx-closed/);
-    await expect(page.locator('.shell')).not.toHaveClass(/rail-closed/);
-    await page.locator('.istrip a.strip-i[data-section="chat"]').click();
+    await page.locator('.side-btn[data-side="right"]').click();
     await expect(page.locator('.shell')).not.toHaveClass(/ctx-closed/);
-    await expect(page.locator('.shell')).toHaveClass(/rail-closed/);
+    await page.locator('.istrip a.strip-i[data-section="chat"]').click();
+    await expect(page.locator('.shell')).toHaveClass(/ctx-closed/);
+    await expect(page.locator('.shell')).not.toHaveClass(/rail-closed/);
   });
 
   test('a storage that throws: the shell still opens and its sidebars still toggle', async ({ page }) => {
@@ -396,6 +405,7 @@ test.describe('TandemApp shell on a phone (VIS-242)', () => {
   test.beforeEach(async ({ page, request }) => {
     test.skip(!IS_MOCK, 'the mock fleet');
     await setMode(request, 'ok');
+    await request.post('/__mock/fleet', { data: { reset: true } });
     await page.setViewportSize({ width: 375, height: 812 });
   });
 
@@ -416,7 +426,7 @@ test.describe('TandemApp shell on a phone (VIS-242)', () => {
     // the right drawer
     await page.locator('.side-btn[data-side="right"]').click();
     await expect(page.locator('aside.ctx')).toBeInViewport();
-    await expect(page.locator('aside.ctx .ctx-t')).toHaveText('Fleet health');
+    await expect(page.locator('aside.ctx .ctx-t')).toHaveText('Fleet now');
     await page.keyboard.press('Escape');
     await expect(page.locator('aside.ctx')).not.toBeInViewport();
     // the scope is a chip that opens a sheet
