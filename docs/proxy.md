@@ -145,7 +145,7 @@ In docker the collector sees the container, not the machine. Run the container w
 
 TandemApp keeps the registry of the Sparks it manages and answers the fleet API (contract: [`docs/contract/fleet-v1`](contract/fleet-v1/README.md), code: `proxy/fleet.py`, `proxy/nodesource.py`). The dashboard reads it for the shell's fleet readout, the scope bar, the charts and the windows; the browser talks to `tandem-app` only.
 
-On one box the fleet has one node: the machine `tandem-app` runs on, when it has an NVIDIA GPU or an engine of its own. The first start registers it with its hostname as the alias, the first identity colour and an id from the machine (the DMI serial, else `/etc/machine-id`), never its address. A new address keeps the node and is noted in the log. A machine in front of cloud APIs only is the controller's host and no node. A node on another machine is listed `off` until its node agent and pairing exist.
+On one box the fleet has one node: the machine `tandem-app` runs on, when it has an NVIDIA GPU or an engine of its own. The first start registers it with its hostname as the alias, the first identity colour and an id from the machine (the DMI serial, else `/etc/machine-id`), never its address. A new address keeps the node and is noted in the log. A machine in front of cloud APIs only is the controller's host and no node. When TandemNode runs on the same machine (below), the controller reads the machine through it, the same path as any other node's; while it does not answer, in-process as before. A node on another machine is read through its TandemNode agent once pairing has given the controller its trust, and is listed `off` until then.
 
 | route | on a fleet of one |
 |-|-|
@@ -160,6 +160,29 @@ On one box the fleet has one node: the machine `tandem-app` runs on, when it has
 | `GET events`, `alerts`, `rules` | empty lists until the fleet's event log and alert rules exist |
 
 Reads follow the dashboard rule, writes the admin rule, as `/v1/config` does. The engine's own server has no fleet API; a dashboard it serves shows the box alone.
+
+## TandemNode: `tandem node`
+
+TandemNode is the agent on each Spark that TandemApp's controller talks to (code: `proxy/nodeagent.py`). It ships in the same package: `tandem-node`, or `tandem node` on an `install.sh` install, where the install's engine is its engine. It listens on port 7700.
+
+| route | what it answers |
+|-|-|
+| `GET /node/identity` | node id, hostname, DMI product and serial, OS, kernel, driver, CUDA, TandemLLM version, code sha |
+| `GET /node/inventory` | disks, network interfaces (ConnectX ports with firmware, RoCE state, physical port), memory, CPU cores by kind, GPUs |
+| `GET /node/metrics` | server-sent `sample` events once a second, on the whole second: GPU (use, clocks, power, temperature, throttle reasons, encoder and decoder), unified memory split, per-core CPU, disks with NVMe temperature, LAN and fabric per interface with RDMA counters, thermal zones, fans, uptime. A field the board does not expose is absent, never 0. `?once=1`: the newest as JSON |
+| `GET /node/engines`, `/node/engines/{id}` | each engine: port, managed or not, state, its `/health` in short, the running job |
+| `POST /node/engines/{id}/start\|stop\|restart` | a job (202); 409 when the engine is not managed here or a job runs |
+| `GET /node/engines/{id}/<route>` | the engine's `/health`, `/v1/models`, `/v1/dashboard/live` (its live stream), `/v1/dashboard/system`, `/v1/dashboard/logs`, `/metrics`, relayed |
+| `GET /node/weights`, `DELETE /node/weights/{profile}?confirm=1` | the Setup Guide's weights with a content id per pack (from the hashes the download recorded), and its removal |
+| `GET /node/logs?level=&q=&source=` | the agent's and its engines' lines as events; `?follow=0` as JSON |
+| `POST /node/linktest {peer}` | to another node's agent: RTT, bandwidth per interface, MTU, RoCE state; a port whose cable reaches one of its two logical interfaces is flagged `half_bandwidth` |
+| `* /node/setup/<route>` | the engine's `/v1/setup/<route>`, unchanged (its status responder while it restarts) |
+
+Engines come from `~/.tandemllm/node/engines.json` (`{"engines": [{"id", "port", "kind", "start", "stop", "restart"}]}`, commands as argument lists). An engine without a `start` command is listed and relayed but never started or stopped by the agent. Without the file: the install's engine, else a TandemLLM engine on :8000, not managed.
+
+**Who may call it.** Every route needs the caller check. Until pairing has filled the trust store (`~/.tandemllm/node/trust`: `node.crt`, `node.key`, `peers/*.pem`), the agent listens on loopback only, in plain HTTP, and every request carries the loopback secret from `~/.tandemllm/node/secret` (made at the first start, mode 0600; a file others can read is refused) as `Authorization: Bearer`. Any other address needs mTLS: a client without a certificate the store vouches for fails the handshake. It never listens on 0.0.0.0 or a WAN address; a remote node is reached through an SSH tunnel to its loopback. `tandem-node check` says how it would listen, and why not. Every change is a log line with its caller.
+
+**As a service.** `tandem-node unit > ~/.config/systemd/user/tandemnode.service`, then `systemctl --user daemon-reload && systemctl --user enable --now tandemnode`. A `tandem-app` on the same machine finds it at `http://127.0.0.1:7700` with that secret (`TANDEM_NODE_AGENT`, `TANDEM_NODE_SECRET`; `TANDEM_NODE_AGENT=off` for none).
 
 ## vLLM and SGLang: their own metrics
 
