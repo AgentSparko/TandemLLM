@@ -196,9 +196,9 @@ PROXY_ROUTES = [
 
 # The two small servers beside them.
 SIDE_ROUTES = [
-    ("tandem-dash hostcollect", "GET", "/host?watch=", "the machine's sample as JSON (the bearer token when --token is set)"),
-    ("tandem-dash hostcollect", "GET", "/metrics", "the same sample in the Prometheus text format"),
-    ("tandem-dash hostcollect", "GET", "/health", "{status: ok}, no token"),
+    ("tandem-app hostcollect", "GET", "/host?watch=", "the machine's sample as JSON (the bearer token when --token is set)"),
+    ("tandem-app hostcollect", "GET", "/metrics", "the same sample in the Prometheus text format"),
+    ("tandem-app hostcollect", "GET", "/health", "{status: ok}, no token"),
     ("ops/engine_status.py", "GET", "/v1/models", "200 with the engine's last model list and its state, while the engine is away"),
     ("ops/engine_status.py", "GET", "/dashboard/", "503 with a page that says why the engine is away and opens the dashboard when it is back"),
     ("ops/engine_status.py", "*", "any other path", "503 provider_unavailable with Retry-After and the state as engine_<state>"),
@@ -536,7 +536,7 @@ def gen_engine_routes_tex(header: str, code, tex) -> str:
 
 
 def gen_proxy_routes_tex(header: str, code, tex) -> str:
-    out = [header, r"\begin{httptable}{The standalone proxy's routes (\texttt{tandem-dash})}{tab:ref-proxy-routes}"]
+    out = [header, r"\begin{httptable}{The standalone proxy's routes (\texttt{tandem-app})}{tab:ref-proxy-routes}"]
     out += _route_rows(PROXY_ROUTES, code, tex)
     out.append(r"\end{httptable}")
     out.append(r"\begin{reftable}{The two small servers beside them}{tab:ref-side-routes}{\hd{server} & \hd{route} & \hd{answer}}")

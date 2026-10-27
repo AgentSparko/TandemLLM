@@ -89,14 +89,14 @@ python -m sglang.launch_server --model-path Qwen/Qwen3.5-4B --port 30000 \
 
 Add the backend with kind \code{sglang}. The proxy never calls SGLang's \code{/health}: on an idle server that route runs a one-token generation. The health poll reads \code{GET /v1/models} instead.
 
-\section{One command: tandem-dash launch}\label{sec:launch}\index{tandem-dash launch}
+\section{One command: tandem-app launch}\label{sec:launch}\index{tandem-app launch}
 
-On the engine's machine, \code{tandem-dash launch}\index{tandem-dash launch@\texttt{tandem-dash launch}} does the steps above at once. It registers the backend in the config database (kind, \code{http://127.0.0.1:<port>/v1}, host \code{same}), hands the engine the proxy's collect URL and token, adds the flags the dashboard reads (\code{--enable-prompt-tokens-details} on vLLM; \code{--enable-metrics} and \code{--enable-cache-report} on SGLang), checks that the plugin is installed in the engine's Python, and then replaces itself with the engine, so the process id it records is the engine's.
+On the engine's machine, \code{tandem-app launch}\index{tandem-app launch@\texttt{tandem-app launch}} does the steps above at once. It registers the backend in the config database (kind, \code{http://127.0.0.1:<port>/v1}, host \code{same}), hands the engine the proxy's collect URL and token, adds the flags the dashboard reads (\code{--enable-prompt-tokens-details} on vLLM; \code{--enable-metrics} and \code{--enable-cache-report} on SGLang), checks that the plugin is installed in the engine's Python, and then replaces itself with the engine, so the process id it records is the engine's.
 
 \begin{shell}
-tandem-dash launch vllm --model Qwen/Qwen3.5-4B --port 8100 -- \
+tandem-app launch vllm --model Qwen/Qwen3.5-4B --port 8100 -- \
     --enable-auto-tool-choice --tool-call-parser qwen3_coder --reasoning-parser qwen3
-tandem-dash launch sglang --model Qwen/Qwen3.5-4B --port 30000 -- \
+tandem-app launch sglang --model Qwen/Qwen3.5-4B --port 30000 -- \
     --tool-call-parser qwen3_coder --reasoning-parser qwen3
 \end{shell}
 
@@ -143,7 +143,7 @@ A backend's key is stored as AES-256-GCM\index{AES-256-GCM} ciphertext in the co
 \item \code{secrets.key} beside the config database, made once at mode 0600.
 \end{enumerate}
 
-\code{tandem-dash secrets status} says which one answers. No API answer, log line, ledger row or audit row holds a key: the GUI gets whether a key is set, its last 4 characters and 6 hex digits of its sha256, and the key field is write-only.
+\code{tandem-app secrets status} says which one answers. No API answer, log line, ledger row or audit row holds a key: the GUI gets whether a key is set, its last 4 characters and 6 hex digits of its sha256, and the key field is write-only.
 
 This protects a copied or backed-up database. It does not protect against a process that runs as the same user, which can read the key file as easily as the proxy can, and a backup of the whole directory carries the key file too. Keep the master key in the environment or the keychain when backups leave the machine. A lost master key means typing the backends' keys in again, nothing else. To move the key file into the macOS keychain:
 

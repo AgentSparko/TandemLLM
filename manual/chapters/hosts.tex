@@ -103,7 +103,7 @@ The System view lists the machines: this one first, with the server's own proces
 \midrule
 \code{auto} & this machine when the backend's URL is loopback or one of its addresses; nothing for a cloud API & yes \\
 \code{same} & this machine, whatever the URL says & yes \\
-\code{collector} & \code{tandem-dash hostcollect} on the backend's machine & yes \\
+\code{collector} & \code{tandem-app hostcollect} on the backend's machine & yes \\
 \code{exporter} & a node\_exporter page and a DCGM exporter page & no \\
 \code{off} & nothing & \\
 \bottomrule
@@ -114,7 +114,7 @@ On a remote machine, run the collector next to the backend and give both sides t
 
 \begin{shell}
 # on the backend's machine
-TANDEM_COLLECTOR_TOKEN=$(openssl rand -hex 24) tandem-dash hostcollect --host 0.0.0.0 --port 9108
+TANDEM_COLLECTOR_TOKEN=$(openssl rand -hex 24) tandem-app hostcollect --host 0.0.0.0 --port 9108
 # on the proxy's machine
 TANDEM_COLLECTOR_TOKEN=<the same token>
 TANDEM_BACKEND_VLLM1_HOST=collector

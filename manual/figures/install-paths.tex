@@ -12,11 +12,11 @@
     {\ttfamily\scriptsize curl -fsSL .../install.sh | bash}\\[2pt]
     {\footnotesize\color{slate} Chapter~\ref{ch:install-engine}}};
   \node[path, below=9mm of py] (b) {\textbf{Path B: the dashboard and proxy}\\[2pt]
-    {\normalfont\footnotesize one address, one ledger and one dashboard for backends you already run; no GPU, no torch. In docker: \texttt{ops/Dockerfile.dash}}\\[3pt]
-    {\ttfamily\scriptsize pip install '.[host]' \&\& tandem-dash}\\[2pt]
-    {\footnotesize\color{slate} Chapter~\ref{ch:install-dash}}};
+    {\normalfont\footnotesize one address, one ledger and one dashboard for backends you already run; no GPU, no torch. In docker: \texttt{ops/Dockerfile.app}}\\[3pt]
+    {\ttfamily\scriptsize pip install '.[host]' \&\& tandem-app}\\[2pt]
+    {\footnotesize\color{slate} Chapter~\ref{ch:install-app}}};
   \node[path, draw=signal, fill=signallight, text width=70mm, below=10mm of $(a.south)!0.5!(b.south)$] (c) {\textbf{Path C: several engines and cloud APIs behind one address}\\[2pt]
-    {\normalfont\footnotesize A or B, plus the backends. The engine's own server relays (\texttt{QSE\_BACKENDS}), or \texttt{tandem-dash} lists the engine as one backend among others. Chapter~\ref{ch:other-engines}}};
+    {\normalfont\footnotesize A or B, plus the backends. The engine's own server relays (\texttt{QSE\_BACKENDS}), or \texttt{tandem-app} lists the engine as one backend among others. Chapter~\ref{ch:other-engines}}};
   \draw[flow] (spark) -- node[right, lbl, pos=.55] {yes} (others);
   \draw[flow] (spark) -- node[left, lbl, pos=.55] {no} (py);
   \draw[flow] (others) -- node[right, lbl] {no} (a);

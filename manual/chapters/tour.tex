@@ -14,7 +14,7 @@ The client is any program that speaks the OpenAI chat completions API: the OpenA
 
 \section{The proxy routes it}
 
-When the server runs with \code{--backends}\index{backends@\texttt{-\kern0pt-backends}}, or when the standalone proxy (\code{tandem-dash}) is in front, the request is routed by its \code{model} field. A model of another backend (vLLM, SGLang, a cloud API) is relayed there: the answer's bytes go back to the client unchanged, and the proxy writes one ledger row with the tokens, the time to first token, the decode rate and the cost. A request for \code{TandemLLM} stays in the engine's server. Chapter~\ref{ch:install-dash} sets this up and Chapter~\ref{ch:harness-proxy} covers the conductor in front of other backends.
+When the server runs with \code{--backends}\index{backends@\texttt{-\kern0pt-backends}}, or when the standalone proxy (\code{tandem-app}) is in front, the request is routed by its \code{model} field. A model of another backend (vLLM, SGLang, a cloud API) is relayed there: the answer's bytes go back to the client unchanged, and the proxy writes one ledger row with the tokens, the time to first token, the decode rate and the cost. A request for \code{TandemLLM} stays in the engine's server. Chapter~\ref{ch:install-app} sets this up and Chapter~\ref{ch:harness-proxy} covers the conductor in front of other backends.
 
 \section{The conductor plans the turn}
 

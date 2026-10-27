@@ -46,7 +46,7 @@
 
 \item[hold]\index{hold} Taking the board for a measurement or a second model: \code{ops/hold.sh} stops the service, runs the command, and restores the service.
 
-\item[host collector]\index{host collector} The code that reads a machine's memory, CPU, GPUs, disks and the process behind each backend's port; \code{tandem-dash hostcollect} on a remote machine.
+\item[host collector]\index{host collector} The code that reads a machine's memory, CPU, GPUs, disks and the process behind each backend's port; \code{tandem-app hostcollect} on a remote machine.
 
 \item[journal]\index{journal} The conductor's record of every decision, acted on or not, in the usage ledger's file, kept 30 days.
 
@@ -82,7 +82,7 @@
 
 \item[profile]\index{profile} Two things. A conductor profile is a document that sets what the harness does for a client (\code{coding}, \code{chat} and others). A serving profile is a \code{serve.env} file that sets the weights.
 
-\item[proxy]\index{proxy} The router of requests by model id to backends, with one ledger and one dashboard; in the engine's server with \code{--backends}, or standalone as \code{tandem-dash}.
+\item[proxy]\index{proxy} The router of requests by model id to backends, with one ledger and one dashboard; in the engine's server with \code{--backends}, or standalone as \code{tandem-app}.
 
 \item[raw]\index{raw} The engine without the conductor: the release's raw path. \code{X-Tandem: raw} or the \code{raw} and \code{bench} profiles.
 
@@ -127,6 +127,8 @@
 \item[swap]\index{swap} Two things. The swap of long chats to the SSD is the session spill (Section~\ref{sec:spill}). The park swaps two sessions' rows in the engine's memory (Section~\ref{sec:resident}).
 
 \item[taint]\index{taint} The lowest row that a session resume wrote. Below it the caches are a cold prefill's bit for bit.
+
+\item[TandemApp]\index{TandemApp} The dashboard and the proxy without the engine, as one installable command, \code{tandem-app} (Chapter~\ref{ch:install-app}).
 
 \item[time to first token]\index{time to first token} The time from a request's arrival to its first streamed token: the prefill, plus any wait in the queue. TTFT in the tables.
 

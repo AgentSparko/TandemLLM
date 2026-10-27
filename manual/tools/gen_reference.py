@@ -376,7 +376,7 @@ def gen_server_flags(root: str, knobs: dict) -> str:
 
 def gen_proxy_flags(root: str) -> str:
     rows = argparse_rows(root, "proxy/__main__.py", "parser")
-    return flags_table(rows, "tandem-dash serve and python -m proxy", "tab:ref-proxy-flags")
+    return flags_table(rows, "tandem-app serve and python -m proxy", "tab:ref-proxy-flags")
 
 
 def gen_launch_flags(root: str) -> str:
@@ -386,7 +386,7 @@ def gen_launch_flags(root: str) -> str:
             r["flag"] = "ENGINE"
             r["help"] = "the engine to start: vllm or sglang"
             r["choices"] = ""
-    return flags_table(rows, "tandem-dash launch", "tab:ref-launch-flags",
+    return flags_table(rows, "tandem-app launch", "tab:ref-launch-flags",
                        {"--port": "the engine's port", "--host": "the engine's bind address",
                         "--model": "the model id or path the engine serves",
                         "--config-db": "the proxy's config database the backend is registered in",
@@ -395,7 +395,7 @@ def gen_launch_flags(root: str) -> str:
 
 def gen_hostcollect_flags(root: str) -> str:
     rows = argparse_rows(root, "proxy/hostcollect.py", None)
-    return flags_table(rows, "tandem-dash hostcollect", "tab:ref-hostcollect-flags",
+    return flags_table(rows, "tandem-app hostcollect", "tab:ref-hostcollect-flags",
                        {"--host": "the address to bind; beyond loopback it needs a token",
                         "--port": "the collector's port",
                         "--token-file": "a file whose first line is the bearer token; else TANDEM_COLLECTOR_TOKEN"})

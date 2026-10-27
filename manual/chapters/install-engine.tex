@@ -14,11 +14,11 @@ The parts combine. One engine can sit behind one address together with other eng
 \hd{setup} & \hd{how} & \hd{state} \\
 \midrule
 the engine alone & \code{install.sh} on the board (this chapter) & live \\
-the engine and cloud APIs, one address & \code{tandem-dash} on the board or another machine, with the engine and the cloud API as backends (Chapter~\ref{ch:install-dash}) & live, with DeepSeek \\
+the engine and cloud APIs, one address & \code{tandem-app} on the board or another machine, with the engine and the cloud API as backends (Chapter~\ref{ch:install-app}) & live, with DeepSeek \\
 the same, from the engine's own server & \code{QSE_BACKENDS}: the engine relays to the cloud API, and its conductor can run in front of it (Section~\ref{sec:engine-backends}) & built \\
 the engine and other engines on other machines & either of the two above, the other engines as \code{vllm}, \code{sglang} or \code{generic} backends (Chapter~\ref{ch:other-engines}) & built; vLLM and SGLang live behind the proxy on their own \\
-the dashboard and proxy alone & \code{pip install} or docker on any machine, in front of the backends you run (Chapter~\ref{ch:install-dash}) & live \\
-the engine and a second GPU engine on one larger machine & each engine on its own GPU, \code{tandem-dash launch} for the second & built \\
+the dashboard and proxy alone & \code{pip install} or docker on any machine, in front of the backends you run (Chapter~\ref{ch:install-app}) & live \\
+the engine and a second GPU engine on one larger machine & each engine on its own GPU, \code{tandem-app launch} for the second & built \\
 the engine and a second GPU engine on one DGX Spark & the engine plans its memory as if it owns the board (up to 77~GiB during a prefill, plus its small models); a board out of memory stops answering until it is power cycled & not supported \\
 \bottomrule
 \end{tabularx}
@@ -258,7 +258,7 @@ echo 'QSE_BACKENDS=$HOME/.tandemllm/config.sqlite3' >> ~/TandemLLM/run/local.env
 
 Then add the backends on the dashboard's Backends screen, or as \code{TANDEM_*} variables (Chapter~\ref{ch:other-engines}). The engine keeps serving \code{TandemLLM} as before, and a request for another model goes to its backend on the handler's own thread: it never takes the engine's lock or a place in its queue, so a slow cloud answer cannot hold up the engine. The engine's conductor can run in front of each backend (\code{harness.mode}, Chapter~\ref{ch:harness-proxy}), and one ledger and the Parallel view cover them all. On a DGX Spark the other backends are cloud APIs or engines on other machines; a second GPU engine on the same Spark is not supported (Table~\ref{tab:setups}). No live run of this in-process relay is recorded yet; the standalone proxy in front of the engine is the setup that ran live.
 
-The other way round works too: \code{tandem-dash} on a laptop or a small server, with the engine as a backend of kind \code{tandemllm} (Chapter~\ref{ch:install-dash}).
+The other way round works too: \code{tandem-app} on a laptop or a small server, with the engine as a backend of kind \code{tandemllm} (Chapter~\ref{ch:install-app}).
 
 \section{Running from a checkout}
 
