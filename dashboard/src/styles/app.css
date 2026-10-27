@@ -1181,6 +1181,87 @@ textarea {
   gap: 6px;
 }
 
+/* the fleet chart (VIS-242): its head with the mode switch, Split's mini titles, markers, Table */
+.fc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+}
+.fc-note {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+}
+.mode-switch .seg-btn {
+  padding: 4px 9px;
+  min-height: 28px;
+}
+.chart .fc-glow {
+  opacity: var(--glow-op);
+}
+.chart .fc-cap {
+  stroke: var(--ink-3);
+  stroke-dasharray: 4 4;
+}
+.chart .fc-ev {
+  stroke: var(--ink-3);
+  stroke-dasharray: 2 3;
+  opacity: 0.6;
+}
+.chart .fc-ev-mark {
+  fill: var(--ink-2);
+}
+.chart .fc-ev-mark.is-alert {
+  fill: var(--warn-ink);
+}
+.chart .fc-mini-t {
+  fill: var(--ink);
+  font-size: var(--fs-sm);
+}
+.fc-sw-line {
+  height: 3px;
+  border-radius: 2px;
+}
+.fc-agg {
+  color: var(--ink-3);
+}
+.fc-tip-ev {
+  margin-top: 4px;
+  color: var(--ink-2);
+}
+.fc-table-wrap {
+  overflow-x: auto;
+}
+.fc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.fc-table th,
+.fc-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  font-weight: 400;
+}
+.fc-table .num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.fc-table thead th {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+}
+.fc-table tfoot th,
+.fc-table tfoot td {
+  border-bottom: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+
 /* the node chip: identity colour, alias, a status glyph (never colour alone) */
 .node-chip {
   display: inline-flex;
