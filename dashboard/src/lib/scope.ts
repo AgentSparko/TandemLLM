@@ -71,6 +71,27 @@ export function setScope(patch: Partial<Scope>): void {
   setParams(scopeParams(next));
 }
 
+export interface ScopeChoice {
+  scope: Pick<Scope, 'kind' | 'id'>;
+  /** the group in the dropdown: null for All */
+  group: 'Sparks' | 'Deployments' | null;
+  /** the node or deployment id; absent for All */
+  id?: string;
+  on: boolean;
+}
+
+/** What the scope bar offers: All, each Spark, each deployment, the current one marked (a scope the
+ *  fleet does not know marks All, as it reads). A fleet of one offers nothing: there is no choice. */
+export function scopeChoices(fleet: { nodes: { id: string }[]; deployments: { id: string }[] }, s: Scope): ScopeChoice[] {
+  if (fleet.nodes.length < 2) return [];
+  const r = resolveScope(s, fleet);
+  return [
+    { scope: { kind: 'all' }, group: null, on: r.kind === 'all' },
+    ...fleet.nodes.map((n): ScopeChoice => ({ scope: { kind: 'node', id: n.id }, group: 'Sparks', id: n.id, on: r.kind === 'node' && r.id === n.id })),
+    ...fleet.deployments.map((d): ScopeChoice => ({ scope: { kind: 'deployment', id: d.id }, group: 'Deployments', id: d.id, on: r.kind === 'deployment' && r.id === d.id })),
+  ];
+}
+
 /** Calls `fn` when the scope changes (not on every hash change); returns the unsubscribe. */
 export function onScope(fn: (s: Scope) => void): () => void {
   let last = currentScope();
