@@ -11,6 +11,8 @@ serves on one port:
     GET  /dashboard/               the dashboard (dashboard/dist, served from disk)
     GET  /v1/dashboard/*           summary, usage, requests, system, live, logs, metrics, session
     *    /v1/config/*              the Backends and Setup screens (proxy/config_api.py)
+    *    /v1/fleet/*               TandemApp's controller: the fleet registry, its nodes'
+                                   figures and the saved layouts (proxy/fleet.py, SRV-723)
     GET  /metrics                  the proxy's families in the Prometheus text format
     GET  /health                   {"status": "ok"}; the full body for the admin or the machine
     *    /v1/conductor/*           the conductor's documents, journal and sessions (P4, with
@@ -37,7 +39,9 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from proxy import config as proxy_config
 from proxy import config_api
+from proxy import fleet as fleet_mod
 from proxy import hostcollect
+from proxy import nodesource
 from proxy import route as route_mod
 from proxy.service import PROXY_PATHS, Service
 from server import auth as auth_mod
@@ -91,15 +95,22 @@ def _live_status() -> dict:
             "last_request_at": None, "backends": svc.backends_view()}
 
 
+def _hosts() -> list | None:
+    """`system.hosts`: this machine first, then the backends' remote hosts. The fleet's sampler
+    reads the same collector (every 2 s, so its 5-minute charts have a sample per point)."""
+    svc: Service = STATE["svc"]
+    args = STATE.get("args") or {}
+    return hostcollect.hosts_for(
+        STATE, svc.cfg.backends(),
+        hostcollect.engine_entry(args.get("port"), "this proxy", backend="proxy"),
+        paths=[os.path.dirname(svc.cfg.path)], fast_period=fleet_mod.SAMPLE_S - 0.25)
+
+
 def _system() -> dict:
     svc: Service = STATE["svc"]
     led = STATE.get("ledger")
     li = led.info() if led is not None else None
-    args = STATE.get("args") or {}
-    hosts = hostcollect.hosts_for(
-        STATE, svc.cfg.backends(),
-        hostcollect.engine_entry(args.get("port"), "this proxy", backend="proxy"),
-        paths=[os.path.dirname(svc.cfg.path)])
+    hosts = _hosts()
     mem = dashboard_api.meminfo()
     if hosts and mem["unified_total_bytes"] is None:          # no /proc here (macOS)
         mem["unified_total_bytes"] = hosts[0]["memory"]["total_bytes"]
@@ -254,6 +265,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._dashboard_get(path)
         if path == "/v1/config" or path.startswith("/v1/config/"):
             return config_api.handle(self, STATE["svc"], "GET", path, None)
+        if path.startswith("/v1/fleet/"):
+            return self._fleet("GET", path, None)
         if path in ("/health", "/healthz", "/v1/health"):
             code = 503 if STATE.get("draining") else 200
             out = {"status": "draining" if STATE.get("draining") else "ok"}
@@ -337,6 +350,8 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/v1/collect/"):          # P6: a plugin's batch, its own token
             from proxy import collect_api
             return collect_api.handle(self, STATE["svc"], path, raw)
+        if path.startswith("/v1/fleet/"):
+            return self._fleet("POST", path, raw)
         try:
             body = json.loads(raw or b"{}")
         except ValueError as exc:
@@ -380,6 +395,8 @@ class Handler(BaseHTTPRequestHandler):
             raw = self._read_raw()
         except BodyError as exc:
             return self._body_error(exc)
+        if path.startswith("/v1/fleet/"):
+            return self._fleet(method, path, raw)
         try:
             body = json.loads(raw) if raw else None
         except ValueError as exc:
@@ -401,6 +418,23 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         return self._write("DELETE")
+
+    def _fleet(self, method: str, path: str, raw: bytes | None) -> None:
+        """`/v1/fleet/*` (proxy/fleet.py): reads under the dashboard's rule, writes (a layout,
+        a node's alias or colour, an acknowledgement) under the configuration's."""
+        if not self._allowed("dashboard" if method == "GET" else "conductor_write"):
+            return
+        body = None
+        if raw:
+            try:
+                body = json.loads(raw)
+            except ValueError as exc:
+                return self._json(400, {"error": {"type": "bad_request",
+                                                  "message": f"bad json: {exc}"}})
+        q = {k: v[-1] for k, v in parse_qs(urlsplit(self.path).query).items()}
+        code, out = STATE["fleet"].handle(method, path, q, body,
+                                          who=config_api._who(self, STATE["svc"]))
+        return self._json(code, out, extra_headers=(("Cache-Control", "no-store"),))
 
     def _metrics(self) -> None:
         raw = STATE["registry"].render().encode()
@@ -659,6 +693,12 @@ def build(args, env=None) -> Service:
     STATE["svc"] = svc
     STATE["parallel"] = parallel_mod.ParallelBoard(live, cost=svc.live_cost,
                                                    peers=svc.peer_backends)
+    STATE["fleet"] = fleet_mod.Fleet(svc, nodesource.LocalNode(
+        hosts=lambda: (_hosts() or [None])[0], draining=lambda: bool(STATE.get("draining")),
+        version=lambda: STATE.get("version", ""), logbuf=logbuf.BUFFER,
+        key=lambda bid: svc.cfg.key_for(bid)),
+        port=getattr(args, "port", None), bind=getattr(args, "host", "127.0.0.1"),
+        log=lambda m: print(m, flush=True))
     # the sampler: it sleeps while nothing is in flight (the live stream and the parallel view's
     # once-a-second sample; before 0.3.32 the standalone proxy never started it)
     live.start()
@@ -743,6 +783,7 @@ def serve(args) -> None:
     logbuf.install()
     svc = build(args)
     svc.start()
+    STATE["fleet"].start()
     srv = Server((args.host, args.port), Handler)
     led = STATE.get("ledger")
     print(f"[proxy] {version()} on {args.host}:{args.port}, config {svc.cfg.path} "
@@ -763,6 +804,7 @@ def serve(args) -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        STATE["fleet"].stop()
         svc.stop()
         if led is not None:
             led.close()

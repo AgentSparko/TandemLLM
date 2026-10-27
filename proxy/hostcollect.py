@@ -1055,13 +1055,16 @@ def engine_entry(port: int | None, label: str | None = None, backend: str = "eng
     return {"backend": backend, "label": label, "pid": os.getpid(), "port": port}
 
 
-def hosts_for(state: dict, backends, engine: dict | None, paths=()) -> list | None:
+def hosts_for(state: dict, backends, engine: dict | None, paths=(),
+              fast_period: float = 5.0) -> list | None:
     """`system.hosts` for a server: one `Hosts` kept in its STATE, None (the key left out) when
-    the collector fails, with one log line the first time."""
+    the collector fails, with one log line the first time. `fast_period` holds for the first
+    call (the fleet's sampler reads every 2 s, proxy/fleet.py)."""
     try:
         h = state.get("hosts")
         if h is None:
-            h = state["hosts"] = Hosts(HostCollector(paths=[p for p in paths if p]))
+            h = state["hosts"] = Hosts(HostCollector(paths=[p for p in paths if p],
+                                                     fast_period=fast_period))
         return h.view(backends, engine)
     except Exception as exc:                                         # noqa: BLE001
         if not state.get("hosts_error"):

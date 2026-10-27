@@ -633,7 +633,9 @@ def test_standalone_proxy_system_has_the_hosts():
             assert local["source"] == "local" and local["backends"] == ["proxy", "f1"]
             f1 = [p for p in local["processes"] if p["backend"] == "f1"][0]
             c = local["cost"]
-            assert c["fast_period_s"] == 5.0 and c["scan_period_s"] == 15.0
+            # SRV-723: tandem-app's fleet sampler reads the same collector every 2 s
+            from proxy import fleet
+            assert c["fast_period_s"] == fleet.SAMPLE_S - 0.25 and c["scan_period_s"] == 15.0
             if f1["via"] is not None:              # psutil, /proc or lsof answered here
                 assert f1["pid"] == os.getpid(), f1
             assert doc["memory"]["unified_total_bytes"], "from the collector where no /proc"
