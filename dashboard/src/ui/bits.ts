@@ -8,6 +8,9 @@ export function icon(name: string): TemplateResult {
   return svg`<svg class="icon" viewBox="0 0 20 20" aria-hidden="true" width="18" height="18">${p}</svg>`;
 }
 
+/** a stroked glyph, the style of the TandemApp icons */
+const g = (p: TemplateResult) => svg`<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${p}</g>`;
+
 const ICONS: Record<string, TemplateResult> = {
   usage: svg`<rect x="2" y="3" width="3.5" height="3.5" rx=".8" fill="currentColor"/><rect x="7" y="3" width="3.5" height="3.5" rx=".8" fill="currentColor" opacity=".55"/><rect x="12" y="3" width="3.5" height="3.5" rx=".8" fill="currentColor"/><rect x="2" y="8" width="3.5" height="3.5" rx=".8" fill="currentColor" opacity=".35"/><rect x="7" y="8" width="3.5" height="3.5" rx=".8" fill="currentColor"/><rect x="12" y="8" width="3.5" height="3.5" rx=".8" fill="currentColor" opacity=".7"/><rect x="2" y="13" width="3.5" height="3.5" rx=".8" fill="currentColor" opacity=".8"/><rect x="7" y="13" width="3.5" height="3.5" rx=".8" fill="currentColor" opacity=".3"/><rect x="12" y="13" width="3.5" height="3.5" rx=".8" fill="currentColor"/>`,
   performance: svg`<path d="M2.5 14.5 7 8.5l3.5 3.5 6.5-8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 17.5h15" stroke="currentColor" stroke-width="1.2" opacity=".5"/>`,
@@ -55,6 +58,19 @@ const ICONS: Record<string, TemplateResult> = {
   right: svg`<path d="m8 4.5 5.5 5.5L8 15.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
   'dock-right': svg`<rect x="2.5" y="3.5" width="15" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11.5 3.5v13" stroke="currentColor" stroke-width="1.6"/><rect x="12.5" y="5" width="4" height="10" fill="currentColor" opacity=".35"/>`,
   'dock-bottom': svg`<rect x="2.5" y="3.5" width="15" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.5 11h15" stroke="currentColor" stroke-width="1.6"/><rect x="4" y="12" width="12" height="3.5" fill="currentColor" opacity=".35"/>`,
+  // TandemApp's menu (VIS-242): the sections that are new, the two sidebars' toggles, the windows
+  overview: g(svg`<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/>`),
+  hardware: g(svg`<rect x="5" y="5" width="10" height="10" rx="1.5"/><path d="M8 2v3M12 2v3M8 15v3M12 15v3M2 8h3M2 12h3M15 8h3M15 12h3"/>`),
+  events: g(svg`<path d="M10 3a4.5 4.5 0 0 0-4.5 4.5V11L4 13.5h12L14.5 11V7.5A4.5 4.5 0 0 0 10 3zM8.3 16a1.8 1.8 0 0 0 3.4 0"/>`),
+  sparks: g(svg`<rect x="3" y="4" width="14" height="5" rx="1"/><rect x="3" y="11" width="14" height="5" rx="1"/><path d="M6 6.5h.01M6 13.5h.01"/>`),
+  models: g(svg`<path d="M10 2.5 17 6v8l-7 3.5L3 14V6z"/><path d="M3 6l7 3.5L17 6M10 9.5v8"/>`),
+  api: g(svg`<path d="M7 3v4M13 3v4M5 7h10v3a5 5 0 0 1-10 0zM10 15v3"/>`),
+  'add-spark': g(svg`<circle cx="10" cy="10" r="7"/><path d="M10 7v6M7 10h6"/>`),
+  app: g(svg`<circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6"/>`),
+  'side-left': g(svg`<rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M7.5 3.5v13"/>`),
+  'side-right': g(svg`<rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M12.5 3.5v13"/>`),
+  window: g(svg`<rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M2.5 7h15"/>`),
+  layout: g(svg`<rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M8 3.5v13M8 11h9.5"/>`),
 };
 
 export function skeleton(lines = 3, cls = ''): TemplateResult {
