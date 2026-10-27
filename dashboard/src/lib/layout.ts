@@ -14,6 +14,12 @@ export function widthClass(w: number): WidthClass {
   return w <= PHONE_MAX ? 'phone' : w <= TABLET_MAX ? 'tablet' : 'desk';
 }
 
+/** The window's width class, read as the CSS reads it (a media query on the layout viewport): a
+ *  phone that zooms out over something too wide reports a wider innerWidth, never a wider class. */
+export function currentWidthClass(matches: (query: string) => boolean = (q) => matchMedia(q).matches): WidthClass {
+  return matches(`(max-width: ${PHONE_MAX}px)`) ? 'phone' : matches(`(max-width: ${TABLET_MAX}px)`) ? 'tablet' : 'desk';
+}
+
 export const RAIL_W = { min: 200, max: 420, def: 248 };
 export const CTX_W = { min: 280, max: 560, def: 340 };
 

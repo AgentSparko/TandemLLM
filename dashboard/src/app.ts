@@ -37,7 +37,7 @@ import { knownJob, rememberStatusPort } from './lib/restart';
 import { browserTz } from './lib/time';
 import { isTypingTarget, splitTabs } from './lib/phone';
 import { MENU, MONITOR, PHONE_BAR, crumb, sectionHref, sectionOf, subPages, type MenuItem, type Section } from './lib/menu';
-import { CTX_W, RAIL_W, isOpen, loadLayout, opened, resized, saveLayout, toggled, widthClass, type ShellLayout, type WidthClass } from './lib/layout';
+import { CTX_W, RAIL_W, currentWidthClass, isOpen, loadLayout, opened, resized, saveLayout, toggled, type ShellLayout, type WidthClass } from './lib/layout';
 import { clearSelection, contextFor, currentSelection, onContext, pageKey, panelFor, setDefaultContext, setPage } from './lib/context';
 import { onFleet, readout, type FleetState } from './lib/fleet-state';
 import { LightElement, type Loadable } from './ui/base';
@@ -138,7 +138,7 @@ export class QseApp extends LightElement {
   @state() private more = false;
   /** a text field has focus: on the phone the bottom bar steps aside and the view takes its room */
   @state() private typing = false;
-  @state() private wclass: WidthClass = widthClass(window.innerWidth);
+  @state() private wclass: WidthClass = currentWidthClass();
   @state() private layout: ShellLayout = loadLayout(undefined, window.innerWidth);
   /** a tablet's or a phone's open drawer */
   @state() private drawer: 'left' | 'right' | null = null;
@@ -285,7 +285,7 @@ export class QseApp extends LightElement {
     saveLayout(l);
   }
   private onResize = () => {
-    const w = widthClass(window.innerWidth);
+    const w = currentWidthClass();
     if (w === this.wclass) return;
     this.wclass = w;
     this.drawer = null;

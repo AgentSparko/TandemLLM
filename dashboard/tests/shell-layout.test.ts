@@ -3,7 +3,7 @@
 // page with its own sidebars (Chat) keeping its own open state, and a storage that throws on read,
 // on write or on the property itself leaving the defaults and a working page.
 import { describe, expect, it } from 'vitest';
-import { BOTH_OPEN_MIN, CTX_W, DEFAULT_LAYOUT, RAIL_W, defaultLayout, isOpen, loadLayout, opened, resized, saveLayout, toggled, widthClass } from '../src/lib/layout';
+import { BOTH_OPEN_MIN, CTX_W, DEFAULT_LAYOUT, RAIL_W, currentWidthClass, defaultLayout, isOpen, loadLayout, opened, resized, saveLayout, toggled, widthClass } from '../src/lib/layout';
 
 const mem = () => {
   const m = new Map<string, string>();
@@ -13,6 +13,10 @@ const mem = () => {
 describe('width class', () => {
   it('desk above 1100 px, tablet to 1100, phone to 600', () => {
     expect([1440, 1101, 1100, 768, 601, 600, 375, 320].map(widthClass)).toEqual(['desk', 'desk', 'tablet', 'tablet', 'tablet', 'phone', 'phone', 'phone']);
+  });
+  it('the window’s class is read with media queries, as the CSS reads it', () => {
+    const at = (w: number) => (q: string) => w <= Number(/max-width: (\d+)px/.exec(q)![1]);
+    expect([1440, 1100, 600, 375].map((w) => currentWidthClass(at(w)))).toEqual(['desk', 'tablet', 'phone', 'phone']);
   });
 });
 
