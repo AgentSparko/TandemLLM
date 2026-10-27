@@ -7,12 +7,12 @@ The two packages here run inside the engine and send exactly those numbers to th
     pip install plugins/vllm       # tandemllm-vllm-plugin
     pip install plugins/sglang     # tandemllm-sglang-plugin
 
-Then start the engine with two variables, or let `tandem-dash launch` do it (below):
+Then start the engine with two variables, or let `tandem-app launch` do it (below):
 
     TANDEM_COLLECT_URL=http://127.0.0.1:8080/v1/collect/<backend id>
     TANDEM_COLLECT_TOKEN=<the proxy's collect token>
 
-The token is `TANDEM_COLLECT_TOKEN` in the proxy's environment, or the one the proxy made and stored in its config database at the first need (`tandem-dash launch` reads it from there).
+The token is `TANDEM_COLLECT_TOKEN` in the proxy's environment, or the one the proxy made and stored in its config database at the first need (`tandem-app launch` reads it from there).
 
 ## What each one reads
 

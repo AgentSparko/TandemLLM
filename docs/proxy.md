@@ -34,10 +34,10 @@ Setting the kind and the URL in the environment locks them on the Backends scree
 
 ### On its own
 
-Anyone without a GPU runs the same code. It needs Python 3.11 or newer, the standard library and `cryptography`, and never pulls torch. From a checkout:
+Anyone without a GPU runs the same code as TandemApp, the `tandem-app` command. It needs Python 3.11 or newer, the standard library and `cryptography`, and never pulls torch. From a checkout:
 
     pip install .                       # or '.[host]': adds psutil and NVML for the System view
-    tandem-dash                         # 127.0.0.1:8080, ~/.tandemllm/config.sqlite3
+    tandem-app                          # 127.0.0.1:8080, ~/.tandemllm/config.sqlite3
     open http://127.0.0.1:8080/dashboard/
 
 `python -m proxy` in the checkout does the same without installing anything but `cryptography`. The page opens on Setup while no backend exists. The engine-only panels (caches, speculation, the conductor, memory) say that this server has no engine.
@@ -45,35 +45,43 @@ Anyone without a GPU runs the same code. It needs Python 3.11 or newer, the stan
 From a DeepSeek key to a row in the Usage view takes five commands:
 
     pip install '.[host]'
-    printf 'TANDEM_BACKENDS=deepseek\nTANDEM_BACKEND_DEEPSEEK_KIND=deepseek\nTANDEM_BACKEND_DEEPSEEK_KEY=%s\n' "$DEEPSEEK_API_KEY" > dash.env && chmod 600 dash.env
-    tandem-dash check --env-file dash.env
-    tandem-dash serve --env-file dash.env &
+    printf 'TANDEM_BACKENDS=deepseek\nTANDEM_BACKEND_DEEPSEEK_KIND=deepseek\nTANDEM_BACKEND_DEEPSEEK_KEY=%s\n' "$DEEPSEEK_API_KEY" > app.env && chmod 600 app.env
+    tandem-app check --env-file app.env
+    tandem-app serve --env-file app.env &
     curl -s localhost:8080/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"Say hi"}]}'
 
 Then open `http://127.0.0.1:8080/dashboard/#/usage`.
 
 ### In docker
 
-`ops/Dockerfile.dash` builds an image of about 70 MB on `python:3.12-slim`, with the built page inside and no compiler or torch in it:
+`ops/Dockerfile.app` builds an image of about 70 MB on `python:3.12-slim`, with the built page inside and no compiler or torch in it:
 
-    docker build -f ops/Dockerfile.dash -t tandemllm-dash .
-    cp ops/dash.env.example dash.env    # fill in; no quotes around values
-    docker run -d --name tandem-dash -p 127.0.0.1:8080:8080 -v tandem-dash:/data \
-        --env-file dash.env tandemllm-dash
+    docker build -f ops/Dockerfile.app -t tandemllm-app .
+    cp ops/app.env.example app.env      # fill in; no quotes around values
+    docker run -d --name tandem-app -p 127.0.0.1:8080:8080 -v tandem-app:/data \
+        --env-file app.env tandemllm-app
 
 The config database, the usage ledger and the key file (when `TANDEM_SECRETS_KEY` is not set) live in the `/data` volume. Inside the container the server binds 0.0.0.0, so what the outside reaches is what `-p` publishes: `127.0.0.1:8080` for this machine, a LAN address for a local network. Turn the login on (`TANDEM_DASHBOARD_LOGIN=on` and `TANDEM_ADMIN_TOKEN`) before you publish it to anything but loopback. Failed logins are throttled per client: a fronting proxy's `X-Real-IP` is believed only when the TCP peer is loopback, or names itself in `TANDEM_TRUSTED_PROXY`. With `-p`, a proxy on the host does not reach the container from loopback: Docker forwards its connection from the bridge's gateway, 172.17.0.1 on the default bridge, so that gateway address goes into `TANDEM_TRUSTED_PROXY`; without it every client behind the proxy shares one bucket. The proxy must set `X-Real-IP` itself (`proxy_set_header X-Real-IP $remote_addr;` in nginx): a proxy that passes the client's own header on lets the client pick its bucket. The container runs as an unprivileged user and answers its health check on `/health`.
 
-### The `tandem-dash` command
+Up to 0.15.0 the image was `tandemllm-dash` and the volume `tandem-dash`; the volume keeps its old name and its data. Mount it as before, or copy it into the new volume once:
+
+    docker run -d --name tandem-app -p 127.0.0.1:8080:8080 -v tandem-dash:/data \
+        --env-file app.env tandemllm-app
+    docker run --rm -v tandem-dash:/from -v tandem-app:/to python:3.12-slim cp -a /from/. /to/
+
+### The `tandem-app` command
 
 | command | what it does |
 |-|-|
-| `tandem-dash` or `tandem-dash serve` | the server; every flag of `python -m proxy` (`--env-file`, `--config-db`, `--host`, `--port`, `--usage-ledger`, `--dashboard-login`) |
-| `tandem-dash check` | reads the environment and a copy of the config database through the schema and prints what would run: the backends, their key hints and locked fields, the rules, the page, the listen address. It writes nothing and exits 1 on an error that names the variable |
-| `tandem-dash secrets init` | makes the master key file beside the config database (0600) when no master key answers; `secrets status` says which source answers |
-| `tandem-dash backends list` | the backends, one line each, from a copy of the database |
-| `tandem-dash hostcollect` | the remote host collector (below) |
-| `tandem-dash launch vllm\|sglang` | starts vLLM or SGLang with TandemLLM's plugin inside and registers it as a backend (below) |
-| `tandem-dash version` | the installed version |
+| `tandem-app` or `tandem-app serve` | the server; every flag of `python -m proxy` (`--env-file`, `--config-db`, `--host`, `--port`, `--usage-ledger`, `--dashboard-login`) |
+| `tandem-app check` | reads the environment and a copy of the config database through the schema and prints what would run: the backends, their key hints and locked fields, the rules, the page, the listen address. It writes nothing and exits 1 on an error that names the variable |
+| `tandem-app secrets init` | makes the master key file beside the config database (0600) when no master key answers; `secrets status` says which source answers |
+| `tandem-app backends list` | the backends, one line each, from a copy of the database |
+| `tandem-app hostcollect` | the remote host collector (below) |
+| `tandem-app launch vllm\|sglang` | starts vLLM or SGLang with TandemLLM's plugin inside and registers it as a backend (below) |
+| `tandem-app version` | the installed version |
+
+`tandem-dash`, the old name, still runs `tandem-app` with the same arguments and exit codes, after one line on stderr; it is removed in 0.17.0.
 
 ## Configuration: the GUI and the environment
 
@@ -92,7 +100,7 @@ The same objects can be declared as `TANDEM_*` variables, for a docker start or 
     TANDEM_PRICE_1_OFFPEAK="0.15,0.003,0.6"
     TANDEM_API_KEYS="laptop:tdm-...,ci:tdm-..."
 
-`python -m proxy --env-file proxy.env` reads such a file; a variable already in the process environment keeps its value. The full list, with the fields each backend takes (`_KIND`, `_URL`, `_KEY`, `_LABEL`, `_MODELS`, `_MODELS_MODE`, `_FALLBACK`, `_MAX_INFLIGHT`, `_ENABLED`, `_INJECT_USAGE`, `_HARNESS`, `_HARNESS_PROFILE`, `_TIMEOUT_CONNECT`, `_TIMEOUT_FIRST_BYTE`, `_TIMEOUT_IDLE`, `_HOST`, `_HOST_URL`, `_HOST_DCGM_URL`), is at the top of `proxy/config.py`, and `ops/dash.env.example` is a file to start from. One schema (`proxy/config.schema.json`) checks both ways in: a wrong variable stops the start with a message that names it.
+`python -m proxy --env-file proxy.env` reads such a file; a variable already in the process environment keeps its value. The full list, with the fields each backend takes (`_KIND`, `_URL`, `_KEY`, `_LABEL`, `_MODELS`, `_MODELS_MODE`, `_FALLBACK`, `_MAX_INFLIGHT`, `_ENABLED`, `_INJECT_USAGE`, `_HARNESS`, `_HARNESS_PROFILE`, `_TIMEOUT_CONNECT`, `_TIMEOUT_FIRST_BYTE`, `_TIMEOUT_IDLE`, `_HOST`, `_HOST_URL`, `_HOST_DCGM_URL`), is at the top of `proxy/config.py`, and `ops/app.env.example` is a file to start from. One schema (`proxy/config.schema.json`) checks both ways in: a wrong variable stops the start with a message that names it.
 
 ## Keys at rest
 
@@ -113,7 +121,7 @@ The System view shows the machine each backend runs on, down to the process behi
 |-|-|-|
 | `auto` (the default) | this machine, when the backend's URL is loopback or one of this machine's addresses; nothing for a cloud API | yes |
 | `same` | this machine, whatever the URL says | yes |
-| `collector` | `tandem-dash hostcollect` running on the backend's machine, at `host.url` | yes |
+| `collector` | `tandem-app hostcollect` running on the backend's machine, at `host.url` | yes |
 | `exporter` | a node_exporter page at `host.url` and a DCGM exporter page at `host.dcgm_url` | no |
 | `off` | nothing | |
 
@@ -127,11 +135,11 @@ Nothing is sampled while nobody looks. When the System view asks, the collector 
 
 On another machine, run the collector next to the backend and give both sides the same token:
 
-    TANDEM_COLLECTOR_TOKEN=$(openssl rand -hex 24) tandem-dash hostcollect --host 0.0.0.0 --port 9108
+    TANDEM_COLLECTOR_TOKEN=$(openssl rand -hex 24) tandem-app hostcollect --host 0.0.0.0 --port 9108
 
 It answers `GET /host` as JSON and `GET /metrics` as Prometheus text (`tandem_host_*`), both behind the bearer token; it refuses to bind beyond loopback without one, because its answer names processes and their command lines. `--watch vllm:8000` reports a port on every answer; the proxy asks for its backends' ports itself. A machine that already runs node_exporter and NVIDIA's DCGM exporter needs nothing new: set the backend's host to `exporter` with both page URLs. That path has no per-process figures, and the panel says so. A remote read runs on its own thread, so a slow or dead host never holds the page; its panel shows the last answer, its age, or the error.
 
-In docker the collector sees the container, not the machine. Run the container with `--pid=host` (and `--gpus all` for NVML) for the machine's view, or run `tandem-dash hostcollect` on the machine itself.
+In docker the collector sees the container, not the machine. Run the container with `--pid=host` (and `--gpus all` for NVML) for the machine's view, or run `tandem-app hostcollect` on the machine itself.
 
 ## vLLM and SGLang: their own metrics
 
@@ -178,8 +186,8 @@ The engine needs two variables, `TANDEM_COLLECT_URL` (the proxy's `/v1/collect/<
 
 One command does all of it, from nothing to a backend with L2 data:
 
-    tandem-dash launch vllm --model Qwen/Qwen3.5-4B --port 8100 -- --max-model-len 32768
-    tandem-dash launch sglang --model Qwen/Qwen3.5-4B --port 30000
+    tandem-app launch vllm --model Qwen/Qwen3.5-4B --port 8100 -- --max-model-len 32768
+    tandem-app launch sglang --model Qwen/Qwen3.5-4B --port 30000
 
 `launch` creates the backend in the config database (kind, `http://127.0.0.1:<port>/v1`, host `same`), hands the engine the collect URL and the token, adds the flags the dashboard reads (`--enable-prompt-tokens-details` on vLLM, `--enable-metrics` and `--enable-cache-report` on SGLang), checks that the plugin is installed in the engine's Python, and then replaces itself with the engine, so the pid it records is the engine's. Without the plugin installed it says how to install it and starts the engine at L1. `--dry-run` prints the command, `--collect-url` names another proxy, and everything after `--` goes to the engine unchanged. `launch` is optional: an engine started by hand with the plugin and the two variables gives the same data.
 

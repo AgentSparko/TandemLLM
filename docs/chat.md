@@ -21,7 +21,7 @@ browser  --https-->  engine server :8000  --/v1/chat-app/* (auth checked, byte f
   then tails the log from the snapshot's `seq` (SSE, `Last-Event-ID` on a reconnect, `event: reset`
   for a device more than 2,000 events behind).
 - **The forward** (`server/chat_forward.py`): the engine server (and the standalone proxy,
-  `tandem-dash`) passes `/v1/chat-app/*` to chatd after the dashboard's auth check. chatd answers
+  `tandem-app`) passes `/v1/chat-app/*` to chatd after the dashboard's auth check. chatd answers
   only requests that carry the forward key.
 - **The model** is reached as any client reaches it, through `POST /v1/chat/completions` with
   `x-session-id: chat-<conversation id>`, so the engine's park, spill and live rows follow the chat.
