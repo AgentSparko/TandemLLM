@@ -211,7 +211,7 @@ export class QseFleetChart extends ChartElement {
           ><span class="swatch ${isHollow(s.colour) ? 'swatch-outline' : ''}" style="${isHollow(s.colour) ? 'border-color' : 'background'}:${nodeColour(s.colour)}"></span>${s.alias} <b class="num">${this.fmt(now(s.values))}</b></span
         >`,
       )}
-      <span class="legend-item fc-agg">${op} <b class="num">${this.withUnit(now(m.mean ?? m.total))}</b></span>
+      <span class="legend-item fc-agg">${op} <b class="num">${this.withUnit(now(m.total))}</b></span>${m.mean ? html`<span class="legend-item fc-agg">mean <b class="num">${this.withUnit(now(m.mean))}</b></span>` : nothing}
     </div>`;
   }
 
