@@ -12,6 +12,10 @@ ledger. Its tables:
     users            the proxy's own API keys: a label, the key's sha256, a 4-character hint
     settings         small JSON values (the dashboard's choices)
     audit            who changed what and when, field names only, never a value of a key
+    nodes            TandemApp's fleet (SRV-723): one row per node, its id, alias, identity colour,
+                     icon, tags, class, how the controller reaches it (transport, endpoint,
+                     address, trust) and what it is (hw, dmi, serial); proxy/fleet.py
+    layouts          a page's window layout per device class, the JSON the dashboard saved
     meta             schema_version, created_at
 
 Migrations are forward only and keyed on meta.schema_version, as the ledger's are.
@@ -109,6 +113,9 @@ OLD_DEFAULT_INFLIGHT = 64
 FEATURE_GROUPS = ("mode", "class", "effort", "packages", "side", "loops", "e1", "tools",
                   "compaction", "states", "memory")
 KEY_PREFIX = "tdm-"
+NODE_COLS = ("id", "alias", "colour", "icon", "tags", "class", "hw", "dmi", "serial", "transport",
+             "endpoint", "address", "trust", "owner", "lease_end_ms", "cost_per_hour", "added_at",
+             "updated_at")
 
 DDL = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -147,6 +154,16 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL,
 CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY, ts_ms INTEGER NOT NULL, who TEXT, action TEXT NOT NULL,
   object TEXT NOT NULL, object_id TEXT, fields TEXT);
+CREATE TABLE IF NOT EXISTS nodes (
+  id TEXT PRIMARY KEY, alias TEXT NOT NULL, colour INTEGER NOT NULL,
+  icon TEXT NOT NULL DEFAULT 'desk', tags TEXT NOT NULL DEFAULT '[]',
+  class TEXT NOT NULL DEFAULT 'spark', hw TEXT, dmi TEXT, serial TEXT,
+  transport TEXT NOT NULL DEFAULT 'lan', endpoint TEXT NOT NULL, address TEXT,
+  trust TEXT NOT NULL DEFAULT '{}', owner TEXT, lease_end_ms INTEGER, cost_per_hour REAL,
+  added_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS layouts (
+  page TEXT NOT NULL, device TEXT NOT NULL, doc TEXT NOT NULL, saved_at REAL NOT NULL,
+  PRIMARY KEY (page, device));
 """
 
 
@@ -1092,6 +1109,73 @@ class ConfigDB:
             self._audit(who, "set", "setting", key)
             self._conn.commit()
             self._bump()
+
+    # ----------------------------------------------------------------- the fleet (SRV-723)
+    def nodes(self) -> list[dict]:
+        """The fleet's nodes in the order they joined. `trust` is what the controller pins for
+        the node (SEC-4); `endpoint` names the node's source (`local`: this process)."""
+        with self._lock:
+            rows = self._conn.execute(f"SELECT {', '.join(NODE_COLS)} FROM nodes "
+                                      f"ORDER BY added_at, id").fetchall()
+        out = []
+        for r in rows:
+            d = dict(zip(NODE_COLS, r))
+            d["tags"] = json.loads(d["tags"] or "[]")
+            d["trust"] = json.loads(d["trust"] or "{}")
+            out.append(d)
+        return out
+
+    def node(self, nid: str) -> dict | None:
+        return next((n for n in self.nodes() if n["id"] == nid), None)
+
+    def add_node(self, doc: dict, who: str = "controller") -> dict:
+        """A new node; without a `colour` it gets the first of 1..8 no node has (1 when all are
+        taken)."""
+        now = _now_ms()
+        with self._lock:
+            if doc.get("colour") is None:
+                used = {r[0] for r in self._conn.execute("SELECT colour FROM nodes")}
+                doc = dict(doc, colour=next((c for c in range(1, 9) if c not in used), 1))
+            row = {"icon": "desk", "tags": [], "class": "spark", "transport": "lan",
+                   "trust": {}, **doc, "added_at": now, "updated_at": now}
+            row["tags"], row["trust"] = json.dumps(row["tags"]), json.dumps(row["trust"])
+            cols = [c for c in NODE_COLS if c in row]
+            self._conn.execute(f"INSERT INTO nodes({', '.join(cols)}) VALUES "
+                               f"({', '.join('?' * len(cols))})", [row[c] for c in cols])
+            self._audit(who, "create", "node", doc["id"], ["alias", "colour"])
+            self._conn.commit()
+            self._bump()
+        return self.node(doc["id"])
+
+    def update_node(self, nid: str, fields: dict, who: str = "gui") -> dict:
+        """Change a node's columns (the caller checked the values); 404 for an unknown id."""
+        vals = {k: json.dumps(v) if k in ("tags", "trust") else v for k, v in fields.items()
+                if k in NODE_COLS and k not in ("id", "added_at")}
+        with self._lock:
+            n = self._conn.execute(
+                f"UPDATE nodes SET {''.join(f'{k} = ?, ' for k in vals)}updated_at = ? "
+                f"WHERE id = ?", [*vals.values(), _now_ms(), nid]).rowcount
+            if not n:
+                raise ConfigError(f"no node {nid}", status=404)
+            self._audit(who, "update", "node", nid, list(vals))
+            self._conn.commit()
+            self._bump()
+        return self.node(nid)
+
+    def layout(self, page: str, device: str) -> dict | None:
+        with self._lock:
+            r = self._conn.execute("SELECT doc FROM layouts WHERE page = ? AND device = ?",
+                                   (page, device)).fetchone()
+        return json.loads(r[0]) if r else None
+
+    def set_layout(self, doc: dict) -> None:
+        """A page's layout on a device class, as the dashboard saved it (`saved_at` set): the
+        last write wins."""
+        with self._lock:
+            self._conn.execute("INSERT OR REPLACE INTO layouts(page, device, doc, saved_at) "
+                               "VALUES (?, ?, ?, ?)", (doc["page"], doc["device"],
+                                                       json.dumps(doc), doc["saved_at"]))
+            self._conn.commit()
 
     def audit(self, limit: int = 50) -> list[dict]:
         with self._lock:
