@@ -1181,6 +1181,49 @@ textarea {
   gap: 6px;
 }
 
+/* the node chip: identity colour, alias, a status glyph (never colour alone) */
+.node-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.node-chip.is-lg {
+  font-size: var(--fs-md);
+}
+a.node-chip:hover .node-alias {
+  text-decoration: underline;
+}
+.node-sw {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 1.5px solid var(--c);
+}
+.node-sw.is-hollow {
+  background: transparent;
+}
+.node-alias {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.node-st {
+  font-size: 0.85em;
+  color: var(--ink-2);
+}
+.node-st.is-alert {
+  color: var(--warn-ink);
+}
+.node-extra {
+  color: var(--ink-2);
+}
+
 /* heatmap */
 .heat {
   display: flex;
