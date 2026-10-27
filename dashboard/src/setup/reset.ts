@@ -140,7 +140,7 @@ export class QseReset extends LightElement {
     const busy = !!this.levels?.busy;
     return html`<div class="reset" data-busy=${busy}>
       <p class="reset-intro muted">${R.intro}</p>
-      ${this.loadError ? html`<div class="reset-load-error" role="alert">${icon('warn')} <span>${this.loadError}</span> ${this.loadError === R.unauthorized && !this.inSetup ? html`<a class="btn btn-sm" href="#/setup">${R.openSetup}</a>` : html`<button class="btn btn-sm" @click=${() => void this.load()}>${icon('refresh')} ${R.retry}</button>`}</div>` : nothing}
+      ${this.loadError ? html`<div class="reset-load-error" role="alert">${icon('warn')} <span>${this.loadError}</span> ${this.loadError === R.unauthorized && !this.inSetup ? html`<a class="btn btn-sm" href="#/models/serve">${R.openSetup}</a>` : html`<button class="btn btn-sm" @click=${() => void this.load()}>${icon('refresh')} ${R.retry}</button>`}</div>` : nothing}
       ${busy ? html`<p class="reset-busy" id="reset-busy" role="status" data-reset-busy>${icon('info')} ${R.busy(this.running)}</p>` : nothing}
       <ol class="reset-levels">${([1, 2, 3, 4, 5] as ResetLevelNo[]).map((n) => this.card(n, busy))}</ol>
       ${this.renderDialog()}
@@ -228,7 +228,7 @@ export class QseReset extends LightElement {
       ${res?.failed?.length ? html`<ul class="reset-failed">${res.failed.map((f) => html`<li><code>${f.path}</code> <span class="muted">${f.reason}</span></li>`)}</ul>` : nothing}
       ${res?.restart_needed && !res.job ? html`<p class="muted small">${R.restartNeeded}</p>` : nothing}
       ${res?.job ? html`<qse-install-progress .jobId=${res.job.id} .initial=${res.job} compact></qse-install-progress>` : nothing}
-      ${r.kind === 'local' && !this.inSetup ? html`<p class="small"><a href="#/setup">${R.openSetup}</a></p>` : nothing}
+      ${r.kind === 'local' && !this.inSetup ? html`<p class="small"><a href="#/models/serve">${R.openSetup}</a></p>` : nothing}
     </div>`;
   }
 }

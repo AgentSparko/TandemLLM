@@ -1,30 +1,25 @@
-// The phone layout's decisions, kept pure so they can be tested: which views sit in the bottom
+// The phone layout's decisions, kept pure so they can be tested: which sections sit in the bottom
 // bar and which go behind More, what counts as typing (the bar steps aside then), and where a
 // scrolling strip of pills stands so its edges can fade. The shell (app.ts) and the composer
 // read these.
 
-import type { View } from './router';
-
-export interface TabDef {
-  view: View;
-  label: string;
-}
+import type { MenuItem, Section } from './menu';
 
 export interface TabSplit {
   /** the slots in the bar, in order */
-  bar: TabDef[];
-  /** the views behind More, in the shell's order */
-  more: TabDef[];
-  /** the More slot shows this view's icon and label when the active view is behind More, so the
-   *  page you are on is never invisible (the setup guide in setup mode lands here too) */
-  moreShows: TabDef | null;
+  bar: MenuItem[];
+  /** the sections behind More, in the menu's order */
+  more: MenuItem[];
+  /** the More slot shows this section's icon and label when the active one is behind More, so the
+   *  page you are on is never invisible (the setup guide in setup mode lands here too, as Models) */
+  moreShows: MenuItem | null;
 }
 
-/** The phone's bottom bar: the primary views in the shell's order, the rest behind More. */
-export function splitTabs(tabs: TabDef[], primary: View[], active: View): TabSplit {
-  const bar = tabs.filter((t) => primary.includes(t.view));
-  const more = tabs.filter((t) => !primary.includes(t.view));
-  return { bar, more, moreShows: more.find((t) => t.view === active) ?? null };
+/** The phone's bottom bar: the primary sections in the menu's order, the rest behind More. */
+export function splitTabs(items: MenuItem[], primary: Section[], active: Section): TabSplit {
+  const bar = items.filter((t) => primary.includes(t.id));
+  const more = items.filter((t) => !primary.includes(t.id));
+  return { bar, more, moreShows: more.find((t) => t.id === active) ?? null };
 }
 
 export type Edge = 'none' | 'start' | 'mid' | 'end';

@@ -21,14 +21,16 @@ describe('dist/', () => {
       }
     }
   });
-  it.skipIf(!present)('0.8.0: the Chat tab carries a Beta pill in the rail and in the chat header', () => {
+  it.skipIf(!present)('0.8.0: the Chat tab carries a Beta pill in the menu and in the chat header', () => {
     const files = readdirSync(join(DIST, 'assets'));
     const js = files.filter((f) => f.endsWith('.js')).map((f) => readFileSync(join(DIST, 'assets', f), 'utf8'));
     const css = files.filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(DIST, 'assets', f), 'utf8')).join('');
     const pills = js.filter((src) => src.includes('beta-pill') && src.includes('The Chat tab is in beta'));
     expect(pills.length).toBeGreaterThanOrEqual(2);
     expect(css).toMatch(/\.beta-pill\{/);
-    expect(css).toMatch(/\.rail-tab \.beta-pill\{/);
+    // VIS-242: in the menu panel beside its label, on the phone's bar and in its menu sheet
+    expect(css).toMatch(/\.bb-i \.beta-pill\{/);
+    expect(css).toMatch(/\.more-item \.beta-pill\{/);
   });
   it.skipIf(!present)('index.html uses relative asset paths and no external origin', () => {
     const html = readFileSync(join(DIST, 'index.html'), 'utf8');

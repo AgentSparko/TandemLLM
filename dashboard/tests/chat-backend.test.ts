@@ -126,7 +126,7 @@ describe('the panel', () => {
     expect(downText(at('chatd_refused')).command).toContain('tandem chat restart');
     expect(downText(at('chatd_refused')).lead).toContain('Restart both');
     expect(downText(at('no_chat_routes')).title).toBe('This engine build has no Chat tab server (it needs 0.8.0 or newer).');
-    expect(downText(at('setup_mode')).link?.href).toBe('#/setup');
+    expect(downText(at('setup_mode')).link?.href).toBe('#/models/serve');
     expect(downText(at('not_an_engine')).title).toBe('This address does not serve the chat API.');
     expect(downText(at('offline')).title).toBe('Cannot reach the engine server.');
     expect(downText(at('offline')).button).toBe('Retry');

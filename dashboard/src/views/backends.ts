@@ -412,7 +412,7 @@ export class QseBackends extends LightElement {
     const models = (b.model_rows ?? []).filter((m) => m.present && m.enabled).length;
     return html`<article class="bk-card is-${st}" role="listitem" data-backend=${b.id}>
       <header class="bk-card-head">
-        <a class="bk-card-title" href=${`#/backends?backend=${encodeURIComponent(b.id)}`}>${b.label}</a>
+        <a class="bk-card-title" href=${`#/api/backends?backend=${encodeURIComponent(b.id)}`}>${b.label}</a>
         <span class="pill bk-state is-${st}" data-state=${st}>${st}</span>
       </header>
       <div class="bk-card-kind"><span class="badge">${KIND_LABEL[b.kind] ?? b.kind}</span>${b.cloud ? html`<span class="badge">cloud</span>` : nothing}${Object.keys(b.locks).length ? html`<span class="badge badge-lock" title="fields set by environment variables">${icon('info')} env</span>` : nothing}</div>
@@ -665,7 +665,7 @@ export class QseBackends extends LightElement {
           <div><dt>in flight</dt><dd class="num">${b.in_flight}${b.max_inflight != null ? ` of ${b.max_inflight}` : html` <span class="muted">(no limit)</span>`}</dd></div>
           <div><dt>timeouts</dt><dd class="num">connect ${b.timeouts.connect} s · first byte ${b.timeouts.first_byte} s · idle ${b.timeouts.idle} s</dd></div>
           <div><dt>routes</dt><dd class="mono small">${b.routes.join(' ')}</dd></div>
-          <div><dt>host</dt><dd>${HOST_MODES.find(([m]) => m === (b.host?.mode ?? 'auto'))?.[1] ?? b.host?.mode}${b.host?.url ? html` <span class="mono small">${b.host.url}</span>` : nothing} · <a href="#/system">System</a></dd></div>
+          <div><dt>host</dt><dd>${HOST_MODES.find(([m]) => m === (b.host?.mode ?? 'auto'))?.[1] ?? b.host?.mode}${b.host?.url ? html` <span class="mono small">${b.host.url}</span>` : nothing} · <a href="#/hardware/system">System</a></dd></div>
           <div><dt>fallback</dt><dd>${b.fallback.length ? b.fallback.join(' → ') : 'none'}</dd></div>
           ${b.writer ? this.renderWriterFacts(b) : nothing}
           <div><dt>updated</dt><dd>${ago(new Date(b.updated_at).toISOString())} by ${b.updated_by ?? '—'}</dd></div>

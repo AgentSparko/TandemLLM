@@ -17,6 +17,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { describeError } from '../api/client';
 import { conductor, type ConfigInfo, type Meta, type ProfileMode, type ProfileTile, type RouterDoc } from '../api/conductor';
 import { timeShort } from '../lib/format';
+import { CONDUCTOR_SCREENS, type ConductorScreen } from '../lib/menu';
 import { poll, type Poller } from '../lib/poll';
 import { setParams } from '../lib/router';
 import { LightElement } from '../ui/base';
@@ -32,18 +33,9 @@ import './conductor/sessions';
 import './conductor/memory';
 import './conductor/compare';
 
-export type Screen = 'overview' | 'routing' | 'monitor' | 'profiles' | 'packages' | 'deciders' | 'sessions' | 'memory' | 'compare';
-const SCREENS: { id: Screen; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'routing', label: 'Routing' },
-  { id: 'monitor', label: 'Monitor' },
-  { id: 'profiles', label: 'Profiles' },
-  { id: 'packages', label: 'Packages' },
-  { id: 'deciders', label: 'Deciders' },
-  { id: 'sessions', label: 'Sessions' },
-  { id: 'memory', label: 'Memory' },
-  { id: 'compare', label: 'Compare' },
-];
+export type Screen = ConductorScreen;
+/** the nine screens: the menu's list (lib/menu.ts), so the left panel's sub-pages are the same */
+const SCREENS = CONDUCTOR_SCREENS;
 
 @customElement('qse-conductor')
 export class QseConductor extends LightElement {

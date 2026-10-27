@@ -3851,7 +3851,7 @@ qse-chat-panes {
   .shell:has(.ch.is-sheet-panes) {
     --tabbar-space: 0px;
   }
-  .shell:has(.ch.is-sheet-panes) .rail {
+  .shell:has(.ch.is-sheet-panes) .bottombar {
     transform: translateY(110%);
   }
   qse-chat-panes.is-sheet,

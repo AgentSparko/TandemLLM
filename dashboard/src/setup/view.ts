@@ -1,7 +1,8 @@
-// <qse-setup>: the Setup Guide at #/setup (D1, D4, D5, D10, VIS-78). Tiles for every model in the
-// registry, then eight steps with a rail, Next and Previous, deep links #/setup/<model>/<step>, the
-// sticky memory bar, and Wren docked beside it (wren.ts). Every change goes through setupReducer
-// (state.ts), from a click or from one of Wren's tool calls, and is saved to tandem.setup.v1.
+// <qse-setup>: the Setup Guide at #/models/serve (Models, Serve a model; #/setup before VIS-242) (D1,
+// D4, D5, D10, VIS-78). Tiles for every model in the registry, then eight steps with a rail, Next and
+// Previous, deep links #/models/serve/<model>/<step>, the sticky memory bar, and Wren docked beside
+// it (wren.ts). Every change goes through setupReducer (state.ts), from a click or from one of Wren's
+// tool calls, and is saved to tandem.setup.v1.
 //
 // The memory bar is computed in the page on every change (estimate.ts) and confirmed by
 // POST /v1/setup/estimate (150 ms debounce, the stale request aborted); the server's numbers win
@@ -16,6 +17,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { ApiError, describeError } from '../api/client';
 import type { CommunitySync, SetupDevice, SetupEstimate, SetupField, SetupJob, SetupModel, SetupModelsList, SetupPlan, SetupProfile, SetupSelection, SetupStepId, SetupToolCall, SetupValue } from '../api/types';
 import { poll, type Poller } from '../lib/poll';
+import { hashFor } from '../lib/router';
 import { rememberJob } from '../lib/restart';
 import { LightElement, type Loadable } from '../ui/base';
 import { emptyState as emptyPanel, errorState, icon, skeleton } from '../ui/bits';
@@ -43,16 +45,19 @@ import { parseSlots, slotsBlocker, slotsRange, slotsVerdict, stepSlots, type Slo
 import { checkWindow, shortTokens, stepWindow, windowRange, type WindowKey, type WindowParse } from './window';
 import { S, STEP_INTRO, STEP_LABEL, STEP_SHORT, STEP_TITLE } from './strings';
 import { fieldKey, planToolCall } from './tools';
+
 import './wren';
 import '../styles/setup.css';
 import type { QseWren, ToolOutcome, WrenHost } from './wren';
 
+/** the guide's own hash (Models, Serve a model) */
+const SERVE = hashFor('setup');
 
 type SecChoice = 'keep' | 'generate';
 
 @customElement('qse-setup')
 export class QseSetup extends LightElement {
-  /** the route below #/setup: [] tiles, [model], [model, step] */
+  /** the route below #/models/serve: [] tiles, [model], [model, step] */
   @property({ attribute: false }) path: string[] = [];
 
   @state() private wiz: WizardState = emptyState();
@@ -148,7 +153,7 @@ export class QseSetup extends LightElement {
     this.wiz = emptyState();
     this.plan = null;
     this.jobInitial = null;
-    if (location.hash !== '#/setup') location.hash = '#/setup';
+    if (location.hash !== SERVE) location.hash = SERVE;
   };
 
   // ---- data ---------------------------------------------------------------------------------
@@ -260,7 +265,7 @@ export class QseSetup extends LightElement {
   }
 
   private hashFor(st: WizardState): string {
-    return st.step === 'models' || !st.model ? '#/setup' : `#/setup/${st.model}/${st.step}`;
+    return st.step === 'models' || !st.model ? SERVE : `${SERVE}/${st.model}/${st.step}`;
   }
 
   /** every change: reduce, save, keep the hash in step (a push, so Back walks the steps) */
@@ -612,7 +617,7 @@ export class QseSetup extends LightElement {
         ? html`<div class="mtiles">
               ${l.data.models.map((t) => {
                 const resuming = resume?.model === t.id;
-                const href = resuming ? `#/setup/${t.id}/${resume!.step === 'models' ? 'overview' : resume!.step}` : `#/setup/${t.id}/overview`;
+                const href = resuming ? `${SERVE}/${t.id}/${resume!.step === 'models' ? 'overview' : resume!.step}` : `${SERVE}/${t.id}/overview`;
                 return html`<a class="mtile ${t.recommended ? 'is-rec' : ''}" href=${href} data-model=${t.id}>
                   <span class="mtile-top"><span class="mtile-family">${t.family}</span>${t.recommended ? html`<span class="sbadge sbadge-rec">${S.tileRecommended}</span>` : nothing}</span>
                   <span class="mtile-name">${t.name}</span>
@@ -699,7 +704,7 @@ export class QseSetup extends LightElement {
           const isCur = id === cur;
           const done = visited && !bad && n < i;
           const reachable = id !== 'install' || (!!this.wiz.job && this.wiz.job_model === this.wiz.model);
-          const href = id === 'models' ? '#/setup' : `#/setup/${m.id}/${id}`;
+          const href = id === 'models' ? SERVE : `${SERVE}/${m.id}/${id}`;
           return html`<li class="steps-item ${isCur ? 'is-current' : ''} ${done ? 'is-done' : ''} ${bad ? 'is-bad' : ''} ${visited ? 'is-visited' : ''}" data-rail=${id}>
             ${reachable
               ? html`<a href=${href} aria-current=${isCur ? 'step' : nothing} title=${bad ? issues[id]!.join(' ') : STEP_TITLE[id]}>
@@ -1199,7 +1204,7 @@ export class QseSetup extends LightElement {
         ${est ? html`<p class="rv-say">${est.fits ? S.reviewFits(est.total_gb, est.budget_gb ?? est.device_gb - est.floor_gb) : overSentence(m, sel, est)}</p>` : nothing}
         ${fixes.length
           ? html`<h3 class="rv-sub">${S.howToFix}</h3>
-              <ul class="rv-fixes">${fixes.map((f) => html`<li><span>${f.text}</span><span class="muted small num">−${f.saves.toFixed(1)} GiB</span><a class="btn btn-sm" href=${`#/setup/${m.id}/${f.step}`}>${S.fixGo}: ${STEP_LABEL[f.step]}</a></li>`)}</ul>`
+              <ul class="rv-fixes">${fixes.map((f) => html`<li><span>${f.text}</span><span class="muted small num">−${f.saves.toFixed(1)} GiB</span><a class="btn btn-sm" href=${`${SERVE}/${m.id}/${f.step}`}>${S.fixGo}: ${STEP_LABEL[f.step]}</a></li>`)}</ul>`
           : nothing}
       </section>
 
@@ -1234,7 +1239,7 @@ export class QseSetup extends LightElement {
               ${ready.errors.map((e, i) => {
                 const code = ready.error_codes?.[i];
                 const fix = planFixStep(code);
-                return html`<li class="is-err" data-error-code=${code ?? nothing}>${icon('warn')} <span>${e}</span>${fix && fix !== step ? html` <a class="btn btn-sm" href=${`#/setup/${m.id}/${fix}`}>${S.planFix}: ${STEP_LABEL[fix]}</a>` : nothing}</li>`;
+                return html`<li class="is-err" data-error-code=${code ?? nothing}>${icon('warn')} <span>${e}</span>${fix && fix !== step ? html` <a class="btn btn-sm" href=${`${SERVE}/${m.id}/${fix}`}>${S.planFix}: ${STEP_LABEL[fix]}</a>` : nothing}</li>`;
               })}
               ${ready.warnings.map((w) => html`<li>${icon('info')} ${w}</li>`)}
             </ul>`

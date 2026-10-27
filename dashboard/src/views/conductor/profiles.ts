@@ -437,7 +437,7 @@ export class QseCondProfiles extends LightElement {
         )}
         <div class="toolbar"><label class="field"><span>a claim for another role</span><input placeholder="role id, e.g. librarian" .value=${this.newClaim} @input=${(e: Event) => (this.newClaim = (e.target as HTMLInputElement).value.trim())} /></label>
           <button class="btn btn-sm" ?disabled=${!/^[a-z][a-z0-9_-]{0,39}$/.test(this.newClaim) || this.newClaim in d.claims} @click=${() => { upd(['claims', this.newClaim], { gib: 0, basis: 'declared', note: '' }); this.newClaim = ''; }}>${icon('plus')} Add</button></div>
-        <p class="muted small">The claims are peaks, not idle figures, and MemAvailable, not nvidia-smi (arbiter: 5.1 GB there, 8.2 GiB of MemAvailable). What fits now, the engine's own split and the last refusal are on the <a href="#/system">System view</a>.</p>
+        <p class="muted small">The claims are peaks, not idle figures, and MemAvailable, not nvidia-smi (arbiter: 5.1 GB there, 8.2 GiB of MemAvailable). What fits now, the engine's own split and the last refusal are on the <a href="#/hardware/system">System view</a>.</p>
         ${errorsList(ed)}
         ${saveBar(ed, 'the residency limits')}
       </div>

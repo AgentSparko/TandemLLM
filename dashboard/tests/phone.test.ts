@@ -1,36 +1,27 @@
 // the phone layout's decisions (src/lib/phone.ts): the bar's split, the strip's edge state, and
 // what counts as typing
 import { describe, expect, it } from 'vitest';
-import { isTypingTarget, splitTabs, stripEdge, type TabDef } from '../src/lib/phone';
+import { isTypingTarget, splitTabs, stripEdge } from '../src/lib/phone';
+import { MENU, PHONE_BAR } from '../src/lib/menu';
 
-const TABS: TabDef[] = [
-  { view: 'chat', label: 'Chat' },
-  { view: 'usage', label: 'Usage' },
-  { view: 'performance', label: 'Performance' },
-  { view: 'dev', label: 'Dev' },
-  { view: 'playground', label: 'Playground' },
-  { view: 'conductor', label: 'Conductor' },
-  { view: 'backends', label: 'Backends' },
-  { view: 'system', label: 'System' },
-  { view: 'setup', label: 'Setup' },
-];
-const PRIMARY = ['chat', 'usage', 'performance'] as const;
+const ITEMS = MENU.flatMap((g) => g.items);
 
 describe('splitTabs', () => {
-  it('keeps the primary views in the bar, in the shell order, and the rest behind More', () => {
-    const s = splitTabs(TABS, [...PRIMARY], 'chat');
-    expect(s.bar.map((t) => t.view)).toEqual(['chat', 'usage', 'performance']);
-    expect(s.more.map((t) => t.view)).toEqual(['dev', 'playground', 'conductor', 'backends', 'system', 'setup']);
+  it('keeps Chat, Overview and Performance in the bar, in the menu order, and the rest behind More', () => {
+    const s = splitTabs(ITEMS, PHONE_BAR, 'chat');
+    expect(s.bar.map((t) => t.id)).toEqual(['chat', 'overview', 'performance']);
+    expect(s.more.map((t) => t.id)).toEqual(['usage', 'hardware', 'events', 'sparks', 'models', 'api', 'conductor', 'playground', 'dev', 'add-spark', 'app']);
     expect(s.moreShows).toBeNull();
   });
-  it('the More slot shows the active view when that view is behind More', () => {
-    expect(splitTabs(TABS, [...PRIMARY], 'setup').moreShows).toEqual({ view: 'setup', label: 'Setup' });
-    expect(splitTabs(TABS, [...PRIMARY], 'dev').moreShows?.label).toBe('Dev');
+  it('the More slot shows the active section when that section is behind More', () => {
+    // the setup guide (setup mode's only page) is Models -> Serve a model
+    expect(splitTabs(ITEMS, PHONE_BAR, 'models').moreShows).toEqual({ id: 'models', label: 'Models' });
+    expect(splitTabs(ITEMS, PHONE_BAR, 'dev').moreShows?.label).toBe('Dev');
   });
-  it('a primary order that differs from the shell order follows the shell', () => {
-    const s = splitTabs(TABS, ['performance', 'chat'], 'usage');
-    expect(s.bar.map((t) => t.view)).toEqual(['chat', 'performance']);
-    expect(s.moreShows?.view).toBe('usage');
+  it('a primary order that differs from the menu order follows the menu', () => {
+    const s = splitTabs(ITEMS, ['performance', 'chat'], 'usage');
+    expect(s.bar.map((t) => t.id)).toEqual(['chat', 'performance']);
+    expect(s.moreShows?.id).toBe('usage');
   });
 });
 

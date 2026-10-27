@@ -35,7 +35,7 @@ export function downText(d: ChatDown): DownText {
     case 'no_chat_routes':
       return { title: 'This engine build has no Chat tab server (it needs 0.8.0 or newer).', lead: 'Update the box: run the installer again with the same --dir.', button: 'Check again' };
     case 'setup_mode':
-      return { title: 'Finish the setup first.', lead: 'The box is in setup mode. The Chat tab starts with the engine once the Setup Guide is done.', link: { href: '#/setup', label: 'Open the Setup Guide' }, button: 'Check again' };
+      return { title: 'Finish the setup first.', lead: 'The box is in setup mode. The Chat tab starts with the engine once the Setup Guide is done.', link: { href: '#/models/serve', label: 'Open the Setup Guide' }, button: 'Check again' };
     case 'not_an_engine':
       return { title: 'This address does not serve the chat API.', lead: "The chat routes answered with a page, not JSON: a static server or a proxy's own page is in front of the engine. Use the dashboard on the engine server's own port.", button: 'Check again' };
     case 'chat_off':

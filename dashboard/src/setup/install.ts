@@ -302,7 +302,7 @@ export class QseInstallProgress extends LightElement {
         : nothing}
       <div class="inst-done-actions">
         <a class="btn btn-primary btn-lg" href="#/chat" data-start-chatting @click=${() => safeMoment()}>${S.startChatting}</a>
-        <a class="btn" href="#/setup" data-back-to-guide @click=${() => {
+        <a class="btn" href="#/models/serve" data-back-to-guide @click=${() => {
           safeMoment();
           this.onBack?.();
         }}>${S.backToGuide}</a>
@@ -353,7 +353,7 @@ export class QseInstallProgress extends LightElement {
             <div><p>${S.jobStale}</p><div class="inst-actions"><button class="btn btn-sm btn-primary" @click=${this.retryRead}>${S.retry}</button><button class="btn btn-sm" @click=${() => location.reload()}>${S.refreshPage}</button></div></div>
           </div>`
         : nothing}
-      ${this.signIn ? html`<div class="inst-away" role="status" data-job-signin>${icon('warn')} <span>${S.jobSignIn}</span> <a class="btn btn-sm" href="#/setup">${S.signIn.go}</a></div>` : nothing}
+      ${this.signIn ? html`<div class="inst-away" role="status" data-job-signin>${icon('warn')} <span>${S.jobSignIn}</span> <a class="btn btn-sm" href="#/models/serve">${S.signIn.go}</a></div>` : nothing}
       <ol class="inst-steps">
         ${(j?.steps ?? []).map(
           (s) => html`<li class="inst-step is-${s.state}" data-step=${s.id}>
