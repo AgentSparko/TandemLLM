@@ -22,7 +22,7 @@ import type { SetupAssistantStatus, SetupChatEvent, SetupChatMessage, SetupPageS
 import { renderMarkdown } from '../playground/markdown';
 import { LightElement } from '../ui/base';
 import { icon } from '../ui/bits';
-import { setupApi, streamChat } from './api';
+import { isCancelled, setupApi, streamChat } from './api';
 import './figure';
 import type { QseWrenFigure } from './figure';
 import { nextFigureState, type FigureEvent, type FigureState } from './figure-state';
@@ -203,6 +203,12 @@ export class QseWren extends LightElement {
     try {
       this.applyStatus(await setupApi.assistant.load());
     } catch (e) {
+      if (isCancelled(e)) {
+        this.phase = 'asleep';
+        this.progress = null;
+        this.emit('unload');
+        return;
+      }
       const d = describeError(e);
       const body = e instanceof ApiError ? (e.body as { assistant?: SetupAssistantStatus } | undefined) : undefined;
       if (body?.assistant) this.status = body.assistant;

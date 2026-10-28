@@ -316,6 +316,11 @@ export interface Saved {
   job_model?: string | null;
 }
 
+/** the progress's key: this server's guide, or another node's (VIS-252: each node has its own) */
+export function storageKey(node: string | null = null): string {
+  return node ? `${STORAGE_KEY}:${node}` : STORAGE_KEY;
+}
+
 /** localStorage, or null where the browser refuses it (private mode, blocked storage). */
 export function safeStorage(): Storage | null {
   try {
@@ -331,11 +336,11 @@ export function safeStorage(): Storage | null {
 export type LoadProblem = 'unavailable' | 'corrupt' | 'version' | null;
 
 /** The saved progress, or why there is none to use. */
-export function readSaved(store: Storage | null): { state: WizardState; problem: LoadProblem } {
+export function readSaved(store: Storage | null, key = STORAGE_KEY): { state: WizardState; problem: LoadProblem } {
   if (!store) return { state: emptyState(), problem: 'unavailable' };
   let raw: string | null;
   try {
-    raw = store.getItem(STORAGE_KEY);
+    raw = store.getItem(key);
   } catch {
     return { state: emptyState(), problem: 'unavailable' };
   }
@@ -378,20 +383,20 @@ export function toSaved(st: WizardState): Saved {
   return { v: 1, model: st.model, step: st.step === 'install' && (!st.job || st.job_model !== st.model) ? 'review' : st.step, selection, visited: st.visited, updatedAt: st.updatedAt, chat: capChat(st.chat), job: st.job, job_model: st.job_model };
 }
 
-export function writeSaved(store: Storage | null, st: WizardState): boolean {
+export function writeSaved(store: Storage | null, st: WizardState, key = STORAGE_KEY): boolean {
   if (!store) return false;
   try {
-    store.setItem(STORAGE_KEY, JSON.stringify(toSaved(st)));
+    store.setItem(key, JSON.stringify(toSaved(st)));
     return true;
   } catch {
     return false;
   }
 }
 
-export function clearSaved(store: Storage | null): boolean {
+export function clearSaved(store: Storage | null, key = STORAGE_KEY): boolean {
   if (!store) return false;
   try {
-    store.removeItem(STORAGE_KEY);
+    store.removeItem(key);
     return true;
   } catch {
     return false;

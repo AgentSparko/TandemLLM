@@ -12,11 +12,11 @@ import { ApiError, describeError } from '../api/client';
 import type { SetupDevice, SetupResetItem, SetupResetLevel, SetupResetLevels, SetupResetResult } from '../api/types';
 import { LightElement } from '../ui/base';
 import { icon } from '../ui/bits';
-import { setupApi } from './api';
+import { isCancelled, setupApi, setupNode } from './api';
 import './install';
 import '../styles/setup.css';
 import { bytesText, confirmState, confirmValue, goes, type ResetLevelNo } from './reset-logic';
-import { clearSaved, safeStorage } from './state';
+import { clearSaved, safeStorage, storageKey } from './state';
 import { R } from './strings';
 
 /** Sizes above this are trees the server may have stopped counting in: "at least". */
@@ -105,7 +105,7 @@ export class QseReset extends LightElement {
     const n = this.openLevel;
     if (n == null) return;
     if (n === 1) {
-      clearSaved(safeStorage());
+      clearSaved(safeStorage(), storageKey(setupNode()?.id));
       window.dispatchEvent(new CustomEvent('qse-setup-reset'));
       this.result = { kind: 'local', text: R.doneLocal };
       return;
@@ -125,7 +125,9 @@ export class QseReset extends LightElement {
       void this.load();
     } catch (e) {
       const d = describeError(e);
-      if (d.status === 409) {
+      if (isCancelled(e)) return;
+      if (e instanceof ApiError && e.type === 'blocked') this.errorText = d.message;
+      else if (d.status === 409) {
         this.errorText = e instanceof ApiError && e.type === 'job_running' ? R.jobRunning : R.busy(this.running);
         void this.load();
       } else if (d.status === 401 || d.status === 403) this.errorText = R.unauthorized;

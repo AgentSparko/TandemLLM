@@ -11,17 +11,26 @@
 //
 // A 401 from any setup route (a box with an admin password) puts the sign-in card in place of the
 // steps (signin.ts); the progress stays, and after the sign-in every reading is asked again.
+//
+// VIS-252: `?node=<id>` is the guide of that Spark of the fleet, through TandemApp's controller (its
+// relay, setup/api.ts): the same steps, Wren and resets, its own saved progress, a bar that names the
+// Spark and switches to another, and each write said by the controller's plan (<qse-setup-confirm>)
+// before it goes. Its job restarts that Spark's engine, not this server's: the shell hears nothing of it.
 
 import { html, nothing, render as litRender, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { ApiError, describeError } from '../api/client';
 import type { CommunitySync, SetupDevice, SetupEstimate, SetupField, SetupJob, SetupModel, SetupModelsList, SetupPlan, SetupProfile, SetupSelection, SetupStepId, SetupToolCall, SetupValue } from '../api/types';
 import { poll, type Poller } from '../lib/poll';
-import { hashFor } from '../lib/router';
+import { hashFor, parseHash } from '../lib/router';
 import { rememberJob } from '../lib/restart';
 import { LightElement, type Loadable } from '../ui/base';
 import { emptyState as emptyPanel, errorState, icon, skeleton } from '../ui/bits';
-import { setupApi } from './api';
+import { isCancelled, setConfirmer, setSetupNode, setupApi } from './api';
+import { fleetNow } from '../lib/fleet-state';
+import { nodeChip } from '../ui/node-chip';
+import './node-confirm';
+import type { QseSetupConfirm } from './node-confirm';
 import { buildPageState, howToFix, overSentence, planFixStep, stepIssues, tokenBlocked, type StepIssues } from './checks';
 import { communityProfiles, ownProfiles, packNoImage, sourceLine, withCommunityProfiles } from './community';
 import './community-view';
@@ -38,7 +47,7 @@ import './parallel-table';
 import './memory-bar';
 import './reset';
 import './signin';
-import { activeSteps, clearSaved, emptyState, normalizeStep, readSaved, safeStorage, setupReducer, stepPos, windowMax, writeSaved, type LoadProblem, type ParallelKey, type SetupAction, type WizardState } from './state';
+import { activeSteps, clearSaved, emptyState, normalizeStep, readSaved, safeStorage, setupReducer, stepPos, storageKey, windowMax, writeSaved, type LoadProblem, type ParallelKey, type SetupAction, type WizardState } from './state';
 import { setSimple, simpleDefaultsActions, simpleFold, simpleOn, simpleSwitch } from './simple';
 import { SIMPLE } from './strings';
 import { parseSlots, slotsBlocker, slotsRange, slotsVerdict, stepSlots, type SlotsParse } from './slots';
@@ -59,6 +68,9 @@ type SecChoice = 'keep' | 'generate';
 export class QseSetup extends LightElement {
   /** the route below #/models/serve: [] tiles, [model], [model, step] */
   @property({ attribute: false }) path: string[] = [];
+  /** VIS-252: the fleet's Spark whose guide this is (?node=), null for this server's own; set once,
+   *  the shell makes a new element for another Spark */
+  @property({ attribute: false }) node: string | null = null;
 
   @state() private wiz: WizardState = emptyState();
   @state() private storageProblem: LoadProblem = null;
@@ -107,11 +119,17 @@ export class QseSetup extends LightElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    // the chunk may load after the shell made the element: its bound properties come at the first
+    // update, after this; the Spark is the route's
+    this.node ??= parseHash().params.get('node');
+    const n = this.node ? fleetNow()?.nodes.find((x) => x.id === this.node) : null;
+    setSetupNode(this.node ? { id: this.node, alias: n?.alias ?? this.node } : null);
+    setConfirmer(this.node ? (plan) => this.querySelector<QseSetupConfirm>('qse-setup-confirm')!.ask(plan) : null);
     this.store = safeStorage();
-    const r = readSaved(this.store);
+    const r = readSaved(this.store, this.key);
     this.wiz = r.state;
     this.storageProblem = r.problem;
-    if (r.problem === 'corrupt' || r.problem === 'version') clearSaved(this.store);
+    if (r.problem === 'corrupt' || r.problem === 'version') clearSaved(this.store, this.key);
     void this.loadList();
     this.devPoll = poll(() => this.loadDevice(), 5000);
     this.devPoll.start();
@@ -129,7 +147,19 @@ export class QseSetup extends LightElement {
     window.removeEventListener('qse-setup-reset', this.onReset);
     window.removeEventListener('qse-setup-unauthorized', this.onUnauthorized);
     window.removeEventListener('qse-signed-in', this.onSignedIn);
+    setSetupNode(null);
+    setConfirmer(null);
     super.disconnectedCallback();
+  }
+
+  /** this guide's saved progress: its own per Spark */
+  private get key(): string {
+    return storageKey(this.node);
+  }
+
+  /** a hash of this guide: #/models/serve/<rest>, with the Spark it is for */
+  private at(rest = ''): string {
+    return `${SERVE}${rest}${this.node ? `?node=${encodeURIComponent(this.node)}` : ''}`;
   }
 
   private onUnauthorized = (): void => {
@@ -153,7 +183,7 @@ export class QseSetup extends LightElement {
     this.wiz = emptyState();
     this.plan = null;
     this.jobInitial = null;
-    if (location.hash !== SERVE) location.hash = SERVE;
+    if (location.hash !== this.at()) location.hash = this.at();
   };
 
   // ---- data ---------------------------------------------------------------------------------
@@ -165,6 +195,13 @@ export class QseSetup extends LightElement {
       this.list = l.models.length || l.errors.length ? { state: 'ready', data: l } : { state: 'empty', note: S.modelsEmpty };
     } catch (e) {
       const d = describeError(e);
+      // VIS-252: a controller without an engine of its own (TandemApp on a Mac) has no /v1/setup:
+      // the guide is its first Spark's, through the controller
+      const n = !this.node && d.status === 404 ? fleetNow()?.nodes.find((x) => x.status !== 'off') : null;
+      if (n) {
+        location.replace(`${SERVE}${this.path.length ? `/${this.path.map(encodeURIComponent).join('/')}` : ''}?node=${encodeURIComponent(n.id)}`);
+        return;
+      }
       this.list = { state: 'error', endpoint: d.endpoint, message: d.status === 401 ? S.unauthorized : d.message };
     }
   }
@@ -265,7 +302,7 @@ export class QseSetup extends LightElement {
   }
 
   private hashFor(st: WizardState): string {
-    return st.step === 'models' || !st.model ? SERVE : `${SERVE}/${st.model}/${st.step}`;
+    return st.step === 'models' || !st.model ? this.at() : this.at(`/${st.model}/${st.step}`);
   }
 
   /** every change: reduce, save, keep the hash in step (a push, so Back walks the steps) */
@@ -274,7 +311,7 @@ export class QseSetup extends LightElement {
     if (next === this.wiz) return;
     const stepChanged = next.step !== this.wiz.step;
     this.wiz = next;
-    if (this.store) this.storageFailed = !writeSaved(this.store, next);
+    if (this.store) this.storageFailed = !writeSaved(this.store, next, this.key);
     const h = this.hashFor(next);
     if (location.hash !== h) {
       if (push) location.hash = h;
@@ -529,7 +566,7 @@ export class QseSetup extends LightElement {
       if (!this.isConnected || this.path[0] !== selection.model || this.wiz.step !== 'review') {   // even when the answer owns nothing
         // the job runs on the box all the same: the shell still learns of it (knownJob(), the
         // restart pill and the setup page when the engine goes away), and nothing here reopens it
-        rememberJob(res.job);
+        if (!this.node) rememberJob(res.job);
         return;
       }
       this.jobInitial = res.job;
@@ -556,6 +593,7 @@ export class QseSetup extends LightElement {
   private applyErrorText(e: unknown): string | null {
     const d = describeError(e);
     if (d.status === 401) return null; // the sign-in card takes over
+    if (isCancelled(e)) return null; // a no on the controller's plan (VIS-252): nothing went
     const body = e instanceof ApiError ? (e.body as { error?: { running?: number }; plan?: SetupPlan } | undefined) : undefined;
     if (body?.plan) {
       this.plan = { state: 'ready', data: body.plan };
@@ -574,6 +612,7 @@ export class QseSetup extends LightElement {
     const m = this.m;
     const inModel = this.path.length > 0;
     return html`<div class="view view-setup" data-step=${inModel ? step : 'models'}>
+      ${this.node ? this.renderNodeBar() : nothing}
       <div class="setup">
         <div class="setup-main">
           ${this.renderBanners()}
@@ -588,6 +627,24 @@ export class QseSetup extends LightElement {
       </div>
       ${m ? this.renderConfirm(m) : nothing}
     </div>`;
+  }
+
+  /** VIS-252: which Spark this guide sets up, another to switch to, and the way back to placement */
+  private renderNodeBar(): TemplateResult {
+    const f = fleetNow();
+    const n = f?.nodes.find((x) => x.id === this.node) ?? null;
+    const go = (id: string) => (location.hash = `${SERVE}${this.path.length ? `/${this.path.map(encodeURIComponent).join('/')}` : ''}?node=${encodeURIComponent(id)}`);
+    return html`<div class="setup-node-bar" data-setup-node=${this.node!}>
+        <span class="eyebrow">Setup Guide on</span>
+        ${n ? nodeChip(n, { lg: true }) : html`<b>${this.node}</b>`}
+        ${n && n.status === 'off' ? html`<span class="small warn-ink">${n.status_text}</span>` : html`<span class="xs muted">through TandemApp’s controller; each change is said before it goes</span>`}
+        <span class="setup-node-sp"></span>
+        ${f && f.nodes.length > 1
+          ? html`<label class="small setup-node-pick"><span class="muted">Spark</span><select data-setup-node-pick aria-label="Set up another Spark" @change=${(e: Event) => go((e.target as HTMLSelectElement).value)}>${f.nodes.map((x) => html`<option value=${x.id} ?selected=${x.id === this.node}>${x.alias}</option>`)}</select></label>`
+          : nothing}
+        <a class="btn btn-sm btn-ghost" href="#/models/place" data-back-placement>← Serve a model</a>
+      </div>
+      <qse-setup-confirm .alias=${n?.alias ?? this.node ?? ''}></qse-setup-confirm>`;
   }
 
   private renderBanners(): TemplateResult {
@@ -617,7 +674,7 @@ export class QseSetup extends LightElement {
         ? html`<div class="mtiles">
               ${l.data.models.map((t) => {
                 const resuming = resume?.model === t.id;
-                const href = resuming ? `${SERVE}/${t.id}/${resume!.step === 'models' ? 'overview' : resume!.step}` : `${SERVE}/${t.id}/overview`;
+                const href = resuming ? this.at(`/${t.id}/${resume!.step === 'models' ? 'overview' : resume!.step}`) : this.at(`/${t.id}/overview`);
                 return html`<a class="mtile ${t.recommended ? 'is-rec' : ''}" href=${href} data-model=${t.id}>
                   <span class="mtile-top"><span class="mtile-family">${t.family}</span>${t.recommended ? html`<span class="sbadge sbadge-rec">${S.tileRecommended}</span>` : nothing}</span>
                   <span class="mtile-name">${t.name}</span>
@@ -704,7 +761,7 @@ export class QseSetup extends LightElement {
           const isCur = id === cur;
           const done = visited && !bad && n < i;
           const reachable = id !== 'install' || (!!this.wiz.job && this.wiz.job_model === this.wiz.model);
-          const href = id === 'models' ? SERVE : `${SERVE}/${m.id}/${id}`;
+          const href = id === 'models' ? this.at() : this.at(`/${m.id}/${id}`);
           return html`<li class="steps-item ${isCur ? 'is-current' : ''} ${done ? 'is-done' : ''} ${bad ? 'is-bad' : ''} ${visited ? 'is-visited' : ''}" data-rail=${id}>
             ${reachable
               ? html`<a href=${href} aria-current=${isCur ? 'step' : nothing} title=${bad ? issues[id]!.join(' ') : STEP_TITLE[id]}>
@@ -1204,7 +1261,7 @@ export class QseSetup extends LightElement {
         ${est ? html`<p class="rv-say">${est.fits ? S.reviewFits(est.total_gb, est.budget_gb ?? est.device_gb - est.floor_gb) : overSentence(m, sel, est)}</p>` : nothing}
         ${fixes.length
           ? html`<h3 class="rv-sub">${S.howToFix}</h3>
-              <ul class="rv-fixes">${fixes.map((f) => html`<li><span>${f.text}</span><span class="muted small num">−${f.saves.toFixed(1)} GiB</span><a class="btn btn-sm" href=${`${SERVE}/${m.id}/${f.step}`}>${S.fixGo}: ${STEP_LABEL[f.step]}</a></li>`)}</ul>`
+              <ul class="rv-fixes">${fixes.map((f) => html`<li><span>${f.text}</span><span class="muted small num">−${f.saves.toFixed(1)} GiB</span><a class="btn btn-sm" href=${this.at(`/${m.id}/${f.step}`)}>${S.fixGo}: ${STEP_LABEL[f.step]}</a></li>`)}</ul>`
           : nothing}
       </section>
 
@@ -1239,7 +1296,7 @@ export class QseSetup extends LightElement {
               ${ready.errors.map((e, i) => {
                 const code = ready.error_codes?.[i];
                 const fix = planFixStep(code);
-                return html`<li class="is-err" data-error-code=${code ?? nothing}>${icon('warn')} <span>${e}</span>${fix && fix !== step ? html` <a class="btn btn-sm" href=${`${SERVE}/${m.id}/${fix}`}>${S.planFix}: ${STEP_LABEL[fix]}</a>` : nothing}</li>`;
+                return html`<li class="is-err" data-error-code=${code ?? nothing}>${icon('warn')} <span>${e}</span>${fix && fix !== step ? html` <a class="btn btn-sm" href=${this.at(`/${m.id}/${fix}`)}>${S.planFix}: ${STEP_LABEL[fix]}</a>` : nothing}</li>`;
               })}
               ${ready.warnings.map((w) => html`<li>${icon('info')} ${w}</li>`)}
             </ul>`

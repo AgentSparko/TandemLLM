@@ -26,6 +26,7 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import { keyed } from 'lit/directives/keyed.js';
 import { api, apiBase, describeError, engineAway, onApi } from './api/client';
 import { awayText, restartText, swAway, whenEngineUp } from './lib/away';
 import { config } from './api/config';
@@ -40,7 +41,7 @@ import { registerWorker } from './lib/pwa';
 import { knownJob, rememberStatusPort } from './lib/restart';
 import { browserTz } from './lib/time';
 import { isTypingTarget, splitTabs } from './lib/phone';
-import { MENU, MONITOR, PHONE_BAR, crumb, sectionHref, sectionOf, subPages, type MenuItem, type Section } from './lib/menu';
+import { MENU, PHONE_BAR, SCOPED, crumb, sectionHref, sectionOf, subPages, type MenuItem, type Section } from './lib/menu';
 import { CHAT_RAIL_MIN, CTX_W, RAIL_W, currentWidthClass, type WidthClass } from './lib/layout';
 import { clearSelection, contextFor, currentSelection, onContext, pageKey, panelFor, setDefaultContext, setPage, setSidebarControl, sidebarsChanged } from './lib/context';
 import { flush, onWorkspace, openWindowMenu, setTray, shownLayout, showPage, trayOpen, windowMenu, change, currentLayout, savedLayouts } from './lib/workspace';
@@ -646,7 +647,7 @@ export class QseApp extends LightElement {
         <div class="body">
           ${this.renderNav(section, meta)}
           <div class="center">
-            ${MONITOR.includes(section) && this.fleet?.nodes.length && !this.setupMode
+            ${SCOPED.includes(section) && this.route.view !== 'setup' && this.route.path[0] !== 'place' && this.fleet?.nodes.length && !this.setupMode
               ? html`<qse-scope-bar class="scopebar" .nodes=${this.fleet.nodes} .deployments=${this.fleet.deployments} ?phone=${this.wclass === 'phone'} ?usage=${section === 'usage'}></qse-scope-bar>`
               : nothing}
             <main class="content ${this.entering ? 'is-entering' : ''}" id="main">
@@ -805,9 +806,13 @@ export class QseApp extends LightElement {
         return html`<qse-backends .params=${this.route.params}></qse-backends>`;
       case 'system':
         return html`<qse-system></qse-system>`;
-      case 'setup':
+      case 'setup': {
+        // VIS-252: ?node= is the guide of one of the fleet's Sparks, through the controller; another
+        // Spark is another element (its own saved progress, its own relay)
+        const node = this.route.params.get('node');
         void loadSetup();
-        return html`<qse-setup .path=${this.route.path}></qse-setup>`;
+        return html`${keyed(node ?? '', html`<qse-setup .path=${this.route.path} .node=${node}></qse-setup>`)}`;
+      }
       default:
         void loadFleetPages();
         return html`<qse-fleet-page .view=${this.route.view} .path=${this.route.path} .summary=${this.summary}></qse-fleet-page>`;

@@ -1,5 +1,5 @@
 // The fleet API of TandemApp's controller (docs/contract/fleet-v1, SRV-723, SRV-725, SRV-727,
-// SRV-729, SRV-731, VIS-246, VIS-248, VIS-250): the Sparks, the links between them, the deployments,
+// SRV-729, SRV-731, VIS-246, VIS-248, VIS-250, VIS-252): the Sparks, the links between them, the deployments,
 // per-node metric series, each node's newest sample, the controller's host, memory, events, alerts,
 // rules, the node actions, the saved window layouts, discovery and the Add Spark wizard's session;
 // SRV-731: the deployment records and their actions, the placement planner and the weights across
@@ -462,6 +462,22 @@ export interface WeightsPlan {
   impact: string[];
   keeps: string[];
   bytes: number | null;
+  confirm: string | null;
+  expires_at: number | null;
+}
+
+/** VIS-252: GET /v1/fleet/nodes/{id}/setup-confirm/{route}: what a write of that node's Setup Guide
+ *  does there, whether it may, and the confirm its POST through the relay sends as ?confirm= */
+export type SetupWrite = 'apply' | 'remove' | 'reset' | 'assistant/load' | `jobs/${string}/retry`;
+export interface SetupConfirm {
+  contract_version: string;
+  node: string;
+  route: string;
+  title: string;
+  allowed: boolean;
+  blocked: string | null;
+  impact: string[];
+  keeps: string[];
   confirm: string | null;
   expires_at: number | null;
 }
@@ -1118,6 +1134,15 @@ export const fleet = {
       `/v1/fleet/weights/${encodeURIComponent(node)}/${encodeURIComponent(profile)}?confirm=${encodeURIComponent(confirm)}`,
       { method: 'DELETE' },
     ),
+  // VIS-252: a node's Setup Guide is /v1/fleet/nodes/{id}/setup/* (setup/api.ts); a write's plan first
+  setupConfirm: (node: string, route: SetupWrite, p: { model?: string; profile?: string; profiles?: string[]; level?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (p.model) q.set('model', p.model);
+    if (p.profile) q.set('profile', p.profile);
+    if (p.profiles?.length) q.set('profiles', p.profiles.join(','));
+    if (p.level != null) q.set('level', String(p.level));
+    return request<SetupConfirm>(`/v1/fleet/nodes/${encodeURIComponent(node)}/setup-confirm/${route}${q.size ? `?${q}` : ''}`);
+  },
   metrics: (p: { source: string; metric: MetricKey; range: Range }) => {
     const q = new URLSearchParams({ source: p.source, metric: p.metric, range: p.range });
     return request<MetricSeries>(`/v1/fleet/metrics?${q}`);

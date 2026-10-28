@@ -9,7 +9,7 @@ import type { SetupInstalledWeights } from '../api/types';
 import { describeError } from '../api/client';
 import { LightElement } from '../ui/base';
 import { icon } from '../ui/bits';
-import { setupApi } from './api';
+import { isCancelled, setupApi } from './api';
 import { S } from './strings';
 
 type Row = SetupInstalledWeights['weights'][number];
@@ -67,7 +67,7 @@ export class QseInstalledWeights extends LightElement {
       this.dispatchEvent(new CustomEvent('weights-removed', { detail: res, bubbles: true }));
       await this.load();
     } catch (e) {
-      this.error = describeError(e).message;
+      if (!isCancelled(e)) this.error = describeError(e).message;
     } finally {
       this.busy = false;
     }

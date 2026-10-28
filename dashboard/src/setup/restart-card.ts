@@ -8,6 +8,7 @@
 import { html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { apiBase } from '../api/client';
+import { setupBase, setupNode } from './api';
 import type { SetupJob } from '../api/types';
 import { cardModel, fetchStatus, type SetupStatus, statusUrls } from '../lib/restart';
 import { LightElement } from '../ui/base';
@@ -44,7 +45,8 @@ export class QseRestartCard extends LightElement {
     if (this.polling) return;
     this.polling = true;
     try {
-      const st = await fetchStatus(statusUrls(apiBase()));
+      // VIS-252: another node's status comes through the controller only (its engine or its responder)
+      const st = await fetchStatus(setupNode() ? [`${apiBase()}${setupBase()}/status`] : statusUrls(apiBase()));
       this.st = st;
       this.asked = true;
       if (st?.engine?.state === 'up') this.dispatchEvent(new CustomEvent('engine-up', { bubbles: true }));

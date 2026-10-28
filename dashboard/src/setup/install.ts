@@ -15,7 +15,7 @@ import { icon } from '../ui/bits';
 import { apiBase } from '../api/client';
 import { rememberJob, rememberStatusPort, restarting } from '../lib/restart';
 import './restart-card';
-import { setupApi, setupUnauthorized } from './api';
+import { isCancelled, setupApi, setupBase, setupNode, setupUnauthorized } from './api';
 import { appendLog, applyJobEvent, changeText, copyText, dedupes, finishedLines, isFinal, type JobLog, needsJob, STALE_MS, streamAction, streamFinished } from './job-view';
 import { S } from './strings';
 import { shortTokens } from './window';
@@ -91,10 +91,12 @@ export class QseInstallProgress extends LightElement {
     if (!this.job && Date.now() - this.connectedAt > STALE_MS) this.stale = true;
     if ((this.awaySince != null || !this.job || this.lost) && Date.now() - this.healthAt >= 3000) {
       this.healthAt = Date.now();
-      void fetch(apiBase() + '/health', { cache: 'no-store', credentials: 'same-origin' })
+      // VIS-252: another node's engine is asked through the controller, by its guide's status
+      const node = !!setupNode();
+      void fetch(apiBase() + (node ? `${setupBase()}/status` : '/health'), { cache: 'no-store', credentials: 'same-origin' })
         .then(async (r) => {
           if (!r.ok) return;
-          rememberStatusPort(await r.json().catch(() => null));
+          if (!node) rememberStatusPort(await r.json().catch(() => null));
           void this.readJob(true);
         })
         .catch(() => undefined);
@@ -250,7 +252,7 @@ export class QseInstallProgress extends LightElement {
       const res = await setupApi.retry(j.id);
       this.dispatchEvent(new CustomEvent('job-retry', { detail: res.job, bubbles: true }));
     } catch (e) {
-      this.retryError = S.retryFailed((e as Error).message);
+      if (!isCancelled(e)) this.retryError = S.retryFailed((e as Error).message);
     } finally {
       this.retrying = false;
     }
@@ -375,8 +377,10 @@ export class QseInstallProgress extends LightElement {
   }
 }
 
-/** VIS-211: the page-wide state of a setup job (the app hides the new-version banner while one runs) */
+/** VIS-211: the page-wide state of a setup job (the app hides the new-version banner while one runs);
+ *  another node's job (VIS-252) restarts no engine of this server: the shell hears nothing of it */
 function publishActive(job: SetupJob | null): void {
+  if (setupNode()) return;
   rememberJob(job);
   window.dispatchEvent(new CustomEvent('qse-setup-job', { detail: { active: !!job && !isFinal(job), id: job?.id ?? null } }));
 }
