@@ -20,6 +20,9 @@ ledger. Its tables:
     add_sessions     the Add Spark wizard's sessions (VIS-246): one active at a time, its steps,
                      targets, checks and install progress as JSON; never a password or a key
                      (proxy/addspark.py)
+    fleet_jobs       the fleet's long jobs (OPS-234): a fleet update (proxy/fleetupdate.py) and a
+                     controller move (proxy/ctlmove.py), their steps per node and their log as
+                     JSON, so they resume or say where they stopped after a restart
     meta             schema_version, created_at
 
 Migrations are forward only and keyed on meta.schema_version, as the ledger's are.
@@ -171,6 +174,9 @@ CREATE TABLE IF NOT EXISTS layouts (
 CREATE TABLE IF NOT EXISTS add_sessions (
   id TEXT PRIMARY KEY, state TEXT NOT NULL, doc TEXT NOT NULL, created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS fleet_jobs (
+  id TEXT PRIMARY KEY, kind TEXT NOT NULL, state TEXT NOT NULL, doc TEXT NOT NULL,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 """
 
 
@@ -1224,6 +1230,26 @@ class ConfigDB:
                 "(?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET state = excluded.state, "
                 "doc = excluded.doc, updated_at = excluded.updated_at",
                 (doc["id"], doc["state"], json.dumps(doc), now, now))
+            self._conn.commit()
+
+    def job(self, kind: str, jid: str | None = None) -> dict | None:
+        """A fleet job by id, or the newest of its kind (OPS-234)."""
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT doc FROM fleet_jobs WHERE id = ?" if jid else
+                "SELECT doc FROM fleet_jobs WHERE kind = ? ORDER BY created_at DESC, rowid DESC "
+                "LIMIT 1", (jid,) if jid else (kind,)).fetchone()
+        return json.loads(r[0]) if r else None
+
+    def put_job(self, doc: dict) -> None:
+        """A job as it is now (its `id`, `kind`, `state`): the last write wins."""
+        now = _now_ms()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO fleet_jobs(id, kind, state, doc, created_at, updated_at) VALUES "
+                "(?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET state = excluded.state, "
+                "doc = excluded.doc, updated_at = excluded.updated_at",
+                (doc["id"], doc["kind"], doc["state"], json.dumps(doc), now, now))
             self._conn.commit()
 
     def audit(self, limit: int = 50) -> list[dict]:

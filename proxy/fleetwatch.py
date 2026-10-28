@@ -18,6 +18,9 @@ resolves once the value is `clear` back past the threshold for `clear_s`):
     host-sleep   the controller's machine may sleep (a Mac)   warn
     lease        a rented node's lease ends in < 24 h         warn  clears when it is extended
                  (VIS-246; a reminder, once per lease: the node's `lease_end` from Add Spark)
+    version-mismatch  the nodes run more than one release      warn  clears once they run one
+                 for 60 s (OPS-234; a local build label is its release's; held while a fleet
+                 update runs, which mixes them on purpose; one alert for the fleet, node `all`)
 
 `PATCH /v1/fleet/rules/{id}` sets `enabled`, `notify`, `threshold`, `for_s` and `scope` (all, or
 node:<id>); an edit is kept in the store and lies over the seeded rule. A rule turned off resolves
@@ -69,6 +72,8 @@ DEFAULTS = (
      ["app"], "host"),
     ("lease", "Lease ends", "lease_left", "<", 24.0, "h", 0, 0.0, 0, "warn", ["app", "system"],
      "all"),
+    ("version-mismatch", "One release on every node", "versions", None, None, None, 60, None, 0,
+     "warn", ["app"], "all"),
 )
 
 
@@ -113,6 +118,7 @@ class Rule:
                 "reachable": f"no answer{hold}",
                 "engine": f"health check fails{hold}",
                 "host_sleep": "sleep allowed",
+                "versions": f"nodes run different releases{hold}",
                 "lease_left": f"lease ends in < {t}"}[self.metric]
 
     def view(self) -> dict:
@@ -140,6 +146,24 @@ def _host_said(v, resolved=False):
     return ("The controller runs on a machine that can sleep",
             "If it sleeps, the API and every metric stop. Keep it awake or move the controller "
             "to a Spark.", {"label": "App settings", "route": "#/app"})
+
+
+def _release(v: str) -> str:
+    from proxy import _version
+    v = v.strip().split("+", 1)[0]
+    try:
+        return _version.pep440(v)
+    except ValueError:
+        return v
+
+
+def _mixed(nodes: list[dict]) -> dict[str, list[str]] | None:
+    """{release: [aliases]} when the answering nodes run more than one release, else None."""
+    got: dict[str, list[str]] = {}
+    for n in nodes:
+        if n.get("version") and n.get("status") != "off":
+            got.setdefault(_release(n["version"]), []).append(n["alias"])
+    return got if len(got) > 1 else None
 
 
 def default_rules() -> dict:
@@ -308,9 +332,10 @@ class Watch:
         self._engine_events(now, nodes)
         if readings.get("deployments") is not None:
             self._deployment_events(now, readings["deployments"])
-        self._evaluate(now, nodes, readings.get("host") or {})
+        self._evaluate(now, nodes, readings.get("host") or {}, readings)
 
-    def _evaluate(self, now: float, nodes: list[dict], host: dict) -> None:
+    def _evaluate(self, now: float, nodes: list[dict], host: dict,
+                  readings: dict | None = None) -> None:
         seen = set()
         for r in self._rules.values():
             if not r.enabled:
@@ -319,6 +344,22 @@ class Watch:
                 aid = "host-sleep:host"
                 seen.add(aid)
                 self._check(now, r, aid, "host", bool(host.get("may_sleep")), _host_said)
+                continue
+            if r.metric == "versions":
+                aid = "version-mismatch:all"
+                seen.add(aid)
+                mixed = _mixed(nodes)
+                v = None if (readings or {}).get("updating") else mixed is not None
+                target = (readings or {}).get("target")
+                self._check(now, r, aid, "all", v, lambda v, resolved=False, m=mixed, t=target: (
+                    "every node runs one release" if resolved else
+                    ("Mixed versions: " + " · ".join(f"{k} on {', '.join(a)}"
+                                                    for k, a in sorted(m.items())),
+                     "Replicas and Split members must run one release, and a node on another "
+                     "one is refused by Add Spark's Install. "
+                     + (f"This controller carries {t}: update the fleet." if t else
+                        "Update the fleet."),
+                     {"label": "Update fleet", "route": "#/sparks?update=1"})))
                 continue
             for n in nodes:
                 if not r.applies(n["id"]):

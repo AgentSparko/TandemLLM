@@ -447,6 +447,10 @@ class Handler(BaseHTTPRequestHandler):
                 parts[-1:] in (["connect"], ["check"], ["install"])) else "conductor_write"
         elif method == "GET" or (method == "PUT" and parts[:1] == ["layouts"]):
             route = "dashboard"
+        elif parts[:1] in (["update"], ["controller"]):
+            # OPS-234: the fleet update installs software on every node, a move hands every node
+            # to another controller: pairing's rights
+            route = "fleet_trust"
         elif (method == "POST" and parts[:1] == ["pair"]) or (method == "DELETE"
                                                               and parts[:1] == ["nodes"]) or \
                 (method == "POST" and len(parts) == 4 and parts[2] == "actions"
@@ -745,6 +749,14 @@ def build(args, env=None) -> Service:
     cfg = config_mod.ConfigDB(args.config_db, env=env,
                               use_keychain=not getattr(args, "no_keychain", False)).open()
     cfg.apply_env()
+    from proxy import ctlmove
+    try:
+        # a move put the fleet's export here (proxy/ctlmove.py): imported once, before anything
+        # reads the registry
+        ctlmove.import_at_start(cfg, os.path.dirname(cfg.path),
+                                log=lambda m: print(m, flush=True))
+    except ctlmove.MoveError as exc:
+        print(f"[fleet] the fleet's export was not imported: {exc.message}", flush=True)
     led = None
     if args.usage_ledger and args.usage_ledger != "off":
         ledger_mod.check_config(args.usage_ledger, args.usage_retention_days,
@@ -776,6 +788,7 @@ def build(args, env=None) -> Service:
         port=getattr(args, "port", None), bind=getattr(args, "host", "127.0.0.1"),
         log=lambda m: print(m, flush=True), agent=node_agent(env),
         store=fleet_store(args, cfg))
+    STATE["fleet"].local_node = env.get("TANDEM_LOCAL_NODE", "on") != "off"
     # the sampler: it sleeps while nothing is in flight (the live stream and the parallel view's
     # once-a-second sample; before 0.3.32 the standalone proxy never started it)
     live.start()

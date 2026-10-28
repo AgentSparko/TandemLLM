@@ -47,6 +47,12 @@ dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_wri
     *     /v1/fleet/add[/{id}[/...]]                the Add Spark wizard's session: its targets,
                                                     connect, check, install, link and names,
                                                     resumable (proxy/addspark.py, VIS-246)
+    *     /v1/fleet/update[/plan|/stop]             the fleet update: its plan (the order, the
+                                                    Splits refused), the job per node with its
+                                                    log, resumed after a restart
+                                                    (proxy/fleetupdate.py, OPS-234)
+    *     /v1/fleet/controller[/move|/handover|/take]   where the controller runs and moving it
+                                                    to a Spark or back (proxy/ctlmove.py, OPS-234)
 
 A FLEET OF ONE. The machine tandem-app runs on is a node when it is Spark-class (an NVIDIA GPU or an
 engine of its own, proxy/nodesource.py): at the first start it is registered with its hostname as
@@ -71,7 +77,14 @@ Pairing, release and take-over are routes of their own (the `fleet_trust` rule o
 the admin password, or this machine; with no password set, this machine only).
 
 THE DEPLOYMENTS. Each model an engine backend on a node serves itself is a Single deployment on that
-node; its id is the model's public id at this gateway, its status the backend's health.
+node; its id is the model's public id at this gateway, its status the backend's health. One model
+id served by engines on two or more nodes is one Replicas deployment over them (OPS-234: the
+gateway reaches the others through the route's fallbacks; serving while one drains, degraded
+while one is down). Step 6 (SRV-731) gives deployments their own records.
+
+A CONTROLLER THAT MOVED (proxy/ctlmove.py) says where to (`moved_to`) and reads no node any more,
+this machine's included. TANDEM_LOCAL_NODE=off (a controller a virtual node started) never makes
+this machine a node.
 
 METRICS. The sampler keeps each hardware figure of each node, and decode tok/s, requests and TTFT
 per engine backend, in the fleet store (proxy/fleetstore.py: 2 s slots for 15 minutes, 30 s for
@@ -113,6 +126,7 @@ import threading
 import time
 from urllib.parse import unquote, urlsplit
 
+from proxy import _version
 from proxy import config as config_mod
 from proxy import fleetops
 from proxy import fleetstore
@@ -287,6 +301,10 @@ class Fleet:
         self._wizard = None
         self._tunnels = None
         self._claimed_by = None                 # the agent told it is this fleet's own node
+        self.local_node = True                  # TANDEM_LOCAL_NODE=off: this machine is no node
+        self._moved: tuple | None = None        # (config generation, moved_to)
+        self._updater = None
+        self._mover = None
 
     def trust(self):
         """The controller's side of node trust (proxy/fleettrust.py), its certificate made at
@@ -316,6 +334,30 @@ class Fleet:
                 if self._wizard is None:
                     self._wizard = addspark.Wizard(self, clock=self.clock)
         return self._wizard
+
+    def updater(self):
+        """The fleet update (proxy/fleetupdate.py), made at the first call."""
+        if self._updater is None:
+            from proxy import fleetupdate
+            with self._reg:
+                if self._updater is None:
+                    self._updater = fleetupdate.Updater(self, clock=self.clock)
+        return self._updater
+
+    def mover(self):
+        """The controller's host and its moves (proxy/ctlmove.py), made at the first call."""
+        if self._mover is None:
+            from proxy import ctlmove
+            with self._reg:
+                if self._mover is None:
+                    self._mover = ctlmove.Mover(self, clock=self.clock)
+        return self._mover
+
+    def moved_to(self) -> dict | None:
+        g = self.cfg.generation
+        if self._moved is None or self._moved[0] != g:
+            self._moved = (g, self.cfg.setting("controller.moved_to"))
+        return self._moved[1]
 
     @property
     def tunnels(self):
@@ -351,6 +393,11 @@ class Fleet:
                              detail)
         self._thread = threading.Thread(target=self._run, name="fleet-sampler", daemon=True)
         self._thread.start()
+        if self.cfg.job("update") is not None:
+            try:
+                self.updater().resume()
+            except Exception as exc:                                 # noqa: BLE001
+                self.log(f"[fleet] the fleet update did not resume: {type(exc).__name__}: {exc}")
         return self
 
     def stop(self) -> None:
@@ -443,6 +490,7 @@ class Fleet:
             lease = row["lease_end_ms"]
             nodes.append({"id": row["id"], "alias": row["alias"], "status": status,
                           "status_text": text, "temp": temp, "engines": engines,
+                          "version": None if status == "off" else (src.version() or None),
                           "lease_left": None if lease is None else (lease / 1000 - now) / 3600,
                           "lease_end": None if lease is None else lease / 1000, **checks})
         deps = None
@@ -451,8 +499,10 @@ class Fleet:
             alias = {r["id"]: r["alias"] for r in self.cfg.nodes()}
             deps = [dict(d, on=" on " + ", ".join(alias.get(m, m) for m in d["members"]))
                     for d in self.deployments()]
+        updating = self._updater is not None and self._updater.running()
         return {"nodes": nodes, "host": {"may_sleep": self.may_sleep},
-                "deployments": deps}
+                "deployments": deps, "updating": updating,
+                "target": _version.release() or None}
 
     # ------------------------------------------------------------------ the registry
     def engine_backends(self, address: str | None = None, ports=None) -> list[dict]:
@@ -472,13 +522,16 @@ class Fleet:
         return out
 
     def _virtual_ports(self, row: dict, src) -> set | None:
-        """A node on this machine read through an agent of its own (a virtual node): the ports
-        of the engines its agent lists; None for a node elsewhere."""
+        """A node that shares its machine with another (a virtual node, OPS-197: on this machine,
+        or beside another node at one address elsewhere): the ports of the engines its agent
+        lists; None for a node alone on its machine."""
         addr = row["address"] or (src.address() if isinstance(src, nodesource.AgentNode) else "")
         if not isinstance(src, nodesource.AgentNode) or src is self.agent or \
-                row["id"] == self._local_id or not addr or \
-                not self.locality.is_local(f"http://[{addr}]/" if ":" in addr else
-                                           f"http://{addr}/"):
+                row["id"] == self._local_id or not addr:
+            return None
+        here = self.locality.is_local(f"http://[{addr}]/" if ":" in addr else f"http://{addr}/")
+        shared = any(n["id"] != row["id"] and n["address"] == addr for n in self.cfg.nodes())
+        if not here and not shared:
             return None
         return {e.get("port") for e in src.agent_engines()}
 
@@ -555,6 +608,9 @@ class Fleet:
         return out
 
     def _ensure_local(self) -> str | None:
+        if not self.local_node or self.moved_to():
+            self._local_id = None
+            return None
         ident = self.local.identity()
         row = self.cfg.node(ident["id"])
         if row is None:
@@ -702,7 +758,7 @@ class Fleet:
                             "pack": card["pack"], "type": "single", "members": [node],
                             "api_id": pub, "ctx": int(card["ctx"] or row["context_length"] or 0),
                             "status": st, "status_text": txt})
-        return out
+        return _replicas(out)
 
     def _engines(self) -> list[tuple[str, object]]:
         """(node id, engine probe) of every node with a source."""
@@ -770,14 +826,18 @@ class Fleet:
         row = self.cfg.node(self._local_id) if self._local_id else None
         return row["alias"] if row else (socket.gethostname().split(".")[0] or "this host")
 
+    def topology_host(self) -> dict:
+        """The controller's host as the topology shows it: its name, address and API URL."""
+        addr = self.local.address() if self.bind in ("0.0.0.0", "::", "") else self.bind
+        return {"name": self.host_name(), "address": addr,
+                "api_url": f"http://{addr}:{self.port}" if self.port else f"http://{addr}",
+                "may_sleep": self.may_sleep}
+
     def topology(self, now: float) -> dict:
         nodes = self.nodes(now)
         infra, links = self.links_infra()
-        addr = self.local.address() if self.bind in ("0.0.0.0", "::", "") else self.bind
         return {"contract_version": CONTRACT,
-                "host": {"name": self.host_name(), "address": addr,
-                         "api_url": f"http://{addr}:{self.port}" if self.port else f"http://{addr}",
-                         "may_sleep": self.may_sleep},
+                "host": self.topology_host(),
                 "infra": infra, "nodes": nodes, "links": links,
                 "groups": [{"deployment": d["id"], "type": d["type"], "members": d["members"]}
                            for d in self.deployments()]}
@@ -1057,6 +1117,18 @@ class Fleet:
                 return self.wizard().handle(method, parts, q, body, who)
             except addspark.AddError as exc:
                 raise FleetError(exc.status, exc.message, exc.kind)
+        if parts[:1] == ["update"]:
+            from proxy import fleetupdate
+            try:
+                return self.updater().handle(method, parts, q, body, who, now)
+            except fleetupdate.UpdateError as exc:
+                raise FleetError(exc.status, exc.message, exc.kind)
+        if parts[:1] == ["controller"]:
+            from proxy import ctlmove
+            try:
+                return self.mover().handle(method, parts, q, body, who, now)
+            except ctlmove.MoveError as exc:
+                raise FleetError(exc.status, exc.message, exc.kind)
         if method == "GET" and len(parts) == 1:
             name = parts[0]
             if name == "nodes":
@@ -1130,6 +1202,35 @@ class Fleet:
             self.cfg.set_layout(doc)
             return doc
         raise FleetError(404, f"no route {method} /v1/fleet/{'/'.join(parts)}")
+
+
+def _replicas(deps: list[dict]) -> list[dict]:
+    """One model id on engines of two or more nodes: one Replicas deployment over them, serving
+    while any member serves (degraded with one down), in the order the first member came."""
+    out: list[dict] = []
+    by: dict[str, dict] = {}
+    for d in deps:
+        got = by.get(d["id"])
+        if got is None:
+            by[d["id"]] = d
+            out.append(d)
+            continue
+        if any(m in got["members"] for m in d["members"]):
+            continue                              # the same model twice on one node
+        got.setdefault("_each", [dict(got)])
+        got["_each"].append(d)
+        got["members"] = got["members"] + d["members"]
+        got["type"] = "replicas"
+    for d in out:
+        each = d.pop("_each", None)
+        if not each:
+            continue
+        up = [x for x in each if x["status"] == "serving"]
+        bad = [x for x in each if x["status"] == "down"]
+        d["status"] = "serving" if up and not bad else "degraded" if up else \
+            ("down" if bad and len(bad) == len(each) else "starting")
+        d["status_text"] = f"{len(up)} of {len(each)} members serving"
+    return out
 
 
 def pairing_view(row: dict) -> dict:
