@@ -196,13 +196,13 @@ export function alertCard(a: FleetAlert, o: AlertCardOpts): TemplateResult {
   </div>`;
 }
 
-/** The controller's sign-in, for its writes. */
-export function signInCard(what: string): TemplateResult {
-  return html`<qse-setup-signin
+/** The controller's sign-in, for its writes: open when something waits for it, else one line. */
+export function signInCard(what: string, open = true): TemplateResult {
+  return html`<details class="mon-signin-box" ?open=${open}><summary class="small warn-ink">⚠ ${what} need TandemApp’s admin password: sign in</summary><qse-setup-signin
     class="mon-signin"
     .signIn=${(p: string) => fleet.signIn(p)}
     .texts=${{ title: 'Sign in to TandemApp’s controller', body: `${what} need TandemApp’s admin password: the TANDEM_ADMIN_TOKEN its controller runs with. Reading needs none.`, kept: 'The session lasts 12 hours in this browser.' }}
-  ></qse-setup-signin>`;
+  ></qse-setup-signin></details>`;
 }
 
 // ---- the node inspector --------------------------------------------------------------------------

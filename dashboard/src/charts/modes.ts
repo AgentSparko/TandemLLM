@@ -136,7 +136,8 @@ export interface ChartModel {
   cap: { v: number; perNode: boolean } | null;
 }
 
-/** Everything <qse-fleet-chart> draws for one mode. `max` is a fixed axis top (percentages). */
+/** Everything <qse-fleet-chart> draws for one mode. `max` is a fixed axis top (percentages); a chart of
+ *  zeros (an idle box) gets an axis to 1, not one of rounding noise. */
 export function chartModel(i: { series: NodeSeries[]; agg: Agg; mode: ChartMode; cap?: number | null; max?: number | null }): ChartModel {
   const mode = effectiveMode(i.mode, i.agg, i.series.length);
   const vals = i.series.map((s) => s.values);
@@ -151,7 +152,7 @@ export function chartModel(i: { series: NodeSeries[]; agg: Agg; mode: ChartMode;
   if (cap) peak = Math.max(peak, cap.v * 1.04);
   // a fixed top holds wherever the drawn values are per node, or not a sum
   const fixed = i.max != null && (mode === 'lines' || mode === 'split' || mode === 'table' || i.agg !== 'sum');
-  return { mode, count: Math.max(0, ...vals.map((v) => v.length)), total, mean, layers, top: fixed ? (i.max as number) : niceMax(Math.max(peak * 1.06, 1e-9)), cap };
+  return { mode, count: Math.max(0, ...vals.map((v) => v.length)), total, mean, layers, top: fixed ? (i.max as number) : niceMax(peak > 0 ? peak * 1.06 : 1), cap };
 }
 
 /** The line under the legend that says what the chart shows. */

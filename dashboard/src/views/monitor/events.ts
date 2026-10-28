@@ -296,7 +296,7 @@ export class QseEvents extends MonitorPage {
     if (!f) return html`${head}<div class="skeleton" style="height:200px"></div>`;
     const writes = activeAlerts(f).length > 0 || this.rules.length > 0;
     return html`${head}
-      ${needsSignIn() && writes ? signInCard('Acknowledging alerts and editing rules') : nothing}
+      ${needsSignIn() && writes ? signInCard('Acknowledging alerts and editing rules', activeAlerts(f).length > 0) : nothing}
       <section class="mon-sec" data-panel="alerts"><div class="mon-sec-h"><span class="eyebrow">Active alerts</span></div>${this.alertsSection()}</section>
       <div class="g-wide">${this.timeline()}<div class="mon-col">${this.rulesPanel()}${this.notifyPanel()}</div></div>`;
   }

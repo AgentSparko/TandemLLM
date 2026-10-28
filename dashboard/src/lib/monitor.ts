@@ -161,12 +161,14 @@ export function exposes(metric: MetricKey, s: NodeSample | null | undefined): bo
 }
 
 /** Why a node's series has no line: the board does not expose it, the controller runs on the node
- *  (no RTT to time), no ConnectX port, or no sample in the range yet. */
-export function absentWhy(metric: MetricKey, n: FleetNode, s: NodeSample | null | undefined, hostNode: string | null): string {
+ *  (no RTT to time), no ConnectX port, or no sample in the range yet. Without a sample to ask, a
+ *  metric the node gave nothing of while its other figures came (`others`) is one it does not give. */
+export function absentWhy(metric: MetricKey, n: FleetNode, s: NodeSample | null | undefined, hostNode: string | null, others = false): string {
   if (metric === 'rtt' && hostNode === n.id) return 'the controller runs on this Spark: no network between them to time';
   if (metric === 'fabric' && !s?.net?.fabric?.length && n.inventory.cx7 == null) return `no ConnectX port: ${NOT_EXPOSED}`;
   if (metric === 'fabric' && s?.net?.fabric?.length && !s.net.fabric.some((p) => p.state === 'up')) return 'ConnectX ports without a cable';
   if (exposes(metric, s) === false) return NOT_EXPOSED;
+  if (!s && others && !['tps', 'req', 'ttft', 'rtt'].includes(metric)) return NOT_EXPOSED;
   return 'no samples in this range yet';
 }
 

@@ -706,7 +706,19 @@ qse-fleet-page .ok-ink,
 .mon-signin .signin-input {
   width: 100%;
   min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--bg-inset);
+  color: var(--ink);
   font-size: 16px;
+}
+.mon-signin-box > summary {
+  cursor: pointer;
+  padding: 4px 0;
+}
+.mon-signin-box[open] > summary {
+  margin-bottom: 8px;
 }
 .mon-signin .signin-foot {
   display: flex;

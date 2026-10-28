@@ -24,6 +24,8 @@ import { MonitorPage } from './base';
 import { fmt, inspector, memBar, memLegend, span, typeBadge } from './bits';
 import { chartEvents, fromFleet } from './data';
 
+const SAMPLES_ABSENT = 'This controller does not give a Spark’s newest sample yet (per core, mounts and NVMe, interfaces, fabric ports, zones and fans); a newer TandemApp does (GET /v1/fleet/nodes/{id}/sample).';
+
 @customElement('qse-hardware')
 export class QseHardware extends MonitorPage {
   protected readonly view: View = 'hardware';
@@ -108,6 +110,11 @@ export class QseHardware extends MonitorPage {
     const x = this.samples[id];
     return x && x !== 'absent' ? x.sample : null;
   }
+  /** why a Spark's series is empty: the newest sample says, else what its other figures say */
+  private why(metric: MetricKey, n: FleetNode): string {
+    const others = (['power', 'temp', 'mem', 'cpu'] as MetricKey[]).some((k) => this.series[k]?.series.some((x) => x.node === n.id && x.values.some((v) => v != null)));
+    return absentWhy(metric, n, this.sample(n.id), this.hostNode(), others);
+  }
   private hostNode(): string | null {
     return this.host && this.host !== 'absent' ? this.host.node : null;
   }
@@ -137,7 +144,8 @@ export class QseHardware extends MonitorPage {
     const rows = nodes.map((n) => {
       const s = this.sample(n.id);
       const x = this.samples[n.id];
-      if (!s) return row(n, html`<span class="muted small">${x === 'absent' ? 'this controller does not give samples yet' : x?.note ?? 'no sample'}</span>`);
+      if (x === 'absent') return nothing;
+      if (!s) return row(n, html`<span class="muted small">${x?.note ?? 'no sample'}</span>`);
       switch (kind) {
         case 'gpu': {
           const g = s.gpus ?? [];
@@ -199,7 +207,7 @@ export class QseHardware extends MonitorPage {
           const fans = s?.board?.fans ?? [];
           return html`<div class="hw-x-row">${one ? nothing : nodeChip(n, { status: false })}<div class="hw-x-body small">
             ${!s
-              ? html`<span class="muted">${(this.samples[n.id] as FleetSample | undefined)?.note ?? 'no sample'}</span>`
+              ? html`<span class="muted">${this.samples[n.id] === 'absent' ? SAMPLES_ABSENT : ((this.samples[n.id] as FleetSample | undefined)?.note ?? 'no sample')}</span>`
               : html`<span class="hw-pill num">${z.length ? `${z.length} zones · hottest ${fmt(Math.max(...z.map((x) => x.temp_c)), 1)} °C` : `thermal zones ${NOT_EXPOSED}`}</span>
                   <span class="hw-pill num">${fans.length ? fans.map((f) => `${f.name.split('/').pop()} ${fmt(f.rpm)} rpm`).join(' · ') : html`<span class="muted">fan ${NOT_EXPOSED}</span>`}</span>
                   <span class="hw-pill num">up ${s.board?.uptime_s != null ? span(s.board.uptime_s) : '—'}</span>
@@ -225,10 +233,10 @@ export class QseHardware extends MonitorPage {
             <div class="hw-cells" role="list">
               ${nodes.map((n) => {
                 const v = m ? lastValue(m.series.find((x) => x.node === n.id)?.values ?? []) : null;
-                return html`<button type="button" role="listitem" class="hw-cell" data-node=${n.id} title=${`${n.alias}: open its sheet at ${g.title}`} @click=${() => this.toSheet(n.id, g.id)}>${nodeChip(n, { status: false })}<b class="num">${v == null ? '—' : fmt(v, info.decimals)}</b><span class="muted xs">${v == null ? absentWhy(g.metric, n, this.sample(n.id), this.hostNode()) : info.unit}</span></button>`;
+                return html`<button type="button" role="listitem" class="hw-cell" data-node=${n.id} title=${`${n.alias}: open its sheet at ${g.title}`} @click=${() => this.toSheet(n.id, g.id)}>${nodeChip(n, { status: false })}<b class="num">${v == null ? '—' : fmt(v, info.decimals)}</b><span class="muted xs">${v == null ? this.why(g.metric, n) : info.unit}</span></button>`;
               })}
             </div>
-            ${absent ? html`<p class="hw-absent small muted">${nodes.length === 1 ? absentWhy(g.metric, nodes[0], this.sample(nodes[0].id), this.hostNode()) : `No Spark in scope gives this: ${absentWhy(g.metric, nodes[0], this.sample(nodes[0].id), this.hostNode())}`}.</p>` : this.chart(g.id, m, g.mode, 180)}
+            ${absent ? html`<p class="hw-absent small muted">${nodes.length === 1 ? this.why(g.metric, nodes[0]) : `No Spark in scope gives this: ${this.why(g.metric, nodes[0])}`}.</p>` : this.chart(g.id, m, g.mode, 180)}
             ${g.extra ? this.extra(g.extra, nodes, false) : nothing}
           </section>`;
         })}
@@ -289,7 +297,7 @@ export class QseHardware extends MonitorPage {
           const extra = g?.extra;
           return html`<section class="panel hw-group" id=${`hw-${g?.id ?? k}`} data-group=${g?.id ?? k}>
             <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">${g?.title ?? info.label}</h2><p class="panel-sub">${info.unit}${m ? ` · now ${fmt(lastValue(m.series[0]?.values ?? []), info.decimals)}` : ''}</p></div></header>
-            ${absent ? html`<p class="hw-absent small muted">${absentWhy(k, n, s, this.hostNode())}.</p>` : this.chart(`n-${k}`, m, 'lines', 150)}
+            ${absent ? html`<p class="hw-absent small muted">${this.why(k, n)}.</p>` : this.chart(`n-${k}`, m, 'lines', 150)}
             ${extra ? this.extra(extra, [n], true) : nothing}
           </section>`;
         })}

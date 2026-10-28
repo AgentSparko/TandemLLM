@@ -125,3 +125,11 @@ describe('the chosen mode per chart', () => {
     expect(savedMode('dev-5')).toBe('lines');
   });
 });
+
+describe('an idle chart', () => {
+  it('a chart of zeros (an idle box) gets an axis to 1, not one of rounding noise', () => {
+    const m = chartModel({ series: [{ id: 'a', alias: 'A', colour: 1, values: [0, 0, null, 0] }], agg: 'sum', mode: 'lines' });
+    expect(m.top).toBe(1);
+    expect(chartModel({ series: [{ id: 'a', alias: 'A', colour: 1, values: [0.04, 0.02] }], agg: 'sum', mode: 'lines' }).top).toBeLessThan(0.1);
+  });
+});

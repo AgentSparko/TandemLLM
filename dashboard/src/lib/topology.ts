@@ -121,14 +121,16 @@ export function topoLayout(t: FleetTopology): TLayout {
   if (far.length) cols.push({ key: 'far', w: NODE_W - 10 });
   if (swI) cols.push({ key: 'sw', w: SW_W });
   const used = cols.reduce((a, c) => a + c.w, 0);
-  const gap = Math.max(36, (TOPO_W - used) / (cols.length + 1));
+  // two columns (a fleet of one) take a narrower drawing, so the page shows it larger
+  const target = cols.length <= 2 ? 720 : TOPO_W;
+  const gap = Math.max(36, (target - used) / (cols.length + 1));
   const x: Record<string, number> = {};
   let at = gap;
   for (const c of cols) {
     x[c.key] = at + c.w / 2;
     at += c.w + gap;
   }
-  const W = Math.max(TOPO_W, at);
+  const W = Math.max(target, at);
   const boxes: TBox[] = [];
   const nodeW = (key: string) => cols.find((c) => c.key === key)!.w;
 

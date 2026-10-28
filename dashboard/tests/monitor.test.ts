@@ -255,6 +255,9 @@ describe('Hardware: every metric, and what a board does not expose', () => {
     // ports present but no cable, and a node without a sample yet
     expect(absentWhy('fabric', spark({ inventory: { cx7: 'not cabled' } as never }), { net: { fabric: [{ iface: 'enp1', state: 'down' }] } }, null)).toBe('ConnectX ports without a cable');
     expect(absentWhy('gpu', spark(), null, null)).toBe('no samples in this range yet');
+    // an older controller without the sample route: a figure the Spark never gave while its others came
+    expect(absentWhy('memclk', spark(), null, null, true)).toBe(NOT_EXPOSED);
+    expect(absentWhy('ttft', spark(), null, null, true)).toBe('no samples in this range yet');
   });
 
   it('the mock’s samples: Desk has no fan and no cabled fabric, the rented have both, no board a power cap', () => {
