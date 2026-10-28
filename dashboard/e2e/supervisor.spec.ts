@@ -4,7 +4,7 @@
 // two actions and one with a shadow decision; `POST /__mock/conductor {fixture: "night140"}` adds
 // a 140-turn session). Every test collects the console: an error fails it.
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { IS_MOCK, login, noHorizontalOverflow, setMode } from './helpers';
+import { consoleErrors, IS_MOCK, login, noHorizontalOverflow, setMode } from './helpers';
 
 const RUN = 'chatcmpl-9f3d1e0c8b7a6f5e4d3c';
 const TWO = 'chatcmpl-2b7e44c1d0a9f8e7d6c5';
@@ -16,15 +16,6 @@ async function mockLive(request: APIRequestContext, data: Record<string, unknown
   return res.json();
 }
 
-/** Console errors and page errors while the test runs. */
-function consoleErrors(page: Page): string[] {
-  const out: string[] = [];
-  page.on('console', (m) => {
-    if (m.type() === 'error') out.push(m.text());
-  });
-  page.on('pageerror', (e) => out.push(String(e)));
-  return out;
-}
 
 /** The row or the card of a request, whichever this viewport shows. */
 const rowOf = (page: Page, rid: string) => page.locator(`.live [data-id="${rid}"]:visible`);

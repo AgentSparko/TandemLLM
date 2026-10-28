@@ -122,7 +122,7 @@ test.describe('live activity', () => {
     const row = live.locator(isPhone(page) ? '.live-card' : '.live-row').first();
     await expect(row.locator('.flag-bad')).toContainText(/client disconnected( [\d.]+ s ago)?$/, { timeout: 8000 });
     await expect(row.locator('.flag-bad .flag-glyph')).toHaveText('✗');
-    await expect(row.locator('.flag-bad')).toHaveCSS('color', /rgb\(230, 103, 103\)|rgb\(201, 60, 60\)/); // --err, dark / light
+    await expect(row.locator('.flag-bad')).toHaveCSS('color', /rgb\(239, 107, 107\)|rgb\(201, 60, 60\)/); // --err, dark (#ef6b6b since the v3 tokens) / light
     await expect(live.locator('.now-warning')).toContainText('client disconnected');
     await expect(live.locator('.now-headline')).toHaveText('Idle', { timeout: 12_000 });
     const rec = live.locator('.recent-row').first();
@@ -162,7 +162,8 @@ test.describe('live activity', () => {
     if (!isPhone(page)) await expect(rows.nth(2).locator('.tools')).toHaveText('write_file, bash');
     // a stop opens the Dev tab's request detail
     await rows.nth(0).locator('.recent-open').click();
-    await expect(page).toHaveURL(/#\/dev\?request=chatcmpl-/);
+    // the newest stop is a chat or a completion, whichever the mock ended last
+    await expect(page).toHaveURL(/#\/dev\?request=(chat)?cmpl-/);
     await expect(page.locator('.view-dev, qse-dev').first()).toBeVisible();
   });
 

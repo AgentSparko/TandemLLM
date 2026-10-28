@@ -44,7 +44,7 @@ test('Reload after the job finished: ten reloads show the final state and the wh
   // collapsed on success, with its count; it opens to the first and the last line
   const box = page.locator('.inst-logbox');
   await expect(box).not.toHaveAttribute('open', '');
-  await box.locator('summary').click();
+  await box.locator(':scope > summary').click();
   await expect(page.locator('.inst-log')).toContainText('[setup] selection valid');
   await expect(page.locator('.inst-log')).toContainText('[smoke] chat request 200');
   await noHorizontalOverflow(page);
@@ -52,6 +52,8 @@ test('Reload after the job finished: ten reloads show the final state and the wh
 
 test('The job page lists the changes under the check step', async ({ page }) => {
   await install(page);
+  // VIS-211: a finished job's steps fold under its log, the check step's changes with them
+  await page.locator('.inst-logbox > summary').click();
   const list = page.locator('.inst-step[data-step="check"] [data-job-changes]');
   await expect(list).toBeVisible();
   const n = await list.locator('li').count();
@@ -80,7 +82,9 @@ test('A component fails after the restart: installed, with a warning naming the 
     const w = page.locator('[data-job-warnings] li.is-warn');
     await expect(w).toHaveCount(1);
     await expect(w).toContainText('Shadow reader did not load (FileNotFoundError');
-    await expect(page.locator('.inst-head .inst-sub').first()).toHaveText('exl3-6.0 is live on port 8000.');
+    // VIS-211: the finished screen names the model and its weights
+    await expect(page.locator('[data-job-finished] .inst-done-title')).toContainText('is ready');
+    await expect(page.locator('[data-job-finished] .inst-done-facts')).toContainText('Weights:');
     if (i === 0) await page.reload();
   }
   await noHorizontalOverflow(page);

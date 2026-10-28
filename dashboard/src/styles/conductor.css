@@ -214,6 +214,13 @@ qse-cond-compare {
 .badge-lock {
   border-color: var(--ink-3);
 }
+/* a field's lock names its variable (TANDEM_BACKEND_DEEPSEEK_WRITER_USD_DAY): it wraps inside the
+   field instead of widening a phone's page past its width */
+.bk-field .badge-lock {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 /* the decision feed */
 .feed {

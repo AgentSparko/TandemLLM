@@ -322,7 +322,7 @@ export class QseInstallProgress extends LightElement {
         ${this.finished(j)}
         <details class="inst-logbox">
           <summary>${S.logTail} <span class="muted small num" data-log-count>${this.log.lines.length + this.log.dropped}</span></summary>
-          <ol class="inst-steps">${j.steps.map((st) => html`<li class="inst-step is-${st.state}" data-step=${st.id}><span class="inst-icon">${this.stepIcon(st)}</span><span class="inst-label">${st.label}</span><span class="inst-state muted small">${S.stepState[st.state]}</span></li>`)}</ol>
+          <ol class="inst-steps">${j.steps.map((st) => html`<li class="inst-step is-${st.state}" data-step=${st.id}><span class="inst-icon">${this.stepIcon(st)}</span><span class="inst-label">${st.label}</span><span class="inst-state muted small">${S.stepState[st.state]}</span>${st.id === 'check' && j.changes?.length ? this.changeList(j) : nothing}</li>`)}</ol>
           <pre class="inst-log" tabindex="0">${this.log.lines.map((l) => l.line).join('\n')}</pre>
         </details>
       </div>`;

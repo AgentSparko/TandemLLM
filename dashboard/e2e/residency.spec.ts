@@ -4,15 +4,9 @@
 // engine's memory limits in the same panel -- the ceiling and peak lines, every limit with what it
 // holds now, edits that apply at the next request or say they need a restart, MAX_LEN locked, and
 // the planner counting the engine's growth to its peak (the mock: 37.9 GiB free, 70 of 77 GiB).
-import { expect, test, type Page } from '@playwright/test';
-import { IS_MOCK, login, noHorizontalOverflow, setMode } from './helpers';
+import { expect, test } from '@playwright/test';
+import { consoleErrors, IS_MOCK, login, noHorizontalOverflow, setMode } from './helpers';
 
-function consoleErrors(page: Page): string[] {
-  const out: string[] = [];
-  page.on('console', (m) => m.type() === 'error' && out.push(m.text()));
-  page.on('pageerror', (e) => out.push(String(e)));
-  return out;
-}
 
 test.describe('the memory plan @mock', () => {
   test.skip(!IS_MOCK, 'needs the mock conductor');
@@ -33,10 +27,12 @@ test.describe('the memory plan @mock', () => {
     await expect(card.locator('[data-residency]')).toContainText('37.9 GiB');
     await expect(card.locator('[data-engine-growth]')).toContainText('7.0 GiB');
     await expect(card.locator('[data-residency]')).toContainText('15.0 GiB + 6.0 GiB');
-    await expect(card.locator('[data-residency-role="decider"]')).toContainText('8.2 GiB');
-    // OPS-47: 37.9 - 7 (the engine's growth to its peak) - 8.2
-    await expect(card.locator('[data-residency-role="decider"]')).toContainText('fits, 22.7 GiB left');
-    await expect(card.locator('[data-residency-role="reader"]')).toContainText('refused: it would break the floor');
+    // SRV-534: Laya's checkpoints in the engine's process claim 3.0 GiB (the arbiter sidecar took 8.2)
+    await expect(card.locator('[data-residency-role="decider"]')).toContainText('3.0 GiB');
+    // OPS-47: 37.9 - 7 (the engine's growth to its peak) - 3.0
+    await expect(card.locator('[data-residency-role="decider"]')).toContainText('fits, 27.9 GiB left');
+    // SRV-534: a role the roles document switches off claims nothing: the reader (off) has no row
+    await expect(card.locator('[data-residency-role="reader"]')).toHaveCount(0);
     await expect(card.locator('[data-last-refusal]')).toContainText('reader');
     await expect(card.locator('[data-load-stages]')).toHaveCount(1);
     expect(errors).toEqual([]);
@@ -45,7 +41,7 @@ test.describe('the memory plan @mock', () => {
   test('at 18 GiB nothing fits: the decider is refused at the floor', async ({ page, request }) => {
     await request.post('/__mock/conductor', { data: { residencyMem: 18 } });
     await login(page, '#/system');
-    await expect(page.locator('[data-residency-role="decider"]')).toContainText('refused: it would break the floor (2.8 GiB left, 21.0 GiB needed)', { timeout: 10_000 });
+    await expect(page.locator('[data-residency-role="decider"]')).toContainText('refused: it would break the floor (8.0 GiB left, 21.0 GiB needed)', { timeout: 10_000 });
   });
 
   test('the limits are edited in the Conductor view and the plan follows', async ({ page }) => {
@@ -53,15 +49,15 @@ test.describe('the memory plan @mock', () => {
     const errors = consoleErrors(page);
     const sec = page.locator('[data-sec="residency"]');
     await sec.locator('summary').click();
-    await sec.locator('input[data-res="floor_gib"]').fill('20');
-    await expect(sec.locator('[data-claim="decider"] input[data-claim-gib="decider"]')).toHaveValue('8.2');
-    await sec.getByLabel('change note').fill('floor 20 for a test');
+    await sec.locator('input[data-res="floor_gib"]').fill('25');
+    await expect(sec.locator('[data-claim="decider"] input[data-claim-gib="decider"]')).toHaveValue('3');
+    await sec.getByLabel('change note').fill('floor 25 for a test');
     await expect(sec.locator('[data-save]')).toBeEnabled({ timeout: 5000 });
     await sec.locator('[data-save]').click();
     await expect(sec.locator('[data-savebar] .status.num')).toContainText('live v1', { timeout: 8000 });
     await page.goto('./#/system');
-    // 37.9 - 7 - 8.2 = 22.7 is under 20 + 6
-    await expect(page.locator('[data-residency-role="decider"]')).toContainText('refused: it would break the floor (22.7 GiB left, 26.0 GiB needed)', { timeout: 10_000 });
+    // 37.9 - 7 - 3.0 = 27.9 is under 25 + 6
+    await expect(page.locator('[data-residency-role="decider"]')).toContainText('refused: it would break the floor (27.9 GiB left, 31.0 GiB needed)', { timeout: 10_000 });
     expect(errors).toEqual([]);
   });
 

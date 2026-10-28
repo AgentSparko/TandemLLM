@@ -191,6 +191,9 @@ test('a paid cloud model: auto is off, and the spend cap the environment sets is
   await expect(cap.locator('input[type="number"]')).toBeDisabled();
   await expect(cap.locator('input[type="number"]')).toHaveValue('0.1');
   await expect(page.locator('[data-field="harness.writer"] .hint')).toContainText('off for a paid model');
+  // the lock names a long variable: it wraps, the page keeps the phone's width (a wider page moved
+  // the bottom bar over Save)
+  expect(await noHorizontalOverflow(page)).toBe(true);
   // another field still saves: the locked one is not sent
   await page.locator('[data-field="harness.writer"] select').selectOption('on');
   await page.getByRole('button', { name: 'Save', exact: true }).click();

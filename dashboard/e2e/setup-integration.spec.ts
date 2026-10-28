@@ -63,7 +63,8 @@ test('setup mode: no /v1/dashboard request, the pill says setup, no offline bann
     if (u.pathname.startsWith('/v1/dashboard/') || u.pathname.startsWith('/v1/conductor/')) dash.push(u.pathname);
   });
   await page.goto('./#/usage');
-  await expect(page).toHaveURL(/#\/setup$/);
+  // the guide lives at #/models/serve since TandemApp's shell (#/setup redirects there)
+  await expect(page).toHaveURL(/#\/models\/serve$/);
   await expect(page.locator(`.mtile[data-model="${MODEL}"]`)).toBeVisible();
   await expect(page.locator('.topbar .pill')).toHaveText('setup');
   await page.waitForTimeout(1500);
@@ -74,9 +75,11 @@ test('setup mode: no /v1/dashboard request, the pill says setup, no offline bann
 test('setup mode ends (the box serves a model): the other views open again', async ({ page, request }) => {
   await setupMock(request, { setupMode: true });
   await page.goto('./#/setup');
-  await expect(page.locator('.rail .rail-tab.is-off')).toHaveCount(8);
+  // TandemApp's shell: every section but Models is off (the strip, the panel, the phone's sheet)
+  await expect(page.locator('a[data-section].is-off').first()).toBeAttached();
+  await expect(page.locator('a[data-section="models"].is-off')).toHaveCount(0);
   await setupMock(request, { setupMode: false });
-  await expect(page.locator('.rail .rail-tab.is-off')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('a[data-section].is-off')).toHaveCount(0, { timeout: 15_000 });
   await expect(page.locator('[data-setup-mode]')).toHaveCount(0);
   await expect(page.locator('.topbar .pill')).not.toHaveText('setup');
 });
@@ -87,7 +90,7 @@ test("Review: the plan's error names its code and links to the step that fixes i
   await page.locator('[data-security-warning] .sec-opt', { hasText: 'Generate a password on the box' }).click();
   const err = page.locator('.rv-notes li[data-error-code="secrets_exist"]');
   await expect(err).toContainText('secrets.env already exists');
-  await expect(err.locator('a')).toHaveAttribute('href', `#/setup/${MODEL}/methods`);
+  await expect(err.locator('a')).toHaveAttribute('href', `#/models/serve/${MODEL}/methods`);
   await expect(page.locator('.setup-finish')).toBeDisabled();
 });
 
@@ -109,7 +112,7 @@ test('apply refused while requests run: the count, and nothing starts', async ({
   await page.locator('.setup-finish').click();
   await page.locator('.setup-confirm-go').click();
   await expect(page.locator('dialog.setup-confirm [role="alert"]')).toHaveText('1 request is running. Install when they finish.');
-  await expect(page).toHaveURL(new RegExp(`#/setup/${MODEL}/review$`));
+  await expect(page).toHaveURL(new RegExp(`#/models/serve/${MODEL}/review$`));
 });
 
 test("each Wren turn carries the step's visible fields and the estimate", async ({ page, request }) => {
@@ -157,9 +160,10 @@ test('level 2 with no configuration written yet still runs: it restarts on the r
   const d = await review(page, 2);
   await expect(d.locator('[data-reset-empty]')).toContainText('still restarts on the recommended weights');
   await d.locator('.reset-go').click();
-  await expect(d.locator('.inst-title')).toHaveText(/Going back to the shipped configuration|Back on the shipped configuration/);
+  await expect(d.locator('[data-job-state]')).toBeVisible();
   await expect(d.locator('[data-job-state="done"]')).toBeVisible({ timeout: 20_000 });
-  await expect(d.locator('.inst-title')).toHaveText('Back on the shipped configuration');
+  // VIS-211: a finished job's screen
+  await expect(d.locator('[data-job-finished] .inst-done-title')).toHaveText('The shipped configuration is ready');
 });
 
 test('desktop: nothing shows through the header or the memory bar while the steps scroll', async ({ page }) => {

@@ -64,3 +64,15 @@ export async function noHorizontalOverflow(page: Page): Promise<boolean> {
     return offenders.length === 0;
   });
 }
+
+/** Console errors and page errors while the test runs, less the Chat tab's probe of a server with no
+ *  chat app (GET /v1/chat-app/capabilities answering 404: a state the tab reads, logged by the browser
+ *  as a failed load; the shell probes it on every page since Chat moved into it, VIS-257). */
+export function consoleErrors(page: Page): string[] {
+  const out: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' && !(m.location().url ?? '').includes('/v1/chat-app/')) out.push(m.text());
+  });
+  page.on('pageerror', (e) => out.push(String(e)));
+  return out;
+}

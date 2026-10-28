@@ -1,7 +1,7 @@
 // VIS-199 (QA VIS-200), SRV-707 (QA SRV-708): parallel chats as a stepper on the memory step, against
-// the mock (Super VL: the card measured 1 to 3, 8 by default, the pool off, so one more chat is 3.1 GiB
-// at the one 262,144-token window every chat has, its KV and the slot's measured fixed part; 8 fit the
-// mock box, 9 do not). Minus, plus, typing and the arrow keys move the memory bar at once; above 3 is a
+// the mock (Super VL: the card measured 1 to 3, 3 by default since SPD-245 (a default is never past the
+// measured max), the pool off, so one more chat is 3.1 GiB at the one 262,144-token window every chat
+// has, its KV and the slot's measured fixed part; 8 fit the mock box, 9 do not; each test starts at 8). Minus, plus, typing and the arrow keys move the memory bar at once; above 3 is a
 // quiet note; a count that does not fit, or one past the setup's 64, says why next to the field and
 // beside Next, which refuses it.
 // The guide opens in SIMPLE mode for a fresh browser; this file drives the ADVANCED
@@ -25,6 +25,8 @@ test.beforeEach(async ({ page, request }) => {
   await setupMock(request);
   await page.addInitScript(() => localStorage.removeItem('tandem.setup.v1'));
   await open(page, `#/setup/${VL}/parallelism`);
+  await expect(input(page)).toHaveValue('3');
+  await setSlots(page, 8);
   await expect(input(page)).toHaveValue('8');
 });
 

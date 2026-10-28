@@ -67,7 +67,7 @@ test('level 1 is local: tandem.setup.v1 goes, no request, the guide starts at th
   await expect(d.locator('[data-reset-result="local"]')).toContainText('This browser forgot your progress and the chat');
   expect(await page.evaluate(() => localStorage.getItem('tandem.setup.v1'))).toBeNull();
   expect(posted).toBe(0);
-  await expect(page).toHaveURL(/#\/setup$/);
+  await expect(page).toHaveURL(/#\/models\/serve$/);
 });
 
 test('the result says what was freed, and the System view refreshes', async ({ page }) => {

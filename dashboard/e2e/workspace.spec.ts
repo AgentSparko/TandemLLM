@@ -19,7 +19,7 @@ const PAGES: [section: string, title: string][] = [
   ['hardware', 'Node inspector'],
   ['events', 'Firing now'],
   ['sparks', 'Sparks'],
-  ['models', 'Deployments'],
+  ['models', 'Models'],
   ['api', 'Gateway'],
   ['conductor', 'Conductor'],
   ['playground', 'Targets'],
@@ -133,7 +133,11 @@ test.describe('workspace on a desk (VIS-256)', () => {
     await check(true);
     // the context sidebar closed: the dock follows the page's right edge too
     await page.locator('.side-btn[data-side="right"]').click();
-    await expect.poll(async () => (await columns(page)).dockRight).toBe((await columns(page)).mainRight);
+    // both edges move as the sidebar closes: compare them in one read, not against a read before it
+    await expect.poll(async () => {
+      const c = await columns(page);
+      return c.dockRight === c.mainRight;
+    }).toBe(true);
     // a tablet: the panel is a drawer over the page, its content at the drawer's width
     await page.setViewportSize({ width: 768, height: 1024 });
     await expect(page.locator('.shell')).toHaveAttribute('data-w', 'tablet');

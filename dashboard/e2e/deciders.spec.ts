@@ -33,9 +33,9 @@ test.describe('the Deciders screen @mock', () => {
     const mem = page.locator('[data-decider-memory]');
     await expect(mem).toContainText('37.9 GiB');
     await expect(mem).toContainText('7.0 GiB'); // OPS-47: the engine's growth to its declared peak
-    await expect(mem).toContainText('8.2 GiB');
+    await expect(mem).toContainText('3.0 GiB'); // SRV-534: Laya in the engine's process
     await expect(mem).toContainText('15.0 GiB + 6.0 GiB');
-    await expect(mem).toContainText('fits, 22.7 GiB left after the claim');
+    await expect(mem).toContainText('fits, 27.9 GiB left after the claim');
     expect(errors).toEqual([]);
   });
 
@@ -58,7 +58,7 @@ test.describe('the Deciders screen @mock', () => {
     await expect(now.locator('.stat-sub')).toContainText('not loaded: kept free for requests (MemAvailable 28.0 GiB');
     await row(page, 'laya-typed-decisions').locator('[data-load]').click();
     const note = page.locator('[data-decider-note="laya-typed-decisions"]');
-    await expect(note.locator('[data-refusal]')).toContainText('not loaded: kept free for requests (MemAvailable 28.0 GiB, less 7.0 GiB the engine may still take for a long request and the 8.2 GiB claim, leaves 12.8 GiB; the box keeps 21.0 GiB free (a 15.0 GiB floor and a 6.0 GiB margin))', { timeout: 8_000 });
+    await expect(note.locator('[data-refusal]')).toContainText('not loaded: kept free for requests (MemAvailable 28.0 GiB, less 7.0 GiB the engine may still take for a long request and the 3.0 GiB claim, leaves 18.0 GiB; the box keeps 21.0 GiB free (a 15.0 GiB floor and a 6.0 GiB margin))', { timeout: 8_000 });
     await expect(note).toContainText('refused by the residency planner');
     await expect(row(page, 'laya-typed-decisions').locator('[data-decider-state]')).toHaveText('not loaded');
   });
