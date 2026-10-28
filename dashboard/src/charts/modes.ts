@@ -165,9 +165,11 @@ export function modeNote(mode: ChartMode, agg: Agg, nodes: number): string {
   return 'one line per Spark';
 }
 
-/** An axis or tooltip time: seconds for a 5-minute window, the weekday over a week. */
-export function timeLabel(t: number, span: number): string {
+/** An axis or tooltip time: seconds for a 5-minute window, the weekday over a week, the date alone
+ *  for daily samples (Usage's tokens per day by Spark). */
+export function timeLabel(t: number, span: number, step = 0): string {
   const d = new Date(t * 1000);
+  if (step >= 86400) return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
   const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: span <= 600 ? '2-digit' : undefined, hour12: false });
   return span > 2 * 86400 ? `${d.toLocaleDateString([], { weekday: 'short', day: 'numeric' })} ${hm}` : hm;
 }

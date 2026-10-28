@@ -1,28 +1,34 @@
-// Performance — how fast is the engine now, and how has that changed. The Live panel at
-// the top (views/live-panel.ts) streams /v1/dashboard/live once a second; the three
-// 5-minute figures under it come from successive /metrics scrapes; the scatter and the history
-// come from the ledger API. One y axis per chart; the reading aids come from server/METRICS.md.
+// Performance → Live — how fast is the engine now. The Live panel at the top
+// (views/live-panel.ts) streams /v1/dashboard/live once a second; the three 5-minute figures under
+// it come from successive /metrics scrapes; the scatter comes from the ledger API. One y axis per
+// chart; the reading aids come from server/METRICS.md. History is its own tab (perf-history.ts).
+//
+// VIS-254: with a fleet (two Sparks or more), the fleet's Now line and a strip per Spark come first
+// (views/fleet-scope.ts <qse-fleet-live>, from the fleet store, following the scope bar); what
+// follows is this server's own engine, request by request, under its node's chip. A scope that
+// leaves that node out says so instead of showing another Spark's numbers as the scope's.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { api, describeError } from '../api/client';
-import type { BackendRef, RequestRow, Usage } from '../api/types';
+import type { RequestRow } from '../api/types';
 import { compact, exact, fixed, money, ms, NOT_REPORTED, pct, tps, dateTimeShort } from '../lib/format';
-import { backendName, ENGINE, relayedBackends, scatterGroup } from '../lib/relayed';
+import { backendName, scatterGroup } from '../lib/relayed';
+import { onFleet, type FleetState } from '../lib/fleet-state';
+import { currentScope, onScope, resolveScope, setScope, type Scope } from '../lib/scope';
+import { hereNode, isFleet, scopeNodes } from '../lib/where';
+import { nodeChip } from '../ui/node-chip';
+import { loadFleetScope } from './perf-history';
 import { backendEngines, backendFigures, liveNumbers, parsePrometheus, histogram, histogramDelta, histogramQuantile, type LiveNumbers, type Scrape } from '../lib/prom';
 import { renderEngines } from './engines';
 import { poll, type Poller } from '../lib/poll';
 import { cacheSummary, cacheTier, isReplay, reuse, TIER_LABEL, TIERS } from '../lib/cache-source';
 import { laneTitle, laneWord } from '../lib/lane';
-import { setParams } from '../lib/router';
-import { addDays, browserTz, todayKey } from '../lib/time';
 import { LightElement, type Loadable } from '../ui/base';
 import { panel, skeleton, statTile, errorState, emptyState } from '../ui/bits';
 import type { ScatterPoint } from '../charts/scatter';
 
 declare const __GRAFANA_URL__: string;
-
-type HRange = '24h' | '7d' | '30d' | '365d';
 
 @customElement('qse-performance')
 export class QsePerformance extends LightElement {
@@ -31,21 +37,15 @@ export class QsePerformance extends LightElement {
   @state() private live: LiveNumbers | null = null;
   @state() private metricsError: { endpoint: string; message: string } | null = null;
   @state() private recent: Loadable<RequestRow[]> = { state: 'loading' };
-  @state() private history: Loadable<Usage> = { state: 'loading' };
-  /** each relayed backend's history (a cloud model), drawn beside the engine's, never pooled */
-  @state() private relayedHistory: { ref: BackendRef; usage: Usage }[] = [];
+  @state() private fleet: FleetState | null = null;
+  @state() private scope: Scope = currentScope();
   @state() private showReplays = false;
   @state() private selected: RequestRow | null = null;
-  private tz = browserTz();
   private livePoll: Poller | null = null;
   private recentPoll: Poller | null = null;
-  private histPoll: Poller | null = null;
+  private unsub: (() => void)[] = [];
   private lastKey = '';
 
-  private get range(): HRange {
-    const r = this.params.get('range');
-    return r === '24h' || r === '30d' || r === '365d' ? r : '7d';
-  }
   private get model() {
     return this.params.get('model');
   }
@@ -57,24 +57,25 @@ export class QsePerformance extends LightElement {
     super.connectedCallback();
     this.livePoll = poll(() => this.scrape(), 5000);
     this.recentPoll = poll(() => this.loadRecent(), 30_000);   // zero-arg fn: supersede by params, not by generation
-    this.histPoll = poll((isCurrent) => this.loadHistory(isCurrent), 60_000);
     this.livePoll.start();
     this.recentPoll.start();
-    this.histPoll.start();
+    this.unsub.push(
+      onFleet((f) => (this.fleet = f)),
+      onScope((s) => (this.scope = s)),
+    );
   }
   disconnectedCallback(): void {
     this.livePoll?.stop();
     this.recentPoll?.stop();
-    this.histPoll?.stop();
+    this.unsub.forEach((u) => u());
+    this.unsub = [];
     super.disconnectedCallback();
   }
   updated(changed: Map<string, unknown>): void {
     if (changed.has('params')) {
-      const key = `${this.range}|${this.model}|${this.client}|${this.params.get('backend')}`;
+      const key = `${this.model}|${this.client}|${this.params.get('backend')}`;
       if (key !== this.lastKey) {
         this.lastKey = key;
-        this.history = { state: 'loading' };
-        void this.histPoll?.refresh();
         void this.recentPoll?.refresh();
       }
     }
@@ -124,40 +125,35 @@ export class QsePerformance extends LightElement {
     }
   }
 
-  private async loadHistory(isCurrent: () => boolean): Promise<void> {
-    const today = todayKey(this.tz);
-    const range = this.range; // captured before the await: post-await reads of this.range would see a newer selection
-    const days = range === '24h' ? 2 : range === '7d' ? 7 : range === '30d' ? 30 : 365;
-    const bucket = days <= 31 ? 'hour' : 'day';
-    const model = this.model, client = this.client;
-    try {
-      const q = { from: addDays(today, -(days - 1)), to: today, bucket, tz: this.tz, model, client } as const;
-      // the engine's own requests; each relayed backend apart (0.11.3)
-      const u = await api.usage({ ...q, backend: ENGINE });
-      if (!isCurrent()) return; // a newer refresh (params changed) owns the view now
-      const others = await Promise.all(relayedBackends(u).map(async (ref) => ({ ref, usage: await api.usage({ ...q, backend: ref.id }) })));
-      if (!isCurrent()) return;
-      if (range === '24h') for (const x of [u, ...others.map((o) => o.usage)]) x.buckets = x.buckets.slice(-24);
-      this.relayedHistory = others.filter((o) => o.usage.totals.requests > 0);
-      this.history = { state: 'ready', data: u };
-    } catch (e) {
-      if (!isCurrent()) return;
-      const d = describeError(e);
-      this.history = { state: 'error', endpoint: d.endpoint, message: d.message };
-    }
+  render() {
+    const f = this.fleet;
+    if (!isFleet(f)) return html`<div class="view view-performance">${this.renderHere()}</div>`;
+    void loadFleetScope();
+    const here = hereNode(f);
+    const s = resolveScope(this.scope, f);
+    const shown = s.kind === 'all' || !here || scopeNodes(f, s).some((n) => n.id === here.id);
+    return html`<div class="view view-performance">
+      <qse-fleet-live></qse-fleet-live>
+      <div class="here-head" data-here>
+        <span class="eyebrow">This server's engine</span>${here ? nodeChip(here) : html`<span class="small muted">on no Spark of this fleet</span>`}
+        <span class="small muted">request by request: the Now line, the 5-minute figures, the recent requests and where their prompts came from</span>
+      </div>
+      ${shown
+        ? this.renderHere()
+        : html`<p class="note note-info" data-here-out>The scope leaves ${here!.alias} out: the request-by-request view is ${here!.alias}'s engine, the one this page talks to. The strips above are the scope's. <button type="button" class="btn btn-sm" @click=${() => setScope({ kind: 'node', id: here!.id })}>Show ${here!.alias}</button></p>`}
+    </div>`;
   }
 
-  render() {
-    return html`<div class="view view-performance">
-      ${this.renderLive()}
+  /** this server's own engine: the Live panel, the 5-minute figures, the backends' engines, the
+   *  recent requests with their timing, the cache sources */
+  private renderHere(): TemplateResult {
+    return html`${this.renderLive()}
       ${this.renderEngines()}
       <div class="grid-2 grid-2-wide">
         ${this.renderScatter()}
         ${this.renderSelected()}
       </div>
-      ${this.renderCacheSources()}
-      ${this.renderHistory()}
-    </div>`;
+      ${this.renderCacheSources()}`;
   }
 
   // ---- live: the panel and the 5-minute figures from /metrics --------------
@@ -319,56 +315,4 @@ export class QsePerformance extends LightElement {
     return panel('Cache sources, last hour', body, { id: 'cache-sources', sub: 'where each prompt came from: RAM (rows in place, the end anchor, the state store), the NVMe, or cold' });
   }
 
-  // ---- history -----------------------------------------------------------------------------
-  private renderHistory(): TemplateResult {
-    const h = this.history;
-    const rangeBtns = html`<div class="seg" role="radiogroup" aria-label="history range">
-      ${(['24h', '7d', '30d', '365d'] as HRange[]).map((r) => html`<button role="radio" aria-checked=${this.range === r} class="seg-btn ${this.range === r ? 'is-on' : ''}" @click=${() => setParams({ range: r === '7d' ? null : r })}>${r.replace(/(\d+)([hd])/, '$1 $2')}</button>`)}
-    </div>`;
-    const dims = h.state === 'ready' ? h.data.dimensions : { models: [], clients: [] };
-    const toolbar = html`<div class="toolbar">
-      ${rangeBtns}
-      <label class="field"><span>Model</span>
-        <select @change=${(e: Event) => setParams({ model: (e.target as HTMLSelectElement).value || null })}>
-          <option value="">all</option>${dims.models.map((m) => html`<option value=${m} ?selected=${m === this.model}>${m}</option>`)}
-        </select></label>
-      <label class="field"><span>Client</span>
-        <select @change=${(e: Event) => setParams({ client: (e.target as HTMLSelectElement).value || null })}>
-          <option value="">all</option>${dims.clients.map((c) => html`<option value=${c.id} ?selected=${c.id === this.client}>${c.label ?? c.id} (${c.kind})</option>`)}
-        </select></label>
-    </div>`;
-    if (h.state === 'loading') return html`<section class="history"><div class="history-head"><h2 class="panel-title">History</h2>${toolbar}</div>${skeleton(6)}</section>`;
-    if (h.state === 'error') return html`<section class="history"><div class="history-head"><h2 class="panel-title">History</h2>${toolbar}</div>${errorState(h.endpoint, h.message, () => this.histPoll?.refresh())}</section>`;
-    if (h.state === 'empty') return html`<section class="history">${emptyState('No history')}</section>`;
-    const u = h.data;
-    const b = u.buckets;
-    const labels = b.map((x) => (u.bucket === 'hour' ? (b.length > 48 ? x.start.slice(5, 13).replace('T', ' ') : x.start.slice(11, 16)) : x.start.slice(5, 10)));
-    const rel = this.relayedHistory.filter((o) => o.usage.buckets.length === b.length);
-    const src = `${u.bucket === 'hour' ? 'hourly' : 'daily'} buckets from the ledger (400 days kept; Prometheus keeps 15); this engine's requests${rel.length ? `, and ${rel.map((o) => backendName(o.ref)).join(', ')} relayed beside them (red)` : ''}`;
-    const relDecode = rel.map((o) => ({ name: `${backendName(o.ref)} p50`, color: 'red' as const, values: o.usage.buckets.map((x) => x.decode_tps_p50) }));
-    const relTtft = rel.map((o) => ({ name: `${backendName(o.ref)} p50`, color: 'red' as const, values: o.usage.buckets.map((x) => x.ttft_ms_p50) }));
-    return html`<section class="history" id="history">
-      <div class="history-head">
-        <div class="panel-titles"><h2 class="panel-title">History</h2><p class="panel-sub">${src}</p></div>
-        ${toolbar}
-      </div>
-      <div class="grid-2">
-        ${panel('Decode speed', html`<qse-ribbon .series=${[{ name: rel.length ? 'engine p50' : 'p50', color: 'cobalt', values: b.map((x) => x.decode_tps_p50), band: b.map((x) => x.decode_tps_p90), bandName: rel.length ? 'engine p90' : 'p90' }, ...relDecode]} .labels=${labels} .format=${(v: number) => String(Math.round(v))} unit="tok/s" ?log=${rel.length > 0} .height=${200}></qse-ribbon>`, { sub: rel.length ? 'tok/s, p50 and p90, log scale; a relayed backend measured at the proxy' : 'tok/s, p50 and p90', id: 'history-decode' })}
-        ${panel('Time to first token', html`<qse-ribbon .series=${[{ name: rel.length ? 'engine p50' : 'p50', color: 'orange', values: b.map((x) => x.ttft_ms_p50), band: b.map((x) => x.ttft_ms_p90), bandName: rel.length ? 'engine p90' : 'p90' }, ...relTtft]} .labels=${labels} .format=${(v: number) => ms(v)} log .height=${200}></qse-ribbon>`, { sub: rel.length ? 'p50 and p90, log scale; a relayed backend\'s holds the network and its queue' : 'p50 and p90, log scale', id: 'history-ttft' })}
-        ${panel('Prefill speed', html`<qse-ribbon .series=${[{ name: 'p50', color: 'cobalt', values: b.map((x) => x.prefill_tps_p50) }]} .labels=${labels} .format=${(v: number) => compact(v)} unit="tok/s" .height=${180}></qse-ribbon>`, { sub: 'uncached prompt tokens per second, p50' })}
-        ${panel('Tokens per block', html`<qse-ribbon .series=${[{ name: 'mean', color: 'violet', values: b.map((x) => x.tokens_per_block_mean) }]} .labels=${labels} .format=${(v: number) => v.toFixed(1)} .height=${180}></qse-ribbon>`, { sub: 'committed tokens per verified block, mean' })}
-        ${panel('Draft acceptance', html`<qse-ribbon .series=${[{ name: 'acceptance', color: 'aqua', values: b.map((x) => (x.draft_acceptance == null ? null : x.draft_acceptance * 100)) }]} .labels=${labels} .format=${(v: number) => v.toFixed(0)} unit="%" .height=${180}></qse-ribbon>`, { sub: 'accepted / drafted tokens' })}
-        ${panel(
-          'Reading the numbers',
-          html`<ul class="reading">
-            <li><b>Tokens per block</b> is the number the engine is tuned on: how many tokens one verify pass commits. The row's mean speed moves with it.</li>
-            <li><b>Acceptance falls first</b> when the drafter loses the workload — watch it before decode tok/s drops.</li>
-            <li>A per-request tok/s is not the row number: the atlas row is 256-in / 256-out at temperature 0; chats are longer, cached and mixed.</li>
-            <li>The block split (narrow / wide / deep arms) and the verify-time histogram are in Grafana.</li>
-          </ul>`,
-          { cls: 'panel-reading' },
-        )}
-      </div>
-    </section>`;
-  }
 }

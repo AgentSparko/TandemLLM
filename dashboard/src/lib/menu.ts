@@ -124,8 +124,9 @@ export function subPages(r: Route, nodes: { id: string; alias: string }[] = []):
   switch (sectionOf(r.view)) {
     case 'performance':
       return [
-        { label: 'Live', href: `#/performance${withScope()}`, on: tab !== 'requests' },
+        { label: 'Live', href: `#/performance${withScope()}`, on: tab !== 'requests' && tab !== 'history' },
         { label: 'Requests', href: `#/performance${withScope({ tab: 'requests' })}`, on: tab === 'requests' },
+        { label: 'History', href: `#/performance${withScope({ tab: 'history' })}`, on: tab === 'history' },
       ];
     case 'hardware':
       return [

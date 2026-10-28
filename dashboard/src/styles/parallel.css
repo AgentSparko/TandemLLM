@@ -461,6 +461,28 @@
   background: transparent;
   border: 1px dashed var(--rule);
 }
+/* VIS-254: a fleet's lanes by deployment, then Spark: the group's head */
+.par-group {
+  margin-top: 8px;
+  padding: 4px 2px 2px;
+}
+.par-group:first-of-type {
+  margin-top: 0;
+}
+.par-group-h {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: var(--fs-sm);
+}
+.par-group-at {
+  font-size: var(--fs-xs);
+}
+.par-bk-node {
+  margin-left: auto;
+  min-width: 0;
+}
 .par-free {
   color: var(--ink-3);
   font-size: var(--fs-xs);

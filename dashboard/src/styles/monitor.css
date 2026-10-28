@@ -49,15 +49,15 @@ qse-topology {
 .grow {
   flex: 1;
 }
-qse-fleet-page .xs,
+:is(qse-fleet-page, .fl-scope) .xs,
 .ctx .xs {
   font-size: var(--fs-xs);
 }
-qse-fleet-page .faint,
+:is(qse-fleet-page, .fl-scope) .faint,
 .ctx .faint {
   color: var(--ink-3);
 }
-qse-fleet-page .ok-ink,
+:is(qse-fleet-page, .fl-scope) .ok-ink,
 .ctx .ok-ink {
   color: var(--ok);
 }
@@ -94,7 +94,7 @@ qse-fleet-page .ok-ink,
 
 /* ---- tiles with each Spark's share ----------------------------------------------------------- */
 /* the page column's own: the Setup Guide's model tiles (setup.css) share the class names */
-qse-fleet-page .mtiles {
+:is(qse-fleet-page, .fl-scope) .mtiles {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   border: 1px solid var(--rule);
@@ -103,22 +103,22 @@ qse-fleet-page .mtiles {
   box-shadow: var(--shadow-1);
   overflow: hidden;
 }
-qse-fleet-page .mtiles.is-4 {
+:is(qse-fleet-page, .fl-scope) .mtiles.is-4 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-qse-fleet-page .mtile {
+:is(qse-fleet-page, .fl-scope) .mtile {
   padding: 13px 15px 12px;
   min-width: 0;
   border-left: 1px solid var(--rule);
   transition: background 0.2s;
 }
-qse-fleet-page .mtile:first-child {
+:is(qse-fleet-page, .fl-scope) .mtile:first-child {
   border-left: 0;
 }
-qse-fleet-page .mtile:hover {
+:is(qse-fleet-page, .fl-scope) .mtile:hover {
   background: color-mix(in srgb, var(--cobalt) 5%, transparent);
 }
-qse-fleet-page .mtile-label {
+:is(qse-fleet-page, .fl-scope) .mtile-label {
   display: flex;
   gap: 6px;
   align-items: baseline;
@@ -128,25 +128,25 @@ qse-fleet-page .mtile-label {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-qse-fleet-page .mtile-label .op {
+:is(qse-fleet-page, .fl-scope) .mtile-label .op {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   color: var(--ink-3);
 }
-qse-fleet-page .mtile-val {
+:is(qse-fleet-page, .fl-scope) .mtile-val {
   margin-top: 4px;
   font: 650 26px/1.1 var(--font-disp);
   letter-spacing: -0.028em;
   white-space: nowrap;
 }
-qse-fleet-page .mtile-val .u {
+:is(qse-fleet-page, .fl-scope) .mtile-val .u {
   margin-left: 5px;
   font-size: var(--fs-sm);
   font-weight: 500;
   letter-spacing: 0;
   color: var(--ink-2);
 }
-qse-fleet-page .mtile-sub {
+:is(qse-fleet-page, .fl-scope) .mtile-sub {
   margin-top: 6px;
   font: var(--fs-xs) var(--font-mono);
   color: var(--ink-2);
@@ -392,7 +392,11 @@ qse-fleet-page .mtile-sub {
   top: auto;
   bottom: -17px;
 }
-/* a mark near either end keeps its label inside the bar */
+/* a mark near either end keeps its label inside the bar; at the very end the line itself stays in
+   (its 2 px border would stand out past a ceiling at capacity) */
+.umem-mark.is-end {
+  margin-left: -2px;
+}
 .umem-mark.is-end span {
   transform: translateX(-100%);
 }

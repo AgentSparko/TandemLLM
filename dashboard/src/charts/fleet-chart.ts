@@ -157,7 +157,7 @@ export class QseFleetChart extends ChartElement {
     return svg`
       ${c.title ?? nothing}
       ${ticks.map((t) => svg`<line class="grid" x1=${x0} x2=${x1} y1=${y(t)} y2=${y(t)} />${c.yLab ? svg`<text class="axis" x=${x0 - 6} y=${y(t) + 3.5} text-anchor="end">${this.tick(t, m.top)}</text>` : nothing}`)}
-      ${xl.map((i) => svg`<text class="axis" x=${x(i)} y=${c.gy + c.h - 7} text-anchor=${i === 0 ? 'start' : i === m.count - 1 ? 'end' : 'middle'}>${timeLabel(this.t0 + i * this.step, span)}</text>`)}
+      ${xl.map((i) => svg`<text class="axis" x=${x(i)} y=${c.gy + c.h - 7} text-anchor=${i === 0 ? 'start' : i === m.count - 1 ? 'end' : 'middle'}>${timeLabel(this.t0 + i * this.step, span, this.step)}</text>`)}
       ${capY != null ? svg`<line class="fc-cap" x1=${x0} x2=${x1} y1=${capY} y2=${capY} /><text class="axis" x=${x1 - 2} y=${capY - 4} text-anchor="end">capacity ${this.fmt(m.cap!.v)} ${this.unit}${m.cap!.perNode && this.series.length > 1 ? ' per Spark' : ''}</text>` : nothing}
       ${c.areas.map((a) => svg`<path class="fc-area" d=${bandPath(pts(a.hi), pts(a.lo))} fill=${a.colour} opacity=${a.opacity} />${a.edge ? svg`<path d=${monotonePath(pts(a.hi))} fill="none" stroke=${a.colour} stroke-width="1.3" />` : nothing}`)}
       ${clusterEvents(evs, this.t0, span, x0, x1).map((c) => {
@@ -259,7 +259,7 @@ export class QseFleetChart extends ChartElement {
     const near = this.events.filter((e) => Math.abs(e.at - t) <= this.step * 1.5);
     const n = this.series.length;
     return html`<div class="tip fc-tip" style="left:${Math.min(Math.max(left, 120), W - 120)}px" role="status">
-      <div class="tip-title">${timeLabel(t, span)}</div>
+      <div class="tip-title">${timeLabel(t, span, this.step)}</div>
       ${this.series.map(
         (s) => html`<div class="tip-row"><span class="swatch ${isHollow(s.colour) ? 'swatch-outline' : ''}" style="${isHollow(s.colour) ? 'border-color' : 'background'}:${nodeColour(s.colour)}"></span><span>${s.alias}</span><span class="num">${this.withUnit(s.values[i])}</span></div>`,
       )}

@@ -46,9 +46,10 @@ describe('the menu', () => {
 });
 
 describe('sub-pages', () => {
-  it('Performance: Live and Requests (Parallel before)', () => {
-    expect(subs('#/performance')).toEqual(['*Live #/performance', 'Requests #/performance?tab=requests']);
-    expect(subs('#/performance?tab=parallel')).toEqual(['Live #/performance', '*Requests #/performance?tab=requests']);
+  it('Performance: Live, Requests (Parallel before) and History (VIS-254)', () => {
+    expect(subs('#/performance')).toEqual(['*Live #/performance', 'Requests #/performance?tab=requests', 'History #/performance?tab=history']);
+    expect(subs('#/performance?tab=parallel')).toEqual(['Live #/performance', '*Requests #/performance?tab=requests', 'History #/performance?tab=history']);
+    expect(subs('#/performance?tab=history')).toEqual(['Live #/performance', 'Requests #/performance?tab=requests', '*History #/performance?tab=history']);
   });
   it('Hardware: the fleet and this box’s System page', () => {
     expect(subs('#/hardware/system')).toEqual(['Fleet #/hardware', '*System #/hardware/system']);
@@ -89,6 +90,7 @@ describe('the scope travels with the Monitor links', () => {
     expect(subs(loc.hash)).toEqual([
       '*Live #/performance?scope=node%3Ar3&range=1h&live=0',
       'Requests #/performance?scope=node%3Ar3&range=1h&live=0&tab=requests',
+      'History #/performance?scope=node%3Ar3&range=1h&live=0&tab=history',
     ]);
   });
   it('the default scope adds nothing', () => {

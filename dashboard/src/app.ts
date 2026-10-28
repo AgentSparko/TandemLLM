@@ -91,16 +91,20 @@ const loadParallel = () => (parallelChunk ??= import('./views/parallel'));
 let fleetChunk: Promise<unknown> | null = null;
 const loadFleetPages = () => (fleetChunk ??= import('./views/fleet-pages'));
 
-/** The two pages of Performance: the engine's own (the Live panel, the scatter, the history) and
- *  every request in flight on every backend at once. */
-function perfTabs(on: 'live' | 'requests', parallel: number | null = null): TemplateResult {
+/** The three pages of Performance (VIS-254, concept §8.2): Live (the fleet's Now line and a strip
+ *  per Spark, then the engine's own: the Live panel, the scatter), Requests (every request in flight
+ *  on every backend, grouped by deployment and Spark) and History (per Spark and this server's
+ *  ledger over time). */
+function perfTabs(on: 'live' | 'requests' | 'history', parallel: number | null = null): TemplateResult {
   const go = (tab: string | null) => navigate('performance', { ...Object.fromEntries(parseHash().params), tab });
+  const note = on === 'requests' ? 'every request in flight, on every backend' : on === 'history' ? 'over time: per Spark, and this server’s ledger' : perfEngineNote(parallel);
   return html`<div class="perf-tabs" role="tablist" aria-label="Performance pages">
     <div class="seg">
       <button class="seg-btn ${on === 'live' ? 'is-on' : ''}" role="tab" aria-selected=${on === 'live'} @click=${() => go(null)}>Live</button>
       <button class="seg-btn ${on === 'requests' ? 'is-on' : ''}" role="tab" aria-selected=${on === 'requests'} data-tab="requests" @click=${() => go('requests')}>Requests</button>
+      <button class="seg-btn ${on === 'history' ? 'is-on' : ''}" role="tab" aria-selected=${on === 'history'} data-tab="history" @click=${() => go('history')}>History</button>
     </div>
-    <span class="perf-tabs-note">${on === 'requests' ? 'every request in flight, on every backend' : perfEngineNote(parallel)}</span>
+    <span class="perf-tabs-note">${note}</span>
   </div>`;
 }
 
@@ -791,6 +795,7 @@ export class QseApp extends LightElement {
           void loadParallel();
           return html`${perfTabs('requests')}<qse-parallel></qse-parallel>`;
         }
+        if (this.route.params.get('tab') === 'history') return html`${perfTabs('history')}<qse-perf-history .params=${this.route.params}></qse-perf-history>`;
         this.askParallel();
         return html`${perfTabs('live', this.engineParallel)}<qse-performance .params=${this.route.params}></qse-performance>`;
       case 'dev':

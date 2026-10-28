@@ -17,6 +17,7 @@ import './charts/spark';
 import './views/usage';
 import './views/live-panel';
 import './views/performance';
+import './views/perf-history';
 import './views/dev';
 import './views/system';
 // views/playground (about 21 KB gzip: the chat, its Markdown, presets and export) loads on demand,

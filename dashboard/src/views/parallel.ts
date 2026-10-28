@@ -8,6 +8,13 @@
 // not give reads "not reported", a relayed request's prompt and cache read "at the end" until the
 // usage arrives. Rows keep their place (lib/parallel.ts Slots): a request holds its lane from its
 // arrival until its "done" fades, a new one takes the first free lane.
+//
+// VIS-254: with a fleet (two Sparks or more) the lanes are grouped by deployment, then by Spark (a
+// group's head: the deployment's type and name, the Spark's chip, its lanes and their rate), what
+// ran on no Spark (a cloud API) last; a backend's card names its Spark. Each lane's place comes
+// from the deployments' members (lib/where.ts): the backend that reaches a node's engine, `engine`
+// for this server's own. The scope bar's Spark or deployment keeps the lanes and cards in it; the
+// aggregate above stays this server's, every backend's, and says so.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
@@ -20,6 +27,12 @@ import { barScale, backendOrder, Colors, inFlightWords, jointWords, kindLabel, m
 import { poll, type Poller } from '../lib/poll';
 import { LightElement } from '../ui/base';
 import { errorState, skeleton } from '../ui/bits';
+import { onFleet, type FleetState } from '../lib/fleet-state';
+import { currentScope, onScope, resolveScope, type Scope } from '../lib/scope';
+import { groupByPlace, inScope, isFleet, whereOf, type FleetView } from '../lib/where';
+import { nodeChip } from '../ui/node-chip';
+import { typeBadge } from '../ui/scope-bar';
+import type { Where } from '../api/types';
 
 const NR = 'not reported';
 const TONES = ['wait', 'prefill', 'think', 'tool', 'write'] as const;
@@ -36,6 +49,9 @@ export class QseParallel extends LightElement {
   @state() private series: Sample[] = [];
   @state() private error: { endpoint: string; message: string } | null = null;
   @state() private bytes = 0;
+  @state() private fleet: FleetState | null = null;
+  @state() private scope: Scope = currentScope();
+  private unsub: (() => void)[] = [];
   private slots = new Slots();
   private colors = new Colors();
   private scale = 0;
@@ -46,10 +62,28 @@ export class QseParallel extends LightElement {
     super.connectedCallback();
     this.poller = poll(() => this.load(), 1000);
     this.poller.start();
+    this.unsub.push(
+      onFleet((f) => (this.fleet = f)),
+      onScope((s) => (this.scope = s)),
+    );
   }
   disconnectedCallback(): void {
     this.poller?.stop();
+    this.unsub.forEach((u) => u());
+    this.unsub = [];
     super.disconnectedCallback();
+  }
+
+  /** the fleet when there is one to group by (two Sparks or more) */
+  private get grouped(): FleetView | null {
+    return isFleet(this.fleet) ? this.fleet : null;
+  }
+  private where(l: Pick<Lane, 'backend' | 'model'>): Where {
+    return whereOf(this.grouped, l.backend, l.model);
+  }
+  private shown(l: Pick<Lane, 'backend' | 'model'>): boolean {
+    const f = this.grouped;
+    return !f || inScope(this.where(l), resolveScope(this.scope, f));
   }
 
   private async load(): Promise<void> {
@@ -95,7 +129,7 @@ export class QseParallel extends LightElement {
     const stall = stallLine(t, live, d.windows.now_s);
     return html`<section class="panel par-hero" aria-label="aggregate decode">
       <div class="par-hero-num">
-        <div class="par-kicker">Aggregate decode, now</div>
+        <div class="par-kicker">Aggregate decode, now${this.grouped ? html` <span class="muted" title="every backend this server relays to, whatever the scope">· this server, every backend</span>` : nothing}</div>
         <div class="par-big ${t.decode_tps == null ? 'is-na' : ''}" data-total-tps>
           <span class="num">${t.decode_tps == null ? (t.decoding ? NR : '0') : rate(t.decode_tps)}</span><span class="par-big-unit">tok/s</span>
         </div>
@@ -167,9 +201,12 @@ export class QseParallel extends LightElement {
     if (!d.backends.length) return nothing;
     const byBackend = new Map<string, Lane[]>();
     for (const l of d.lanes) byBackend.set(l.backend, [...(byBackend.get(l.backend) ?? []), l]);
+    const f = this.grouped;
+    // a backend's card in the scope: one of its models runs on a Spark the scope covers
+    const cards = f ? d.backends.filter((b) => (b.models.length ? b.models : [null]).some((m) => this.shown({ backend: b.id, model: m }))) : d.backends;
     return html`<div class="par-backends">
       ${repeat(
-        d.backends,
+        cards,
         (b) => b.id,
         (b) => this.renderBackend(b, byBackend.get(b.id) ?? [], d),
       )}
@@ -198,6 +235,7 @@ export class QseParallel extends LightElement {
         <span class="swatch" style="background:${col}"></span>
         <span class="par-bk-id">${b.id}</span>
         <span class="par-kind">${kindLabel(b.kind)}</span>
+        ${this.cardNode(b)}
       </header>
       <div class="par-bk-models" title=${b.models.join(', ')}>${b.models.join(', ') || html`<span class="ink-3">idle</span>`}</div>
       <div class="par-bk-rate ${b.decode_tps == null && b.decoding ? 'is-na' : ''}">
@@ -216,6 +254,14 @@ export class QseParallel extends LightElement {
       <div class="par-bk-frames" title="how live tokens are counted for this backend">${frames}</div>
       ${b.id === 'engine' && d.engine_slots ? this.renderSlots(d.engine_slots) : nothing}
     </article>`;
+  }
+
+  /** the Spark a backend's card reaches, with a fleet */
+  private cardNode(b: BackendRow): TemplateResult | typeof nothing {
+    const f = this.grouped;
+    const id = f ? this.where({ backend: b.id, model: b.models[0] ?? null }).node : null;
+    const n = id ? f!.nodes.find((x) => x.id === id) : null;
+    return n ? html`<span class="par-bk-node">${nodeChip(n, { status: false })}</span>` : nothing;
   }
 
   /** The engine's sequence slots (`--parallel N`): one chip a slot, its window and what it does,
@@ -254,17 +300,45 @@ export class QseParallel extends LightElement {
           <span role="columnheader" class="r">prefill</span><span role="columnheader" class="r">cache</span><span role="columnheader" class="r">cost</span><span role="columnheader" class="r">elapsed</span>
         </div>
         ${slots.length ? nothing : html`<div class="par-empty">Nothing in flight. Requests appear here the moment they arrive, on every backend.</div>`}
-        ${repeat(
-          slots.map((s, i) => [s, i] as [Slot, number]),
-          ([, i]) => i,
-          ([s]) => (s.lane ? this.renderLane(s.lane) : html`<div class="par-row par-row-free" role="row" aria-hidden="true"><span class="par-free">free</span></div>`),
-        )}
+        ${this.grouped
+          ? this.renderGroups(lanes)
+          : repeat(
+              slots.map((s, i) => [s, i] as [Slot, number]),
+              ([, i]) => i,
+              ([s]) => (s.lane ? this.renderLane(s.lane) : html`<div class="par-row par-row-free" role="row" aria-hidden="true"><span class="par-free">free</span></div>`),
+            )}
       </div>
       <p class="par-foot">
         Server: ${d.build_us ? html`built in ${(d.build_us.last / 1000).toFixed(2)} ms (max ${(d.build_us.max / 1000).toFixed(1)} ms)` : nothing} · ${(this.bytes / 1024).toFixed(1)} KB a poll · one poll a second.
         Live tokens are the engine's own count, or a backend's stream frames once they were checked against its usage; the rest is "${NR}" until the usage arrives.
       </p>
     </section>`;
+  }
+
+  /** VIS-254: the lanes by deployment, then Spark, in their slots' order within a group; the scope
+   *  keeps its own */
+  private renderGroups(lanes: Lane[]): TemplateResult {
+    const f = this.grouped!;
+    const groups = groupByPlace(lanes.filter((l) => this.shown(l)), (l) => this.where(l), f);
+    const hidden = lanes.length - groups.reduce((a, g) => a + g.items.length, 0);
+    return html`${groups.map((g) => {
+      const tps = g.items.reduce((a, l) => a + (l.decode_now ?? 0), 0);
+      return html`<div class="par-group" role="row" data-group=${g.key}>
+          <span role="cell" class="par-group-h">
+            ${g.deployment ? html`${typeBadge(g.deployment)} <b>${g.deployment.name}</b>` : g.node ? html`<b>outside any deployment</b>` : html`<b>on no Spark</b> <span class="muted">a cloud API or another backend</span>`}
+            ${g.node ? html`<span class="par-group-at muted">on</span>${nodeChip(g.node)}` : nothing}
+            ${g.deployment?.type === 'replicas' && g.node ? html`<span class="muted xs">member ${g.deployment.members.indexOf(g.node.id) + 1} of ${g.deployment.members.length}</span>` : nothing}
+            <span class="grow"></span>
+            <span class="num muted">${g.items.length} in flight · ${rate(tps)} tok/s</span>
+          </span>
+        </div>
+        ${repeat(
+          g.items,
+          (l) => l.id,
+          (l) => this.renderLane(l),
+        )}`;
+    })}
+    ${hidden ? html`<p class="par-foot muted" data-scope-hidden>${hidden} more in flight outside the scope</p>` : nothing}`;
   }
 
   private renderLane(l: Lane): TemplateResult {

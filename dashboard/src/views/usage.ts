@@ -1,13 +1,26 @@
 // Usage — a year of tokens at a glance. Hero: tokens this year over the heatmap.
 // Stat tiles today / 7 d / 30 d / year with the input-cached-output-reasoning split, trends,
 // speed over time, top days, model/client filters kept in the URL hash.
+//
+// VIS-254: one ledger at a time, said on the page. This server's (/v1/dashboard/*) by default: every
+// request that came to it, the ones sent straight to its engine included. TandemApp's controller's
+// (/v1/fleet/ledger/*, `?ledger=fleet`): what its gateway relayed, each row with its Spark and
+// deployment; a Spark or a deployment picked (the scope bar, or the Spark and Deployment filters
+// here) reads it, filtered. A request the gateway relayed to an engine is a row in both ledgers, so
+// no figure adds them up. With a fleet, By Spark (views/fleet-scope.ts) always reads the controller's
+// ledger: tokens per day stacked by Spark, and each Spark's requests, tokens, kWh and tokens per kWh.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { api, describeError } from '../api/client';
-import type { BackendRef, Summary, Totals, Usage, UsageBucket } from '../api/types';
+import type { BackendRef, LedgerSource, Summary, Totals, Usage, UsageBucket } from '../api/types';
+import { onFleet, type FleetState } from '../lib/fleet-state';
+import { currentScope, onScope, resolveScope, setScope, type Scope } from '../lib/scope';
+import { isFleet, ledgerFor } from '../lib/where';
+import { nodeChip } from '../ui/node-chip';
+import { loadFleetScope } from './perf-history';
 import { compact, dateLong, exact, fixed, money, ms, tps } from '../lib/format';
-import { compareRows, ENGINE, relayedBackends } from '../lib/relayed';
+import { compareRows, relayedBackends } from '../lib/relayed';
 import { buildHeatGrid, bucketDayKey, streaks, yearWindow, type HeatGrid, type HeatMetric } from '../lib/heatmap';
 import { setParams } from '../lib/router';
 import { addDays, browserTz, dayKey, diffDays, todayKey } from '../lib/time';
@@ -55,27 +68,66 @@ export class QseUsage extends LightElement {
   /** the engine's own year and each relayed backend's (0.11.3), for the comparison table */
   @state() private byBackend: { engine: Usage; relayed: { ref: BackendRef; usage: Usage }[] } | null = null;
   @state() private metric: HeatMetric = 'total_tokens';
+  @state() private fleet: FleetState | null = null;
+  @state() private scope: Scope = currentScope();
+  /** the controller's summary, for the hero when the page reads its ledger */
+  @state() private fleetSummary: Loadable<Summary> = { state: 'loading' };
   private tz = browserTz();
   private lastKey = '';
   private timer: ReturnType<typeof setInterval> | null = null;
+  private unsub: (() => void)[] = [];
 
   connectedCallback(): void {
     super.connectedCallback();
     this.timer = setInterval(() => document.visibilityState === 'visible' && this.load(true), 60_000);
+    this.unsub.push(
+      onFleet((f) => {
+        this.fleet = f;
+        this.reloadOnKey();
+      }),
+      onScope((s) => {
+        this.scope = s;
+        this.reloadOnKey();
+      }),
+    );
   }
   disconnectedCallback(): void {
     if (this.timer) clearInterval(this.timer);
+    this.unsub.forEach((u) => u());
+    this.unsub = [];
     super.disconnectedCallback();
   }
 
   updated(changed: Map<string, unknown>): void {
-    if (changed.has('params')) {
-      const key = `${this.model}|${this.client}|${this.backend}|${this.user}|${this.internal}|${this.range}|${this.from}|${this.to}`;
-      if (key !== this.lastKey) {
-        this.lastKey = key;
-        void this.load();
-      }
+    if (changed.has('params')) this.reloadOnKey();
+  }
+  private reloadOnKey(): void {
+    const key = `${this.model}|${this.client}|${this.backend}|${this.user}|${this.internal}|${this.range}|${this.from}|${this.to}|${this.ledger}|${this.node}|${this.deployment}`;
+    if (key !== this.lastKey) {
+      this.lastKey = key;
+      void this.load();
     }
+  }
+
+  /** VIS-254: the scope as the fleet knows it (a forgotten Spark reads as All) */
+  private get scoped(): Scope {
+    return this.fleet ? resolveScope(this.scope, this.fleet) : this.scope;
+  }
+  /** the Spark or deployment the page is filtered to: the scope's */
+  private get node(): string | null {
+    return this.scoped.kind === 'node' ? (this.scoped.id ?? null) : null;
+  }
+  private get deployment(): string | null {
+    return this.scoped.kind === 'deployment' ? (this.scoped.id ?? null) : null;
+  }
+  /** the ledger this page reads: this server's, or the controller's (lib/where.ts ledgerFor) */
+  private get ledger(): LedgerSource {
+    const picked = this.params.get('ledger') === 'fleet' ? 'fleet' : this.params.get('ledger') === 'here' ? 'here' : null;
+    return ledgerFor(this.fleet, this.scoped, picked);
+  }
+  /** the summary the hero reads: the one of the ledger on the page */
+  private get shownSummary(): Loadable<Summary> {
+    return this.ledger === 'fleet' ? this.fleetSummary : this.summary;
   }
 
   private get model() {
@@ -114,20 +166,27 @@ export class QseUsage extends LightElement {
     // response that lands after a param change is discarded instead of showing the old selection.
     const my = ++this.loadSeq;
     const mine = () => my === this.loadSeq;
-    const { model, client, backend, user, internal, range, from: customFrom, to: customTo } =
-      { model: this.model, client: this.client, backend: this.backend, user: this.user, internal: this.internal, range: this.range, from: this.from, to: this.to };
+    const { model, client, backend, user, internal, range, from: customFrom, to: customTo, ledger, node, deployment } =
+      { model: this.model, client: this.client, backend: this.backend, user: this.user, internal: this.internal, range: this.range, from: this.from, to: this.to, ledger: this.ledger, node: this.node, deployment: this.deployment };
     if (!quiet) this.usage = { state: 'loading' };
     const today = todayKey(this.tz);
     const { from, to } = yearWindow(today);
+    if (ledger === 'fleet') {
+      api.summary(this.tz, 'fleet').then(
+        (d) => mine() && (this.fleetSummary = { state: 'ready', data: d }),
+        (e) => mine() && (this.fleetSummary = { state: 'error', endpoint: describeError(e).endpoint, message: describeError(e).message }),
+      );
+    }
+    const where = { ledger, node, deployment };
     try {
-      const u = await api.usage({ from, to, bucket: 'day', tz: this.tz, model, client, backend, user, internal });
+      const u = await api.usage({ from, to, bucket: 'day', tz: this.tz, model, client, backend, user, internal, ...where });
       if (!mine()) return; // a newer load owns the view now
       this.usage = { state: 'ready', data: u };
       // the engine against each relayed backend (a cloud model), over the same year and filters
       const rel = backend ? [] : relayedBackends(u);
       if (rel.length) {
-        const q = { from, to, bucket: 'day' as const, tz: this.tz, model, client, user, internal };
-        const [engine, ...others] = await Promise.all([api.usage({ ...q, backend: ENGINE }), ...rel.map((ref) => api.usage({ ...q, backend: ref.id }))]);
+        const q = { from, to, bucket: 'day' as const, tz: this.tz, model, client, user, internal, ...where };
+        const [engine, ...others] = await Promise.all([api.usage({ ...q, own: true }), ...rel.map((ref) => api.usage({ ...q, backend: ref.id }))]);
         if (!mine()) return;
         this.byBackend = { engine, relayed: rel.map((ref, i) => ({ ref, usage: others[i] })) };
       } else this.byBackend = null;
@@ -140,7 +199,7 @@ export class QseUsage extends LightElement {
     if (range === 'custom' && customFrom && customTo) {
       this.custom = { state: 'loading' };
       try {
-        const u = await api.usage({ from: customFrom, to: customTo, bucket: 'day', tz: this.tz, model, client, backend, user, internal });
+        const u = await api.usage({ from: customFrom, to: customTo, bucket: 'day', tz: this.tz, model, client, backend, user, internal, ...where });
         if (mine()) this.custom = { state: 'ready', data: u };
       } catch (e) {
         if (!mine()) return;
@@ -168,22 +227,56 @@ export class QseUsage extends LightElement {
   }
 
   render() {
-    const filtered = !!(this.model || this.client || this.backend || this.user || this.internal);
+    const filtered = !!(this.model || this.client || this.backend || this.user || this.internal || this.node || this.deployment);
+    const fleet = isFleet(this.fleet);
+    if (fleet) void loadFleetScope();
     return html`
       <div class="view view-usage">
         ${this.renderHero(filtered)}
         ${this.renderFilters()}
+        ${this.renderLedger()}
         ${this.renderHeatmap()}
         ${this.renderCharts()}
+        ${fleet ? html`<qse-usage-fleet .window=${this.byNodeWindow()}></qse-usage-fleet>` : nothing}
         ${this.renderBackends()}
         ${this.renderTopDays()}
       </div>
     `;
   }
 
+  /** By Spark's period: the range shown, its filters (the controller's ledger) */
+  private byNodeWindow() {
+    const today = todayKey(this.tz);
+    const custom = this.range === 'custom' && this.from && this.to;
+    const n = this.range === '30d' ? 30 : this.range === '365d' ? 365 : 90;
+    return { from: custom ? (this.from as string) : addDays(today, -(n - 1)), to: custom ? (this.to as string) : today, tz: this.tz, model: this.model, client: this.client, user: this.user, internal: this.internal };
+  }
+
+  /** VIS-254: which ledger the numbers above and below come from; a fleet may switch */
+  private renderLedger(): TemplateResult | typeof nothing {
+    const f = this.fleet;
+    if (!f?.nodes.length) return nothing;
+    const ledger = this.ledger;
+    const forced = this.node || this.deployment;
+    const words =
+      ledger === 'fleet'
+        ? `TandemApp's controller: the requests its gateway relayed, each with its Spark${forced ? ', filtered to the scope' : ''}. A request sent straight to an engine is in that engine's own ledger, not here.`
+        : "this server's: every request that came to it, the ones its proxy relayed and the ones sent straight to its engine. Its own engine's rows name no Spark.";
+    return html`<div class="ledger-line small" data-ledger=${ledger}>
+      <span class="eyebrow">Ledger</span>
+      ${isFleet(f)
+        ? html`<div class="seg" role="radiogroup" aria-label="ledger">
+            <button type="button" role="radio" class="seg-btn ${ledger === 'here' ? 'is-on' : ''}" aria-checked=${ledger === 'here'} ?disabled=${!!forced} title=${forced ? 'a Spark or a deployment needs the controller’s ledger' : 'this server’s ledger'} @click=${() => setParams({ ledger: null })}>This server</button>
+            <button type="button" role="radio" class="seg-btn ${ledger === 'fleet' ? 'is-on' : ''}" aria-checked=${ledger === 'fleet'} @click=${() => setParams({ ledger: 'fleet' })}>TandemApp controller</button>
+          </div>`
+        : nothing}
+      <span class="muted">${words}</span>
+    </div>`;
+  }
+
   // ---- hero + stat tiles ------------------------------------------------------------------
   private renderHero(filtered: boolean): TemplateResult {
-    const s = this.summary;
+    const s = this.shownSummary;
     const u = this.usage;
     if (s.state === 'loading' || (filtered && u.state === 'loading')) return html`<section class="hero">${skeleton(2, 'skeleton-hero')}</section>`;
     if (s.state === 'error') return html`<section class="hero">${errorState(s.endpoint, s.message)}</section>`;
@@ -280,6 +373,11 @@ export class QseUsage extends LightElement {
     }
     if (this.user) chips.push(html`<button class="chip" @click=${() => setParams({ user: null })}>user ${this.user} ${icon('x')}</button>`);
     if (this.internal) chips.push(html`<button class="chip" @click=${() => setParams({ internal: null })}>with internal calls ${icon('x')}</button>`);
+    const f = this.fleet;
+    const node = this.node ? f?.nodes.find((n) => n.id === this.node) : null;
+    if (node) chips.push(html`<button class="chip" data-chip="node" @click=${() => setScope({ kind: 'all' })}>Spark ${nodeChip(node, { status: false })} ${icon('x')}</button>`);
+    const dep = this.deployment ? f?.deployments.find((d) => d.id === this.deployment) : null;
+    if (dep) chips.push(html`<button class="chip" data-chip="deployment" @click=${() => setScope({ kind: 'all' })}>deployment ${dep.name} ${icon('x')}</button>`);
     return html`<div class="toolbar" role="group" aria-label="filters and range">
       <label class="field">
         <span>Metric</span>
@@ -320,6 +418,28 @@ export class QseUsage extends LightElement {
               ${dims.users.map((u) => html`<option value=${u} ?selected=${u === this.user}>${u}</option>`)}
             </select>
           </label>`
+        : nothing}
+      ${isFleet(f)
+        ? html`<label class="field" data-filter="node">
+              <span>Spark</span>
+              <select @change=${(e: Event) => {
+                const v = (e.target as HTMLSelectElement).value;
+                setScope(v ? { kind: 'node', id: v } : { kind: 'all' });
+              }} .value=${this.node ?? ''}>
+                <option value="">all</option>
+                ${f.nodes.map((n) => html`<option value=${n.id} ?selected=${n.id === this.node}>${n.alias}</option>`)}
+              </select>
+            </label>
+            <label class="field" data-filter="deployment">
+              <span>Deployment</span>
+              <select @change=${(e: Event) => {
+                const v = (e.target as HTMLSelectElement).value;
+                setScope(v ? { kind: 'deployment', id: v } : { kind: 'all' });
+              }} .value=${this.deployment ?? ''}>
+                <option value="">all</option>
+                ${f.deployments.map((d) => html`<option value=${d.id} ?selected=${d.id === this.deployment}>${d.name}</option>`)}
+              </select>
+            </label>`
         : nothing}
       <label class="switch" data-filter="internal" title="TandemLLM's own calls to itself (the router's question to the engine). Off: Usage counts what clients sent.">
         <input type="checkbox" .checked=${this.internal} @change=${(e: Event) => setParams({ internal: (e.target as HTMLInputElement).checked ? '1' : null })} />
@@ -437,7 +557,7 @@ export class QseUsage extends LightElement {
                 <td class="num-col num" title=${exact(r.completion)}>${compact(r.completion)}</td>
                 <td class="num-col num">${r.decodeP50 == null ? '—' : `${fixed(r.decodeP50, 1)} tok/s`}</td>
                 <td class="num-col num">${ms(r.ttftP50)}</td>
-                <td class="num-col num">${r.id === ENGINE ? '—' : money(r.cost)}</td>
+                <td class="num-col num">${r.own ? '—' : money(r.cost)}</td>
               </tr>`,
             )}
           </tbody>
