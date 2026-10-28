@@ -54,6 +54,9 @@
 // test, a Spark's page with its edit in place and the action dialog in the new pages' chunk (10.2 KB) with their CSS
 // (1.5 KB); the client's node actions, the drained status word and the chart's clustered markers in the main chunk
 // (0.4 KB). A use of lit's `query` decorator split shared code into another chunk (2.6 KB more): left out.
+// 563 KB with the Add Spark wizard (VIS-246, 2026-10-28: 560.0 KB from 543.7): Find, Connect, Check, Install,
+// Link, Name and Done with the session's client, its logic and its stylesheet, in a chunk of its own (13.7 KB js
+// and 2.3 KB css gzipped) that loads when Settings → Add Spark opens.
 import { BUDGET, distSizes } from './gzip-size.mjs';
 
 const dist = new URL('../dist/', import.meta.url).pathname;
