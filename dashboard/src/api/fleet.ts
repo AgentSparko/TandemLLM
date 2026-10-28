@@ -7,7 +7,7 @@
 // computes Total, Stacked, Lines, Split and Table itself (charts/modes.ts), so one answer serves
 // every chart mode.
 
-import { request } from './client';
+import { apiBase, request } from './client';
 
 export const FLEET_CONTRACT = '1.0';
 
@@ -1197,6 +1197,17 @@ export interface ImportResult {
   applied: { add: number; change: number; remove: number };
   skipped: number;
   items: ImportItem[];
+}
+
+/** SRV-733: whether this page's own /v1 (the data plane) reaches TandemApp's controller, which says
+ *  so on its /v1/models answer (`X-Tandem-Gateway`); an engine's does not. */
+export async function gatewayHere(): Promise<boolean> {
+  try {
+    const r = await fetch(apiBase() + '/v1/models', { credentials: 'same-origin', cache: 'no-store' });
+    return r.headers.get('X-Tandem-Gateway') === 'tandem-app';
+  } catch {
+    return false;
+  }
 }
 
 export const fleet = {

@@ -20,6 +20,8 @@
 // else TANDEM_MOCK_FLEET, else fleet4. What macOS answers the controller's first discovery browse
 // (SRV-727): `?lan=deny` (or `allow`) on the page URL (a cookie), else POST /__mock/fleet {"lan"},
 // else allow. Discovery, its GET included, wants the token or a session like the other writes.
+// The data plane (SRV-733): `?gateway=on` on the page URL (a cookie) answers /v1/models as
+// TandemApp's controller does (`X-Tandem-Gateway`): the page's /v1 reaches the controller.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
@@ -556,6 +558,9 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
       if ((path === '/dashboard' || path === '/' || path === '/index.html') && isFleetScenario(q.get('fleet'))) {
         res.appendHeader('Set-Cookie', `qse_fleet=${q.get('fleet')}; Path=/; SameSite=Strict`);
       }
+      if ((path === '/dashboard' || path === '/' || path === '/index.html') && (q.get('gateway') === 'on' || q.get('gateway') === 'off')) {
+        res.appendHeader('Set-Cookie', `qse_gateway=${q.get('gateway')}; Path=/; SameSite=Strict`);
+      }
       if ((path === '/dashboard' || path === '/' || path === '/index.html') && (q.get('lan') === 'deny' || q.get('lan') === 'allow')) {
         res.appendHeader('Set-Cookie', `qse_lan=${q.get('lan')}; Path=/; SameSite=Strict`);
       }
@@ -977,6 +982,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
 
       if (path === '/v1/chat/completions' && req.method === 'POST') return chat(req, res);
       if (path === '/v1/models') {
+        if (cookies(req).qse_gateway === 'on') res.setHeader('X-Tandem-Gateway', 'tandem-app');
         return json(res, 200, { object: 'list', data: [{ id: 'TandemLLM', object: 'model', created: Math.floor(startedAt / 1000), owned_by: 'tandemllm', profile: 'chat' }] });
       }
       if (path === '/health') return json(res, 200, { status: liveStatus(), ...(setup.o.setupMode ? { mode: 'setup' } : {}) });

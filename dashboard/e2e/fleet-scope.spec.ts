@@ -138,6 +138,24 @@ test.describe('the fleet in every page (VIS-254)', () => {
     expect(await noHorizontalOverflow(page)).toBe(true);
   });
 
+  test('SRV-733 "Counted once": the data plane through the controller makes its ledger the default, one Spark too; this server’s by choice', { tag: '@mock' }, async ({ page }) => {
+    await login(page, '#/usage', '?fleet=fleet1&gateway=on');
+    const line = page.locator('[data-ledger="fleet"]');
+    await expect(line).toContainText('every request clients sent', { timeout: 15_000 });
+    await expect(line.locator('[role="radio"]', { hasText: 'TandemApp controller' })).toHaveAttribute('aria-checked', 'true');
+    await line.locator('[role="radio"]', { hasText: 'This server' }).click();
+    await expect(page).toHaveURL(/ledger=here/);
+    await expect(page.locator('[data-ledger="here"]')).toBeVisible();
+    await page.locator('[data-ledger] [role="radio"]', { hasText: 'TandemApp controller' }).click();
+    await expect(page).not.toHaveURL(/ledger=/);
+    await expect(page.locator('[data-ledger="fleet"]')).toBeVisible();
+    // an engine's /v1 (no gateway): one Spark says nothing of ledgers, as before the fleet
+    await login(page, '#/usage', '?fleet=fleet1&gateway=off');
+    await expect(page.locator('.usage-hero, section.hero').first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('[data-ledger]')).toHaveCount(0);
+    expect(await noHorizontalOverflow(page)).toBe(true);
+  });
+
   test('Dev: one Spark’s log through the controller, all of them interleaved with chips, Spark and deployment columns', { tag: '@mock' }, async ({ page }) => {
     await login(page, '#/dev', '?fleet=fleet4');
     const pick = page.locator('[data-dev-source]');

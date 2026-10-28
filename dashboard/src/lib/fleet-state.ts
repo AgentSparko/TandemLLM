@@ -2,10 +2,11 @@
 // of each Spark every 5 s, read from the controller's fleet API (api/fleet.ts). One store for the top
 // bar's readout, the scope bar, the icon strip's swatches and the context sidebar's health list. A
 // server without the fleet API (a box before TandemApp's controller, SRV-723) answers 404 once: the
-// store stops asking and the shell shows the box as it does today, a fleet of none.
+// store stops asking and the shell shows the box as it does today, a fleet of none. Whether the
+// page's own /v1 (the data plane) reaches the controller is asked once (SRV-733, `gateway`).
 
 import type { FleetAlert, FleetDeployment, FleetNode } from '../api/fleet';
-import { fleet } from '../api/fleet';
+import { fleet, gatewayHere } from '../api/fleet';
 import { describeError } from '../api/client';
 import { poll, type Poller } from './poll';
 
@@ -15,6 +16,8 @@ export interface FleetState {
   alerts: FleetAlert[];
   /** each node's decode rate now, tok/s; absent before the first answer */
   tps: Record<string, number>;
+  /** SRV-733: this page's /v1 reaches the controller (clients' requests are in its ledger) */
+  gateway: boolean;
 }
 
 /** null until the first answer, and for good on a server without the fleet API */
@@ -28,9 +31,9 @@ const emit = () => listeners.forEach((f) => f(state));
 
 async function loadFleet(): Promise<void> {
   try {
-    const [n, d, a] = await Promise.all([fleet.nodes(), fleet.deployments(), fleet.alerts()]);
+    const [n, d, a, gw] = await Promise.all([fleet.nodes(), fleet.deployments(), fleet.alerts(), state ? state.gateway : gatewayHere()]);
     const first = !state;
-    state = { nodes: n.nodes, deployments: d.deployments, alerts: a.alerts, tps: state?.tps ?? {} };
+    state = { nodes: n.nodes, deployments: d.deployments, alerts: a.alerts, tps: state?.tps ?? {}, gateway: gw };
     emit();
     // the rates wait for the Sparks they belong to
     if (first) void fast?.refresh();

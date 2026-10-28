@@ -68,6 +68,9 @@
 // strip per Spark, History per Spark and Usage's By Spark in a chunk of their own with their stylesheet; the
 // lanes grouped by deployment and Spark, the ledger switch and the Spark filters, Dev's sources and columns,
 // Playground's targets and Compare, Conductor's deployment, Chat's place line, the Done step's figures.
+// 611 KB with the data plane through the controller (SRV-733, 2026-10-28: 610.1 KB from 609.9): the fleet store
+// asks once whether the page's /v1 reaches the controller, and Usage then reads its ledger by default with the
+// switch and its words on one Spark too.
 import { BUDGET, distSizes } from './gzip-size.mjs';
 
 const dist = new URL('../dist/', import.meta.url).pathname;

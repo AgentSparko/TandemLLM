@@ -91,7 +91,7 @@ describe('the left panel’s override', () => {
 
 const node = (id: string, colour: number, status: FleetNode['status'] = 'up', status_text = ''): FleetNode => ({ id, alias: id.toUpperCase(), colour, status, status_text }) as FleetNode;
 const alert = (id: string, node: string, acked = false): FleetAlert => ({ id, node, acked, severity: 'warn', title: 't', since: 0, rule: 'r', detail: '', action: null, acked_at: null });
-const fleet = (p: Partial<FleetState>): FleetState => ({ nodes: [], deployments: [], alerts: [], tps: {}, ...p });
+const fleet = (p: Partial<FleetState>): FleetState => ({ nodes: [], deployments: [], alerts: [], tps: {}, gateway: false, ...p });
 
 describe('the fleet readout', () => {
   it('a swatch per Spark in its colour, the fleet’s rate summed, the active alerts', () => {
@@ -173,7 +173,7 @@ describe('the sidebars on every page (VIS-256)', () => {
     vi.stubGlobal('location', { origin: 'http://box:8000' });
     onTestFinished(() => void vi.unstubAllGlobals());
     const sections: Section[] = ['overview', 'performance', 'usage', 'hardware', 'events', 'sparks', 'models', 'api', 'conductor', 'playground', 'dev', 'add-spark', 'app'];
-    const f = { nodes: [node('desk', 1), node('r3', 4, 'alert', 'thermal')], deployments: [], alerts: [alert('a1', 'r3')], tps: { desk: 40 } } as FleetState;
+    const f = { nodes: [node('desk', 1), node('r3', 4, 'alert', 'thermal')], deployments: [], alerts: [alert('a1', 'r3')], tps: { desk: 40 }, gateway: false } as FleetState;
     const data = { route: { view: 'overview', path: [], params: new URLSearchParams() }, fleet: f, summary: null, meta: { version: '0.15.0', code: null }, layouts: [], theme: 'dark', toggleTheme: () => {} } as unknown as PageData;
     const titles = sections.map((s) => pageContext(s, { ...data, route: { ...data.route, view: s } } as PageData).title);
     expect(new Set(titles).size).toBe(sections.length);

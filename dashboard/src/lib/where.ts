@@ -99,11 +99,13 @@ export function inScope(w: Where, s: Pick<Scope, 'kind' | 'id'>): boolean {
 /** The ledger a page reads. This server's by default: it holds every request that came to it,
  *  the ones sent straight to its engine included (a controller's gateway sees only its own). A
  *  Spark or a deployment in scope, or a node or deployment filter, needs the controller's: the
- *  only one that knows nodes. The page may pick the controller's (`?ledger=fleet`) on a fleet. */
-export function ledgerFor(f: Pick<FleetView, 'nodes'> | null | undefined, s: Pick<Scope, 'kind'>, picked: LedgerSource | null, filtered = false): LedgerSource {
+ *  only one that knows nodes. The page may pick either (`?ledger=fleet`, `?ledger=here`) on a
+ *  fleet, or when the data plane runs through the controller (`gateway`, SRV-733): then the
+ *  controller's is the default, every client request with its Spark, each once. */
+export function ledgerFor(f: (Pick<FleetView, 'nodes'> & { gateway?: boolean }) | null | undefined, s: Pick<Scope, 'kind'>, picked: LedgerSource | null, filtered = false): LedgerSource {
   if (!f?.nodes.length) return 'here';
   if (s.kind !== 'all' || filtered) return 'fleet';
-  return picked ?? 'here';
+  return picked ?? (f.gateway ? 'fleet' : 'here');
 }
 
 export interface LaneGroup<T> {

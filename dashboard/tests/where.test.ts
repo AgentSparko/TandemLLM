@@ -83,6 +83,14 @@ describe('where a request ran', () => {
     expect(ledgerFor(f4, { kind: 'deployment' }, null)).toBe('fleet');
     expect(ledgerFor(f4, { kind: 'all' }, 'here', true)).toBe('fleet');
   });
+  it("SRV-733: the controller's ledger by default once the data plane runs through it; this server's by choice", () => {
+    const one = { ...fleetOf('fleet1'), gateway: true };
+    expect(ledgerFor(one, { kind: 'all' }, null)).toBe('fleet');
+    expect(ledgerFor(one, { kind: 'all' }, 'here')).toBe('here');
+    expect(ledgerFor({ ...f4, gateway: true }, { kind: 'all' }, null)).toBe('fleet');
+    expect(ledgerFor({ ...f4, gateway: false }, { kind: 'all' }, null)).toBe('here');
+    expect(ledgerFor(one, { kind: 'node' }, 'here')).toBe('fleet');
+  });
 });
 
 describe('the API has no single engine of its own (VIS-254 acceptance)', () => {

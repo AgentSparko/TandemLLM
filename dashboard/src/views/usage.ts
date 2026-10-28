@@ -9,6 +9,9 @@
 // here) reads it, filtered. A request the gateway relayed to an engine is a row in both ledgers, so
 // no figure adds them up. With a fleet, By Spark (views/fleet-scope.ts) always reads the controller's
 // ledger: tokens per day stacked by Spark, and each Spark's requests, tokens, kWh and tokens per kWh.
+// SRV-733: once the page's own /v1 reaches the controller (the data plane runs through it, the
+// fleet store's `gateway`), the controller's ledger is the default, one Spark or many: every client
+// request once, with its Spark and deployment; this server's stays a click away (`?ledger=here`).
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -252,23 +255,28 @@ export class QseUsage extends LightElement {
     return { from: custom ? (this.from as string) : addDays(today, -(n - 1)), to: custom ? (this.to as string) : today, tz: this.tz, model: this.model, client: this.client, user: this.user, internal: this.internal };
   }
 
-  /** VIS-254: which ledger the numbers above and below come from; a fleet may switch */
+  /** VIS-254: which ledger the numbers above and below come from; a fleet may switch, and so may
+   *  a page whose data plane runs through the controller (SRV-733: then the controller's is the
+   *  default) */
   private renderLedger(): TemplateResult | typeof nothing {
     const f = this.fleet;
     const ledger = this.ledger;
+    const gw = !!f?.gateway;
     // one Spark reads this server's ledger, as before the fleet: nothing to say unless asked for the other
-    if (!isFleet(f) && ledger === 'here') return nothing;
+    if (!isFleet(f) && !gw && ledger === 'here') return nothing;
     const forced = this.node || this.deployment;
     const words =
       ledger === 'fleet'
-        ? `TandemApp's controller: the requests its gateway relayed, each with its Spark${forced ? ', filtered to the scope' : ''}. A request sent straight to an engine is in that engine's own ledger, not here.`
+        ? gw
+          ? `TandemApp's controller: every request clients sent to this address's /v1, each once with its Spark${forced ? ', filtered to the scope' : ''}. A request sent straight to an engine (the Chat tab's) is in that engine's own ledger, not here.`
+          : `TandemApp's controller: the requests its gateway relayed, each with its Spark${forced ? ', filtered to the scope' : ''}. A request sent straight to an engine is in that engine's own ledger, not here.`
         : "this server's: every request that came to it, the ones its proxy relayed and the ones sent straight to its engine. Its own engine's rows name no Spark.";
     return html`<div class="ledger-line small" data-ledger=${ledger}>
       <span class="eyebrow">Ledger</span>
-      ${isFleet(f)
+      ${isFleet(f) || gw
         ? html`<div class="seg" role="radiogroup" aria-label="ledger">
-            <button type="button" role="radio" class="seg-btn ${ledger === 'here' ? 'is-on' : ''}" aria-checked=${ledger === 'here'} ?disabled=${!!forced} title=${forced ? 'a Spark or a deployment needs the controller’s ledger' : 'this server’s ledger'} @click=${() => setParams({ ledger: null })}>This server</button>
-            <button type="button" role="radio" class="seg-btn ${ledger === 'fleet' ? 'is-on' : ''}" aria-checked=${ledger === 'fleet'} @click=${() => setParams({ ledger: 'fleet' })}>TandemApp controller</button>
+            <button type="button" role="radio" class="seg-btn ${ledger === 'here' ? 'is-on' : ''}" aria-checked=${ledger === 'here'} ?disabled=${!!forced} title=${forced ? 'a Spark or a deployment needs the controller’s ledger' : 'this server’s ledger'} @click=${() => setParams({ ledger: gw ? 'here' : null })}>This server</button>
+            <button type="button" role="radio" class="seg-btn ${ledger === 'fleet' ? 'is-on' : ''}" aria-checked=${ledger === 'fleet'} @click=${() => setParams({ ledger: gw ? null : 'fleet' })}>TandemApp controller</button>
           </div>`
         : nothing}
       <span class="muted">${words}</span>
