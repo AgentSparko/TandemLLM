@@ -27,7 +27,7 @@ class OpenAI(Adapter):
                                  "input_tokens_details.cached_tokens"],
                 "thinking_switch": "reasoning_effort"}
 
-    def forward(self, client_headers) -> list[tuple[str, str]]:
+    def forward(self, client_headers, key: str | None = None) -> list[tuple[str, str]]:
         try:
             beta = client_headers.get("OpenAI-Beta")
         except Exception:                                          # noqa: BLE001

@@ -86,6 +86,12 @@ alias, which the user may change) and the deployment that served a relayed reque
 (proxy/deployments.py); null for an engine's own rows, for a cloud backend and on a proxy without
 a fleet. Indexed with the time, as the backend is, for the Usage filters `node=` and `deployment=`.
 
+SCHEMA VERSION 12 (SRV-733): `upstream_request`, the id the backend gave a relayed answer (its
+`id`, a Responses answer's `response.id`). Our engine's answer id is the `request_id` of its own
+row for the request, so a TandemApp controller's row and the engine's row of one request join on
+it: one request, two rows, never added up (docs/proxy.md, the data plane). Null on the engine's
+own rows and for an answer without an id (embeddings).
+
 RETENTION. Rows older than `--usage-retention-days` (400; less is refused outside tests) are
 deleted once a day at 04:00 local, then `PRAGMA incremental_vacuum`. Once an ISO week, an online
 backup (the sqlite3 backup API) goes to `backup/ledger-<year>-W<week>.sqlite3` beside the file,
@@ -109,7 +115,7 @@ import time
 from server.conductor import signals
 
 PRODUCTION = "~/.qwen38-spark-engine/usage/ledger.sqlite3"
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 MIN_RETENTION_DAYS = 400
 QUEUE_MAX = 10_000
 BACKUP_KEEP = 8
@@ -125,7 +131,7 @@ COLUMNS = ("ts_ms", "request_id", "model", "client_id", "client_kind", "endpoint
            "proxy_ms", "retries", "fallback_from", "upstream_status", "user", "preemptions",
            "engine_finish", "corrupted", "l2_join", "wait_own_ms", "parent_request",
            "slot", "engine_cached", "forwarded_tokens", "wait_mem_ms", "sampling",
-           "system_fingerprint", "node", "deployment")
+           "system_fingerprint", "node", "deployment", "upstream_request")
 
 # The conductor's columns (SRV-117, then SRV-115's three of schema version 2), added in place to a
 # ledger that lacks them. Additive and idempotent: an old row reads null in each.
@@ -160,7 +166,9 @@ ADDED = (("model_served", "TEXT"), ("profile", "TEXT"), ("profile_version", "INT
          # schema version 10 (VIS-207): a relayed answer's `system_fingerprint`
          ("system_fingerprint", "TEXT"),
          # schema version 11 (SRV-731): the fleet node and the deployment that served it
-         ("node", "TEXT"), ("deployment", "TEXT"))
+         ("node", "TEXT"), ("deployment", "TEXT"),
+         # schema version 12 (SRV-733): a relayed answer's own id (the engine row it joins)
+         ("upstream_request", "TEXT"))
 
 # the columns `Ledger.amend` may set on a row already written (proxy/collect_api.py)
 AMENDABLE = ("queue_ms", "prompt_ms", "decode_ms", "decode_tps", "prefill_tps", "cached_tokens",

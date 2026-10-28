@@ -484,6 +484,13 @@
               "null"
             ],
             "description": "VIS-207 (ledger schema 10): the backend configuration a relayed answer named (its system_fingerprint); null for the engine's own rows and a backend that sends none"
+          },
+          "upstream_request": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "SRV-733 (ledger schema 12): the id the backend gave a relayed answer; for a TandemLLM engine, the request_id of the engine's own row of the request (the two rows join on it, never added up); null for the engine's own rows and an answer without an id"
           }
         },
         "required": [

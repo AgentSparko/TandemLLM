@@ -13,6 +13,20 @@ from __future__ import annotations
 
 from proxy.adapters.base import CHAT, COMPLETIONS, EMBEDDINGS, RESPONSES, Adapter
 
+# SRV-733: what the relay does not pass between a client and our engine: the hop's own headers,
+# what the relay writes itself (the body's length and type, the host), a cookie of this server,
+# and the headers only this proxy may set (whose memory, its lane id, a deployment's pin)
+NOT_FORWARDED = frozenset((
+    "connection", "keep-alive", "proxy-connection", "proxy-authorization", "proxy-authenticate",
+    "te", "trailer", "transfer-encoding", "upgrade", "expect", "host", "content-length",
+    "content-type", "accept", "accept-encoding", "cookie", "x-tandem-user", "x-tandem-relay-id",
+    "x-tandem-pin"))
+# ... and back: the hop's own, what the relay writes itself, and the facts this proxy states
+NOT_PASSED = frozenset((
+    "connection", "keep-alive", "transfer-encoding", "content-length", "content-type", "date",
+    "server", "cache-control", "x-accel-buffering", "x-tandem-backend", "x-tandem-node",
+    "x-tandem-deployment"))
+
 
 class Generic(Adapter):
     kind = "generic"
@@ -25,10 +39,29 @@ class Generic(Adapter):
 
 class TandemLLM(Generic):
     """Our own engine at a URL (the standalone proxy in front of it). It puts `usage` on the finish
-    chunk unasked, so the stream is not asked for a separate usage frame, and it reads `X-Tandem`
-    and the session headers, which the relay passes on."""
+    chunk unasked, so the stream is not asked for a separate usage frame.
+
+    SRV-733: a client that reached the engine through this proxy is the client the engine would
+    have seen. Every header it sent goes on (its agent and referer for the client kind, the
+    conductor's and memory's headers, the session headers, `X-Real-IP` and `X-Forwarded-For` as
+    the reverse proxy set them, its `Authorization` when the backend has no key of its own)
+    except NOT_FORWARDED; every header of the answer comes back except NOT_PASSED. The engine's
+    model list is kept whole (`cards`): /v1/models here lists its cards as the engine does."""
 
     kind = "tandemllm"
+    cards = True
+
+    def forward(self, client_headers, key: str | None = None) -> list[tuple[str, str]]:
+        try:
+            items = list(client_headers.items())
+        except Exception:                                          # noqa: BLE001
+            return []
+        return [(k, v) for k, v in items
+                if v and k.lower() not in NOT_FORWARDED
+                and not (key and k.lower() == "authorization")]
+
+    def passes(self, name: str) -> bool:
+        return name.lower() not in NOT_PASSED
 
     def capabilities(self) -> dict:
         caps = super().capabilities()

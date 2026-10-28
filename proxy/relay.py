@@ -9,7 +9,12 @@ The request body goes upstream as the client sent it unless the model id or the 
 changes it; then it is the client's JSON with those fields set.
 
 TIMEOUTS per backend (local: connect 5 s, first byte 600 s, idle gap 120 s; cloud: 10, 120, 60),
-each its own `finish_reason`: `timeout_connect`, `timeout_first_byte`, `timeout_idle`.
+each its own `finish_reason`: `timeout_connect`, `timeout_first_byte`, `timeout_idle`. Our engine
+(`tandemllm`) may think for longer than either before its next byte (a long prefill, reasoning
+it does not stream, a request without a stream): when a wait runs out, the relay asks the
+engine's board (`/v1/dashboard/parallel`) whether it still holds the request under the relay's
+lane id, and waits another span while it does (SRV-733). An engine that dropped the request, or
+does not answer the question, ends the wait as before.
 
 RETRIES only before any byte went to the client: a connect error, a 429, 502 or 503. At most 2
 across the route's fallbacks. A fallback is tried at once (another backend); the same backend is
@@ -22,6 +27,11 @@ one SSE comment just before `data: [DONE]`: `: tandem-cost {"cost_micros": N, "b
 price of the request (every request the harness sent for it) as its ledger row will have it, N
 null without a price. A comment is ignored by every SSE reader; without the header the bytes are
 the backend's.
+
+OUR ENGINE BEHIND IT (SRV-733, proxy/adapters/generic.py TandemLLM): the client's headers go on
+and the answer's come back as the engine would have taken and sent them; a request this proxy let
+in without a key is the engine's `owner`, as one sent straight to the engine is
+(`X-Tandem-User`); the cost comment is the engine's own, which prices what it relays.
 
 THE CLIENT LEAVES: the upstream connection is closed within a quarter second (the backend stops
 generating), and the row says `abandoned`.
@@ -57,14 +67,14 @@ import time
 from proxy import http1
 from proxy.adapters import ENDPOINTS, Stamps
 from proxy.measure import RelayRecord
+from server.parallel import _fetch_json
 
 RETRYABLE = (429, 502, 503)
 MAX_RETRIES = 2
 RETRY_AFTER_CAP = 30.0
 DRAIN_RETRY_S = 30
-# response headers passed to the client (besides Content-Type)
-PASS_HEADERS = ("retry-after", "x-request-id", "openai-processing-ms")
-PASS_PREFIXES = ("x-ratelimit-",)
+# SRV-733: our engine's board, asked whether it still holds a quiet request
+BOARD = "/v1/dashboard/parallel?since=9999999999"
 
 
 _DONE = re.compile(rb"(?:^|\n)data: ?\[DONE\]")
@@ -147,6 +157,17 @@ class Relay:
         self._pools: dict[str, tuple] = {}
         self._lock = threading.Lock()
         self.sleep = time.sleep
+        self.fetch = _fetch_json
+
+    def engine_holds(self, backend: dict, rid: str) -> bool:
+        """Our engine still holds the request the relay filed under `rid` (a lane of its board,
+        queued, prefilling or generating). False when it does not, or does not say."""
+        base = backend["url"].rstrip("/")
+        if base.endswith("/v1"):
+            base = base[:-3]
+        doc = self.fetch(base + BOARD)
+        lanes = doc.get("lanes") if isinstance(doc, dict) else None
+        return any(isinstance(x, dict) and x.get("relay_id") == rid for x in lanes or [])
 
     def pool(self, backend: dict) -> http1.Pool:
         key = (backend["url"], backend["timeouts"]["connect"])
@@ -271,17 +292,18 @@ class Relay:
             if changed:
                 body, raw = body2, json.dumps(body2, ensure_ascii=False).encode()
         up_body, injected = adapter.prepare(path, raw, body, upstream_model)
-        headers = adapter.headers(key) + adapter.forward(handler.headers)
+        headers = adapter.headers(key) + adapter.forward(handler.headers, key)
         if hx is not None:
             headers = hx.headers(adapter, headers)
-        if backend.get("kind") == "tandemllm":
+        ours = backend.get("kind") == "tandemllm"
+        if ours:
             # the parallel view: our engine files the request under this id, so the proxy's lane
             # reads the engine's own live count, prefill and state (server/parallel.py peers)
             headers = headers + [("X-Tandem-Relay-Id", rec.request_id)]
-            if getattr(rec, "user", None):
-                # 2026-10-05: whose memory the engine reads and writes (server/app.py
-                # `_memory_user` takes it from a trusted proxy address only)
-                headers = headers + [("X-Tandem-User", str(rec.user))]
+            # 2026-10-05: whose memory the engine reads and writes (server/app.py `_memory_user`
+            # takes it from a trusted proxy address only); SRV-733: a request let in without a
+            # key is the owner's, as the engine takes one sent to it straight
+            headers = headers + [("X-Tandem-User", str(getattr(rec, "user", None) or "owner"))]
         collect = getattr(self.svc, "collect", None)
         if collect is not None:                     # P6: an id the engine's plugin reports back
             up_body, headers = collect.tag(backend, path, body, up_body, headers, rec)
@@ -294,6 +316,8 @@ class Relay:
             try:
                 conn = pool.get(fresh=fresh)
                 rec.connect_ms += conn.connect_ms
+                if ours:
+                    conn.busy = lambda: self.engine_holds(backend, rec.request_id)
                 conn.send("POST", upath, headers, up_body)
                 if rec.t_sent is None:
                     rec.stamp_sent()
@@ -342,7 +366,7 @@ class Relay:
                 ra = float(hmap.get("retry-after", ""))
             except ValueError:
                 ra = None
-            keep = [(k, v) for k, v in uh if _passed(k)]
+            keep = [(k, v) for k, v in uh if adapter.passes(k)]
             ctype = hmap.get("content-type")
             if ctype:
                 keep.append(("Content-Type", ctype))
@@ -356,14 +380,14 @@ class Relay:
         return ("done",)
 
     # ----------------------------------------------------------------- answers
-    def _start(self, handler, status: int, uh, backend: dict, stream: bool, length=None,
-               rec=None) -> None:
+    def _start(self, handler, status: int, uh, backend: dict, adapter, stream: bool,
+               length=None, rec=None) -> None:
         handler._px_written = True
         handler.send_response(status)
         ctype = next((v for k, v in uh if k.lower() == "content-type"), "application/json")
         handler.send_header("Content-Type", ctype)
         for k, v in uh:
-            if _passed(k):
+            if adapter.passes(k):
                 handler.send_header(k, v)
         handler.send_header("X-Tandem-Backend", backend["id"])
         if rec is not None and getattr(rec, "node_alias", None):
@@ -384,9 +408,10 @@ class Relay:
         st = Stamps()
         to = backend["timeouts"]
         hx = getattr(rec, "hx", None)
-        self._start(handler, 200, uh, backend, True, rec=rec)
+        self._start(handler, 200, uh, backend, adapter, True, rec=rec)
         w = handler.wfile
-        if (handler.headers.get("X-Tandem-Cost") or "").strip() == "1":
+        if (handler.headers.get("X-Tandem-Cost") or "").strip() == "1" and \
+                backend.get("kind") != "tandemllm":
             w = CostTap(w, lambda: self._cost_line(st, adapter, path, backend, rec))
         try:
             self._pump(conn, path, adapter, st, injected, rec, w, to, poll, hx)
@@ -579,7 +604,7 @@ class Relay:
             for ev in data.replace(b"\r\n", b"\n").split(b"\n\n"):
                 adapter.read_frame(path, ev, st, False)
         try:
-            self._start(handler, status, uh, backend, False, len(data), rec=rec)
+            self._start(handler, status, uh, backend, adapter, False, len(data), rec=rec)
             handler.wfile.write(data)
             handler.wfile.flush()
         except (BrokenPipeError, ConnectionResetError, OSError):
@@ -605,6 +630,7 @@ class Relay:
         rec.cost_micros = adapter.price(u, self.svc.price_of(backend["id"], rec.backend_model
                                                               or rec.public_model), rec.ts)
         rec.system_fingerprint = st.fingerprint
+        rec.upstream_request = st.response_id
 
     def _cost_line(self, st: Stamps, adapter, path, backend, rec) -> bytes:
         """The cost comment: the usage so far (the harness's requests summed, else the stream's
@@ -628,7 +654,8 @@ class Relay:
                          "application/json")
             handler.send_header("Content-Type", ctype)
             for k, v in headers:
-                if k.lower() != "content-type" and (_passed(k) or k.lower() == "retry-after"):
+                # the relay's own (a Retry-After), or a backend's that its adapter passed
+                if k.lower() != "content-type":
                     handler.send_header(k, v)
             if getattr(rec, "deployment", None):
                 handler.send_header("X-Tandem-Deployment", rec.deployment)
@@ -650,11 +677,6 @@ def _finish(st) -> str:
     if st.error:
         return "error"
     return FINISH.get(st.finish_reason or "stop", "stop")
-
-
-def _passed(name: str) -> bool:
-    n = name.lower()
-    return n in PASS_HEADERS or n.startswith(PASS_PREFIXES)
 
 
 def _event_end(buf: bytearray) -> tuple[int, int]:

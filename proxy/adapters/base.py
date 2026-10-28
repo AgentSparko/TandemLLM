@@ -7,8 +7,10 @@ One class per backend kind. The relay copies bytes; the adapter only reads them,
                       field, where reasoning arrives, which cache counts it reports, how thinking
                       is switched
     headers(key)      the upstream headers: the key as a bearer, a JSON body
-    forward(headers)  the client headers passed on (local engines read X-Tandem and the session
-                      headers; a cloud API gets none of them)
+    forward(headers, key)  the client headers passed on (local engines read X-Tandem and the
+                      session headers; a cloud API gets none of them; our engine gets all a
+                      client sends it, SRV-733)
+    passes(name)      a response header the client gets as the backend sent it
     prepare(...)      the upstream body: the model id the backend knows, and a stream asked for
                       its usage frame when the client did not ask (the frame is then dropped)
     read_frame(...)   one event of a stream: does it carry a token (content, reasoning or a
@@ -48,6 +50,9 @@ ENDPOINTS = {CHAT: "chat", COMPLETIONS: "completions", EMBEDDINGS: "embeddings",
 
 # the client headers a local engine reads (our engine's conductor, session identity)
 LOCAL_HEADERS = ("x-tandem", "x-session-id", "x-conversation-id", "x-request-id")
+# response headers passed to the client (besides Content-Type)
+PASS_HEADERS = ("retry-after", "x-request-id", "openai-processing-ms")
+PASS_PREFIXES = ("x-ratelimit-",)
 
 
 def _int(x):
@@ -80,7 +85,8 @@ class Stamps:
     """What one response's frames said, filled by `read_frame`; the relay adds the times."""
 
     __slots__ = ("usage", "finish_reason", "reasoning", "tools", "tokens_seen", "error",
-                 "model", "think_open", "kind", "tool_name", "tool_chars", "fingerprint")
+                 "model", "think_open", "kind", "tool_name", "tool_chars", "fingerprint",
+                 "response_id")
 
     def __init__(self):
         self.usage = None              # the provider's usage object, as sent
@@ -98,6 +104,14 @@ class Stamps:
         self.tool_chars = 0            # the tool calls' argument characters streamed so far
         # the backend configuration the answer names (`system_fingerprint`), the first one seen
         self.fingerprint = None
+        # the answer's own id (`id`; a Responses answer's `response.id`), the first one seen: our
+        # engine's is its ledger row's request_id (SRV-733, the row of record)
+        self.response_id = None
+
+
+def _answer_id(obj: dict, st: Stamps) -> None:
+    if st.response_id is None and isinstance(obj.get("id"), str) and obj["id"]:
+        st.response_id = obj["id"][:80]
 
 
 def sse_data(event: bytes) -> bytes | None:
@@ -223,7 +237,7 @@ class Adapter:
             out.append(("Authorization", f"Bearer {key}"))
         return out
 
-    def forward(self, client_headers) -> list[tuple[str, str]]:
+    def forward(self, client_headers, key: str | None = None) -> list[tuple[str, str]]:
         if self.cloud:
             return []
         out = []
@@ -235,6 +249,10 @@ class Adapter:
             if v:
                 out.append((name, v))
         return out
+
+    def passes(self, name: str) -> bool:
+        n = name.lower()
+        return n in PASS_HEADERS or n.startswith(PASS_PREFIXES)
 
     def inject_usage(self) -> bool:
         v = self.backend.get("inject_usage")
@@ -282,6 +300,7 @@ class Adapter:
             st.error = obj.get("error")
             st.finish_reason = "error"
             return False, False
+        _answer_id(obj, st)
         if obj.get("model") and st.model is None:
             st.model = obj["model"]
         if st.fingerprint is None and isinstance(obj.get("system_fingerprint"), str):
@@ -344,6 +363,8 @@ class Adapter:
 
     def _read_response_event(self, obj: dict, st: Stamps) -> bool:
         t = obj.get("type") or ""
+        if isinstance(obj.get("response"), dict):
+            _answer_id(obj["response"], st)
         if t in ("response.output_text.delta", "response.refusal.delta"):
             st.tokens_seen += 1
             st.kind = "content"
@@ -388,6 +409,7 @@ class Adapter:
             return
         if st.fingerprint is None and isinstance(obj.get("system_fingerprint"), str):
             st.fingerprint = obj["system_fingerprint"][:64]
+        _answer_id(obj, st)
         if path == RESPONSES:
             if isinstance(obj.get("usage"), dict):
                 st.usage = obj["usage"]

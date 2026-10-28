@@ -777,6 +777,8 @@ def _proxy_fields(r: dict, conf: dict) -> dict:
             "system_fingerprint": r.get("system_fingerprint"),
             # SRV-731 (ledger schema 11): the fleet node and the deployment that served it
             "node": r.get("node"), "deployment": r.get("deployment"),
+            # SRV-733 (ledger schema 12): the answer's own id, the engine row it joins
+            "upstream_request": r.get("upstream_request"),
             # P6: the engine's own numbers came from its plugin (ledger schema 4)
             "l2": ({"join": r["l2_join"], "preemptions": r.get("preemptions"),
                     "engine_finish": r.get("engine_finish"),

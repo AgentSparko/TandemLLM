@@ -294,6 +294,9 @@ export interface RequestRow {
    *  for an engine's own row, a cloud backend, a server without a fleet */
   node?: string | null;
   deployment?: string | null;
+  /** SRV-733 (ledger schema 12): the id the backend gave the answer; a TandemLLM engine's is its
+   *  own row's request_id (the two rows of one request join on it, never added up) */
+  upstream_request?: string | null;
   /** P6: the queue, prefill and decode split and the cached tokens came from the engine's plugin */
   l2?: { join: 'exact' | 'approximate'; preemptions?: number | null; engine_finish?: string | null; corrupted?: boolean | null } | null;
 }

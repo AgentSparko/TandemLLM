@@ -53,6 +53,8 @@ class RelayRecord(usage_mod.RequestRecord):
         self.live_kind = None          # "reasoning" | "content" | "tool"
         self.live_tool = None
         self.system_fingerprint = None  # the answer's `system_fingerprint` (ledger schema 10)
+        # SRV-733 (ledger schema 12): the answer's own id, our engine's ledger row for it
+        self.upstream_request = None
         # SRV-731 (ledger schema 11): the fleet node and the deployment that served it; the
         # alias goes into the answer's `X-Tandem-Node`
         self.node = None
@@ -159,5 +161,6 @@ class RelayRecord(usage_mod.RequestRecord):
             "cache_source": None,
             "system_fingerprint": self.system_fingerprint,
             "node": self.node, "deployment": self.deployment,
+            "upstream_request": self.upstream_request,
         })
         return out

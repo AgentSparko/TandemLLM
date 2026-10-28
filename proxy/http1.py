@@ -13,7 +13,10 @@ stops generating) and whether the idle gap has passed. So this module owns its b
     for piece in conn.body(idle, poll):     bytes as they arrive (chunked decoded)
     pool.put(conn)                          back for the next request, when the body was whole
 
-`poll()` is called at least every 0.25 s while a read waits; a true answer raises `Aborted`. A
+`poll()` is called at least every 0.25 s while a read waits; a true answer raises `Aborted`.
+`conn.busy`, when set, is asked once a wait for the head or the next byte has run its whole span:
+True (the server still works on the request) starts another span, anything else ends it with
+`Timeout` (SRV-733: our engine thinking for minutes before its first byte). A
 connection taken from the pool that turns out to be closed by the server before any byte of the
 answer is reported as `Stale`, and the relay sends again on a fresh one without counting a retry.
 A cloud TLS handshake costs about 100 ms; the pool pays it once per connection.
@@ -64,6 +67,7 @@ class Conn:
         self.t_sent: float | None = None
         self.t_first_byte: float | None = None
         self.connect_ms = 0.0                 # DNS, TCP and TLS of a new connection; 0 when reused
+        self.busy = None                      # fn() -> True while the server works on the request
 
     # ----------------------------------------------------------------- writing
     def send(self, method: str, path: str, headers: list[tuple[str, str]], body: bytes) -> None:
@@ -87,12 +91,16 @@ class Conn:
     # ----------------------------------------------------------------- reading
     def _fill(self, deadline: float, poll, which: str) -> bool:
         """Read what arrives into the buffer. False at end of file."""
+        span = deadline - time.monotonic()
         while True:
             if poll is not None and poll():
                 raise Aborted()
             left = deadline - time.monotonic()
             if left <= 0:
-                raise Timeout(which)
+                if self.busy is None or span <= 0 or self.busy() is not True:
+                    raise Timeout(which)
+                deadline = time.monotonic() + span
+                continue
             self.sock.settimeout(min(TICK, left))
             try:
                 got = self.sock.recv(65536)
@@ -359,6 +367,7 @@ class Pool:
         return c
 
     def put(self, conn: Conn) -> None:
+        conn.busy = None                     # the request's own question, not the next one's
         if not (conn.keep and conn.done) or conn.buf:
             conn.close()
             return
