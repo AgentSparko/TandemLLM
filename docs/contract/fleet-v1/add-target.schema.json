@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/add-target.schema.json",
+  "title": "the body of POST /v1/fleet/add/{id}/targets: a discovery row, or a rented or remote node by its ssh line (or the target /discovery/target read from it) with its lease; key: a private key for this node (memory only during the session; kept 0600 for a tunnel while the node is in the fleet)",
+  "type": "object",
+  "properties": {
+    "row": {
+      "type": "string"
+    },
+    "ssh": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object"
+        }
+      ],
+      "description": "the ssh line, or the target /discovery/target read from it"
+    },
+    "rented": {
+      "type": "object",
+      "properties": {
+        "lease_end": {
+          "type": "number"
+        },
+        "cost_per_hour": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "lease_end"
+      ],
+      "additionalProperties": false
+    },
+    "key": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}

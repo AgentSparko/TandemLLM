@@ -1,0 +1,812 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/add-session.schema.json",
+  "title": "An Add Spark session (VIS-246): POST /v1/fleet/add, GET, PATCH and DELETE /v1/fleet/add/{id}, and every POST under it; the state the wizard resumes from, never a password or a key",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "active",
+        "done",
+        "abandoned"
+      ]
+    },
+    "step": {
+      "enum": [
+        "find",
+        "connect",
+        "check",
+        "install",
+        "link",
+        "name",
+        "done"
+      ]
+    },
+    "created_at": {
+      "type": "number"
+    },
+    "updated_at": {
+      "type": "number"
+    },
+    "by": {
+      "type": "string"
+    },
+    "fleet_version": {
+      "type": "string"
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/target"
+      }
+    },
+    "link": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "todo",
+            "not_needed",
+            "skipped",
+            "testing",
+            "done"
+          ]
+        },
+        "why": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "node": {
+                "type": "string"
+              },
+              "link": {
+                "type": "string"
+              },
+              "test": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "error": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "node",
+              "link",
+              "test",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "state",
+        "why",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "done_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "seq": {
+      "type": "integer"
+    },
+    "reminders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "lease_end": {
+            "type": "number"
+          },
+          "at": {
+            "type": "number"
+          },
+          "hours": {
+            "type": "number"
+          },
+          "rule": {
+            "const": "lease"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "node",
+          "target",
+          "lease_end",
+          "at",
+          "hours",
+          "rule",
+          "enabled"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract_version",
+    "id",
+    "state",
+    "step",
+    "created_at",
+    "updated_at",
+    "by",
+    "fleet_version",
+    "targets",
+    "link",
+    "done_at",
+    "seq",
+    "reminders"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "target": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "row": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "spark",
+            "gb10",
+            "host",
+            "owned",
+            "unknown",
+            "rented",
+            "remote"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "connect": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "code",
+              "ssh",
+              "takeover"
+            ]
+          }
+        },
+        "hw": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "window": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "ssh": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "user": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "jumps": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hop"
+              }
+            },
+            "key_file": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "auth": {
+              "enum": [
+                "password",
+                "key",
+                "key_file",
+                "agent",
+                null
+              ]
+            }
+          },
+          "required": [
+            "host",
+            "port",
+            "user",
+            "jumps",
+            "key_file",
+            "auth"
+          ],
+          "additionalProperties": false
+        },
+        "rented": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "lease_end": {
+              "type": "number"
+            },
+            "cost_per_hour": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "lease_end",
+            "cost_per_hour"
+          ],
+          "additionalProperties": false
+        },
+        "transport": {
+          "enum": [
+            "lan",
+            "tunnel"
+          ]
+        },
+        "state": {
+          "enum": [
+            "todo",
+            "paired",
+            "bare"
+          ]
+        },
+        "via": {
+          "enum": [
+            "code",
+            "ssh",
+            "takeover",
+            null
+          ]
+        },
+        "host_key": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "fingerprint": {
+              "type": "string"
+            },
+            "known": {
+              "enum": [
+                "new",
+                "same",
+                "changed"
+              ]
+            },
+            "stored": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "confirmed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "fingerprint",
+            "known",
+            "stored",
+            "confirmed"
+          ],
+          "additionalProperties": false
+        },
+        "error": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        "node": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "preflight": {
+          "$ref": "#/$defs/preflight"
+        },
+        "install": {
+          "$ref": "#/$defs/install"
+        },
+        "name": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "alias": {
+              "type": "string"
+            },
+            "colour": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            },
+            "icon": {
+              "enum": [
+                "desk",
+                "cloud",
+                "rack"
+              ]
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "secret": {
+          "type": "object",
+          "properties": {
+            "held": {
+              "type": "boolean"
+            },
+            "until": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "held",
+            "until"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "row",
+        "label",
+        "kind",
+        "title",
+        "detail",
+        "address",
+        "connect",
+        "hw",
+        "version",
+        "window",
+        "ssh",
+        "rented",
+        "transport",
+        "state",
+        "via",
+        "host_key",
+        "error",
+        "node",
+        "preflight",
+        "install",
+        "name",
+        "secret"
+      ],
+      "additionalProperties": false
+    },
+    "hop": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "user",
+        "host",
+        "port"
+      ],
+      "additionalProperties": false
+    },
+    "row": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "ok",
+            "warn",
+            "fail"
+          ]
+        },
+        "value": {
+          "type": "string"
+        },
+        "fix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "state",
+        "value",
+        "fix"
+      ],
+      "additionalProperties": false
+    },
+    "preflight": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "at": {
+          "type": "number"
+        },
+        "via": {
+          "enum": [
+            "agent",
+            "ssh",
+            null
+          ]
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/row"
+          }
+        },
+        "verdict": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "fails": {
+              "type": "integer"
+            },
+            "warns": {
+              "type": "integer"
+            },
+            "install": {
+              "enum": [
+                "needed",
+                "skip",
+                "refused"
+              ]
+            },
+            "why": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fails",
+            "warns",
+            "install",
+            "why"
+          ],
+          "additionalProperties": false
+        },
+        "error": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "at",
+        "via",
+        "rows",
+        "verdict",
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    "install": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "skip",
+            "queued",
+            "running",
+            "done",
+            "failed"
+          ]
+        },
+        "why": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "node": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        "started_at": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "ended_at": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "prefix": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "unit": {
+              "type": "string"
+            },
+            "engine": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "prefix",
+            "port",
+            "unit",
+            "engine"
+          ],
+          "additionalProperties": false
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "log": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/logline"
+          }
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "step": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "enum": [
+            "check",
+            "upload",
+            "agent",
+            "engine",
+            "unit",
+            "pair"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "todo",
+            "running",
+            "done",
+            "failed",
+            "skip"
+          ]
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "started_at": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "ended_at": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "state",
+        "detail",
+        "started_at",
+        "ended_at"
+      ],
+      "additionalProperties": false
+    },
+    "logline": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "type": "number"
+        },
+        "step": {
+          "type": "string"
+        },
+        "level": {
+          "enum": [
+            "info",
+            "warn"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "step",
+        "level",
+        "text"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

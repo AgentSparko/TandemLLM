@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/add.schema.json",
+  "title": "GET /v1/fleet/add: the fleet's version and the active Add Spark session, or null (a page resumes from it)",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "const": "1.0"
+    },
+    "fleet_version": {
+      "type": "string"
+    },
+    "session": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "the active session (add-session.schema.json), null when none is open"
+    }
+  },
+  "required": [
+    "contract_version",
+    "fleet_version",
+    "session"
+  ],
+  "additionalProperties": false
+}

@@ -30,7 +30,11 @@
             "confirm_required",
             "confirm_invalid",
             "no_wire",
-            "lan_denied"
+            "lan_denied",
+            "host_key_unconfirmed",
+            "secret_needed",
+            "version_mismatch",
+            "preflight_failed"
           ]
         },
         "message": {
