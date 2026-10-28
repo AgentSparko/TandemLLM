@@ -422,9 +422,9 @@ class Handler(BaseHTTPRequestHandler):
     def _fleet(self, method: str, path: str, raw: bytes | None) -> None:
         """`/v1/fleet/*` (proxy/fleet.py): reads (an action's plan too) and a page's window
         layout under the dashboard's rule, writes (a node's alias or colour, an acknowledgement,
-        a drain, a restart, a link test) under the configuration's, pairing, release, forget and
-        a lease's release under `fleet_trust` (server/auth.py), and the controller's own sign-in
-        at /v1/fleet/session."""
+        a drain, a restart, a link test; discovery, read too) under the configuration's,
+        pairing, release, forget and a lease's release under `fleet_trust` (server/auth.py), and
+        the controller's own sign-in at /v1/fleet/session."""
         body = None
         if raw:
             try:
@@ -435,7 +435,11 @@ class Handler(BaseHTTPRequestHandler):
         if path.rstrip("/") == "/v1/fleet/session":
             return self._session(method, body, fleet=True)
         parts = path.rstrip("/").split("/")[3:]
-        if method == "GET" or (method == "PUT" and parts[:1] == ["layouts"]):
+        if parts[:1] == ["discovery"]:
+            # SRV-727: the LAN scan's consent is a write, and the list (~/.ssh/config's hosts,
+            # what answers on the LAN) is read with a write's rights too
+            route = "conductor_write"
+        elif method == "GET" or (method == "PUT" and parts[:1] == ["layouts"]):
             route = "dashboard"
         elif (method == "POST" and parts[:1] == ["pair"]) or (method == "DELETE"
                                                               and parts[:1] == ["nodes"]) or \

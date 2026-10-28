@@ -21,7 +21,9 @@ port refuses this certificate is owned by another TandemApp: 409 `owned`.
 SSH ONCE (proxy/sshonce.py). The controller's certificate goes to `tandem-node adopt` on the node
 (found from its user unit, PATH, or an install.sh install); the node's certificate comes back on
 the same authenticated channel and is pinned. A node another TandemApp owns is taken over only
-with `takeover: true` (SSH access proves the node is the user's).
+with `takeover: true` (SSH access proves the node is the user's). The same login first prints the
+node's DMI (vendor, product name, version, family, all world-readable): discovery
+(proxy/discovery.py) learns from it what the box is, a GB10 with nothing installed included.
 
 RELEASE. `DELETE /v1/fleet/nodes/{id}` asks the node to forget this controller (its pin, its
 listen addresses), then forgets the node here. A node that does not answer is forgotten only with
@@ -51,6 +53,9 @@ TRIES_PER_MIN = 10
 IDENTITY_WAIT_S = 8.0
 ACTIONS = ("pair", "takeover", "release", "forget")
 REMOTE = r"""set -u
+dmi=${TANDEM_DMI_DIR:-/sys/devices/virtual/dmi/id}
+r() { head -n 1 "$dmi/$1" 2>/dev/null | tr -d '|\r'; }
+echo "TANDEMNODE-DMI $(r sys_vendor)|$(r product_name)|$(r product_version)|$(r product_family)" >&2
 unit="$HOME/.config/systemd/user/tandemnode.service"
 addr=$(printf '%s' "${SSH_CONNECTION:-}" | awk '{print $3}')
 node=""
@@ -89,6 +94,17 @@ def _port(v, default: int) -> int:
     if not isinstance(v, int) or isinstance(v, bool) or not 0 < v < 65536:
         raise TrustError("bad_request", "port is a whole number from 1 to 65535", 400)
     return v
+
+
+def _dmi(err: str) -> dict | None:
+    """The DMI line the SSH login printed: {vendor, product, version, family}, None without."""
+    line = next((x for x in err.splitlines() if x.startswith("TANDEMNODE-DMI ")), None)
+    if line is None:
+        return None
+    parts = (line[len("TANDEMNODE-DMI "):].split("|") + ["", "", "", ""])[:4]
+    got = dict(zip(("vendor", "product", "version", "family"), (p.strip() or None
+                                                                 for p in parts)))
+    return got if any(got.values()) else None
 
 
 def _url(address: str, port: int) -> str:
@@ -251,6 +267,7 @@ class Trust:
                 why = pairing.owned_elsewhere(address, port - PAIR_PORT_OFFSET, self.cert,
                                               self.key)
                 if why == "owned":
+                    self._learn(address, owned=True)
                     raise TrustError("owned", f"{address} is paired with another TandemApp: "
                                               f"take it over on the node (tandem node takeover) "
                                               f"or release it there", 409)
@@ -259,10 +276,12 @@ class Trust:
                                                  f"already", 409)
             self.fleet.log(f"[fleet] pairing with {address}:{port} failed: {exc.kind}")
             raise TrustError(exc.kind, exc.message, exc.status)
-        return self._record(node_pem=node_pem, address=address,
-                            port=_port(ans.get("port"), nodesource_port()),
-                            node_id=ans.get("node_id"), via="code", who=who,
-                            took=ans.get("took_over_from"))
+        row = self._record(node_pem=node_pem, address=address,
+                           port=_port(ans.get("port"), nodesource_port()),
+                           node_id=ans.get("node_id"), via="code", who=who,
+                           took=ans.get("took_over_from"))
+        self._learn(address, node=row["id"])
+        return row
 
     # ------------------------------------------------------------------ SSH once
     def _host(self, body) -> tuple[str, int]:
@@ -326,8 +345,14 @@ class Trust:
             body.pop("password", None)
             body.pop("key", None)
         line = next((x for x in out.splitlines() if x.startswith("TANDEMNODE-ADOPTED ")), None)
+        dmi = _dmi(err)
         if rc != 0 or line is None:
-            raise self._ssh_refusal(rc, err, host)
+            exc = self._ssh_refusal(rc, err, host, dmi)
+            # 64: not installed; 66: installed but neither running nor set up as a unit
+            installed = {64: False, 66: True}.get(rc, True if exc.kind == "owned" else None)
+            self._learn(host, port, dmi=dmi, host_key=hk["fingerprint"], installed=installed,
+                        owned=exc.kind == "owned")
+            raise exc
         try:
             ans = json.loads(line[len("TANDEMNODE-ADOPTED "):])
             node_pem = ans["certificate"]
@@ -336,17 +361,32 @@ class Trust:
             raise TrustError("ssh_failed", f"tandem-node adopt on {host} answered something "
                                            f"else", 502)
         self.ssh.remember(host, port, hk["type"], b64)
-        return self._record(node_pem=node_pem, address=_ip(ans.get("address"), "the address"),
-                            port=_port(ans.get("port"), nodesource_port()),
-                            node_id=ans.get("node_id"), via="ssh", who=who,
-                            took=ans.get("took_over_from"), host_key=hk["fingerprint"])
+        row = self._record(node_pem=node_pem, address=_ip(ans.get("address"), "the address"),
+                           port=_port(ans.get("port"), nodesource_port()),
+                           node_id=ans.get("node_id"), via="ssh", who=who,
+                           took=ans.get("took_over_from"), host_key=hk["fingerprint"])
+        self._learn(host, port, dmi=dmi, installed=True, host_key=hk["fingerprint"],
+                    node=row["id"])
+        return row
 
-    def _ssh_refusal(self, rc: int, err: str, host: str) -> TrustError:
+    def _learn(self, host: str, port: int = 22, **facts) -> None:
+        """What this pairing found out, for discovery's list; never in its way."""
+        try:
+            self.fleet.discover().learn(host, port, **facts)
+        except Exception as exc:                                     # noqa: BLE001
+            self.fleet.log(f"[fleet] discovery did not take what pairing {host} found: "
+                           f"{type(exc).__name__}: {exc}")
+
+    def _ssh_refusal(self, rc: int, err: str, host: str, dmi: dict | None = None) -> TrustError:
         mark = next((x for x in err.splitlines() if x.startswith("TANDEMNODE-ERROR ")), "")
         kind = mark.split(" ", 2)[1] if mark else ""
         if rc == 64 or kind == "not_installed":
-            return TrustError("not_installed", f"TandemNode is not installed on {host}: the "
-                                               f"Add Spark wizard's Install step installs it", 409)
+            from proxy import discovery
+            got = discovery.classify_dmi(**dmi) if dmi else None
+            what = f" ({got[0]}{', a GB10' if got[1] else ', not a Spark'})" if got else ""
+            return TrustError("not_installed", f"TandemNode is not installed on {host}{what}: "
+                                               f"the Add Spark wizard's Install step installs "
+                                               f"it", 409)
         if rc == 66 or kind == "not_running":
             return TrustError("not_installed", f"TandemNode on {host} is not running and has no "
                                                f"user unit (tandemnode.service): set it up "
@@ -355,7 +395,8 @@ class Trust:
             return TrustError("owned", f"{host} is paired with another TandemApp: send "
                                        f"takeover: true to move it here (SSH access proves it "
                                        f"is yours)", 409)
-        last = (err.strip().splitlines() or [f"exit status {rc}"])[-1][:300]
+        lines = [x for x in err.strip().splitlines() if not x.startswith("TANDEMNODE-DMI ")]
+        last = (lines or [f"exit status {rc}"])[-1][:300]
         if "Host key verification failed" in err:
             return TrustError("host_key_changed", f"{host} did not present the confirmed host "
                                                   f"key; refused", 409)

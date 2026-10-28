@@ -40,6 +40,10 @@ dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_wri
     POST  /v1/fleet/nodes/{id}/actions/{action}     {confirm?, engine?}: done, or a job started
                                                     (proxy/fleetops.py, VIS-250)
     POST  /v1/fleet/links/{id}/test                 a LAN link's round trip and bandwidth, kept
+    GET   /v1/fleet/discovery[?since=]              what the Add Spark wizard finds, each device
+                                                    classified; POST a run, /scan the consented
+                                                    LAN scan, /address one device, /target an ssh
+                                                    line (proxy/discovery.py, SRV-727)
 
 A FLEET OF ONE. The machine tandem-app runs on is a node when it is Spark-class (an NVIDIA GPU or an
 engine of its own, proxy/nodesource.py): at the first start it is registered with its hostname as
@@ -269,6 +273,7 @@ class Fleet:
         self._proc_prev: tuple[float, float] | None = None
         self.ops = fleetops.Ops(self)
         svc.drain_of = self.ops.drain_of        # the gateway's question, per request
+        self._discovery = None
 
     def trust(self):
         """The controller's side of node trust (proxy/fleettrust.py), its certificate made at
@@ -280,6 +285,15 @@ class Fleet:
                     self._trust = fleettrust.Trust(self, os.path.join(
                         os.path.dirname(self.cfg.path), "controller"), clock=self.clock)
         return self._trust
+
+    def discover(self):
+        """The Add Spark wizard's list (proxy/discovery.py), made at the first call."""
+        if self._discovery is None:
+            from proxy import discovery
+            with self._reg:
+                if self._discovery is None:
+                    self._discovery = discovery.Discovery(self, clock=self.clock)
+        return self._discovery
 
     def forget(self, nid: str) -> None:
         """A node gone from the registry: its source closed, its rings dropped."""
@@ -976,6 +990,12 @@ class Fleet:
 
     def _route(self, method, parts, q, body, who, now):
         v = CONTRACT
+        if parts[:1] == ["discovery"]:
+            from proxy import discovery
+            try:
+                return self.discover().handle(method, parts, q, body, who)
+            except discovery.DiscoveryError as exc:
+                raise FleetError(exc.status, exc.message, exc.kind)
         if method == "GET" and len(parts) == 1:
             name = parts[0]
             if name == "nodes":
