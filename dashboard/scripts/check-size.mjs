@@ -64,6 +64,10 @@
 // plan dialog, Serve a model with its placement step, the weights matrix and its copies in the new pages'
 // chunk (14.1 KB js) with their stylesheet; a Spark's Setup Guide through the controller and its confirm
 // in the setup chunk (1.2 KB). The tile rules of the Monitor pages and the guide are scoped to each.
+// 610 KB with the fleet in every page (VIS-254, 2026-10-28: 603.7 KB from 587.1): Performance's Now line, a
+// strip per Spark, History per Spark and Usage's By Spark in a chunk of their own with their stylesheet; the
+// lanes grouped by deployment and Spark, the ledger switch and the Spark filters, Dev's sources and columns,
+// Playground's targets and Compare, Conductor's deployment, Chat's place line, the Done step's figures.
 import { BUDGET, distSizes } from './gzip-size.mjs';
 
 const dist = new URL('../dist/', import.meta.url).pathname;
