@@ -499,7 +499,7 @@ def test_bare_box_over_ssh_install():
             assert inst["state"] == "done", json.dumps(inst, indent=1)[:3000]
             assert [x["state"] for x in inst["steps"]] == ["done", "done", "done", "skip",
                                                            "done", "done"], inst["steps"]
-            assert any("uploaded tandemllm-" in x["text"] for x in inst["log"])
+            assert any("uploaded tandemapp-" in x["text"] for x in inst["log"])
             t = done["targets"][0]
             assert t["state"] == "paired" and t["node"] and not t["secret"]["held"]
             node = ok(tf.get(px, f"/v1/fleet/nodes/{t['node']}")[1], "node")
@@ -967,8 +967,11 @@ def test_the_node_wheel():
     try:
         p = nodeinstall.build_wheel(out_dir, VERSION)
         assert nodeinstall.build_wheel(out_dir, VERSION) == p      # cached by content
+        v = _version.pep440(VERSION)
+        assert os.path.basename(p) == f"tandemapp-{v}-py3-none-any.whl", p
         with zipfile.ZipFile(p) as z:
             names = z.namelist()
+            assert "Name: tandemapp" in z.read(f"tandemapp-{v}.dist-info/METADATA").decode()
             assert {"proxy/nodeagent.py", "proxy/preflight.py", "chatd/__init__.py",
                     "tandemapp/__init__.py", "tandemapp/static.py", "proxy/dashboard/index.html",
                     "proxy/dashboard/sw.js"} <= set(names)

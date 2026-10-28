@@ -167,7 +167,7 @@ class FakeNode:
             return 1, "ERROR: no"
         with open(self.ver, "w") as f:
             f.write(v + "\n")
-        return 0, f"Successfully installed tandemllm-{v}"
+        return 0, f"Successfully installed tandemapp-{v}"
 
     def restart(self):
         """The agent's exec: a new process reads update.json and runs the new version."""
@@ -207,7 +207,7 @@ class Fleet2:
                           "endpoint": f"http://127.0.0.1:{n.port}", "address": "127.0.0.1",
                           "trust": {"kind": "loopback-secret", "file": n.agent.secret_path}})
         d = tempfile.mkdtemp(prefix="upd-wheel-")
-        self.wheel = os.path.join(d, f"tandemllm-{TARGET}-py3-none-any.whl")
+        self.wheel = os.path.join(d, f"tandemapp-{TARGET}-py3-none-any.whl")
         with open(self.wheel, "wb") as f:
             f.write(b"PK fake wheel " * 64)
         self.up = self.f.updater()
@@ -453,11 +453,14 @@ def test_agent_update():
         assert v["version"] == FROM
         data = b"wheel bytes " * 100
         sha = hashlib.sha256(data).hexdigest()
-        name = f"tandemllm-{TARGET}-py3-none-any.whl"
+        name = f"tandemapp-{TARGET}-py3-none-any.whl"
         st, _ = c.raw("PUT", f"/node/update/package?name={quote(name)}&sha256={'0' * 64}", data)
         assert st == 400
         st, _ = c.raw("PUT", f"/node/update/package?name=../x.whl&sha256={sha}", data)
         assert st == 400
+        old = f"tandemllm-{TARGET}-py3-none-any.whl"          # the distribution's old name
+        st, raw = c.raw("PUT", f"/node/update/package?name={quote(old)}&sha256={sha}", data)
+        assert st == 400 and b"tandemapp-<version>-py3-none-any.whl" in raw, raw
         st, doc = c.json("POST", "/node/update", {"name": name, "sha256": sha, "version": TARGET})
         assert st == 409 and doc["error"]["type"] == "no_package", doc
         st, raw = c.raw("PUT", f"/node/update/package?name={quote(name)}&sha256={sha}", data)

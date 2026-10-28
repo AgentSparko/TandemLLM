@@ -80,7 +80,7 @@ def _backend_lines(cfg) -> list[str]:
 def check(args) -> int:
     env = os.environ
     from proxy import _version
-    _say(f"tandemllm {_version.release() or 'unknown'}, python {sys.version.split()[0]}")
+    _say(f"{_version.DIST} {_version.release() or 'unknown'}, python {sys.version.split()[0]}")
     try:
         config_mod.parse_env(env)
     except config_mod.ConfigError as exc:

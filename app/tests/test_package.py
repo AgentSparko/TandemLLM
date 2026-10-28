@@ -311,7 +311,7 @@ def test_check_secrets_and_backends_commands():
         assert code == 0 and out.startswith("local ") and "key …0002 (database)" in out, out
         assert "sk-fixture-CLI-0002" not in out and os.path.getmtime(db) == before
         code, out = _run(["version"], base)
-        assert code == 0 and out.startswith("tandemllm "), out
+        assert code == 0 and out.startswith(f"tandemapp {_version.release()} "), out
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

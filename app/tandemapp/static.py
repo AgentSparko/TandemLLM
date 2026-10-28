@@ -49,7 +49,7 @@ server</h1><p>Build it on the Mac (<code>cd dashboard &amp;&amp; npm run build</
 
 def default_dir() -> str:
     """`dashboard/dist` in a checkout; `proxy/dashboard` beside this package in an installed
-    wheel (`pip install tandemllm` puts the built page there)."""
+    wheel (the tandemapp wheel puts the built page there)."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     repo = os.path.join(root, "dashboard", "dist")
     installed = os.path.join(root, "proxy", "dashboard")

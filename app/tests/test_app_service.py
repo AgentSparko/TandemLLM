@@ -288,14 +288,18 @@ def test_local_label_wheel():
                         "--out", out], cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stdout + r.stderr
     path = r.stdout.splitlines()[0]
-    assert os.path.basename(path) == "tandemllm-0.15.0+test-py3-none-any.whl"
+    assert os.path.basename(path) == "tandemapp-0.15.0+test-py3-none-any.whl"
+    assert r.stdout.splitlines()[1].startswith("[package] tandemapp 0.15.0+test, sha256 "), \
+        r.stdout
     assert nodeinstall.wheel_version(path) == "0.15.0+test"
+    assert nodeinstall.wheel_version("tandemllm-0.15.0+test-py3-none-any.whl") is None
     with zipfile.ZipFile(path) as z:
-        meta = z.read("tandemllm-0.15.0+test.dist-info/METADATA").decode()
+        meta = z.read("tandemapp-0.15.0+test.dist-info/METADATA").decode()
         names = z.namelist()
-    assert "Version: 0.15.0+test" in meta
+    assert "Name: tandemapp" in meta.splitlines() and "Version: 0.15.0+test" in meta
     assert "proxy/appservice.py" in names and "proxy/nodeupdate.py" in names
-    assert "proxy/dashboard/index.html" in names
+    assert "proxy/dashboard/index.html" in names and "tandemapp/__init__.py" in names
+    assert not [n for n in names if n.startswith("server/")]
     pkg = nodeinstall.Package(out, env={"TANDEM_NODE_WHEEL": path})
     assert pkg.target() == "0.15.0+test" and pkg.wheel() == path
     assert nodeinstall.Package(out, version="0.15.0", env={}).target() == "0.15.0"

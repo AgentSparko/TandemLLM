@@ -21,7 +21,7 @@ What one host reports, each field null when its source cannot answer on that tic
                files, uptime, CPU in cores, GPU memory (NVML or `nvidia-smi --query-compute-apps`)
                and the command line with the home written as `~` and secret values masked
 
-Sources, first that answers: `psutil` and NVML when installed (`pip install tandemllm[host]`),
+Sources, first that answers: `psutil` and NVML when installed (`pip install tandemapp[host]`),
 else `/proc` and `nvidia-smi`, else (macOS without psutil) `os` and `lsof`. A source that fails
 once is not asked again on every tick: a missing `nvidia-smi` is remembered.
 
@@ -536,7 +536,7 @@ class HostCollector:
             info = self._proc_info(pid, now)
             if info is None:
                 entry["note"] = ("process figures need psutil on this system (pip install "
-                                 "'tandemllm[host]')" if self.psutil is None and not
+                                 "'tandemapp[host]')" if self.psutil is None and not
                                  os.path.isdir(self.proc) else
                                  "the process is gone or not readable")
                 out.append(entry)

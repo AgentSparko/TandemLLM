@@ -25,7 +25,7 @@
 `python -m proxy` takes the same commands; with none it serves, so `python -m proxy --port 8080`
 works as before. `tandem-dash`, the old name, prints one line on stderr and runs `tandem-app`
 (OPS-238; removed in 0.17.0). Needs Python 3.11 or newer, the standard library and `cryptography`
-(for keys at rest); `pip install 'tandemllm[host]'` adds psutil and NVML for the System view's
+(for keys at rest); `pip install 'tandemapp[host]'` adds psutil and NVML for the System view's
 hosts. No torch, no GPU. A fresh `--config-db` path is created at schema version 1.
 """
 
@@ -166,7 +166,8 @@ def main(argv=None) -> None:
         raise SystemExit(nodeinstall.package_main(argv))
     if cmd == "version":
         from proxy import _version
-        print(f"tandemllm {_version.release() or 'unknown'} (python {sys.version.split()[0]})")
+        print(f"{_version.DIST} {_version.release() or 'unknown'} "
+              f"(python {sys.version.split()[0]})")
         return
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("--env-file")

@@ -52,7 +52,7 @@ class Tandemapp < Formula
   end
 
   test do
-    assert_match "tandemllm", shell_output("#{bin}/tandem-app version")
+    assert_match "tandemapp", shell_output("#{bin}/tandem-app version")
     system libexec/"bin/python", "-c", "import cryptography, psutil, proxy.appservice"
   end
 end

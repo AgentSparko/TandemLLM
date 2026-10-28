@@ -69,10 +69,12 @@ def norm(v: str | None) -> str:
 
 
 def installed_version(python: str) -> str | None:
-    """The tandemllm version the environment of `python` has installed, None without one."""
+    """The version of the distribution (proxy/_version.py DIST) the environment of `python` has
+    installed, None without one."""
+    from proxy import _version
     try:
         r = subprocess.run([python, "-c", "from importlib.metadata import version; "
-                                          "print(version('tandemllm'))"],
+                                          f"print(version({_version.DIST!r}))"],
                            capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -153,9 +155,11 @@ class Updater:
 
     # ------------------------------------------------------------------ the package
     def receive(self, name: str, sha256: str, data: bytes) -> dict:
-        if not re.fullmatch(r"tandemllm-[A-Za-z0-9.+_]+-py3-none-any\.whl", name or ""):
+        from proxy import _version
+        if not re.fullmatch(rf"{re.escape(_version.DIST)}-[A-Za-z0-9.+_]+-py3-none-any\.whl",
+                            name or ""):
             raise UpdateError(400, "bad_request", "name is the wheel's file name "
-                                                  "(tandemllm-<version>-py3-none-any.whl)")
+                                                  f"({_version.DIST}-<version>-py3-none-any.whl)")
         if not re.fullmatch(r"[0-9a-f]{64}", sha256 or ""):
             raise UpdateError(400, "bad_request", "sha256 is the wheel's hex digest")
         got = hashlib.sha256(data).hexdigest()
@@ -230,6 +234,7 @@ class Updater:
         del job["log"][:-LOG_MAX]
 
     def _go(self, job: dict, wheel: str, script: bytes | None) -> None:
+        from proxy import _version
         sid = "install"
         try:
             self._step(job, sid, "running")
@@ -243,7 +248,7 @@ class Updater:
             if norm(now) != norm(job["version"]):
                 raise UpdateError(500, "version_mismatch", f"the environment has {now}, not "
                                                            f"{job['version']}")
-            self._step(job, sid, "done", f"tandemllm {now} in {self.prefix}")
+            self._step(job, sid, "done", f"{_version.DIST} {now} in {self.prefix}")
             sid = "engine"
             self._step(job, sid, "running")
             if self.virtual:

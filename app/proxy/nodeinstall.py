@@ -6,14 +6,15 @@ fleet's version on a box with nothing installed, then its pairing; progress per 
     job.run()                             the steps in order, in the caller's thread (a job's own)
     job.view()                            {state, version, steps: [{id, label, state, detail}], log}
 
-THE PACKAGE. Nothing is published yet, so a node gets what this controller runs: one wheel,
-`tandemllm-<version>-py3-none-any.whl`, built here from this controller's own copy (its checkout,
-read as pyproject.toml lists the packages and their data, or the installed distribution's own
-files) with the standard library's zipfile, no setuptools and no network. It carries TandemNode
-(`tandem-node`), the controller, and the engine's code (`server/`): the same packages a
-`pip install .` gives. Its only dependency, cryptography, comes from the node's own package index
-when pip installs the wheel there. TANDEM_NODE_WHEEL names a wheel file to send instead (a release
-once there is one). The wheel is cached in `<config dir>/packages/` by version and content hash.
+THE PACKAGE. Nothing is published yet, so a node gets what this controller runs: one wheel of the
+tandemapp distribution (proxy/_version.py DIST), `tandemapp-<version>-py3-none-any.whl`, built
+here from this controller's own copy (its checkout, read as pyproject.toml lists the packages and
+their data, or the installed distribution's own files) with the standard library's zipfile, no
+setuptools and no network. It carries TandemNode (`tandem-node`) and the controller, the packages
+a `pip install` of app/ gives, and no engine code. Its only dependency, cryptography, comes from
+the node's own package index when pip installs the wheel there. TANDEM_NODE_WHEEL names a wheel
+file to send instead (a release once there is one). The wheel is cached by version and content
+hash in `<config dir>/packages/`.
 
 THE STEPS, each one SSH login with the credentials the wizard holds for this install (the password
 in memory only, proxy/addspark.py), each line it prints kept in the log:
@@ -122,8 +123,8 @@ def checkout_files(root: str) -> tuple[dict, list[tuple[str, str]]]:
 def installed_files() -> tuple[dict, list[tuple[str, str]]]:
     """The same of the installed distribution (no checkout): its own RECORD's files."""
     from importlib import metadata
-    dist = metadata.distribution("tandemllm")
-    proj = {"name": "tandemllm", "dependencies": dist.requires or [],
+    dist = metadata.distribution(_version.DIST)
+    proj = {"name": _version.DIST, "dependencies": dist.requires or [],
             "scripts": {e.name: e.value for e in dist.entry_points
                         if e.group == "console_scripts"},
             "description": dist.metadata.get("Summary") or ""}
@@ -152,14 +153,14 @@ def build_wheel(out_dir: str, version: str, root: str = ROOT) -> str:
             h.update(hashlib.sha256(f.read()).digest())
     tag = h.hexdigest()[:12]
     os.makedirs(out_dir, mode=0o700, exist_ok=True)
-    name = f"tandemllm-{v}-py3-none-any.whl"
+    name = f"{_version.DIST}-{v}-py3-none-any.whl"
     path = os.path.join(out_dir, tag, name)
     if os.path.isfile(path):
         return path
     os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
-    di = f"tandemllm-{v}.dist-info"
-    meta = [f"Metadata-Version: 2.1", "Name: tandemllm", f"Version: {v}",
-            f"Summary: {proj.get('description') or 'TandemLLM'}", "Requires-Python: >=3.11"]
+    di = f"{_version.DIST}-{v}.dist-info"
+    meta = [f"Metadata-Version: 2.1", f"Name: {_version.DIST}", f"Version: {v}",
+            f"Summary: {proj.get('description') or 'TandemApp'}", "Requires-Python: >=3.11"]
     meta += [f"Requires-Dist: {d}" for d in proj.get("dependencies") or []]
     extra = {
         f"{di}/METADATA": ("\n".join(meta) + "\n").encode(),
@@ -208,7 +209,8 @@ class Package:
             except (OSError, KeyError, ValueError, ImportError) as exc:
                 raise InstallError("no_package", f"this controller cannot build its wheel "
                                                  f"({type(exc).__name__}: {exc}); set "
-                                                 f"TANDEM_NODE_WHEEL to a TandemLLM wheel", 500)
+                                                 f"TANDEM_NODE_WHEEL to a {_version.DIST} wheel",
+                                   500)
 
     def target(self) -> str:
         """The version the wheel carries, as a node reports it once installed (PEP 440, a local
@@ -466,9 +468,10 @@ class Install:
 
 
 def wheel_version(path: str) -> str | None:
-    """The version in a wheel's file name (`tandemllm-0.15.0+test-py3-none-any.whl`)."""
+    """The version in a wheel's file name (`tandemapp-0.15.0+test-py3-none-any.whl`); None for
+    another distribution's."""
     parts = os.path.basename(path).split("-")
-    return parts[1] if len(parts) >= 5 and parts[0] == "tandemllm" and \
+    return parts[1] if len(parts) >= 5 and parts[0] == _version.DIST and \
         path.endswith(".whl") else None
 
 
@@ -476,7 +479,7 @@ def package_main(argv: list[str]) -> int:
     """`tandem-app package`: the wheel this controller sends, built here; its path on stdout."""
     import argparse
     ap = argparse.ArgumentParser(prog="tandem-app package",
-                                 description="the TandemLLM wheel a node is installed or "
+                                 description=f"the {_version.DIST} wheel a node is installed or "
                                              "updated from")
     ap.add_argument("--version", default=None,
                     help="the release name (default this copy's VERSION); a local label such as "
@@ -491,7 +494,7 @@ def package_main(argv: list[str]) -> int:
         return 1
     with open(path, "rb") as f:
         sha = hashlib.sha256(f.read()).hexdigest()
-    print(f"{path}\n[package] tandemllm {wheel_version(path)}, sha256 {sha}", flush=True)
+    print(f"{path}\n[package] {_version.DIST} {wheel_version(path)}, sha256 {sha}", flush=True)
     return 0
 
 

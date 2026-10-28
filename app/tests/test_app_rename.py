@@ -51,7 +51,7 @@ def test_the_old_name_runs_the_new_one():
         assert (old.stdout, old.returncode) == (new.stdout, new.returncode), argv
     assert new.returncode == 2 and "tandem-app backends" in new.stderr, new.stderr
     assert "tandem-app check" in _run("main", "check", "--help").stdout
-    assert _run("main", "version").stdout.startswith("tandemllm ")
+    assert _run("main", "version").stdout.startswith("tandemapp ")
 
 
 def _hits() -> list[tuple[str, int, str]]:
