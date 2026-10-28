@@ -46,6 +46,10 @@
 // 508 KB with the window manager (VIS-256, VIS-257, 2026-10-27: 504.7 KB from 481.3): the docks, floating windows,
 // the tray, the menus and each page's layout in the main chunk (9.7 KB) with their CSS (2.5 KB); the Logs, Chart and
 // inspector, the sandbox's and the model's windows in three chunks of their own (8.7 KB), loaded on first use.
+// 534 KB with the Monitor pages (VIS-248, 2026-10-28: 530.8 KB from 505.1): Overview with the topology graph, Hardware
+// with every metric group, each Spark's sheet and the host, Events & Alerts with the rule editor, in the new pages'
+// chunk (22 KB) with their CSS (4.3 KB); the fleet client's sample and host calls and the alert notifications in the
+// main chunk (2.4 KB).
 import { BUDGET, distSizes } from './gzip-size.mjs';
 
 const dist = new URL('../dist/', import.meta.url).pathname;
