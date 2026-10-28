@@ -907,6 +907,14 @@ qse-fleet-page .drain-ink,
 .app-form .field input {
   width: 100%;
 }
+.app-pw {
+  display: flex;
+  gap: 6px;
+}
+.app-pw input {
+  flex: 1;
+  min-width: 0;
+}
 .app-job {
   display: flex;
   flex-direction: column;

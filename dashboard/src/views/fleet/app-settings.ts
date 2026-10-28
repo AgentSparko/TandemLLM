@@ -284,8 +284,7 @@ export class QseAppSettings extends LightElement {
       <div class="app-form">
         <label class="field"><span>Port on ${p.title.replace('Move the controller to ', '')}</span><input data-in="port" inputmode="numeric" .value=${this.port} @change=${(e: Event) => ((this.port = (e.target as HTMLInputElement).value), void this.readPlan(p.to))} /></label>
         ${p.needs_password
-          ? html`<label class="field"><span>Admin password for the new controller</span><input type=${this.showPw ? 'text' : 'password'} class="num" data-in="move-pw" autocomplete="new-password" spellcheck="false" placeholder=${`${MIN_PASSWORD} or more characters`} .value=${this.password} @input=${(e: Event) => ((this.password = (e.target as HTMLInputElement).value), (this.err = { ...this.err, move: '' }))} /></label>
-              <button type="button" class="btn btn-sm" data-act="gen-pw" @click=${() => ((this.password = newPassword()), (this.showPw = true), (this.err = { ...this.err, move: '' }))}>Generate</button>`
+          ? html`<label class="field"><span>Admin password for the new controller</span><span class="app-pw"><input type=${this.showPw ? 'text' : 'password'} class="num" data-in="move-pw" autocomplete="new-password" spellcheck="false" placeholder=${`${MIN_PASSWORD} or more characters`} .value=${this.password} @input=${(e: Event) => ((this.password = (e.target as HTMLInputElement).value), (this.err = { ...this.err, move: '' }))} /><button type="button" class="btn btn-sm" data-act="gen-pw" @click=${() => ((this.password = newPassword()), (this.showPw = true), (this.err = { ...this.err, move: '' }))}>Generate</button></span></label>`
           : nothing}
       </div>
       ${p.needs_password ? html`<p class="xs muted">It listens on the LAN: changes there need this password, reading does not. Keep it: it is written to the controller’s env file on the Spark (mode 0600), nowhere else, and asked when you sign in there.</p>` : nothing}

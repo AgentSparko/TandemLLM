@@ -27,6 +27,10 @@ test.describe('TandemApp alone, its controller, the fleet update', () => {
   test.beforeEach(async ({ request }) => {
     await setMode(request, 'ok');
   });
+  // a scenario set here is the server's default for every later request: leave the suite's own
+  test.afterEach(async ({ request }) => {
+    await fresh(request, 'fleet4');
+  });
 
   test('Install on a Mac: the first open with no Spark lands on Add Spark; a route given is kept', async ({ page, request }, info) => {
     await fresh(request, 'empty');
