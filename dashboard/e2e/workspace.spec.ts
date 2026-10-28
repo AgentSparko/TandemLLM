@@ -16,7 +16,7 @@ const PAGES: [section: string, title: string][] = [
   ['overview', 'Fleet now'],
   ['performance', 'Now, per Spark'],
   ['usage', 'Today'],
-  ['hardware', 'Spark status'],
+  ['hardware', 'Node inspector'],
   ['events', 'Firing now'],
   ['sparks', 'Sparks'],
   ['models', 'Deployments'],
