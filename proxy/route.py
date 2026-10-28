@@ -12,8 +12,14 @@ The route of a request, in this order:
     2. the first enabled routing rule whose glob matches the id (the id goes upstream unchanged
        unless the rule's backend lists it under another public id)
     3. the one backend that serves the id
-    4. otherwise OpenAI's 404 `model_not_found` (two backends and no rule: the message names the
+    4. the default backend (TANDEM_DEFAULT_BACKEND, SRV-733), the id as asked: a TandemLLM engine
+       answers any id with its own model, so a proxy in front of one answers what it did
+    5. otherwise OpenAI's 404 `model_not_found` (two backends and no rule: the message names the
        prefixed forms)
+
+A model of a TandemLLM backend is listed with the engine's own card (its profile, description,
+`tandem` block and capabilities, as the engine's /v1/models has it, SRV-733) under the id this
+proxy lists it by; the proxy's card while no list of the engine's was read yet.
 
 A route carries its fallbacks: the model's own list, else its backend's. A fallback entry is a
 backend id (the same model id there) or `<backend>/<model>`. The relay tries them on a connect
@@ -85,6 +91,8 @@ class Table:
     def __init__(self, cfg: "config_mod.ConfigDB", reserved=()):
         self.cfg = cfg
         self.reserved = set(reserved)    # ids the engine itself answers (TandemLLM, its alias)
+        # fn(backend id, upstream id) -> a TandemLLM engine's own card of the model, or None
+        self.upstream_card = None
         self._gen = None
         self._lock = threading.Lock()
         self._snap = None
@@ -130,8 +138,14 @@ class Table:
                 caps = capabilities(cls, m)
                 if caps is not None:
                     card["capabilities"] = caps
-                out.append({"id": pub if bare else f"{b['id']}/{pub}", "object": "model",
-                            "created": created, "owned_by": b["id"], "tandem": card})
+                lid = pub if bare else f"{b['id']}/{pub}"
+                own = self.upstream_card(b["id"], m["model"]) \
+                    if self.upstream_card is not None and getattr(cls, "cards", False) else None
+                if own is not None:
+                    out.append(dict(own, id=lid))
+                    continue
+                out.append({"id": lid, "object": "model", "created": created,
+                            "owned_by": b["id"], "tandem": card})
         return out
 
     def card(self, name: str, created: int) -> dict | None:
@@ -139,7 +153,7 @@ class Table:
             if m["id"] == name:
                 return m
         try:
-            r = self.resolve(name)
+            r = self.resolve(name, default=False)
         except NotFound:
             return None
         return {"id": name, "object": "model", "created": created, "owned_by": r.backend}
@@ -170,7 +184,7 @@ class Table:
             fbs.append((fb_bid, fb_model))
         return Route(bid, upstream, asked, fbs, m["price"] if m is not None else None, rule)
 
-    def resolve(self, model: str) -> Route:
+    def resolve(self, model: str, default: bool = True) -> Route:
         if not isinstance(model, str) or not model:
             raise NotFound("", "the request names no model")
         s = self.snapshot()
@@ -192,6 +206,9 @@ class Table:
             names = ", ".join(sorted(f"{m['backend']}/{model}" for m in rows))
             raise NotFound(model, f"the model '{model}' is served by {len(rows)} backends; "
                                   f"ask for one of {names}, or add a routing rule")
+        dflt = getattr(self.cfg, "default_backend", None) if default else None
+        if dflt in s["backends"]:
+            return self._route(s, dflt, None, model)
         raise NotFound(model, f"The model '{model}' does not exist or no backend serves it")
 
     def backend_for(self, bid: str) -> dict | None:

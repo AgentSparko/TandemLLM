@@ -6,6 +6,9 @@ The model list is refreshed from the same answer every 10 minutes, and at once o
 connection" or when a backend is added or changed. A cloud API's list costs nothing to read; the
 proxy never fetches a price list (no silent network calls beyond these).
 
+A TandemLLM engine's answer is kept whole (`docs`, SRV-733): its cards and what its list holds
+beside `data` (`decision_models`), for /v1/models to list as the engine does.
+
 `probe(backend, key)` is the same request for a backend that is not saved yet: the GUI's "Test
 connection" shows its latency and its models before the row is written.
 """
@@ -42,8 +45,11 @@ def probe(backend: dict, key: str | None, log=None) -> dict:
         out["status"] = status
         if status == 200:
             try:
-                out["models"] = adapter.parse_models(json.loads(data))
+                doc = json.loads(data)
+                out["models"] = adapter.parse_models(doc)
                 out["ok"] = True
+                if getattr(adapter, "cards", False) and isinstance(doc, dict):
+                    out["doc"] = doc
             except ValueError:
                 out["error"] = "the /models answer is not JSON"
         elif status in (401, 403):
@@ -73,6 +79,7 @@ class Health:
         self.models_every = models_every
         self.clock = clock
         self.state: dict[str, dict] = {}
+        self.docs: dict[str, dict] = {}         # a TandemLLM engine's last /models answer
         self._due: dict[str, float] = {}
         self._models_due: dict[str, float] = {}
         self._stop = threading.Event()
@@ -137,6 +144,8 @@ class Health:
         else:
             r = probe(b, key, log=self.svc.log)
         now = self.clock()
+        if r.get("doc") is not None:
+            self.docs[bid] = r["doc"]
         prev = self.state.get(bid) or {}
         st = "up" if r["ok"] else "down"
         since = prev.get("since") if prev.get("state") == st else now

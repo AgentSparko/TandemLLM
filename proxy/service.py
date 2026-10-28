@@ -12,6 +12,7 @@ dashboard.
     svc.route(path, body) -> Route | None        None: not a backend's model (the engine's, or 404)
     svc.serve(handler, path, raw, body, route, user)
     svc.models(created) -> [...]                 the backends' part of /v1/models
+    svc.model_extras() -> {...}                  beside `data`: a TandemLLM engine's own keys
 
 THE HARNESS (P4, proxy/harness.py). With a conductor (the engine's own in the embedded mode, one
 of the proxy's in the standalone mode) every chat completion relayed to a backend whose harness
@@ -24,6 +25,8 @@ OpenAI routes without a known key is a 401, for a backend's model and for the en
 box's own tools stay open the way the admin routes treat them: a request from loopback with
 neither `X-Forwarded-For` nor `X-Real-IP` (trusted-local, server/auth.py) needs no key. The
 label of the key fills the ledger's `user` column; the client id stays the token's hash.
+`TANDEM_API_USERS_FROM` (SRV-733) makes another config database's users count too: a controller in
+front of an engine takes the keys the engine takes, read from the engine's file, never copied.
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ from proxy import collect_api as collect_mod
 from proxy import config as config_mod
 from proxy import engines as engines_mod
 from proxy import health as health_mod
+from proxy import http1
 from proxy import relay as relay_mod
 from proxy import route as route_mod
 from proxy.measure import RelayRecord
@@ -158,6 +162,7 @@ class Service:
         self.table = route_mod.Table(cfg, reserved)
         self.relay = relay_mod.Relay(self)
         self.health = health_mod.Health(self, **(health_kw or {}))
+        self.table.upstream_card = self._engine_card
         self.engines = engines_mod.Watch(self, **(engines_kw or {}))
         self.collect = collect_mod.Collector(self)
         self._adapters: dict = {}
@@ -267,8 +272,9 @@ class Service:
             self.metrics.retries.inc(backend=bid, reason=reason)
 
     # ----------------------------------------------------------------- the OpenAI routes
-    def authorize(self, handler) -> tuple[bool, str | None]:
-        """(may it go on, the user's label). On False a 401 is already written."""
+    def authorize(self, handler, headers: tuple = ()) -> tuple[bool, str | None]:
+        """(may it go on, the user's label). On False a 401 is already written, with `headers`
+        beside its own."""
         try:
             active = self.cfg.users_active()
         except Exception:                                          # noqa: BLE001
@@ -296,6 +302,8 @@ class Service:
             handler.send_response(401)
             handler.send_header("Content-Type", "application/json")
             handler.send_header("WWW-Authenticate", 'Bearer realm="TandemLLM"')
+            for k, v in headers:
+                handler.send_header(k, v)
             handler.send_header("Content-Length", str(len(body)))
             handler.end_headers()
             handler.wfile.write(body)
@@ -467,6 +475,56 @@ class Service:
             if got is not None:
                 return got
         return self.table.card(name, created)
+
+    # ----------------------------------------------------------------- our engine's own list
+    def _engine_card(self, bid: str, model: str) -> dict | None:
+        """SRV-733: a TandemLLM backend's own card of `model`, from its last /models answer."""
+        doc = self.health.docs.get(bid)
+        for m in (doc or {}).get("data") or []:
+            if isinstance(m, dict) and m.get("id") == model:
+                return m
+        return None
+
+    def model_extras(self) -> dict:
+        """SRV-733: what the TandemLLM backends' lists hold beside `data` (the engine's
+        `decision_models`), each item once by id, for /v1/models to carry as the engine does."""
+        out: dict = {}
+        for b in self.cfg.backends():
+            if not b["enabled"]:
+                continue
+            for k, v in (self.health.docs.get(b["id"]) or {}).items():
+                if k in ("object", "data") or not isinstance(v, list):
+                    continue
+                have = {x.get("id") for x in out.get(k, []) if isinstance(x, dict)}
+                out.setdefault(k, []).extend(x for x in v if not (isinstance(x, dict)
+                                                                  and x.get("id") in have))
+        return out
+
+    def default_card(self, name: str) -> tuple[int, bytes] | None:
+        """SRV-733: `GET /v1/models/{name}` of the default backend (TANDEM_DEFAULT_BACKEND) when
+        it is a TandemLLM engine, for an id this proxy does not list: the engine's own answer
+        (its raw model's alias, a decision model, its 404). None without such a backend."""
+        bid = self.cfg.default_backend
+        b = self.table.backend_for(bid) if bid else None
+        if b is None or b["kind"] != "tandemllm":
+            return None
+        from urllib.parse import quote
+        adapter = self.adapter(b)
+        pool = http1.Pool(b["url"], float(b["timeouts"]["connect"]))
+        conn = None
+        try:
+            conn = pool.get()
+            conn.send("GET", pool.path("/v1/models/" + quote(name, safe="")),
+                      [h for h in adapter.headers(self.cfg.key_for(bid))
+                       if h[0] != "Content-Type"], b"")
+            status, _, _ = conn.read_head(health_mod.ANSWER_TIMEOUT_S)
+            return status, conn.read_all(health_mod.ANSWER_TIMEOUT_S, limit=1024 * 1024)
+        except Exception:                                          # noqa: BLE001
+            return None
+        finally:
+            if conn is not None:
+                conn.close()
+            pool.close()
 
     # ----------------------------------------------------------------- views
     def cost_today(self, tz=None) -> dict:

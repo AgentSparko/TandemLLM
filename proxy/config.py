@@ -80,6 +80,15 @@ same code path.
     TANDEM_PRICE_<n>_OFFPEAK="0.15,0.003,0.6"       the same model outside the provider's peak
                                                     hours (DeepSeek)
     TANDEM_API_KEYS="laptop:tdm-...,ci:tdm-..."     the proxy's own keys, in memory only
+    TANDEM_API_USERS_FROM=~/.engine/config.sqlite3  SRV-733: the keys another config database's
+                                                    users hold count here too, read from that file
+                                                    at each check (read only: the label, the
+                                                    key's sha256, enabled); a controller in front
+                                                    of an engine takes the engine's own keys
+    TANDEM_DEFAULT_BACKEND=engine                   SRV-733: a model id that no deployment, rule
+                                                    or backend serves goes to this backend as
+                                                    asked (a TandemLLM engine answers any id with
+                                                    its own model); unset: OpenAI's 404
     TANDEM_SECRETS_KEY=<base64 of 32 bytes>         the master key (proxy/secrets.py)
 
 `<ID>` is the backend id in capitals with `-` written as `_`. An unknown field, an unknown backend
@@ -318,7 +327,8 @@ def _num(v: str, var: str) -> float:
 
 def parse_env(env) -> dict:
     """The overlay the environment declares, validated; ConfigError names the variable."""
-    out = {"backends": {}, "keys": {}, "rules": [], "prices": [], "users": [], "vars": {}}
+    out = {"backends": {}, "keys": {}, "rules": [], "prices": [], "users": [], "vars": {},
+           "users_from": None, "default_backend": None}
     ids = _list(env.get("TANDEM_BACKENDS", ""))
     by_name = {}
     for bid in ids:
@@ -409,6 +419,15 @@ def parse_env(env) -> dict:
                 raise ConfigError("TANDEM_API_KEYS: write it as label:key,label:key with keys of "
                                   "at least 16 characters", var="TANDEM_API_KEYS")
             out["users"].append({"label": label.strip(), "key": key.strip()})
+    if env.get("TANDEM_API_USERS_FROM", "").strip():
+        out["users_from"] = os.path.realpath(os.path.expanduser(env["TANDEM_API_USERS_FROM"]
+                                                                .strip()))
+    if env.get("TANDEM_DEFAULT_BACKEND", "").strip():
+        bid = env["TANDEM_DEFAULT_BACKEND"].strip()
+        if schema.validate(bid, "backend_id"):
+            raise ConfigError(f"TANDEM_DEFAULT_BACKEND: '{bid}' is not a backend id",
+                              var="TANDEM_DEFAULT_BACKEND")
+        out["default_backend"] = bid
     # each backend the environment declares must validate once its defaults are filled in
     for bid, fields_set in out["backends"].items():
         if "kind" not in fields_set:
@@ -467,6 +486,9 @@ class ConfigDB:
         self.locks: dict = {}           # ("backend", id, field) | ("key", id) | ... -> variable
         self.env_keys: dict[str, str] = {}
         self.env_users: dict[str, str] = {}    # key hash -> label
+        self.users_from: str | None = None     # another config database's users (SRV-733)
+        self._from_active = True               # ... its last answer: any user there
+        self.default_backend: str | None = None
         self.schema_was: int | None = None
         self._seen: dict[int, int] = {}        # user id -> last seen ms, flushed once a minute
         self._seen_flushed = 0.0
@@ -599,6 +621,12 @@ class ConfigDB:
                 self._set_price(p["backend"], p["model"], p["price"])
                 self.locks[("price", p["backend"], p["model"])] = p["var"]
             self.env_users = {key_hash(u["key"]): u["label"] for u in ov["users"]}
+            if ov["default_backend"] and c.execute("SELECT 1 FROM backends WHERE id = ?",
+                                                   (ov["default_backend"],)).fetchone() is None:
+                raise ConfigError(f"TANDEM_DEFAULT_BACKEND: no backend '{ov['default_backend']}'",
+                                  var="TANDEM_DEFAULT_BACKEND")
+            self.default_backend = ov["default_backend"]
+            self.users_from = ov["users_from"]
             c.commit()
             self._bump()
         return ov
@@ -1063,8 +1091,28 @@ class ConfigDB:
         if self.env_users:
             return True
         with self._lock:
-            return bool(self._conn.execute("SELECT 1 FROM users WHERE enabled = 1 "
-                                           "LIMIT 1").fetchone())
+            if self._conn.execute("SELECT 1 FROM users WHERE enabled = 1 LIMIT 1").fetchone():
+                return True
+        if not self.users_from:
+            return False
+        got = self._users_from("SELECT 1 FROM users WHERE enabled = 1 LIMIT 1", ())
+        if got is not None:
+            self._from_active = bool(got)
+        return self._from_active
+
+    def _users_from(self, sql: str, args: tuple) -> list | None:
+        """SRV-733: `sql` on the users of TANDEM_API_USERS_FROM's database, read only; None when
+        the file cannot be read. Then the last answer stands, and before any answer the routes
+        need a key that no user matches: closed, never open while the other side's keys are
+        unknown."""
+        try:
+            con = sqlite3.connect(f"file:{self.users_from}?mode=ro", uri=True, timeout=2.0)
+            try:
+                return con.execute(sql, args).fetchall()
+            finally:
+                con.close()
+        except sqlite3.Error:
+            return None
 
     def create_user(self, doc: dict, who: str = "gui") -> tuple[dict, str]:
         """A new user and its key, which is returned this once and never again."""
@@ -1123,7 +1171,9 @@ class ConfigDB:
             r = self._conn.execute("SELECT id, label FROM users WHERE key_hash = ? AND "
                                    "enabled = 1", (h,)).fetchone()
         if r is None:
-            return None
+            got = self._users_from("SELECT label FROM users WHERE key_hash = ? AND enabled = 1",
+                                   (h,)) if self.users_from else None
+            return got[0][0] if got else None
         self._seen[r[0]] = _now_ms()
         self.flush_seen()
         return r[1]

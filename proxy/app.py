@@ -66,6 +66,9 @@ from server import static
 
 STATE: dict = {}
 GATEWAY = "/v1/fleet/gateway/chat/completions"
+# SRV-733: on this server's /v1/models answers, so a page behind a reverse proxy knows whether its
+# own /v1 (the data plane) reaches this controller or an engine (dashboard lib/fleet-state.ts)
+GATEWAY_HEADER = ("X-Tandem-Gateway", "tandem-app")
 # a /v1/fleet/* request body (not the gateway's chat body) is read only up to this: the body is
 # read before the route's guard, so a bigger one is refused unread (an import is a few KiB)
 FLEET_BODY_MAX = 4 * 1024 * 1024
@@ -212,6 +215,18 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             self.close_connection = True
 
+    def _raw_json(self, code: int, raw: bytes, extra_headers: tuple = ()) -> None:
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            for k, v in extra_headers:
+                self.send_header(k, v)
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+
     def _send_empty(self, code: int, headers: tuple = ()) -> None:
         try:
             self.send_response(code)
@@ -322,24 +337,33 @@ class Handler(BaseHTTPRequestHandler):
                 return
             return self._metrics()
         if path == "/v1/models":
-            ok, _ = STATE["svc"].authorize(self)
+            ok, _ = STATE["svc"].authorize(self, (GATEWAY_HEADER,))
             if not ok:
                 return
+            # SRV-733: beside `data`, what a TandemLLM engine's own list holds (decision models)
             return self._json(200, {"object": "list",
-                                    "data": STATE["svc"].models(int(STATE["svc"].started))})
+                                    "data": STATE["svc"].models(int(STATE["svc"].started)),
+                                    **STATE["svc"].model_extras()},
+                              extra_headers=(GATEWAY_HEADER,))
         if path.startswith("/v1/models/"):
             # the list above asks for a key; a single card was answering without one,
             # so a configured deployment leaked model ids and card metadata to strangers
-            ok, _ = STATE["svc"].authorize(self)
+            ok, _ = STATE["svc"].authorize(self, (GATEWAY_HEADER,))
             if not ok:
                 return
             name = unquote(path[len("/v1/models/"):])
             card = STATE["svc"].card(name, int(STATE["svc"].started))
             if card is None:
+                # SRV-733: an id the default engine answers that no list names (its raw model's
+                # alias, a decision model): the engine's own answer
+                got = STATE["svc"].default_card(name)
+                if got is not None and got[0] in (200, 404):
+                    return self._raw_json(got[0], got[1], (GATEWAY_HEADER,))
                 return self._json(404, {"error": {"message": f"no model {name!r}",
                                                   "type": "invalid_request_error",
-                                                  "param": "model", "code": "model_not_found"}})
-            return self._json(200, card)
+                                                  "param": "model", "code": "model_not_found"}},
+                                  extra_headers=(GATEWAY_HEADER,))
+            return self._json(200, card, extra_headers=(GATEWAY_HEADER,))
         if path.startswith("/v1/conductor/"):
             return self._conductor("GET")
         if (path == "/v1/library" or path.startswith("/v1/library/")) and \
@@ -402,6 +426,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = json.loads(raw or b"{}")
         except (ValueError, RecursionError) as exc:
+            if path in PROXY_PATHS:
+                # a row as the engine writes one for a body it cannot read (SRV-733: counted once
+                # when the data plane comes here)
+                STATE["svc"].account_refusal(self, path, None, 400)
             return self._json(400, {"error": {"message": f"bad json: {exc}",
                                               "type": "invalid_request_error"}})
         if path == "/v1/dashboard/session":
