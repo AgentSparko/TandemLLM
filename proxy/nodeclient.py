@@ -5,6 +5,7 @@
     c.json("GET", "/node/identity")                -> (status, parsed body or None)
     for ev, data in c.events("/node/metrics"): ...  an event stream, (event name, parsed data)
     conn = c.connection(host="10.77.0.2", source="10.77.0.1")   a raw connection (the link test)
+    pipe(r, conn, write, gone)                     a streamed answer passed on as it arrives
 
 The address is the one given, never resolved anew; a TLS peer is checked against the pinned
 certificates in its context, not by name.
@@ -14,6 +15,8 @@ from __future__ import annotations
 
 import http.client
 import json
+import socket
+import threading
 import urllib.parse
 
 TIMEOUT_S = 5.0
@@ -101,3 +104,35 @@ class Client:
                     data.append(line[5:].lstrip())
         finally:
             conn.close()
+
+
+def pipe(r, conn, write, gone, every: float = 1.0) -> None:
+    """An upstream answer's bytes to `write` as they arrive, until it ends, a write fails or
+    `gone()` (asked every `every` s) says the reader left; then the upstream is closed. A read
+    has no timeout here: a quiet stream (a job between two steps, a model thinking) stays open.
+    (A socket timeout would end it: after one, a file read from that socket only fails.)"""
+    done = threading.Event()
+    # the response's own socket: http.client lets go of it on the connection once the answer
+    # says it closes, so a caller keeps it as r.sock before getresponse
+    sock = getattr(r, "sock", None) or conn.sock
+
+    def watch():
+        while not done.wait(every):
+            if gone():
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except (OSError, AttributeError):
+                    pass
+                return
+    if sock is not None:
+        sock.settimeout(None)
+    threading.Thread(target=watch, daemon=True).start()
+    try:
+        while True:
+            piece = r.read1(65536)
+            if not piece:
+                return
+            write(piece)
+    finally:
+        done.set()
+        conn.close()

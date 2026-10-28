@@ -1129,18 +1129,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header(k, v)
             self.end_headers()
             self.close_connection = True
-            r.sock.settimeout(1.0)
-            while True:
-                try:
-                    piece = r.read1(65536)
-                except socket.timeout:
-                    if self._gone():
-                        break
-                    continue
-                if not piece:
-                    break
+
+            def write(piece: bytes) -> None:
                 self.wfile.write(piece)
                 self.wfile.flush()
+            nodeclient.pipe(r, conn, write, self._gone)
         except (BrokenPipeError, ConnectionResetError, ssl.SSLError, OSError):
             self.close_connection = True
         finally:
