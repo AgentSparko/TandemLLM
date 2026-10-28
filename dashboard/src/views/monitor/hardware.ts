@@ -253,6 +253,8 @@ export class QseHardware extends MonitorPage {
     const g0 = s?.gpus?.[0];
     const ttft = lastValue(this.series.ttft?.series[0]?.values ?? []);
     const throttle = g0?.throttle?.filter((r) => r !== 'gpu_idle') ?? [];
+    // a field the newest sample lacks: the board does not expose it; without a sample, nothing is known
+    const na = html`<span class="muted">${s ? NOT_EXPOSED : 'no sample from this Spark yet'}</span>`;
     return html`<section class="panel hw-head" data-sheet=${n.id}>
         <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">${nodeChip(n, { lg: true })} <span class="muted small">${n.dmi || n.hw} · ${n.transport === 'tunnel' ? 'SSH tunnel' : 'LAN'} ${n.address}</span></h2><p class="panel-sub">${n.inventory.os ?? ''}${n.inventory.kernel ? ` · kernel ${n.inventory.kernel}` : ''}${n.inventory.driver ? ` · driver ${n.inventory.driver}` : ''}${n.inventory.cuda ? ` · CUDA ${n.inventory.cuda}` : ''}</p></div><div class="panel-tools"><a class="btn btn-sm" href=${`#/sparks/${encodeURIComponent(n.id)}`}>Node page</a></div></header>
         <div class="eyebrow hw-mem-t">Engine memory split · ${mem ? `${mem.usable} GiB usable` : 'unified memory'}</div>
@@ -275,15 +277,15 @@ export class QseHardware extends MonitorPage {
         <section class="panel" data-panel="limits">
           <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">Limits</h2><p class="panel-sub">read from the Spark, not assumed</p></div></header>
           <dl class="kv">
-            <div><dt>power cap</dt><dd>${g0?.power_cap_w != null ? `${fmt(g0.power_cap_w)} W` : html`<span class="muted">${NOT_EXPOSED}</span>`}</dd></div>
-            <div><dt>GPU clock events</dt><dd>${g0?.throttled == null ? html`<span class="muted">${NOT_EXPOSED}</span>` : throttle.length ? html`<span class="warn-ink">${throttle.map((r) => r.replace(/_/g, ' ')).join(', ')}</span>` : html`<span class="ok-ink">none</span>`}</dd></div>
+            <div><dt>power cap</dt><dd>${g0?.power_cap_w != null ? `${fmt(g0.power_cap_w)} W` : na}</dd></div>
+            <div><dt>GPU clock events</dt><dd>${g0?.throttled == null ? na : throttle.length ? html`<span class="warn-ink">${throttle.map((r) => r.replace(/_/g, ' ')).join(', ')}</span>` : html`<span class="ok-ink">none</span>`}</dd></div>
             <div><dt>GPU temperature rule</dt><dd>85 °C for ${holdWords(60)}</dd></div>
-            <div><dt>engine ceiling</dt><dd class="num">${mem ? `${mem.ceiling} GiB · peak ${fmt(mem.peak, 1)} in 24 h` : '—'}</dd></div>
-            <div><dt>swap</dt><dd class="num">${s?.memory?.swap_total != null ? `${fmt(s.memory.swap_used ?? 0, 1)} of ${fmt(s.memory.swap_total, 0)} GiB used` : NOT_EXPOSED}</dd></div>
-            <div><dt>fan</dt><dd>${s?.board?.fans?.length ? s.board.fans.map((x) => `${fmt(x.rpm)} rpm`).join(' · ') : html`<span class="muted">${s ? NOT_EXPOSED : '—'}</span>`}</dd></div>
-            <div><dt>CPU temperature</dt><dd class="num">${s?.cpu?.temp_c != null ? `${fmt(s.cpu.temp_c, 1)} °C` : NOT_EXPOSED}</dd></div>
-            <div><dt>GPU memory</dt><dd>${s?.memory?.unified ? 'unified with the system' : NOT_EXPOSED}</dd></div>
-            <div><dt>uptime</dt><dd class="num">${s?.board?.uptime_s != null ? span(s.board.uptime_s) : '—'}</dd></div>
+            <div><dt>engine ceiling</dt><dd class="num">${mem ? `${mem.ceiling} GiB · peak ${fmt(mem.peak, 1)} in 24 h` : html`<span class="muted">no memory split from this Spark</span>`}</dd></div>
+            <div><dt>swap</dt><dd class="num">${s?.memory?.swap_total != null ? `${fmt(s.memory.swap_used ?? 0, 1)} of ${fmt(s.memory.swap_total, 0)} GiB used` : na}</dd></div>
+            <div><dt>fan</dt><dd>${s?.board?.fans?.length ? s.board.fans.map((x) => `${fmt(x.rpm)} rpm`).join(' · ') : na}</dd></div>
+            <div><dt>CPU temperature</dt><dd class="num">${s?.cpu?.temp_c != null ? `${fmt(s.cpu.temp_c, 1)} °C` : na}</dd></div>
+            <div><dt>GPU memory</dt><dd>${s?.memory?.unified ? 'unified with the system' : na}</dd></div>
+            <div><dt>uptime</dt><dd class="num">${s?.board?.uptime_s != null ? span(s.board.uptime_s) : na}</dd></div>
           </dl>
           ${this.samples[n.id] && this.samples[n.id] !== 'absent' && (this.samples[n.id] as FleetSample).note ? html`<p class="xs muted">${(this.samples[n.id] as FleetSample).note}</p>` : nothing}
         </section>
