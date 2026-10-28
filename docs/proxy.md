@@ -161,9 +161,17 @@ On one box the fleet has one node: the machine `tandem-app` runs on, when it has
 | `GET alerts`, `POST alerts/{id}/ack` | the alerts firing now; an acknowledgement is kept |
 | `GET rules`, `PATCH rules/{id}` | the alert rules; `{enabled?, notify?, threshold?, for_s?, scope?}` |
 | `POST pair`, `pair/ssh`, `pair/ssh/hostkey`, `DELETE nodes/{id}`, `GET trust` | node trust, below |
+| `GET`/`POST nodes/{id}/actions/{action}` | the node actions, below: a plan of what it would do, then the action with the plan's `confirm` |
+| `POST links/{id}/test` | a LAN link's round trip and bandwidth from the controller to the node's agent, kept on the link |
 | `GET`/`POST`/`DELETE session` | the controller's own sign-in for its writes |
 
-Reads and a page's window layout follow the dashboard rule, the other writes the admin rule, as `/v1/config` does; pairing and release need the admin password or a caller on the controller's machine, and with no password set only the latter. The engine's own server has no fleet API; a dashboard it serves shows the box alone.
+Reads (an action's plan too) and a page's window layout follow the dashboard rule, the other writes the admin rule, as `/v1/config` does; pairing, release, forget and a lease's release need the admin password or a caller on the controller's machine, and with no password set only the latter. The engine's own server has no fleet API; a dashboard it serves shows the box alone.
+
+**Node actions** (code: `proxy/fleetops.py`). `drain`, `undrain`, `restart-engine` (`?engine=`, else the first engine TandemNode manages), `reboot`, `update`, `forget`, `release-lease`. `GET .../actions/{action}` answers what it stops (the deployments on the node and where their new requests go, the requests in flight), what it removes and what it keeps, and `blocked` in words when it may not run. All but drain and undrain are destructive: their plan carries a `confirm`, single use for five minutes, that the `POST` must send (428 without it, 409 with a spent or another action's).
+
+- **Drain.** A drained node takes no new request through this gateway: the relay skips a route's backend on it for the route's fallbacks, and with none left answers 503 `node_draining` with `Retry-After: 30`. What is in flight finishes; in flight is the larger of the gateway's own requests on the node's engines and the engines' own count (a client that calls an engine's port directly is counted, not turned away). The node is `draining` (◐) until nothing is in flight, then `drain.state` `drained`; the drain is kept in the config database, so it holds across a restart of the controller from its first request, until `undrain`. With one engine per deployment, "elsewhere" is a route's fallback; Replicas come with the deployments.
+- **Restart, reboot, update** go to the node's agent: an engine's restart (an engine TandemNode did not start is refused: "not managed by TandemNode"), the machine's reboot and update (below). A node read without its agent has none of them.
+- **Forget** is the release above: both pins, the record and its history here go; TandemNode, its engines and the weights stay on the node. **Release lease** is for a rented node: weights and caches wiped, keys removed, TandemNode uninstalled; it comes with rental support (409 for an owned node, 501 until then).
 
 ### History, events and alert rules
 
@@ -210,13 +218,16 @@ TandemNode is the agent on each Spark that TandemApp's controller talks to (code
 | `GET /node/weights`, `DELETE /node/weights/{profile}?confirm=1` | the Setup Guide's weights with a content id per pack (from the hashes the download recorded), and its removal |
 | `GET /node/logs?level=&q=&source=` | the agent's and its engines' lines as events; `?follow=0` as JSON |
 | `POST /node/linktest {peer}` | to another node's agent: RTT, bandwidth per interface, MTU, RoCE state; a port whose cable reaches one of its two logical interfaces is flagged `half_bandwidth` |
+| `GET /node/maintenance`, `POST /node/maintenance/reboot\|update` | whether the machine's reboot and update are set up here (simulated on a virtual node), the last job; a job (202), 409 when not set up or a job runs |
 | `* /node/setup/<route>` | the engine's `/v1/setup/<route>`, unchanged (its status responder while it restarts) |
 
-Engines come from `~/.tandemllm/node/engines.json` (`{"engines": [{"id", "port", "kind", "start", "stop", "restart"}]}`, commands as argument lists). An engine without a `start` command is listed and relayed but never started or stopped by the agent. Without the file: the install's engine, else a TandemLLM engine on :8000, not managed.
+Engines come from `~/.tandemllm/node/engines.json` (`{"engines": [{"id", "port", "kind", "start", "stop", "restart"}]}`, commands as argument lists). An engine without a `start` command is listed and relayed but never started or stopped by the agent. Without the file: the install's engine, else a TandemLLM engine on :8000, not managed; a virtual node (below) has none.
+
+The machine's reboot and update come from `~/.tandemllm/node/node.json` (`{"reboot": [...], "update": [...]}`, argument lists; code: `proxy/nodemaint.py`). Neither is set by default: a reboot needs a right to reboot (a sudoers or polkit rule for the agent's user) that the agent never takes itself, and an update is the install's own. Without a command the action is refused with the words to set it up.
 
 **Who may call it.** Every route needs the caller check. Until pairing has filled the trust store (`~/.tandemllm/node/trust`: `node.crt`, `node.key`, `peers/*.pem`), the agent listens on loopback only, in plain HTTP, and every request carries the loopback secret from `~/.tandemllm/node/secret` (made at the first start, mode 0600; a file others can read is refused) as `Authorization: Bearer`. Any other address needs mTLS: a client without a certificate the store vouches for fails the handshake. After pairing, loopback is mTLS too, and the node's own CLI uses the node's certificate. The owner and the node itself reach every route; another node pinned for link tests only `/node/identity` and `/node/linktest`. It never listens on 0.0.0.0 or a WAN address; a remote node is reached through an SSH tunnel to its loopback. `tandem-node check` says how it would listen, and why not. Every change is a log line with its caller.
 
-**As a service.** `tandem-node unit > ~/.config/systemd/user/tandemnode.service`, then `systemctl --user daemon-reload && systemctl --user enable --now tandemnode`. A `tandem-app` on the same machine finds it at `http://127.0.0.1:7700` with that secret (`TANDEM_NODE_AGENT`, `TANDEM_NODE_SECRET`; `TANDEM_NODE_AGENT=off` for none). `--virtual NAME` runs a second agent on the same machine as another node, with its own id (its own `--state-dir` and `--port`).
+**As a service.** `tandem-node unit > ~/.config/systemd/user/tandemnode.service`, then `systemctl --user daemon-reload && systemctl --user enable --now tandemnode`. A `tandem-app` on the same machine finds it at `http://127.0.0.1:7700` with that secret (`TANDEM_NODE_AGENT`, `TANDEM_NODE_SECRET`; `TANDEM_NODE_AGENT=off` for none). `--virtual NAME` runs a second agent on the same machine as another node, with its own id (its own `--state-dir` and `--port`). A virtual node never reboots or updates the machine (both are simulated, whatever `node.json` says), has no engine unless its own `engines.json` names one, and serves only the engine backends whose port its agent lists.
 
 ## Node trust: pairing, ownership, reset
 

@@ -168,12 +168,19 @@ TandemNode is the agent on each Spark that TandemApp's controller talks to. It s
 \code{/node/weights} & the Setup Guide's weights with a content id per pack; \code{DELETE} removes one as the Setup Guide does \\
 \code{GET /node/logs} & the agent's and its engines' lines, by level, text and source \\
 \code{POST /node/linktest} & to another node: RTT, bandwidth per interface, MTU, RoCE state, a port running at half its rate \\
+\code{/node/maintenance} & whether the machine's reboot and update are set up here (simulated on a virtual node); \code{POST .../reboot}, \code{update} run them \\
 \code{/node/setup/*} & the engine's Setup Guide routes, unchanged \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 Every route needs its caller checked. Until pairing has filled the trust store (\code{~/.tandemllm/node/trust}), the agent listens on loopback only, in plain HTTP, and every request carries the loopback secret from \code{~/.tandemllm/node/secret} (mode 0600, made at the first start). Any other address needs mutual TLS: a client without a certificate the store vouches for fails the handshake. It never listens on \code{0.0.0.0} or a WAN address; a remote node is reached through an SSH tunnel to its loopback. \code{tandem-node check} says how it would listen. \code{tandem-node unit} prints a systemd user unit for the same options.
+
+The machine's reboot and update are commands the node's owner sets in \code{~/.tandemllm/node/node.json}; neither is set by default, because a reboot needs a right the agent never takes by itself. A virtual node (\code{--virtual}, a second agent on one machine for tests) simulates both and never touches the machine.
+
+\subsection{Maintenance: drain}\index{TandemNode!drain}
+
+Drain on a Spark's page stops new requests to it through TandemApp's API: a model's route goes to its fallback, and with none the client gets a 503 with \code{Retry-After}, so it tries again later. Requests in flight finish; the Spark shows draining (a half-filled circle), then drained once nothing runs, and can be updated or rebooted. Undrain takes requests again. Every action that stops or removes something (restart the engine, reboot, update, forget, release a rented Spark) first says what goes and what stays, and runs only from that page's confirmation.
 
 \subsection{Pairing}\index{TandemNode!pairing}
 
