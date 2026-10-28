@@ -3,7 +3,7 @@
 // raises `unauthorized` on the app bus, and the shell shows a banner; a network failure raises
 // `offline`. Every error names the endpoint it came from.
 
-import type { Bucket, Live, LogsJson, Requests, ResidencyPlan, SessionInfo, Summary, SystemInfo, Usage } from './types';
+import type { Bucket, LedgerSource, LogsJson, Requests, ResidencyPlan, ServerLive, ServerSystem, SessionInfo, Summary, Usage } from './types';
 import type { Parallel } from '../lib/parallel';
 import { EXPORT_LIMIT_MS, LOGS_EXPORT, nameFrom } from '../lib/log-export';
 
@@ -103,37 +103,65 @@ export async function request<T>(endpoint: string, init: RequestInit = {}, parse
   return (await res.json()) as T;
 }
 
+/** VIS-254: where each ledger answers: this server's own, or TandemApp's controller's (its routes
+ *  under /v1/fleet/ledger/, which a reverse proxy sends to the controller with the rest of the fleet
+ *  API while /v1/dashboard/* reaches an engine) */
+const LEDGER: Record<LedgerSource, string> = { here: '/v1/dashboard', fleet: '/v1/fleet/ledger' };
+/** the `backend=` value of a ledger's own rows: the requests its server's engine served itself
+ *  (server/dashboard_api.py), not one it relayed */
+const OWN_ROWS = 'engine';
+
+/** The filters of a ledger read. `own`: only the rows of the server's own engine; `node` and
+ *  `deployment` (SRV-731) on a ledger that has them, the controller's. */
+export interface LedgerFilters {
+  model?: string | null;
+  client?: string | null;
+  backend?: string | null;
+  own?: boolean;
+  user?: string | null;
+  internal?: boolean;
+  node?: string | null;
+  deployment?: string | null;
+  ledger?: LedgerSource;
+}
+
+function filterParams(q: URLSearchParams, p: LedgerFilters): void {
+  if (p.model) q.set('model', p.model);
+  if (p.client) q.set('client', p.client);
+  if (p.own) q.set('backend', OWN_ROWS);
+  else if (p.backend) q.set('backend', p.backend);
+  if (p.user) q.set('user', p.user);
+  if (p.internal) q.set('internal', '1'); // VIS-60: TandemLLM's own calls too
+  if (p.node) q.set('node', p.node);
+  if (p.deployment) q.set('deployment', p.deployment);
+}
+
+/** a backend row the ledger files as the server's own engine's */
+export const isOwnBackend = (b: { id: string } | null | undefined): boolean => b?.id === OWN_ROWS;
+
 export const api = {
   session: {
     get: () => request<SessionInfo>('/v1/dashboard/session'),
   },
-  summary: (tz: string) => request<Summary>(`/v1/dashboard/summary?tz=${encodeURIComponent(tz)}`),
-  usage: (p: { from?: string; to?: string; bucket: Bucket; tz: string; model?: string | null; client?: string | null; backend?: string | null; user?: string | null; internal?: boolean }) => {
+  summary: (tz: string, ledger: LedgerSource = 'here') => request<Summary>(`${LEDGER[ledger]}/summary?tz=${encodeURIComponent(tz)}`),
+  usage: (p: LedgerFilters & { from?: string; to?: string; bucket: Bucket; tz: string }) => {
     const q = new URLSearchParams();
     if (p.from) q.set('from', p.from);
     if (p.to) q.set('to', p.to);
     q.set('bucket', p.bucket);
     q.set('tz', p.tz);
-    if (p.model) q.set('model', p.model);
-    if (p.client) q.set('client', p.client);
-    if (p.backend) q.set('backend', p.backend);
-    if (p.user) q.set('user', p.user);
-    if (p.internal) q.set('internal', '1'); // VIS-60: TandemLLM's own calls too
-    return request<Usage>(`/v1/dashboard/usage?${q}`);
+    filterParams(q, p);
+    return request<Usage>(`${LEDGER[p.ledger ?? 'here']}/usage?${q}`);
   },
-  requests: (p: { limit?: number; before?: number | null; model?: string | null; client?: string | null; finish?: string | null; backend?: string | null; user?: string | null; internal?: boolean } = {}) => {
+  requests: (p: LedgerFilters & { limit?: number; before?: number | null; finish?: string | null } = {}) => {
     const q = new URLSearchParams();
     q.set('limit', String(p.limit ?? 50));
     if (p.before != null) q.set('before', String(p.before));
-    if (p.model) q.set('model', p.model);
-    if (p.client) q.set('client', p.client);
     if (p.finish) q.set('finish', p.finish);
-    if (p.backend) q.set('backend', p.backend);
-    if (p.user) q.set('user', p.user);
-    if (p.internal) q.set('internal', '1');
-    return request<Requests>(`/v1/dashboard/requests?${q}`);
+    filterParams(q, p);
+    return request<Requests>(`${LEDGER[p.ledger ?? 'here']}/requests?${q}`);
   },
-  system: () => request<SystemInfo>('/v1/dashboard/system'),
+  system: () => request<ServerSystem>('/v1/dashboard/system'),
   // /metrics under the dashboard's own access rule (the same page), so the page needs no metrics token
   metrics: () => request<string>('/v1/dashboard/metrics', { headers: { Accept: 'text/plain' } }, 'text'),
   logsJson: (p: { level?: string; since?: number | null; grep?: string | null; backlog?: number } = {}) => {
@@ -181,7 +209,7 @@ export const api = {
     }
   },
   logsExportUrl: () => `${base}${LOGS_EXPORT}`,
-  live: () => request<Live>('/v1/dashboard/live?follow=0'),
+  live: () => request<ServerLive>('/v1/dashboard/live?follow=0'),
   /** every request in flight on every backend (server/parallel.py); `since` = the newest series
    *  sample the page holds, so a poll carries the new samples only */
   parallel: (since?: number | null) => request<Parallel>(`/v1/dashboard/parallel${since != null ? `?since=${since}` : ''}`),
@@ -191,6 +219,9 @@ export const api = {
   conductorEvents: (requestId: string) => request<{ events: unknown[]; monitor: boolean }>(`/v1/conductor/events?request=${encodeURIComponent(requestId)}&limit=50`),
   liveUrl: () => `${base}/v1/dashboard/live?follow=1`,
   chatUrl: () => `${base}/v1/chat/completions`,
+  /** VIS-254: a completion through TandemApp's gateway (a fleet deployment, `X-Tandem-Pin` for one
+   *  member) when this page's /v1/* is an engine's */
+  gatewayUrl: () => `${base}/v1/fleet/gateway/chat/completions`,
 };
 
 export function describeError(e: unknown): { endpoint: string; message: string; status: number } {

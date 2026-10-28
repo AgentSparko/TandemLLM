@@ -161,6 +161,17 @@ export interface KindInfo {
   timeouts: { connect: number; first_byte: number; idle: number };
 }
 
+/** /v1/config's `engine`: this server's own engine */
+export interface OwnEngine {
+  model: string;
+  base_model: string | null;
+  embedded: boolean;
+  /** PL1: this engine's own parallel requests (never a relayed backend's: those get no limit
+   *  from us) and the small models it runs beside Qwen */
+  parallel?: { n: number; requested: number; side_max_len: number | null; side_graphs: string | null; floor_gib: number | null; max_len?: number | null };
+  roles?: { deciders?: string[]; narrator?: { model: string | null; state: string } };
+}
+
 export interface ConfigOverview {
   contract_version: string;
   setup_needed: boolean;
@@ -172,13 +183,9 @@ export interface ConfigOverview {
   rules: Rule[];
   users: ProxyUser[];
   users_active: boolean;
-  engine: {
-    model: string; base_model: string | null; embedded: boolean;
-    /** PL1: this engine's own parallel requests (never a relayed backend's: those get no limit
-     *  from us) and the small models it runs beside Qwen */
-    parallel?: { n: number; requested: number; side_max_len: number | null; side_graphs: string | null; floor_gib: number | null; max_len?: number | null };
-    roles?: { deciders?: string[]; narrator?: { model: string | null; state: string } };
-  } | null;
+  /** the engine of the server this page talks to (null on a standalone proxy); a fleet's other
+   *  engines are its deployments' members (api/fleet.ts) */
+  engine: OwnEngine | null;
   generation: number;
   /** P4: whether a conductor runs the harness on this server, its profiles, and the defaults of
    * every feature group by kind */

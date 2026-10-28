@@ -2,7 +2,7 @@
 // range, and which server flag carries its default. The panel renders from this table and the
 // request builder reads it, so a field exists in exactly one place.
 
-import type { SystemInfo } from '../api/types';
+import type { ServerSystem } from '../api/types';
 import type { ParamValues } from './types';
 
 export type ParamKey = keyof ParamValues;
@@ -55,7 +55,7 @@ export const NOT_A_PARAM = 'min_p is not a parameter of this engine; the server 
 export type Defaults = Partial<Record<ParamKey, string | number | boolean | null>> & { max_len?: number };
 
 /** The server's defaults, read from /v1/dashboard/system (flags.args + the model card). */
-export function defaultsFrom(sys: SystemInfo | null | undefined): Defaults {
+export function defaultsFrom(sys: ServerSystem | null | undefined): Defaults {
   const out: Defaults = {};
   if (!sys) return out;
   const args = sys.flags?.args ?? {};

@@ -2,7 +2,7 @@
 // first event's `history`, gaps by timestamp (the sampler sleeps when nothing is in flight and
 // nobody watches), the row ordering, and the words for a phase. Pure functions, no DOM.
 
-import type { Live, LivePhase, LiveRequest, LiveSample, LiveWindows } from '../api/types';
+import type { ServerLive, LivePhase, LiveRequest, LiveSample, LiveWindows } from '../api/types';
 import { exact } from './format';
 
 export const WINDOW_S = 300;
@@ -149,7 +149,7 @@ export function sumDecodeNow(rows: LiveRequest[]): number | null {
 // ---- VIS-40: the live rates without the warm-up ---------------------------------------------------
 
 /** The server sends the live rates (it reports their `windows`); an older one gets 1.0's figures. */
-export function hasLiveRates(l: Pick<Live, 'windows'> | null | undefined): l is { windows: LiveWindows } {
+export function hasLiveRates(l: Pick<ServerLive, 'windows'> | null | undefined): l is { windows: LiveWindows } {
   return !!l?.windows;
 }
 
@@ -252,7 +252,7 @@ export function mostlyCachedWords(r: LiveRequest): string | null {
  * The prefill tile of a server with the live rates: the running prefills' now-rate (summed over
  * several), "—" while none has one. Never the last finished request's rate: that stays in its row.
  */
-export function prefillFigure(l: Live & { windows: LiveWindows }, rows: LiveRequest[]): LiveFigure {
+export function prefillFigure(l: ServerLive & { windows: LiveWindows }, rows: LiveRequest[]): LiveFigure {
   const w = l.windows;
   const value = l.now.prefill_live_tps ?? null;
   const pre = rows.filter((r) => r.phase === 'prefill');
@@ -279,7 +279,7 @@ export function prefillFigure(l: Live & { windows: LiveWindows }, rows: LiveRequ
 }
 
 /** The decode tile of a server with the live rates: every request's rate from its warm-up anchor on. */
-export function decodeFigure(l: Live & { windows: LiveWindows }, rows: LiveRequest[]): LiveFigure {
+export function decodeFigure(l: ServerLive & { windows: LiveWindows }, rows: LiveRequest[]): LiveFigure {
   const w = l.windows;
   const value = l.now.decode_live_tps ?? null;
   const c = l.counts;

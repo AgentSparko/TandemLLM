@@ -7,14 +7,14 @@ import { describe, expect, it } from 'vitest';
 import Ajv2020 from 'ajv/dist/2020.js';
 import { nowLine } from '../src/lib/activity';
 import { decodeFigure, hasLiveRates, mostlyCachedWords, peak, prefillFigure, push, rateText, seedRing, slots, warmingWords } from '../src/lib/live';
-import type { Live, LiveActivity, LiveRequest, LiveWindows } from '../src/api/types';
+import type { ServerLive, LiveActivity, LiveRequest, LiveWindows } from '../src/api/types';
 import { MockLive, mostlyCached, prefillLive, WINDOWS } from '../mock/live.ts';
 import { makeRow, rng } from '../mock/generate.ts';
 
 const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'dashboard-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const schema = ajv.compile(JSON.parse(readFileSync(join(DIR, 'live.schema.json'), 'utf8')));
-function valid(l: Live): Live {
+function valid(l: ServerLive): ServerLive {
   if (!schema(l)) throw new Error(ajv.errorsText(schema.errors, { separator: '\n' }));
   return l;
 }
@@ -31,7 +31,7 @@ function mock(kind: string, at: number, opts: { liveRates?: boolean } = {}): Moc
 }
 
 /** What the page shows: the tile's number and the banner's rate, as text. */
-function shown(l: Live) {
+function shown(l: ServerLive) {
   const rows = l.requests;
   const pf = hasLiveRates(l) ? prefillFigure(l, rows) : null;
   const df = hasLiveRates(l) ? decodeFigure(l, rows) : null;
@@ -39,7 +39,7 @@ function shown(l: Live) {
   return { prefill: pf, decode: df, tile: pf ? rateText(pf.value) : null, banner: n?.numbers ?? [], headline: n?.headline ?? '' };
 }
 
-const pre = (l: Live, id: string) => l.requests.find((x) => x.request_id.startsWith(id))!;
+const pre = (l: ServerLive, id: string) => l.requests.find((x) => x.request_id.startsWith(id))!;
 
 describe('scenario 1 + 2: the running prefill drives the headline, and the tile equals the banner', () => {
   it('B prefills at 743 tok/s; A finished at 433 end to end: the tile says 743', () => {
@@ -134,7 +134,7 @@ describe('scenario 6 + 7 + 10: decode from token 50', () => {
   it('10: nothing decoding', () => {
     const live = new MockLive(rng(1), 0);
     const l = live.snapshot(NOW);
-    expect(decodeFigure(l as Live & { windows: LiveWindows }, l.requests)).toMatchObject({ value: null, sub: 'nothing decoding', caption: 'from token 50' });
+    expect(decodeFigure(l as ServerLive & { windows: LiveWindows }, l.requests)).toMatchObject({ value: null, sub: 'nothing decoding', caption: 'from token 50' });
   });
 });
 
@@ -208,7 +208,7 @@ describe('scenario 16: an older server', () => {
     expect(n.numbers[0]).toMatch(/tok\/s$/); // tps_now of the last chunk, as before
   });
   it('the recorded box messages (from before VIS-40) have no windows and keep their Now line', () => {
-    const fx = JSON.parse(readFileSync(join(__dirname, '..', '..', 'tests', 'fixtures', 'live-1.1-box.json'), 'utf8')) as { messages: Record<string, Live> };
+    const fx = JSON.parse(readFileSync(join(__dirname, '..', '..', 'tests', 'fixtures', 'live-1.1-box.json'), 'utf8')) as { messages: Record<string, ServerLive> };
     for (const m of Object.values(fx.messages)) {
       expect(hasLiveRates(m)).toBe(false);
       expect(nowLine(m.engine, m.requests, m.windows)).toEqual(nowLine(m.engine, m.requests));

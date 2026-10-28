@@ -4,14 +4,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { ActivityState, Live, LiveActivity, LiveEngine, LiveRequest, LiveStop, StopReason } from '../src/api/types';
+import type { ActivityState, ServerLive, LiveActivity, LiveEngine, LiveRequest, LiveStop, StopReason } from '../src/api/types';
 import { activityCell, clientFlag, continuesText, etaWord, isMoving, memoryLines, nowLine, ordinal, pathSegments, pickRunning, roundWords, secs, stateWord, stopTone, streamHealth, timelineList, timelineSegments, tokensSplit } from '../src/lib/activity';
 
-const recentRows = (r: Live['recent'], n = 20) => (r ?? []).slice(0, n);
+const recentRows = (r: ServerLive['recent'], n = 20) => (r ?? []).slice(0, n);
 import { emptyRing, push } from '../src/lib/live';
 
-const FIX = JSON.parse(readFileSync(join(__dirname, '..', '..', 'tests', 'fixtures', 'live-1.1-box.json'), 'utf8')) as { messages: Record<string, Live> };
-const msg = (k: string): Live => {
+const FIX = JSON.parse(readFileSync(join(__dirname, '..', '..', 'tests', 'fixtures', 'live-1.1-box.json'), 'utf8')) as { messages: Record<string, ServerLive> };
+const msg = (k: string): ServerLive => {
   const m = FIX.messages[k];
   if (!m) throw new Error(`no fixture message ${k}`);
   return m;

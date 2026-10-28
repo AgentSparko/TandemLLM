@@ -17,7 +17,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api, describeError } from '../api/client';
-import type { MemoryLimitRow, MemoryLimits, ResidencyDoc, ResidencyPlan, ResidentFile, SystemInfo } from '../api/types';
+import type { MemoryLimitRow, MemoryLimits, ResidencyDoc, ResidencyPlan, ResidentFile, ServerSystem } from '../api/types';
 import { bytes, duration, exact, pct, timeShort, dateTimeShort, ago } from '../lib/format';
 import { poll, type Poller } from '../lib/poll';
 import { appliesWords, eventWords, gib, gibOf, inUseWords, tableWords, windowWords, limitValue, roleRows, pendingWords, REASON_WORDS, rowWords, scaledBar, switchWords, usageShare, usageWords, withEngineLimit } from '../lib/residency';
@@ -44,7 +44,7 @@ interface Sample {
 
 @customElement('qse-system')
 export class QseSystem extends LightElement {
-  @state() private sys: Loadable<SystemInfo> = { state: 'loading' };
+  @state() private sys: Loadable<ServerSystem> = { state: 'loading' };
   @state() private samples: Sample[] = [];
   /** P1.5: each host's CPU, GPU and memory, 30 minutes in the browser */
   @state() private hostHist = new Map<string, HostSample[]>();
@@ -250,7 +250,7 @@ export class QseSystem extends LightElement {
   }
 
   /** OPS-41: the engine's split and what may load beside it. Nothing on a server without the split. */
-  private renderPlan(d: SystemInfo): TemplateResult | typeof nothing {
+  private renderPlan(d: ServerSystem): TemplateResult | typeof nothing {
     const p = this.plan && this.plan !== 'off' ? this.plan : null;
     const split = p?.engine ?? d.memory.split ?? null;
     const lim = p?.limits ?? d.memory.limits ?? null;
@@ -311,7 +311,7 @@ export class QseSystem extends LightElement {
   }
 
   /** 0.6.1: the small models under memory pressure: loaded, unloaded for memory, loading again. */
-  private renderRoles(d: SystemInfo): TemplateResult | typeof nothing {
+  private renderRoles(d: ServerSystem): TemplateResult | typeof nothing {
     const rep = d.memory.roles;
     const rows = roleRows(rep);
     if (!rep || !rows.length) return nothing;

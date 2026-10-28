@@ -22,7 +22,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { api, describeError } from '../api/client';
-import type { Live, LiveRecent, LiveRequest, LiveSample } from '../api/types';
+import type { ServerLive, LiveRecent, LiveRequest, LiveSample } from '../api/types';
 import { activityCell, clientFlag, constrainedWord, continuesText, memoryLines, nowLine, pathSegments, roundWords, secs, stopTone, streamHealth, timelineList, timelineSegments, tokensSplit, type Segment } from '../lib/activity';
 import { compact, exact, fixed, ms, timeShort, tps } from '../lib/format';
 import { agoShort, cachedShare, clockSkew, decodeFigure, elapsed, emptyFoot, emptyRing, hasLiveRates, mostlyCachedWords, orderRows, peak, prefillFigure, prefillingWords, push, rateText, seedRing, slots, sumDecodeNow, voiceLine, warmingWords, type Ring } from '../lib/live';
@@ -40,7 +40,7 @@ export class QseLivePanel extends LightElement {
   @property({ type: String }) grafanaUrl = '';
   /** `#/performance?debug=live`: log every event's arrival and show the last 20 gaps. */
   @property({ type: Boolean }) debug = false;
-  @state() private live: Live | null = null;
+  @state() private live: ServerLive | null = null;
   @state() private ring: Ring = emptyRing();
   @state() private streamState: StreamState = 'closed';
   @state() private error: { endpoint: string; message: string } | null = null;
@@ -93,7 +93,7 @@ export class QseLivePanel extends LightElement {
       onEvent: (ev) => {
         if (ev.event !== 'live') return;
         try {
-          this.apply(JSON.parse(ev.data) as Live, true);
+          this.apply(JSON.parse(ev.data) as ServerLive, true);
         } catch {
           /* a malformed event is skipped */
         }
@@ -116,7 +116,7 @@ export class QseLivePanel extends LightElement {
   }
 
   /** Merge one message. The sparklines keep one sample a second: `push` ignores a repeated `sample.t`. */
-  private apply(l: Live, fromStream: boolean): void {
+  private apply(l: ServerLive, fromStream: boolean): void {
     const at = Date.now();
     this.skew = clockSkew(l.generated_at, at);
     const now = at / 1000 + this.skew;

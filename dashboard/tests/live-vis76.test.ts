@@ -11,7 +11,7 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import { nowLine } from '../src/lib/activity';
 import { clockSkew, decodeFigure, emptyFoot, emptyRing, hasLiveRates, prefillEstimate, prefillFigure, push, rateText, slots } from '../src/lib/live';
 import { inFlightWords, stallLine, stateLine, stateTone, type Lane, type Parallel } from '../src/lib/parallel';
-import type { Live, LiveEngine, LiveRequest, LiveSample } from '../src/api/types';
+import type { ServerLive, LiveEngine, LiveRequest, LiveSample } from '../src/api/types';
 import { MockLive, WINDOWS } from '../mock/live.ts';
 import { MockParallel } from '../mock/parallel.ts';
 import { makeRow, rng } from '../mock/generate.ts';
@@ -23,7 +23,7 @@ const parSchema = ajv.compile(JSON.parse(readFileSync(join(DIR, 'parallel.schema
 
 const NOW = Date.parse('2026-10-10T08:30:36Z');
 
-function windowed(at: number): Live {
+function windowed(at: number): ServerLive {
   const r = rng(76);
   const live = new MockLive(r, 812);
   live.rates((forced) => makeRow(r, NOW, false, forced), 'exl3-window', NOW, at);
@@ -32,7 +32,7 @@ function windowed(at: number): Live {
   return l;
 }
 
-function shown(l: Live) {
+function shown(l: ServerLive) {
   const rows = l.requests;
   const p = rows.find((x) => x.phase === 'prefill')!;
   return { row: p, tile: hasLiveRates(l) ? prefillFigure(l, rows) : null, now: nowLine(l.engine, rows, l.windows)! };
@@ -165,7 +165,7 @@ describe('several requests at once', () => {
     expect(nowLine(engine, [dec('a', 0)], windows)!.numbers[0]).toBe('stalled, no token in the last 2 s');
   });
   it('the decode tile says the stall instead of a silent 0', () => {
-    const l = { counts: { decoding: 3, prefilling: 1 }, now: { decode_live_tps: 0, decode_warming: 0 }, windows } as unknown as Live & { windows: typeof windows };
+    const l = { counts: { decoding: 3, prefilling: 1 }, now: { decode_live_tps: 0, decode_warming: 0 }, windows } as unknown as ServerLive & { windows: typeof windows };
     expect(decodeFigure(l, []).sub).toBe('3 decoding · stalled behind a prefill');
     const ok = { ...l, now: { decode_live_tps: 17.2, decode_warming: 0 } } as typeof l;
     expect(decodeFigure(ok, []).sub).toBe('3 decoding · last 2 s');

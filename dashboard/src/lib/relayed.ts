@@ -3,16 +3,15 @@
 // decodes at 200-400 tok/s, the engine at 30-45: pooled, the engine's p50 jumped to 300 in an
 // hour of a cloud chat and the cloud dots sat above the scatter's axis as "cold" (2026-10-17).
 
+import { isOwnBackend } from '../api/client';
 import type { BackendRef, RequestRow, Usage } from '../api/types';
 
-/** the `backend=` filter's value for the engine's own rows (server/dashboard_api.py) */
-export const ENGINE = 'engine';
 /** at most this many relayed backends get a line of their own */
 export const MAX_RELAYED = 4;
 
-/** the backends of a usage answer other than the engine, the ones a view draws beside it */
+/** the backends of a usage answer other than the server's own engine, the ones a view draws beside it */
 export function relayedBackends(u: Pick<Usage, 'dimensions'> | null | undefined): BackendRef[] {
-  return (u?.dimensions.backends ?? []).filter((b) => b.id !== ENGINE).slice(0, MAX_RELAYED);
+  return (u?.dimensions.backends ?? []).filter((b) => !isOwnBackend(b)).slice(0, MAX_RELAYED);
 }
 
 /** a backend's name in a legend: its label (`DeepSeek (cloud)`), else its id */
@@ -27,6 +26,8 @@ export function scatterGroup(r: Pick<RequestRow, 'backend'>, tier: string): stri
 
 export interface BackendRow {
   id: string;
+  /** the server's own engine (no price, no relay) */
+  own: boolean;
   name: string;
   kind: string;
   requests: number;
@@ -41,8 +42,9 @@ export interface BackendRow {
 
 /** the comparison table: the engine first, then each relayed backend, from their usage answers */
 export function compareRows(engine: Usage | null, relayed: { ref: BackendRef; usage: Usage }[]): BackendRow[] {
-  const row = (id: string, name: string, kind: string, u: Usage): BackendRow => ({
+  const row = (id: string, name: string, kind: string, u: Usage, own = false): BackendRow => ({
     id,
+    own,
     name,
     kind,
     requests: u.totals.requests,
@@ -54,7 +56,7 @@ export function compareRows(engine: Usage | null, relayed: { ref: BackendRef; us
     cost: u.totals.cost_micros ?? null,
   });
   const out: BackendRow[] = [];
-  if (engine) out.push(row(ENGINE, 'this engine', 'engine', engine));
+  if (engine) out.push(row('engine', 'this engine', 'engine', engine, true));
   for (const r of relayed) out.push(row(r.ref.id, backendName(r.ref), r.ref.kind ?? 'proxy', r.usage));
   return out;
 }

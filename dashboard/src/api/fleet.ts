@@ -500,7 +500,7 @@ export interface FleetTopology {
 
 export type Agg = 'sum' | 'mean' | 'max' | 'maxmean';
 export type MetricKey = 'tps' | 'req' | 'ttft' | 'gpu' | 'power' | 'temp' | 'sm' | 'memclk' | 'mem' | 'cpu' | 'disk' | 'lan' | 'fabric' | 'rtt';
-export type Range = '5m' | '1h' | '6h' | '24h' | '7d';
+export type Range = '5m' | '1h' | '6h' | '24h' | '7d' | '30d';
 
 export interface MetricInfo {
   label: string;
@@ -538,8 +538,11 @@ export const RANGES: Record<Range, { span: number; count: number; label: string 
   '6h': { span: 21600, count: 145, label: '6 h' },
   '24h': { span: 86400, count: 145, label: '24 h' },
   '7d': { span: 604800, count: 169, label: '7 d' },
+  // VIS-254: hourly over the store's retention, for a month of energy on Usage
+  '30d': { span: 2592000, count: 721, label: '30 d' },
 };
-export const RANGE_KEYS = Object.keys(RANGES) as Range[];
+/** the ranges the scope bar offers */
+export const RANGE_KEYS: Range[] = ['5m', '1h', '6h', '24h', '7d'];
 
 export interface MetricSeries {
   contract_version: string;

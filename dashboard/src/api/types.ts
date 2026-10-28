@@ -209,12 +209,29 @@ export interface Usage {
   to: string;
   bucket: Bucket;
   tz: string;
-  filters: { model: string | null; client: string | null; backend?: string | null; user?: string | null };
+  /** SRV-731: `node` and `deployment` on a ledger that has them (a TandemApp controller's) */
+  filters: { model: string | null; client: string | null; backend?: string | null; user?: string | null; node?: string | null; deployment?: string | null };
   buckets: UsageBucket[];
   totals: Totals;
   top_days: TopDay[];
-  dimensions: { models: string[]; clients: ClientDim[]; backends?: BackendRef[]; users?: string[] };
+  /** SRV-731: the fleet nodes and deployments the ledger has seen, when it has seen any */
+  dimensions: { models: string[]; clients: ClientDim[]; backends?: BackendRef[]; users?: string[]; nodes?: string[]; deployments?: string[] };
 }
+
+/** VIS-254: where a ledger row, a lane or an answer ran in a fleet: the node's id and the
+ *  deployment's. A controller's ledger names both for every request its gateway sent to a node;
+ *  an engine's own ledger names neither, and the page attributes its rows to the node whose
+ *  deployment member that engine is (lib/where.ts). Null: not on a fleet node (a cloud backend),
+ *  or a server without a fleet. */
+export interface Where {
+  node: string | null;
+  deployment: string | null;
+}
+
+/** VIS-254: which ledger a Usage, Requests or History figure is read from: `here`, the server this
+ *  page talks to (/v1/dashboard/*), or `fleet`, TandemApp's controller (/v1/fleet/ledger/*). One
+ *  figure is never added up from both: a request the gateway relayed to an engine is a row in each. */
+export type LedgerSource = 'here' | 'fleet';
 
 export type FinishReason = 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'timeout' | 'abandoned' | 'error' | 'refused';
 /** `resident`: the resident prompt's pinned head or a kept anchor answered the prefix (turncache). */
@@ -273,6 +290,10 @@ export interface RequestRow {
   /** VIS-207: the backend configuration a relayed answer named (its `system_fingerprint`); a
    *  new value under the same model id is a snapshot the provider swapped in */
   system_fingerprint?: string | null;
+  /** SRV-731 (ledger schema 11): the fleet node (its id) and the deployment that served it; null
+   *  for an engine's own row, a cloud backend, a server without a fleet */
+  node?: string | null;
+  deployment?: string | null;
   /** P6: the queue, prefill and decode split and the cached tokens came from the engine's plugin */
   l2?: { join: 'exact' | 'approximate'; preemptions?: number | null; engine_finish?: string | null; corrupted?: boolean | null } | null;
 }
@@ -301,7 +322,10 @@ export interface Requests {
   requests: RequestRow[];
 }
 
-export interface SystemInfo {
+/** `GET /v1/dashboard/system`: the server this page talks to, and the one engine it runs (`engine`,
+ *  `memory`, `gpu`); in a fleet that engine is one node's (lib/where.ts `hereNode`), every other
+ *  node's figures come from the fleet API. */
+export interface ServerSystem {
   contract_version: ContractVersion;
   generated_at: string;
   engine: {
@@ -756,7 +780,9 @@ export interface LiveCounts {
   refused: number;
 }
 
-export interface Live {
+/** `GET /v1/dashboard/live`: what the engine of the server this page talks to does now; the other
+ *  nodes' rates come from the fleet API's metrics. */
+export interface ServerLive {
   contract_version: ContractVersion;
   seq?: number; // 1.1: rises by one per event, also the SSE id
   generated_at: string;
