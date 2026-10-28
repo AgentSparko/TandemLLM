@@ -64,6 +64,13 @@ const SERVE = hashFor('setup');
 
 type SecChoice = 'keep' | 'generate';
 
+/** VIS-252: another Spark's guide asks TandemApp's controller, whose admin password it is */
+const NODE_SIGNIN = {
+  title: 'Sign in to TandemApp’s controller',
+  body: 'This Spark’s Setup Guide runs through TandemApp’s controller, which has an admin password: the TANDEM_ADMIN_TOKEN it runs with.',
+  kept: 'The session lasts 12 hours in this browser; your progress stays in it too.',
+};
+
 @customElement('qse-setup')
 export class QseSetup extends LightElement {
   /** the route below #/models/serve: [] tiles, [model], [model, step] */
@@ -617,7 +624,7 @@ export class QseSetup extends LightElement {
         <div class="setup-main">
           ${this.renderBanners()}
           ${simpleSwitch(this.simple, (v) => this.setMode(v))}
-          ${this.unauthorized ? html`<qse-setup-signin></qse-setup-signin>` : inModel ? this.renderModelArea() : this.renderTiles()}
+          ${this.unauthorized ? html`<qse-setup-signin .texts=${this.node ? NODE_SIGNIN : null}></qse-setup-signin>` : inModel ? this.renderModelArea() : this.renderTiles()}
           <footer class="setup-foot">
             <button class="btn btn-ghost btn-sm" aria-expanded=${this.resetOpen} aria-controls="setup-reset" @click=${() => (this.resetOpen = !this.resetOpen)}>${icon('trash')} ${S.resetLink}</button>
           </footer>
