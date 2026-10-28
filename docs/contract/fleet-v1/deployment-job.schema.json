@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/deployment-job.schema.json",
+  "title": "POST /v1/fleet/deployments/{id}/actions/{action} and GET /v1/fleet/deployments/jobs/{job} (200): the job",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ]
+    },
+    "deployment": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "start",
+        "stop",
+        "move"
+      ]
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "running",
+        "done",
+        "failed"
+      ]
+    },
+    "job": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "deploy"
+          ]
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "start",
+            "stop",
+            "move"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "running",
+            "done",
+            "failed"
+          ]
+        },
+        "by": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "number"
+        },
+        "ended_at": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "node": {
+                "type": "string"
+              },
+              "alias": {
+                "type": "string"
+              },
+              "phase": {
+                "type": "string",
+                "enum": [
+                  "start",
+                  "warm",
+                  "serving",
+                  "stop",
+                  "stopped",
+                  "kept",
+                  "failed"
+                ]
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "node",
+              "alias",
+              "phase",
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "log": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "t": {
+                "type": "number"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "t",
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "error": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        "from": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "deployment",
+        "action",
+        "state",
+        "by",
+        "started_at",
+        "ended_at",
+        "steps",
+        "log",
+        "error",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "contract_version",
+    "deployment",
+    "action",
+    "state",
+    "job"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/placement.schema.json",
+  "title": "POST /v1/fleet/placement (200): each node's fit from its own Setup Guide estimate and the deployment types allowed, or why not",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ]
+    },
+    "model": {
+      "type": "string"
+    },
+    "pack": {
+      "type": "string"
+    },
+    "ctx": {
+      "type": "integer"
+    },
+    "slots": {
+      "type": "integer"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "transport": {
+            "type": "string"
+          },
+          "fits": {
+            "type": "boolean"
+          },
+          "need_gib": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "free_gib": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "budget_gib": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "total_gib": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "serving": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "engine",
+              "agent",
+              "process",
+              "none"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "gib": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "gib"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "node",
+          "alias",
+          "status",
+          "version",
+          "transport",
+          "fits",
+          "need_gib",
+          "free_gib",
+          "budget_gib",
+          "total_gib",
+          "serving",
+          "source",
+          "reason",
+          "parts"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "types": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "single",
+              "replicas",
+              "split",
+              "role"
+            ]
+          },
+          "allowed": {
+            "type": "boolean"
+          },
+          "built": {
+            "type": "boolean"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "warn": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "type": "string"
+                },
+                "layers": {
+                  "type": "string"
+                },
+                "gib": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "node",
+                "layers",
+                "gib"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "type",
+          "allowed",
+          "built",
+          "nodes",
+          "reason",
+          "warn",
+          "stages"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract_version",
+    "model",
+    "pack",
+    "ctx",
+    "slots",
+    "nodes",
+    "types"
+  ],
+  "additionalProperties": false
+}

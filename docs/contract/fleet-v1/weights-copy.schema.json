@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/weights-copy.schema.json",
+  "title": "The body of POST /v1/fleet/weights/copy: a pack from one node to another",
+  "type": "object",
+  "properties": {
+    "from": {
+      "type": "string"
+    },
+    "to": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    }
+  },
+  "required": [
+    "from",
+    "to",
+    "profile"
+  ],
+  "additionalProperties": false
+}

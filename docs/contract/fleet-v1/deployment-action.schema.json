@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/deployment-action.schema.json",
+  "title": "The body of POST /v1/fleet/deployments/{id}/actions/{action}: the plan's confirm (stop, move), the nodes of a move",
+  "type": "object",
+  "properties": {
+    "confirm": {
+      "type": "string"
+    },
+    "from": {
+      "type": "string"
+    },
+    "to": {
+      "type": "string"
+    },
+    "engine": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

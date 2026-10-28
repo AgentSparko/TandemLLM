@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/deployment-new.schema.json",
+  "title": "The body of POST /v1/fleet/deployments: a deployment record",
+  "type": "object",
+  "properties": {
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "single",
+        "replicas",
+        "split",
+        "role"
+      ]
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "node": {
+                "type": "string"
+              },
+              "engine": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "node"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "minItems": 1
+    },
+    "pack": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "api_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "ctx": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string"
+          },
+          "layers": {
+            "type": "string"
+          },
+          "gib": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "node",
+          "layers",
+          "gib"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "role": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "role_of": {
+      "type": "string"
+    },
+    "affinity": {
+      "type": "string",
+      "enum": [
+        "root",
+        "own"
+      ]
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "serving",
+        "stopped"
+      ]
+    }
+  },
+  "required": [
+    "model",
+    "type",
+    "members"
+  ],
+  "additionalProperties": false
+}

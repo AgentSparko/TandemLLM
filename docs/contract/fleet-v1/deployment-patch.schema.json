@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/deployment-patch.schema.json",
+  "title": "The body of PATCH /v1/fleet/deployments/{id}: what changes",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "api_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "ctx": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pack": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "single",
+        "replicas",
+        "split",
+        "role"
+      ]
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "node": {
+                "type": "string"
+              },
+              "engine": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "node"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "minItems": 1
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string"
+          },
+          "layers": {
+            "type": "string"
+          },
+          "gib": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "node",
+          "layers",
+          "gib"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "role": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "role_of": {
+      "type": "string"
+    },
+    "affinity": {
+      "type": "string",
+      "enum": [
+        "root",
+        "own"
+      ]
+    }
+  },
+  "required": [],
+  "additionalProperties": false,
+  "minProperties": 1
+}

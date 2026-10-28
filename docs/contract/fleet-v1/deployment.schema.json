@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/deployment.schema.json",
+  "title": "GET /v1/fleet/deployments/{id}, and POST /v1/fleet/deployments and PATCH .../{id} (200): one deployment",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "pack": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "single",
+        "replicas",
+        "split",
+        "role"
+      ]
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string"
+          },
+          "layers": {
+            "type": "string"
+          },
+          "gib": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "node",
+          "layers",
+          "gib"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "api_id": {
+      "type": "string"
+    },
+    "ctx": {
+      "type": "integer"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "serving",
+        "starting",
+        "degraded",
+        "down",
+        "stopped"
+      ]
+    },
+    "status_text": {
+      "type": "string"
+    },
+    "role_of": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "warn": {
+      "type": "string"
+    },
+    "record": {
+      "type": "boolean",
+      "description": "SRV-731: a deployment record (false: a Single derived from what an engine serves that no record covers)"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "serving",
+        "stopped"
+      ],
+      "description": "SRV-731: what the record says should be"
+    },
+    "managed": {
+      "type": "boolean",
+      "description": "SRV-731: TandemNode starts and stops every member's engine"
+    },
+    "member_states": {
+      "description": "SRV-731: each member resolved now: its engine, the backend this gateway reaches it through, its state and whether it takes requests",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "engine": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backend": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model": {
+            "type": "string"
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "serving",
+              "starting",
+              "down",
+              "draining",
+              "leaving",
+              "mismatch",
+              "off",
+              "gone"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "routable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "node",
+          "alias",
+          "engine",
+          "backend",
+          "model",
+          "managed",
+          "state",
+          "text",
+          "routable"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "job": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "start",
+            "stop",
+            "move"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "running",
+            "done",
+            "failed"
+          ]
+        },
+        "started_at": {
+          "type": "number"
+        },
+        "ended_at": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "error": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "state",
+        "started_at",
+        "ended_at",
+        "text",
+        "error"
+      ],
+      "additionalProperties": false,
+      "description": "SRV-731: the record's last start, stop or move"
+    },
+    "affinity": {
+      "type": "string",
+      "enum": [
+        "root",
+        "own"
+      ],
+      "description": "SRV-731: a Replicas' conversation key: root keeps a chat and its workers on one member"
+    }
+  },
+  "required": [
+    "contract_version",
+    "id",
+    "name",
+    "model",
+    "pack",
+    "type",
+    "members",
+    "api_id",
+    "ctx",
+    "status",
+    "status_text"
+  ],
+  "additionalProperties": false
+}

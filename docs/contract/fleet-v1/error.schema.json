@@ -37,7 +37,13 @@
             "preflight_failed",
             "partial_split",
             "password_needed",
-            "not_empty"
+            "not_empty",
+            "no_engine",
+            "ambiguous_engine",
+            "in_use",
+            "exists",
+            "no_space",
+            "refused"
           ]
         },
         "message": {

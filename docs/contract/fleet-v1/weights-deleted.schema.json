@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/weights-deleted.schema.json",
+  "title": "DELETE /v1/fleet/weights/{node}/{profile}?confirm= (200): the pack is gone from that node",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ]
+    },
+    "node": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string"
+    },
+    "deleted": {
+      "type": "boolean",
+      "const": true
+    },
+    "bytes": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "contract_version",
+    "node",
+    "profile",
+    "deleted",
+    "bytes"
+  ],
+  "additionalProperties": false
+}
