@@ -551,7 +551,8 @@ def build(state: dict, *, floor_gib: float, meminfo=None, headroom=None, idle=No
 def _decider_claim(state: dict) -> float:
     try:
         cond = state.get("conductor")
-        from server.conductor import residency, schema
+        from server.conductor import residency
+        from tandemapp.conductor import schema
         doc = cond.store.peek("residency")[1] if cond is not None else schema.seed("residency")
         roles = cond.store.peek("roles")[1] if cond is not None else schema.seed("roles")
         c = residency.claims(doc, roles).get("decider")

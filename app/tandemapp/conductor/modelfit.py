@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import copy
 
-from server.knobs import SETTINGS as _S
+from tandemapp.knobs import SETTINGS as _S
 
 DEFAULTS: dict = {"served_classifier": True, "fallback": "class", "packages": "all",
                   "no_package_classes": (), "effort_notes": True, "memory": True,

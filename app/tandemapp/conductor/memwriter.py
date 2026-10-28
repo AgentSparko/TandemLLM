@@ -49,9 +49,9 @@ import re
 import threading
 import time
 
-from server import memblock
-from server.conductor import notes as notes_mod
-from server.conductor import schema, signals
+from tandemapp import memblock
+from tandemapp.conductor import notes as notes_mod
+from tandemapp.conductor import schema, signals
 
 WRITER = (
     "Memory pass. The runtime asks this, not the user, and the user does not see this turn or your "
@@ -141,7 +141,7 @@ def shadow_log(store, user: str | None, head: str, blocks: list[str]) -> str | N
     heading line, then each block after `redact()`. Returns the file's path, or None."""
     if not user or not blocks:
         return None
-    from server.conductor import redact as redact_mod
+    from tandemapp.conductor import redact as redact_mod
     try:
         d = os.path.join(store.user_dir(user), SHADOW_DIR)
         os.makedirs(d, mode=0o700, exist_ok=True)

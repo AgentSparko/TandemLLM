@@ -137,7 +137,7 @@ class Policy:
         self.templates = data["templates"]
         self.journal = data["journal"]
         self.tasks = {tid: Task(tid, cfg) for tid, cfg in data["tasks"].items()}
-        from server.conductor.monitor import tier0
+        from tandemapp.conductor.monitor import tier0
         for t in self.tasks.values():
             sp = tier0.RULES[t.rule].safe_point
             if sp not in SAFE_POINTS:
@@ -145,7 +145,7 @@ class Policy:
 
     def at(self, safe_point: str) -> list[Task]:
         """The tasks that run at a safe point and are not off, in file order."""
-        from server.conductor.monitor import tier0
+        from tandemapp.conductor.monitor import tier0
         return [t for t in self.tasks.values()
                 if t.mode != "off" and tier0.RULES[t.rule].safe_point == safe_point]
 
@@ -193,7 +193,7 @@ def load(path: str | None = None) -> Policy:
 def schema() -> dict:
     """The JSON Schema of the policy file: the fixed top level, and each task as the schema its
     rule declares (one `oneOf` branch per registered rule)."""
-    from server.conductor.monitor import tier0
+    from tandemapp.conductor.monitor import tier0
     rules = []
     for name in sorted(tier0.RULES):
         r = tier0.RULES[name]

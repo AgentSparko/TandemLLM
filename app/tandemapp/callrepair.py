@@ -91,7 +91,7 @@ def repair_args(name: str, args: dict, schema, gate: bool = True, kinds: dict | 
             used.add(k)
             continue
         if kinds and to in kinds and isinstance(v, str):
-            from server.toolcall import convert
+            from tandemapp.toolcall import convert
             v = convert(v, kinds[to])
         out[to] = v
         used.add(to)

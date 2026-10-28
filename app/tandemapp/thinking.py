@@ -44,8 +44,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from server.compat import Refusal
-from server.conductor import schema
+from tandemapp.refusal import Refusal
+from tandemapp.conductor import schema
 
 # the effort words clients send, and the effort level each one is (server/conductor/schema.py)
 WORDS = {"none": "off", "minimal": "low", "low": "low", "medium": "medium", "high": "high",

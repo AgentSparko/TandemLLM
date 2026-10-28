@@ -40,7 +40,7 @@ import threading
 import time
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from server.conductor import packages as packages_mod
+from tandemapp.conductor import packages as packages_mod
 
 MAX_QUERY = 1000
 MAX_K, DEFAULT_K = 20, 5
@@ -89,7 +89,7 @@ RATE = Rate()
 
 def _index(cond):
     """The router's index, rebuilt if the documents or the files moved."""
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     v, doc = cond.store.peek("packages")
     _, router = cond.store.peek("router")
     idx = cond.router.index
@@ -172,7 +172,7 @@ def handle_get(handler, cond) -> None:
         # a shipped text names the provider `{tandem_url}`: this request's address
         url = packages_mod.request_url(handler.headers)
         if getattr(handler, "_stok", None) is not None:
-            from server.session_tokens import with_token
+            from tandemapp.session_tokens import with_token
             url = with_token(url or packages_mod.URL_DEFAULT, handler._stok)
         out = dict(out, body=packages_mod.with_url(out["body"], url),
                    reference=packages_mod.with_url(out["reference"], url))

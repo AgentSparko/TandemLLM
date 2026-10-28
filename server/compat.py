@@ -60,16 +60,9 @@ MAX_TOP_LOGPROBS = 20
 MAX_COMPLETION_LOGPROBS = 5
 
 
-class Refusal(ValueError):
-    """A request the engine will not serve as asked: a 400 that names the field."""
-
-    def __init__(self, param: str, message: str):
-        super().__init__(message)
-        self.param = param
-
-    def body(self) -> dict:
-        return {"error": {"message": str(self), "type": "invalid_request_error",
-                          "param": self.param}}
+# A request the engine will not serve as asked: a 400 that names the field. TandemApp's thinking
+# read raises it too, so it is TandemApp's (app/tandemapp/refusal.py) until ENG-413 (SRV-747).
+from tandemapp.refusal import Refusal  # noqa: E402,F401
 
 
 def _int(body: dict, name: str, lo: int, hi: int, default: int) -> int:
@@ -432,9 +425,10 @@ def tool_constraint(body: dict, fmt=None) -> tuple[str, dict] | None:
         return None
     allowed = [name] if mode == "named" else tool_names(body)
     try:
-        from server import toolformats
+        from tandemapp import toolformats
         return toolformats.resolve(fmt).forced_regex(body["tools"], allowed,
-                                                     many=body.get("parallel_tool_calls") is True)
+                                                     many=body.get("parallel_tool_calls") is True,
+                                                     grammar=grammar)
     except grammar.GrammarError as exc:
         raise Refusal("tools", f"tool_choice {mode}: {exc}")
 
@@ -468,7 +462,7 @@ def answer_constraint(body: dict, chat: bool = True, xml_calls: bool = True,
     `ToolFormat` or its name, server/toolformats), whose forced calls and markers tool_choice takes.
     """
     from engine import grammar
-    from server import toolformats
+    from tandemapp import toolformats
     form = toolformats.resolve(fmt)
     doc = structured_pattern(body)
     forced = tool_constraint(body, form) if chat else None

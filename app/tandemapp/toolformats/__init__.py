@@ -91,8 +91,9 @@ class ToolFormat:
                 f"</parameter>, " if key else "")
         return f"<tool_call>, <function={name}>, {args}</function>, </tool_call>"
 
-    def forced_regex(self, tools: list[dict], allowed: list[str], many: bool):
-        from engine import grammar
+    def forced_regex(self, tools: list[dict], allowed: list[str], many: bool, grammar):
+        """`grammar`: the engine's constraint builder (engine/grammar.py), handed in by the engine
+        (server/compat.py): TandemApp does not import the engine (SRV-747)."""
         return grammar.tool_call_regex(tools, allowed, many=many)
 
     def open_call_name(self, open_text: str) -> str | None:

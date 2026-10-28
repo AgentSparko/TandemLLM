@@ -20,15 +20,15 @@ The public interface, kept stable for the conductor's policy engine and UI (docs
     notify.send                            NOTIFY through the ntfy stack (Monitor.notifier)
 """
 
-from server.conductor.monitor import claimcheck  # noqa: F401  (registers the SP2 claim check)
-from server.conductor.monitor import sessiontasks  # noqa: F401  (registers the SP4 rules)
-from server.conductor.monitor import toolcheck  # noqa: F401  (registers the SP3 rules)
-from server.conductor.monitor.executor import Monitor, Supervisor  # noqa: F401
-from server.conductor.monitor.journal import Journal  # noqa: F401
-from server.conductor.monitor.observe import (  # noqa: F401
+from tandemapp.conductor.monitor import claimcheck  # noqa: F401  (registers the SP2 claim check)
+from tandemapp.conductor.monitor import sessiontasks  # noqa: F401  (registers the SP4 rules)
+from tandemapp.conductor.monitor import toolcheck  # noqa: F401  (registers the SP3 rules)
+from tandemapp.conductor.monitor.executor import Monitor, Supervisor  # noqa: F401
+from tandemapp.conductor.monitor.journal import Journal  # noqa: F401
+from tandemapp.conductor.monitor.observe import (  # noqa: F401
     BlockEvent, FinishEvent, RequestEvent, ToolCallEvent,
 )
-from server.conductor.monitor.policy import (  # noqa: F401
+from tandemapp.conductor.monitor.policy import (  # noqa: F401
     ACTIONS, MODES, SAFE_POINTS, TASK_MODES, Action, Policy, PolicyError, load, lower,
     parse_mode, schema,
 )

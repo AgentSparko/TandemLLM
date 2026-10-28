@@ -35,7 +35,7 @@ import os
 import re
 import threading
 
-from server.conductor import schema
+from tandemapp.conductor import schema
 
 DEFAULT_ROOT = "~/.qwen38-spark-engine/conductor"
 KINDS = ("settings", "router", "roles", "packages", "monitor", "profiles", "residency",

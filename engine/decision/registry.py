@@ -64,6 +64,8 @@ def _loud(name: str, d: dict) -> str:
 class UnknownModel(ValueError):
     """A `model` no served decision model answers to."""
 
+    why, status = "unknown_model", 422          # read by TandemApp's Laya API (tandemapp/laya_api.py)
+
 
 def _allowed(name: str) -> dict:
     return {"allowed": True, "reason": None, "role": name}

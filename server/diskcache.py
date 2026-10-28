@@ -233,7 +233,7 @@ def legacy_fingerprints(here: str, m, a, adopt_from=(), tree: str | None = None)
 
 
 def _in_repository(path: str) -> str | None:
-    from server.conductor.transcripts import in_repository
+    from tandemapp.conductor.transcripts import in_repository
     return in_repository(path)
 
 

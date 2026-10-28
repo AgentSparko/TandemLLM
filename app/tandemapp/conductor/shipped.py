@@ -18,7 +18,7 @@ from __future__ import annotations
 import copy
 import os
 
-from server.conductor import schema
+from tandemapp.conductor import schema
 
 NOTE = "shipped defaults (0.3.22-test): the live documents of 2026-10-03"
 
@@ -47,6 +47,6 @@ def install(store) -> list[str]:
 
 
 def install_at(root: str) -> list[str]:
-    from server.conductor.store import Store
+    from tandemapp.conductor.store import Store
     os.makedirs(root, exist_ok=True)
     return install(Store(root))

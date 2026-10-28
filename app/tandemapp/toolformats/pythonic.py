@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import json
 
-from server.toolcall import CLOSE, OPEN
-from server.toolformats import ToolFormat, register
+from tandemapp.toolcall import CLOSE, OPEN
+from tandemapp.toolformats import ToolFormat, register
 
 # LiquidAI's LFM2 models write their calls as a Python list of calls between two tokens of their own:
 #

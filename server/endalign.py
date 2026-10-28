@@ -612,7 +612,7 @@ def _canon(v):
 def same_calls(mine: str, theirs: str) -> bool:
     """SRV-679: the two texts of one generation hold the same tool calls (names and arguments as
     values, in order, at least one) and the same text around them, whitespace aside."""
-    from server import toolcall
+    from tandemapp import toolcall
     try:
         ca, a = toolcall.parse_tool_calls(mine)
         cb, b = toolcall.parse_tool_calls(theirs)

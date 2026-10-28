@@ -65,7 +65,7 @@ from __future__ import annotations
 import re
 import time
 
-from server.knobs import SETTINGS as _S
+from tandemapp.knobs import SETTINGS as _S
 
 MAX_WORDS = 14
 MAX_TOKENS = 24
@@ -130,7 +130,7 @@ _BAD = re.compile(r"[\u203a\u2060<>\n]|\|im_|</?think")
 def messages(entry: dict, labels: dict | None = None) -> list[dict]:
     """The model's prompt for one line: the fixed system turn and the event with its facts, in
     words (`labels`: class id -> the router's label for it). Facts pass the secret filter."""
-    from server.conductor.redact import redact
+    from tandemapp.conductor.redact import redact
     facts = []
     for k, v in (entry.get("facts") or {}).items():
         if v is None or v == "" or v == []:
@@ -161,7 +161,7 @@ def clean(text: str) -> tuple[str | None, str | None]:
         return None, "markup"
     if len(s.split()) > MAX_WORDS:
         return None, "words"
-    from server.conductor.states import MAX_CHARS
+    from tandemapp.conductor.states import MAX_CHARS
     if len(s) > MAX_CHARS:
         return None, "chars"
     return s, None
@@ -169,7 +169,7 @@ def clean(text: str) -> tuple[str | None, str | None]:
 
 def frame(text: str) -> str:
     """A narrated line as it goes out (states.frame plus the sentinel)."""
-    from server.conductor.states import MARKER
+    from tandemapp.conductor.states import MARKER
     return "\n" + MARKER + text + SENTINEL + "\n\n"
 
 
@@ -198,7 +198,7 @@ class Narrator:
     def voice_around(self, task: str, lang: str) -> tuple[list[int], list[int]]:
         """v3's prompt head (one for every task and language) and the tail naming `task` and
         `lang`, in the loaded model's ids (cached per load)."""
-        from server.conductor import voice
+        from tandemapp.conductor import voice
         key = (id(self.slot.model), self.slot.loaded_at)
         if self._voice is None or self._voice[0] != key:
             self._voice = (key, {})
@@ -219,7 +219,7 @@ class Narrator:
         None when the role is off or its model cannot be advanced in slices."""
         if self.settings()["mode"] == "off" or not getattr(self.slot.model, "jobs", False):
             return None
-        from server.conductor.voice import Voice
+        from tandemapp.conductor.voice import Voice
         return Voice(self, ui, lang=lang, opened=opened, close_id=close_id, decode=decode,
                      share=share, settings=settings)
 
@@ -265,7 +265,7 @@ class Narrator:
                    max_tokens: int | None = None) -> list[dict]:
         """`POST /v1/conductor/narrator/try`: each event's template and line, in the idle window
         (the engine's lock taken per line)."""
-        from server.conductor.states import TEXTS
+        from tandemapp.conductor.states import TEXTS
         budget = float(budget_ms or self.settings()["budget_ms"])
         cap = int(max_tokens or MAX_TOKENS)
         out = []
@@ -602,8 +602,8 @@ class Thoughts:
         line = None
         if why is None:
             # a secret the thought held is never in a status line, nor in the journal
-            from server.conductor.redact import redact
-            from server.conductor.states import NARRATED_MAX_CHARS
+            from tandemapp.conductor.redact import redact
+            from tandemapp.conductor.states import NARRATED_MAX_CHARS
             raw = self.slot.model.job_text(job)
             summary, bad = clean_summary(raw, job.finish, NARRATED_MAX_CHARS - len(j["prefix"]))
             if summary is None:
@@ -628,53 +628,20 @@ class Thoughts:
 
 
 def _duration(s: float) -> str:
-    from server.conductor.states import duration
+    from tandemapp.conductor.states import duration
     return duration(s)
 
 
 # ---------------------------------------------------------------------- the server's wiring
+# The narrator's model and its slot load in the engine's process: server/conductor/inproc.py
+# start_narrator (SRV-747), which builds the `Narrator` below.
 def configured() -> str:
     return (_S.get("NARRATOR_MODEL") or "").strip()
 
 
-def start(state: dict, gate, *, fake: bool = False, log=print):
-    """The narrator for this server, or None when `QWEN38_NARRATOR_MODEL` is empty. Nothing
-    loads here: the model loads when a profile's first narrated line asks for it."""
-    name = configured()
-    if not name:
-        return None
-    from engine import generative
-    from engine.generative.slot import Slot
-    from server import decider_api
-    from server.conductor import residency, schema
-    # N2: a Qwen3.5 model compares its tokenizer with the served checkpoint's, to read Qwen's ids
-    engine_dir = getattr(getattr(state.get("engine"), "cfg", None), "path", None)
-    model = generative.model(name, _S.get("NARRATOR_DIR") or None, allow_fake=fake,
-                             engine_dir=engine_dir if isinstance(engine_dir, str) else None)
-    device = None
-    if not fake:
-        from engine.decision.device import Device
-        device = Device(_S.get("NARRATOR_DEVICE"))
-
-    def journal(rec):
-        cond = state.get("conductor")
-        if cond is not None:
-            residency.Journal(cond.root).write(rec)
-
-    slot = Slot(model, role="narrator", gate=gate,
-                planner=decider_api.planner(state, fake=fake, role="narrator"), device=device,
-                log=lambda s: log(s, flush=True),
-                contract=lambda f, n: schema.role_errors(f, n, state.get("tokenizer_sha")),
-                journal=journal, mem_available=lambda: decider_api._mem_available_gib(fake))
-    log(f"[narrator] {name} on {device or 'no device (fake)'}: loads through the residency "
-        f"planner when ops/start.sh asks (v3: at the start, then kept loaded) or a profile's "
-        f"first line asks", flush=True)
-    return Narrator(slot, role=lambda: role_doc(state), labels=lambda: class_labels(state))
-
-
 def role_doc(state: dict) -> dict:
     """The roles document's `narrator` (the built-in one in a document stored before it)."""
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     cond = state.get("conductor")
     roles = cond.store.peek("roles")[1] if cond is not None else schema.seed("roles")
     return roles.get("narrator") or schema.seed("roles")["narrator"]

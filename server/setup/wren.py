@@ -369,7 +369,8 @@ class Wren:
         """The residency planner's check for role `wren`, its claim added to a residency document
         that has none (the stored ones predate Wren)."""
         from server import decider_api, memlimits
-        from server.conductor import residency, schema
+        from server.conductor import residency
+        from tandemapp.conductor import schema
         st = self.app.STATE
         cond = st.get("conductor")
         doc = cond.store.peek("residency")[1] if cond is not None else schema.seed("residency")
@@ -628,7 +629,7 @@ class Wren:
         sources_out, finish, talked, emitted = [], "stop", False, 0
         said, repairs, unchanged, changed = "", 0, False, False
         names = list(tools.NAMES)
-        from server.toolcall import parse_tool_calls, schema_types
+        from tandemapp.toolcall import parse_tool_calls, schema_types
         types = schema_types(tools.definitions(m))
         while True:
             ids, sources = self.prompt(m, messages, page, model, use_tools=use_tools)

@@ -55,8 +55,8 @@ import time
 import uuid
 
 from proxy.adapters.base import CHAT
-from server.conductor import inject_messages as im
-from server.conductor import memwriter as mw
+from tandemapp.conductor import inject_messages as im
+from tandemapp.conductor import memwriter as mw
 
 KEY_PREFIX = "px:"
 CLIENT_ID = "harness:writer"

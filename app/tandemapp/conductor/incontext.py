@@ -34,7 +34,7 @@ from __future__ import annotations
 import math
 import string
 
-from server.conductor import inject
+from tandemapp.conductor import inject
 
 LETTERS = string.ascii_uppercase
 # the hidden turn after the conversation, as the template writes a user turn and the generation

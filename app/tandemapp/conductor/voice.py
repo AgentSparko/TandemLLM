@@ -716,7 +716,7 @@ class Voice:
     def __init__(self, narrator, ui, *, lang: str = "en", opened: bool = False,
                  close_id: int | None = None, decode=None, share=None, settings: dict | None = None,
                  clock=time.perf_counter, log=print):
-        from server.conductor.narrator import Share
+        from tandemapp.conductor.narrator import Share
         self.narrator, self.ui, self.lang = narrator, ui, lang if lang in LANG_NAMES else "en"
         self.slot = narrator.slot
         self.close_id, self.decode = close_id, decode
@@ -1067,7 +1067,7 @@ class Voice:
                     **({"error": error} if error else {}))
         phrase = None
         if why is None:
-            from server.conductor.redact import redact
+            from tandemapp.conductor.redact import redact
             raw = self.slot.model.job_text(job)
             phrase, bad = clean(raw, task, j["source"], self.lang)
             if phrase is not None and any(similar(phrase, s) for s in self.said[-4:]):

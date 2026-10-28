@@ -386,3 +386,35 @@ class Auth:
         if route == "cache_clear":
             return "ok" if self.admin_bearer(headers) else "unauthorized"
         return "unauthorized"
+
+
+# ---------------------------------------------------------------------- a write from the page itself
+# Copied from server/setup_api.py (SRV-747: TandemApp does not import the engine; the engine keeps
+# its own for the Setup Guide's routes, and tests/test_engine_api.py holds the two equal).
+
+def same_origin_json(headers) -> tuple[int, str, str] | None:
+    """None for a POST the page itself sent, else (status, code, message): the body must be
+    declared JSON (a form or text/plain POST needs no CORS preflight), a browser's
+    `Sec-Fetch-Site: cross-site` is refused, and an `Origin` must name this server's host (the
+    `Host` the browser sent, which nginx passes on as $host, or `X-Forwarded-Host`). A tool
+    without a browser sends no Origin and no Sec-Fetch-Site and passes on its JSON alone."""
+    ctype = (headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if ctype != "application/json":
+        return 415, "json_only", "the setup routes take a JSON body (Content-Type: application/json)"
+    return same_origin(headers)
+
+
+def same_origin(headers) -> tuple[int, str, str] | None:
+    """same_origin_json without the body's type: for a write whose body may be empty (a DELETE)
+    or that a tool sends without one (proxy/app.py, every /v1/fleet/* write)."""
+    from urllib.parse import urlsplit
+    if (headers.get("Sec-Fetch-Site") or "").strip().lower() == "cross-site":
+        return 403, "cross_site", "a request from another site cannot change the setup"
+    origin = headers.get("Origin")
+    if origin is not None:
+        o = urlsplit(origin.strip()) if origin.strip() != "null" else None
+        hosts = {x.strip().lower() for x in (headers.get("Host"), headers.get("X-Forwarded-Host"))
+                 if x}
+        if o is None or not o.netloc or o.netloc.lower() not in hosts:
+            return 403, "cross_origin", "a request from another origin cannot change the setup"
+    return None

@@ -27,13 +27,13 @@ import os
 import threading
 import time
 
-from server.conductor import schema
-from server.conductor.classify import Decider, Qwen, decider_for
-from server.conductor.decisions import Journal
-from server.conductor.packages import Library
-from server.conductor.router import COMPOSITE, Plan, Router, is_alias
-from server.conductor.store import DEFAULT_ROOT, Store
-from server.conductor.transcripts import Transcripts, memory_root
+from tandemapp.conductor import schema
+from tandemapp.conductor.classify import Decider, Qwen, decider_for
+from tandemapp.conductor.decisions import Journal
+from tandemapp.conductor.packages import Library
+from tandemapp.conductor.router import COMPOSITE, Plan, Router, is_alias
+from tandemapp.conductor.store import DEFAULT_ROOT, Store
+from tandemapp.conductor.transcripts import Transcripts, memory_root
 
 HEALTH_TTL_S = 10.0
 
@@ -78,15 +78,15 @@ class Conductor:
         # 2026-10-05: the memory notes beside the transcripts (server/conductor/notes.py), and
         # the router's part of them (server/conductor/memory.py); the nightly job runs with the
         # transcripts' prune at 04:00
-        from server.conductor.memory import Memory
-        from server.conductor.notes import NoteStore
+        from tandemapp.conductor.memory import Memory
+        from tandemapp.conductor.notes import NoteStore
         settings_of = lambda: self.store.peek("settings")[1]                   # noqa: E731
         self.notes = NoteStore(self.transcripts.root,
                                settings=lambda: schema.notes(settings_of()),
                                journal=self.journal)
         self.memory = Memory(self.notes, self.journal, settings=settings_of)
         # P-M3: the packages the model proposes to change, waiting for a click
-        from server.conductor.proposals import Proposals
+        from tandemapp.conductor.proposals import Proposals
         self.proposals = Proposals(self.transcripts.root, self.store, self.library, self.journal)
         self.memory.proposals = self.proposals
         self.router.memory = self.memory
@@ -94,7 +94,7 @@ class Conductor:
         if isinstance(journal, Journal):
             self.transcripts.start()            # the server's: the prune at start, then 04:00
         # J1 step 7: Laya's questions on the narrowed cases, after the request, journaled only
-        from server.conductor.judge import Judge
+        from tandemapp.conductor.judge import Judge
         self.judge = Judge(lambda: self.store.peek("roles")[1], self.journal,
                            deciders=lambda: self.store.peek("deciders")[1])
         self._health: dict = {}
@@ -319,7 +319,7 @@ class Conductor:
         runs the monitor raw too (SRV-117)."""
         if plan is None:
             return server_mode
-        from server.conductor.monitor.policy import lower
+        from tandemapp.conductor.monitor.policy import lower
         return lower(server_mode or "raw", plan.res.mode)
 
     def monitor_policy(self, plan: Plan | None, base):
@@ -336,7 +336,7 @@ class Conductor:
         if got is not None:
             return got
         import copy
-        from server.conductor.monitor.policy import Policy
+        from tandemapp.conductor.monitor.policy import Policy
         data = copy.deepcopy(mdoc if mv else base.data)
         doc = plan.res.doc
         for tid, task in data["tasks"].items():

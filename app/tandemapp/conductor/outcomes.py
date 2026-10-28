@@ -42,7 +42,7 @@ import re
 import struct
 import time
 
-from server.conductor import redact, signals
+from tandemapp.conductor import redact, signals
 
 SEEN_MAX = 4096
 OUTPUTS_MAX = 512

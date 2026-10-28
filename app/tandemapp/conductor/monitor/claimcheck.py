@@ -45,9 +45,9 @@ from __future__ import annotations
 
 import re
 
-from server.conductor import incontext
-from server.conductor.monitor.policy import CONTINUE_HIDDEN, PASS, Action
-from server.conductor.monitor.tier0 import register
+from tandemapp.conductor import incontext
+from tandemapp.conductor.monitor.policy import CONTINUE_HIDDEN, PASS, Action
+from tandemapp.conductor.monitor.tier0 import register
 
 ANSWERS = ("supported", "no_run_after_last_write", "errors_in_evidence", "surprise_unexplained",
            "test_faked")
@@ -129,7 +129,7 @@ def since_text(since: list[str]) -> str:
 
 
 def _has_call(ev, sup) -> bool:
-    from server.toolcall import answer_items
+    from tandemapp.toolcall import answer_items
     return bool(answer_items(ev.answer, sup.tool_names or None, eos=True, types=sup.tool_types))
 
 

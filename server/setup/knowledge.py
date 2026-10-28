@@ -24,7 +24,7 @@ import re
 import threading
 import time
 
-from server.conductor.libsearch import TextIndex
+from tandemapp.conductor.libsearch import TextIndex
 from server.setup import registry
 
 ROOT = registry.ROOT

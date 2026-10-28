@@ -51,9 +51,9 @@ import threading
 import time
 import zipfile
 
-from server.conductor import redact as redact_mod
-from server.conductor.libsearch import TextIndex, words
-from server.conductor.transcripts import dir_name, in_repository
+from tandemapp.conductor import redact as redact_mod
+from tandemapp.conductor.libsearch import TextIndex, words
+from tandemapp.conductor.transcripts import dir_name, in_repository
 
 KINDS = ("rule", "ruling", "gotcha", "runbook", "program_state", "reference", "registry",
          "archive")

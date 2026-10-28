@@ -91,9 +91,9 @@ import json
 import threading
 import time
 
-from server import activity as act
-from server.activity import REPLAY
-from server.usage import client_cached_of
+from tandemapp import activity as act
+from tandemapp.activity import REPLAY
+from tandemapp.usage import client_cached_of
 
 try:
     from engine.methods import busy          # SPD-249: the round runner's GPU-wait windows

@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from server.conductor.monitor.policy import (
+from tandemapp.conductor.monitor.policy import (
     PASS, CLOSE_REASONING, CONTINUE_HIDDEN, GIVE_UP, Action,
 )
 
@@ -155,7 +155,7 @@ def reasoning_backstop(ev, task, sup):
 def _liftable(text: str, sup) -> list[str] | None:
     """The names of the calls in `text` when every block parses and names a tool the request
     offers (SRV-199's lift); None otherwise."""
-    from server.toolcall import answer_items
+    from tandemapp.toolcall import answer_items
     try:
         items = answer_items(text, sup.tool_names or None, eos=True, types=sup.tool_types)
     except Exception:                                              # noqa: BLE001

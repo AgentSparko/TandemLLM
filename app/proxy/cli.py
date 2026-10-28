@@ -112,7 +112,7 @@ def check(args) -> int:
     except config_mod.ConfigError as exc:
         _say(f"FAIL the configuration: {exc.message}")
         return 1
-    from server import static
+    from tandemapp import static
     dist = args.dashboard_dir or static.default_dir()
     ok_dist = os.path.exists(os.path.join(dist, "index.html"))
     _say(f"page    {_tilde(dist)}{'' if ok_dist else ' MISSING: the page shows a placeholder'}")

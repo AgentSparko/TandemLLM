@@ -46,7 +46,7 @@ from proxy import http1
 from proxy import relay as relay_mod
 from proxy import route as route_mod
 from proxy.measure import RelayRecord
-from server import ledger as ledger_mod
+from tandemapp import ledger as ledger_mod
 
 PROXY_PATHS = ("/v1/chat/completions", "/v1/completions", "/v1/embeddings", "/v1/responses")
 
@@ -60,7 +60,7 @@ class Metrics:
     a relayed request is never counted in them."""
 
     def __init__(self, registry, svc: "Service"):
-        from server import metrics as m
+        from tandemapp import metrics as m
         self.svc = svc
         self.requests = registry.add(m.Counter(
             "qse_proxy_requests_total", "requests relayed to a backend, by its id, its kind and "
@@ -254,7 +254,7 @@ class Service:
         if not cfg or not (cfg.get("url") and cfg.get("token_file")):
             return
         if self.notifier is None:
-            from server.conductor.monitor import notify
+            from tandemapp.conductor.monitor import notify
             self.notifier = notify.send
         cfg = dict(cfg, tags="new")
         said = self.notifier(cfg, "TandemLLM: new model",

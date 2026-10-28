@@ -39,9 +39,9 @@ import json
 import re
 from collections import OrderedDict
 
-from server.conductor import signals
-from server.conductor.monitor.policy import PASS, PROMPT_TAIL_NOTE, Action
-from server.conductor.monitor.tier0 import register
+from tandemapp.conductor import signals
+from tandemapp.conductor.monitor.policy import PASS, PROMPT_TAIL_NOTE, Action
+from tandemapp.conductor.monitor.tier0 import register
 
 SEEN_MAX = 4096
 _TEXT = {"type": "string", "minLength": 1}
@@ -479,7 +479,7 @@ _SHELL_WRITE = re.compile(r"(?:\bcat\b|\becho\b|\bprintf\b|\btee\b)[^|;&\n]*?"
 
 def _lead(text: str, words: int = 40) -> str:
     """The first sentence of a step's visible text (two when the first is under five words)."""
-    from server.conductor import states as states_mod
+    from tandemapp.conductor import states as states_mod
     text = states_mod.strip_text(text or "").strip()
     if not text:
         return ""

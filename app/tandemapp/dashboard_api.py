@@ -52,7 +52,7 @@ try:
 except ImportError:                                               # pragma: no cover
     np = None
 
-from server.activity import REPLAY  # noqa: E402  (answered from memory, nothing decoded)
+from tandemapp.activity import REPLAY  # noqa: E402  (answered from memory, nothing decoded)
 
 # 1.3 (the proxy, P1): rows and dimensions gain the backend and the user, the totals a cost, and
 # `backend=` / `user=` filter usage and requests. Every new field is optional in the schemas.

@@ -411,7 +411,7 @@ def _is_tool_response(text: str) -> bool:
 def _compaction_marker(body: dict) -> bool | None:
     """SRV-351: `tandem.compaction` in the body (chatd sends it on every request); when present
     the shape guesses below are skipped (server/compaction.py `marker`)."""
-    from server.compaction import marker
+    from tandemapp.compaction import marker
     return marker(body)
 
 

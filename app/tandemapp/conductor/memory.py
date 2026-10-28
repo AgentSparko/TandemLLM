@@ -73,12 +73,12 @@ import os
 import threading
 import time
 
-from server.conductor import notes as notes_mod
-from server.conductor import packages as packages_mod
-from server.conductor import modelfit, schema, signals
-from server.conductor.transcripts import WORKDIR
-from server import memblock
-from server.conductor.libsearch import words as signals_words
+from tandemapp.conductor import notes as notes_mod
+from tandemapp.conductor import packages as packages_mod
+from tandemapp.conductor import modelfit, schema, signals
+from tandemapp.conductor.transcripts import WORKDIR
+from tandemapp import memblock
+from tandemapp.conductor.libsearch import words as signals_words
 from server.knobs import SETTINGS as _S
 
 CARD = "tandem-memory"
@@ -165,7 +165,7 @@ class Memory:
         self._lock = threading.Lock()
         self.stats = {"blocks": 0, "taken": 0, "failed": 0, "index_notes": 0, "body_notes": 0,
                       "intent_yes": 0}
-        from server.conductor.memwriter import Writer
+        from tandemapp.conductor.memwriter import Writer
         self.writer = Writer(self)
 
     def cfg(self) -> dict:

@@ -49,15 +49,15 @@ import re
 import threading
 import time
 
-from server import argloop, thinking
-from server.conductor import incontext, inject, libsearch, modelfit, outcomes, schema, signals, transcripts
-from server.conductor import deferred as deferred_mod
+from tandemapp import argloop, thinking
+from tandemapp.conductor import incontext, inject, libsearch, modelfit, outcomes, schema, signals, transcripts
+from tandemapp.conductor import deferred as deferred_mod
 from server.conductor import memory as memory_mod
-from server.conductor import packages as packages_mod
-from server import session_tokens as session_tokens_mod
-from server.conductor.classify import ASKING, PARENT, Answer, Qwen, decider_for
-from server.conductor.store import ConfigError
-from server.knobs import SETTINGS as _S
+from tandemapp.conductor import packages as packages_mod
+from tandemapp import session_tokens as session_tokens_mod
+from tandemapp.conductor.classify import ASKING, PARENT, Answer, Qwen, decider_for
+from tandemapp.conductor.store import ConfigError
+from tandemapp.knobs import SETTINGS as _S
 
 #: FX5: Open WebUI's live working directory at the end of `run_command`'s description
 #: (open_webui/utils/tools.py), and what the turn's note says instead (`Router._client_cwd`)
@@ -2274,7 +2274,7 @@ class Router:
                 return
         snap["outcome"] = {"label": label, "why": why, "mode": so["mode"]}
         if so["judge"] == "shadow":
-            from server.conductor import judge
+            from tandemapp.conductor import judge
             plan.judge = judge.questions(snap, cfg)        # asked after the request (step 7)
         snap["_narrow_kept"] = snap.pop("_narrow", None) or []
         if so["snapshots"] == "on":

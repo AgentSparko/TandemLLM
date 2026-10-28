@@ -128,7 +128,7 @@ CAP_BY = {"route": "the router, for the task's effort", "client": "the client's 
 
 def schema_label(task: str) -> str | None:
     """A monitor task's label (`D1` -> "reasoning loop"), for the narrator."""
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     return (schema.TASKS.get(task) or {}).get("label")
 
 # a line the server writes: the marker and one of the templates, nothing else, so a line of
@@ -274,7 +274,7 @@ def status_clients(spec: str | None = None) -> frozenset:
     """`QWEN38_STATUS_CLIENTS` (`kind,kind`): the client kinds that get the lines said before the
     first generated token as `status` events (`StatusBar`)."""
     if spec is None:
-        from server.knobs import SETTINGS as _S
+        from tandemapp.knobs import SETTINGS as _S
         spec = _S.get("STATUS_CLIENTS")
     return frozenset(k.strip() for k in (spec or "").split(",") if k.strip())
 
@@ -397,7 +397,7 @@ class States:
         if not self.on(kind):
             return
         text = " ".join(str(text).split())
-        from server.conductor.narrator import SENTINEL
+        from tandemapp.conductor.narrator import SENTINEL
         text = text.replace(SENTINEL, "")[:NARRATED_MAX_CHARS - 4]
         e = {"kind": kind, "text": text, "summary": text, "narrator": dict(info or {}, live=True),
              "at_ms": int((time.time() - self.t0) * 1000)}
@@ -426,7 +426,7 @@ class States:
         wrote one: `written`); with the voice (v3) the template's facts in plain words."""
         if self.voice is not None and "narrator" not in e:
             if "shown" not in e:
-                from server.conductor import voice as voice_mod
+                from tandemapp.conductor import voice as voice_mod
                 f = dict(e.get("f") or {})
                 if e["kind"] == "route" and f.get("cls") in self.labels:
                     f["label"] = self.labels[f["cls"]]
@@ -435,12 +435,12 @@ class States:
                 except Exception:                                  # noqa: BLE001
                     e["shown"] = None
             if e.get("shown"):
-                from server.conductor.narrator import frame as narrated
+                from tandemapp.conductor.narrator import frame as narrated
                 return narrated(e["shown"].replace("*", "\u2217"))
             return frame(e["text"])
         if "narrator" in e:
             if e["summary"]:
-                from server.conductor.narrator import frame as narrated
+                from tandemapp.conductor.narrator import frame as narrated
                 return narrated(e["summary"])
             return frame(e["text"])
         if self.narrator is None or e["kind"] in PROGRESS:
@@ -452,7 +452,7 @@ class States:
                 e["summary"], e["narrator"] = None, {"why": "error",
                                                      "error": f"{type(exc).__name__}: {exc}"[:200]}
         if e["summary"]:
-            from server.conductor.narrator import frame as narrated
+            from tandemapp.conductor.narrator import frame as narrated
             return narrated(e["summary"])
         return frame(e["text"])
 
@@ -549,5 +549,5 @@ class States:
         elif d == "GIVE_UP":
             self.add("give_up", why)
         elif d == "PROMPT_TAIL_NOTE":
-            from server.conductor import schema
+            from tandemapp.conductor import schema
             self.add("steer", label=(schema.TASKS.get(task) or {}).get("label") or task)

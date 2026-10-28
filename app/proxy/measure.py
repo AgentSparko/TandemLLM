@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import time
 
-from server import usage as usage_mod
+from tandemapp import usage as usage_mod
 
 
 class RelayRecord(usage_mod.RequestRecord):

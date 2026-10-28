@@ -42,6 +42,16 @@ LLAMA_KEYS = ("cache_n", "prompt_n", "prompt_ms", "prompt_per_token_ms", "prompt
 #: Their "decode rate" is the speed of a replay; no speed view, average or histogram reads it, and
 #: the ledger records none.
 REPLAY = ("response", "prepared")
+#: cache sources (`cache_source` of the usage frame) -> tiers; a source not here is its own name.
+#: Copied from server/cache_peek.py (SRV-747: the app does not import the engine; the engine's
+#: tests/test_cache_peek.py holds the two equal)
+TIER_OF = {"resident": "resident", "end": "resident", "side": "resident",
+           "park": "ram_park", "pin": "ram_park", "prefix": "ram_snapshot",
+           "spill": "nvme_spill", "disk": "disk_tier", "none": "none"}
+
+
+def tier_of(source: str | None) -> str:
+    return TIER_OF.get(source or "none", source or "none")
 
 ENGINE_KEYS = ("ttft_ms", "queue_ms", "total_ms", "blocks", "tokens_per_block", "reasoning_n",
                "cache_source")
@@ -401,7 +411,6 @@ class RequestRecord:
         for a request no router plan served. None for a request with no rendered chat prompt."""
         if self.parts is None or self.prompt_tokens is None:
             return None
-        from server.cache_peek import tier_of
         system, tools = int(self.parts.get("system") or 0), int(self.parts.get("tools") or 0)
         images = int(self.parts.get("images") or 0)
         p = int(self.prompt_tokens)

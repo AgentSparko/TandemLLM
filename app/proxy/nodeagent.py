@@ -619,7 +619,7 @@ class Agent:
         if not isinstance(port, int) or isinstance(port, bool) or not 1024 <= port < 65536 or \
                 port in (self.port, self.port + 1):
             raise ValueError("port is a free port from 1024 to 65535, not the agent's")
-        from server.auth import MIN_TOKEN
+        from tandemapp.auth import MIN_TOKEN
         token = body.get("admin_token")
         if not isinstance(token, str) or len(token) < MIN_TOKEN or any(c.isspace() for c in token):
             raise ValueError(f"admin_token is the controller's admin password ({MIN_TOKEN} or "
@@ -1952,7 +1952,7 @@ def main(argv=None) -> None:
                           f"{mdns.SERVICE} on {', '.join(lans)}" if lans else
                           "no LAN address to advertise on"))
         return
-    from server import logbuf
+    from tandemapp import logbuf
     buf = logbuf.install()
     try:
         agent = Agent(a.state_dir, tandem_dir=a.tandem_dir, logbuf=buf, virtual=a.virtual,

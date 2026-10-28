@@ -56,9 +56,9 @@ from server.stream import (  # noqa: E402
     answer_stops, drop_stray_close, off_full, off_split, opens_think, split_full,
 )
 from engine.tree import DraftTree  # noqa: E402
-from server import toolformats  # noqa: E402  (ENG-407 the forms a model writes calls in)
-from server import callrepair  # noqa: E402  (SRV-691 argument names matched to the schema)
-from server.toolcall import (JSON_ANY, OPEN as TOOL_OPEN, ToolCallBuffer,  # noqa: E402
+from tandemapp import toolformats  # noqa: E402  (ENG-407 the forms a model writes calls in)
+from tandemapp import callrepair  # noqa: E402  (SRV-691 argument names matched to the schema)
+from tandemapp.toolcall import (JSON_ANY, OPEN as TOOL_OPEN, ToolCallBuffer,  # noqa: E402
                              answer_items, parse_tool_calls, rewrite_native, schema_types,
                              strip_blocks)
 from server import compat  # noqa: E402
@@ -66,25 +66,25 @@ from server import sampling_defaults  # noqa: E402  (SPD-245 a request's filters
 from server import prefill_burst  # noqa: E402  (SPD-245 the prefills of requests that arrive together)
 from server import roundlog as _roundlog  # noqa: E402  (SPD-187 the round logger, QWEN38_ROUND_LOG)
 from server import round_runner as _round_runner  # noqa: E402  (SPD-201 the runner-owned round)
-from server import health_cache  # noqa: E402  (SPD-249 /health's parts and reuse)
+from tandemapp import health_cache  # noqa: E402  (SPD-249 /health's parts and reuse)
 from server import thinking as thinking_mod  # noqa: E402
 from engine import grammar as grammar_mod  # noqa: E402
 from engine.models.adapter import ServeSpec  # noqa: E402  (ENG-406 what the family says about its model)
 from server import logprobs as lp_mod  # noqa: E402
-from server import metrics  # noqa: E402
-from server import usage as usage_mod  # noqa: E402
-from server import ledger as ledger_mod  # noqa: E402
+from tandemapp import metrics  # noqa: E402
+from tandemapp import usage as usage_mod  # noqa: E402
+from tandemapp import ledger as ledger_mod  # noqa: E402
 from server import endalign  # noqa: E402
-from server import argloop as argloop_mod  # noqa: E402
+from tandemapp import argloop as argloop_mod  # noqa: E402
 from server import regenerate as regenerate_mod  # noqa: E402
 from server import skillcanon as skillcanon_mod  # noqa: E402
-from server import dashboard_api  # noqa: E402
-from server import live as live_mod  # noqa: E402
-from server import parallel as parallel_mod  # noqa: E402
-from server import activity as activity_mod  # noqa: E402
-from server import logbuf  # noqa: E402
-from server import auth as auth_mod  # noqa: E402
-from server import static  # noqa: E402
+from tandemapp import dashboard_api  # noqa: E402
+from tandemapp import live as live_mod  # noqa: E402
+from tandemapp import parallel as parallel_mod  # noqa: E402
+from tandemapp import activity as activity_mod  # noqa: E402
+from tandemapp import logbuf  # noqa: E402
+from tandemapp import auth as auth_mod  # noqa: E402
+from tandemapp import static  # noqa: E402
 from server import images as images_mod  # noqa: E402
 from server import memlimits  # noqa: E402
 from server import gpu_health  # noqa: E402
@@ -92,39 +92,41 @@ from server import memsplit  # noqa: E402
 from server import rolemem  # noqa: E402
 from server import refwatch as refwatch_mod  # noqa: E402
 from server import decider_api  # noqa: E402
-from server import laya_api  # noqa: E402
+from tandemapp import laya_api  # noqa: E402
 from server import probe as probe_mod  # noqa: E402
 from server import diskcache as diskcache_mod  # noqa: E402
 from server import identity as identity_mod  # noqa: E402  (SRV-741 the replica identity)
 from server import stage as stage_mod  # noqa: E402  (ENG-307 one model as two stage processes)
-from server import library_api  # noqa: E402
-from server import cache_peek, chat_forward, model_card, tokenize_api  # noqa: E402
+from tandemapp import library_api  # noqa: E402
+from server import cache_peek, model_card, tokenize_api  # noqa: E402
+from tandemapp import chat_forward  # noqa: E402
 from server import memory_api  # noqa: E402
-from server import mode as mode_mod  # noqa: E402  (OPS-260 engine or chat, and what runs beside the engine)
+from tandemapp import mode as mode_mod  # noqa: E402  (OPS-260 engine or chat, and what runs beside the engine)
 from server import memblock  # noqa: E402
-from server import compaction as compaction_mod  # noqa: E402
-from server import session_tokens as session_tokens_mod  # noqa: E402
+from tandemapp import compaction as compaction_mod  # noqa: E402
+from tandemapp import session_tokens as session_tokens_mod  # noqa: E402
 from server import preempt  # noqa: E402
 from server import queue_wait as qwait  # noqa: E402
-from server.conductor import monitor as conductor  # noqa: E402
-from server.conductor.monitor.policy import (  # noqa: E402
+from tandemapp.conductor import monitor as conductor  # noqa: E402
+from tandemapp.conductor.monitor.policy import (  # noqa: E402
     CONTINUE_HIDDEN, GIVE_UP, REGENERATE_CALL,
 )
-from server.conductor import routes as conductor_routes  # noqa: E402
-from server.conductor import memory as conductor_memory  # noqa: E402
-from server.conductor import narrator as narrator_mod  # noqa: E402
-from server.conductor import voice as voice_mod  # noqa: E402
-from server.conductor import schema as conductor_schema  # noqa: E402
+from tandemapp.conductor import routes as conductor_routes  # noqa: E402
+from tandemapp.conductor import memory as conductor_memory  # noqa: E402
+from tandemapp.conductor import narrator as narrator_mod  # noqa: E402
+from tandemapp.conductor import voice as voice_mod  # noqa: E402
+from tandemapp.conductor import schema as conductor_schema  # noqa: E402
 from server.conductor import shadow as shadow_mod  # noqa: E402
-from server.conductor import incontext as incontext_mod  # noqa: E402
-from server.conductor import outcomes as conductor_outcomes  # noqa: E402
-from server.conductor import states as states_mod  # noqa: E402
-from server.conductor import loopescape as loopescape_mod  # noqa: E402
-from server.conductor import redact as redact_mod  # noqa: E402
-from server.conductor.classify import USER_AGENT as CLASSIFY_UA  # noqa: E402
-from server.conductor.store import ConfigError as ConductorConfigError  # noqa: E402
-from server.conductor.router import COMPOSITE as COMPOSITE_NAME  # noqa: E402
-from server.conductor.schema import SIDE_FIRST_MAX_TOKENS  # noqa: E402
+from server.conductor import inproc as conductor_inproc  # noqa: E402
+from tandemapp.conductor import incontext as incontext_mod  # noqa: E402
+from tandemapp.conductor import outcomes as conductor_outcomes  # noqa: E402
+from tandemapp.conductor import states as states_mod  # noqa: E402
+from tandemapp.conductor import loopescape as loopescape_mod  # noqa: E402
+from tandemapp.conductor import redact as redact_mod  # noqa: E402
+from tandemapp.conductor.classify import USER_AGENT as CLASSIFY_UA  # noqa: E402
+from tandemapp.conductor.store import ConfigError as ConductorConfigError  # noqa: E402
+from tandemapp.conductor.router import COMPOSITE as COMPOSITE_NAME  # noqa: E402
+from tandemapp.conductor.schema import SIDE_FIRST_MAX_TOKENS  # noqa: E402
 
 from server import slots as slots_mod  # noqa: E402
 
@@ -227,6 +229,8 @@ class EngineLock:
 
 
 STATE: dict = SlotState()
+# SRV-747: the conductor's engine-only screens, which TandemApp's routes hand to the engine
+STATE[conductor_routes.ENGINE_ROUTES] = conductor_inproc.ROUTES
 # the routers' prices for this weight set (engine/prices.py); empty = the code's constants
 PRICES: dict = {}
 LOCK = EngineLock()
@@ -5749,7 +5753,7 @@ def _writer_ctx():
     cond = STATE.get("conductor")
     if cond is None or getattr(cond, "memory", None) is None:
         return None, None
-    from server.conductor import memwriter
+    from tandemapp.conductor import memwriter
     return cond.memory, memwriter.settings_of(cond.memory.cfg())
 
 
@@ -5881,7 +5885,7 @@ def _writer_turn(mem, cfg, conv, r, trigger, gate, stop=lambda: False, yielded=N
     the record plus the writer's user turn, thinking off, at most `max_tokens`, in scratch rows;
     the conversation's bookkeeping is put back after it as the preparer does. `stop()` ends it
     at the next chunk or block."""
-    from server.conductor import memwriter
+    from tandemapp.conductor import memwriter
     tok = STATE["tok"]
     said = ""
     text, existing = mem.writer.instructions(conv, cfg)
@@ -6235,7 +6239,7 @@ def _compacting(plan, body: dict, client_kind: str | None = None) -> bool:
     if row is not None and row.get("source") == "structural" and row.get("class_id") == "summarize":
         return True
     try:
-        from server.conductor import signals
+        from tandemapp.conductor import signals
         return bool(signals.shape(body, client_kind=client_kind).compaction)
     except Exception:                                              # noqa: BLE001
         return False
@@ -7290,7 +7294,7 @@ def _probe_done(rec) -> None:
         row = plan.row if plan is not None and plan.row is not None else {}
         stage = STATE.get("probe_stage")
         if stage is not None and plan is not None and plan.router_cfg is not None:
-            from server.conductor import schema as cond_schema
+            from tandemapp.conductor import schema as cond_schema
             ps = cond_schema.probe_stage(plan.router_cfg)
             if ps["mode"] != "off" and row.get("source") != "probe":
                 row.setdefault("extra", {})["probe"] = stage.stage(
@@ -13544,7 +13548,7 @@ def open_ledger(a, *, test: bool | None = None) -> "ledger_mod.Ledger | None":
 def conductor_root(a) -> str | None:
     """The conductor's config directory, or None for off. A fake engine is a test run: it may never
     use the production one."""
-    from server.conductor.store import DEFAULT_ROOT
+    from tandemapp.conductor.store import DEFAULT_ROOT
     val = getattr(a, "conductor_config", "off")
     if val in (None, "", "off"):
         return None
@@ -13637,7 +13641,7 @@ def _limits_at_start(a) -> None:
         root = None
     if root is not None:
         try:
-            from server.conductor.store import Store
+            from tandemapp.conductor.store import Store
             doc = Store(root, readonly=True).get("residency")[1]
             for line in memlimits.overrides_at_start(a, doc, len_mode=_S.get("LEN_MODE")):
                 print(f"[memory] the dashboard's limit: {line}", flush=True)
@@ -14651,7 +14655,7 @@ def _serve(a, led) -> None:
     root = conductor_root(a)
     if root is not None and getattr(a, "conductor_defaults", "builtin") == "shipped":
         # The shipped documents a box has no version of yet, as version 1
-        from server.conductor import shipped
+        from tandemapp.conductor import shipped
         for line in shipped.install_at(root):
             print(f"[conductor] shipped default stored: {line}", flush=True)
     # One location per skill in opencode's skills list (server/skillcanon.py)
@@ -14665,8 +14669,8 @@ def _serve(a, led) -> None:
     # off it lives in memory only. Opened when either half of the conductor runs.
     journal = None
     if root is not None or STATE["monitor"] is not None:
-        from server.conductor.decisions import Journal as CondJournal
-        from server.conductor.store import Store
+        from tandemapp.conductor.decisions import Journal as CondJournal
+        from tandemapp.conductor.store import Store
         days = (Store(root, readonly=True).get("settings")[1]["journal"]["retention_days"]
                 if root is not None else 30)
         journal = STATE["journal"] = CondJournal(STATE["ledger"].path if led is not None
@@ -14676,10 +14680,10 @@ def _serve(a, led) -> None:
         print(f"[conductor] journal: {journal.path or 'in memory (no ledger)'}, "
               f"{days} days", flush=True)
     if root is not None:
-        from server.conductor.hook import Conductor
-        from server.conductor import schema as cond_schema
+        from tandemapp.conductor.hook import Conductor
+        from tandemapp.conductor import schema as cond_schema
         cond_schema.SERVED_NAME = _identity_name()
-        from server.conductor import modelfit as cond_fit
+        from tandemapp.conductor import modelfit as cond_fit
         _caps = getattr(STATE.get("engine"), "caps", None)
         print(cond_fit.install(getattr(_caps, "conductor", None)), flush=True)
         cond = STATE["conductor"] = Conductor(
@@ -14698,7 +14702,7 @@ def _serve(a, led) -> None:
         # VIS-119: the shadow questions after their turn wait for an idle server
         cond.router.own_idle = _own_idle_s
         # stored documents a fix must reach (a shipped default reaches only a box without one)
-        from server.conductor import migrations as cond_migrations
+        from tandemapp.conductor import migrations as cond_migrations
         cond_migrations.run(cond.store, cond.journal)
         st = cond.store.status()["documents"]
         print(f"[conductor] on: {cond.root} (router v{st['router']['version']}, "
@@ -14720,7 +14724,7 @@ def _serve(a, led) -> None:
     # summaries. None with QWEN38_NARRATOR_MODEL empty; nothing loads here, its first line (a
     # profile with ui.narrator on) starts the load through the residency planner.
     try:
-        STATE["narrator"] = narrator_mod.start(STATE, LOCK, fake=bool(a.fake_engine))
+        STATE["narrator"] = conductor_inproc.start_narrator(STATE, LOCK, fake=bool(a.fake_engine))
     except ValueError as exc:
         raise SystemExit(f"[narrator] {exc}")
     if STATE.get("narrator") is not None and not a.fake_engine:

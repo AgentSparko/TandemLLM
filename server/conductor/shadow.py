@@ -74,7 +74,7 @@ JOURNAL = "shadow.jsonl"
 # the model is unloaded, which drops the pool; the next use loads it again (~13 s, beside).
 # QWEN38_SHADOW_POOL_SLACK_GIB (engine/settings.py), read at each burst
 def pool_slack_gib() -> float:
-    from server.knobs import SETTINGS as _S
+    from tandemapp.knobs import SETTINGS as _S
     return float(_S.get("SHADOW_POOL_SLACK_GIB") or 2.0)
 JOURNAL_KEEP = 5000
 MODES = ("off", "on")
@@ -486,13 +486,13 @@ class ShadowService:
 
     # ------------------------------------------------------------------ questions
     def _letters(self, choices: list[str]):
-        from server.conductor import incontext
+        from tandemapp.conductor import incontext
         tok = self.model.tok
         letters = [incontext.LETTERS[i] for i in range(len(choices))]
         return letters, incontext.letter_ids(tok, letters)
 
     def _tail(self, question: str, choices: dict[str, str]) -> tuple[list[int], list[int]]:
-        from server.conductor import incontext
+        from tandemapp.conductor import incontext
         text, letters = incontext.listing(choices)
         q = question.replace("{classes}", text) if "{classes}" in question else \
             question + "\n\n" + text + "\n\nAnswer with the letter only."
@@ -501,7 +501,7 @@ class ShadowService:
         return list(tail), incontext.letter_ids(self.model.tok, letters)
 
     def _decide(self, s, upto: int, question: str, choices: dict[str, str]) -> dict:
-        from server.conductor import incontext
+        from tandemapp.conductor import incontext
         t0 = self.clock()
         tail, lids = self._tail(question, choices)
         lp = self.reader.fork_logits(s, upto, tail, rows=lids)
@@ -544,7 +544,7 @@ class ShadowService:
         turn does not get one: the prompt shorter than `router_min_tokens`, a structural class
         (the compaction), a side request, no class decided, no insertion point. Each skip is
         counted by its reason (`router_skip`)."""
-        from server.conductor import inject, schema
+        from tandemapp.conductor import inject, schema
 
         def skip(why):
             self.router["skip_" + why] += 1
@@ -831,7 +831,7 @@ class ThoughtSlot:
 
 # ---------------------------------------------------------------------- the server's wiring
 def configured() -> str:
-    from server.knobs import SETTINGS as _S
+    from tandemapp.knobs import SETTINGS as _S
     return (_S.get("SHADOW_MODEL") or "").strip()
 
 
@@ -839,7 +839,7 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
     """The shadow reader for this server, or None when `QWEN38_SHADOW_MODEL` is empty. It shares
     the narrator's slot when both name the same model (one copy of the weights); else it has a
     slot of its own (role `shadow` in the residency planner). Nothing loads here."""
-    from server.knobs import SETTINGS as _S
+    from tandemapp.knobs import SETTINGS as _S
     name = configured()
     if not name:
         return None
@@ -888,7 +888,7 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
 # the shadow's claim when the stored residency document has none (it predates SR1): the 0.8B's
 # weights (1.6 GiB), its workspace, and QWEN38_SHADOW_GB of session states
 def claim_gib() -> float:
-    from server.knobs import SETTINGS as _S
+    from tandemapp.knobs import SETTINGS as _S
     from engine.generative.qwen35 import NAMES
     meta = NAMES.get(configured()) or {}
     return round(float(meta.get("claim_gib") or 2.5) + float(_S.get("SHADOW_GB") or 4.0), 2)
@@ -905,7 +905,8 @@ def planner(state: dict, *, fake: bool = False):
         if cond is not None:
             doc = cond.store.peek("residency")[1]
             if "shadow" not in (doc.get("claims") or {}):
-                from server.conductor import residency, schema
+                from server.conductor import residency
+                from tandemapp.conductor import schema
                 from server.decider_api import _mem_available_gib, held, _other_loading
                 from server import memlimits
                 doc = dict(doc, claims=dict(doc.get("claims") or {}, shadow={

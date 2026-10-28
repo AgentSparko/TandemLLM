@@ -55,14 +55,14 @@ from proxy import hostcollect
 from proxy import nodesource
 from proxy import route as route_mod
 from proxy.service import PROXY_PATHS, Service
-from server import auth as auth_mod
-from server import chat_forward
-from server import dashboard_api
-from server import live as live_mod
-from server import parallel as parallel_mod
-from server import logbuf
-from server import metrics as metrics_mod
-from server import static
+from tandemapp import auth as auth_mod
+from tandemapp import chat_forward
+from tandemapp import dashboard_api
+from tandemapp import live as live_mod
+from tandemapp import parallel as parallel_mod
+from tandemapp import logbuf
+from tandemapp import metrics as metrics_mod
+from tandemapp import static
 
 STATE: dict = {}
 GATEWAY = "/v1/fleet/gateway/chat/completions"
@@ -291,11 +291,10 @@ class Handler(BaseHTTPRequestHandler):
         return False
 
     def _cross_site(self) -> bool:
-        """A write from another site or origin (server/setup_api.py same_origin): 403, True. The
+        """A write from another site or origin (tandemapp/auth.py same_origin): 403, True. The
         configuration's and the conductor's writes take no cookie on an open controller or from
         this machine, and a form's POST needs no preflight (6.3b)."""
-        from server.setup_api import same_origin
-        bad = same_origin(self.headers)
+        bad = auth_mod.same_origin(self.headers)
         if bad is None:
             return False
         self._json(bad[0], {"error": {"type": bad[1], "code": bad[1], "message":
@@ -368,10 +367,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._conductor("GET")
         if (path == "/v1/library" or path.startswith("/v1/library/")) and \
                 STATE.get("conductor") is not None:
-            from server import library_api
+            from tandemapp import library_api
             return library_api.handle_get(self, STATE["conductor"])
         if path in ("/v1/laya", "/v1/laya/") and STATE.get("laya") is not None:
-            from server import laya_api
+            from tandemapp import laya_api
             return laya_api.handle_get(self, STATE["laya"], STATE)
         return self._json(404, {"error": {"message": f"no route {path}", "type": "not_found"}})
 
@@ -381,13 +380,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {"error": {"type": "not_found",
                                               "message": "the conductor is off on this proxy "
                                                          "(--conductor-config off)"}})
-        from server.conductor import routes as conductor_routes
+        from tandemapp.conductor import routes as conductor_routes
         return conductor_routes.handle(self, cond, method, body, STATE["auth"])
 
     def _strip_session(self) -> bool:
         """`/s/<token>/v1/library...` and `/s/<token>/v1/laya...` (server/session_tokens.py):
         the prefix off, the session on the handler; True when answered here (a 404)."""
-        from server import session_tokens as st_mod
+        from tandemapp import session_tokens as st_mod
         self._sess = self._stok = None
         path, tok = st_mod.strip(self.path)
         if tok is None:
@@ -444,7 +443,7 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/v1/conductor/"):
             return self._conductor("POST", body)
         if path == "/v1/laya/ask" and STATE.get("laya") is not None:
-            from server import laya_api
+            from tandemapp import laya_api
             return laya_api.handle_post(self, STATE["laya"], STATE, body)
         return self._json(404, {"error": {"message": f"no route {path}", "type": "not_found"}})
 
@@ -473,8 +472,7 @@ class Handler(BaseHTTPRequestHandler):
     def _gateway(self, raw: bytes, t_arrival: float) -> None:
         """`POST /v1/fleet/gateway/chat/completions` (VIS-254): the page's own JSON POST, then the
         completion as /v1/chat/completions takes it (the proxy's API keys when users exist)."""
-        from server.setup_api import same_origin_json
-        bad = same_origin_json(self.headers)
+        bad = auth_mod.same_origin_json(self.headers)
         if bad:
             words = {"json_only": "the gateway takes a JSON body (Content-Type: application/json)",
                      "cross_site": "a request from another site cannot use the gateway",
@@ -553,8 +551,7 @@ class Handler(BaseHTTPRequestHandler):
             # a write from another site or origin is refused before anything reads it: the
             # session cookie is SameSite=Strict, but trusted-local and an open controller need no
             # cookie, and a form's POST needs no preflight (6.3b)
-            from server.setup_api import same_origin
-            bad = same_origin(self.headers)
+            bad = auth_mod.same_origin(self.headers)
             if bad is not None:
                 return self._json(bad[0], {"error": {"type": bad[1], "code": bad[1], "message": (
                     "a request from another site cannot change the fleet" if bad[1] ==
@@ -576,8 +573,7 @@ class Handler(BaseHTTPRequestHandler):
         if parts == ["app", "password"]:
             return self._app_password(method, body)
         if parts[:1] == ["app"] and method == "POST":
-            from server.setup_api import same_origin_json
-            bad = same_origin_json(self.headers)
+            bad = auth_mod.same_origin_json(self.headers)
             if bad is not None:
                 return self._json(bad[0], {"error": {"type": bad[1], "message": bad[2]}})
         if parts[:1] == ["app"]:
@@ -647,7 +643,6 @@ class Handler(BaseHTTPRequestHandler):
         token whenever one is set, as a JSON request of this origin. Setting, changing or
         removing it ends every other session; this browser gets a new cookie."""
         from proxy import adminpw
-        from server.setup_api import same_origin_json
         a = STATE["auth"]
         nostore = (("Cache-Control", "no-store"),)
         if method == "GET":
@@ -658,7 +653,7 @@ class Handler(BaseHTTPRequestHandler):
         if method not in ("PUT", "DELETE"):
             return self._json(405, {"error": {"type": "method_not_allowed", "message":
                                               "the password takes GET, PUT and DELETE"}})
-        bad = same_origin_json(self.headers)
+        bad = auth_mod.same_origin_json(self.headers)
         if bad is not None:
             return self._json(bad[0], {"error": {"type": bad[1], "message": bad[2]}})
         if not a.password_set and not a.trusted_local(self._peer(), self.headers):
@@ -727,8 +722,7 @@ class Handler(BaseHTTPRequestHandler):
                                               "code": "method_not_allowed",
                                               "message": "the Setup Guide takes GET and POST"}})
         if method == "POST":
-            from server.setup_api import same_origin_json
-            bad = same_origin_json(self.headers)
+            bad = auth_mod.same_origin_json(self.headers)
             if bad is not None:
                 return self._json(bad[0], {"error": {"type": bad[1], "code": bad[1],
                                                      "message": bad[2]}})
@@ -1050,7 +1044,7 @@ class Server(ThreadingHTTPServer):
 def build(args, env=None) -> Service:
     """The service of the standalone server from its arguments (tests call this too)."""
     from proxy import config as config_mod
-    from server import ledger as ledger_mod
+    from tandemapp import ledger as ledger_mod
     env = os.environ if env is None else env
     Handler.timeout = getattr(args, "idle_timeout", IDLE_TIMEOUT_S) or None
     cfg = config_mod.ConfigDB(args.config_db, env=env,
@@ -1143,10 +1137,10 @@ def conductor_of(args, led, env) -> tuple:
     STATE.update(conductor=None, session_tokens=None, laya=None)
     if root == "off":
         return None, None
-    from server import session_tokens as st_mod
-    from server.conductor import shipped
-    from server.conductor.decisions import Journal
-    from server.conductor.hook import Conductor
+    from tandemapp import session_tokens as st_mod
+    from tandemapp.conductor import shipped
+    from tandemapp.conductor.decisions import Journal
+    from tandemapp.conductor.hook import Conductor
     root = os.path.realpath(os.path.expanduser(root))
     os.makedirs(root, mode=0o700, exist_ok=True)
     if getattr(args, "conductor_defaults", "shipped") == "shipped":
@@ -1157,11 +1151,11 @@ def conductor_of(args, led, env) -> tuple:
                      journal=journal)
     tokens = st_mod.SessionTokens(os.path.join(root, "session-tokens.json"))
     cond.router.session_tokens = tokens
-    from server.conductor import migrations
+    from tandemapp.conductor import migrations
     migrations.run(cond.store, cond.journal)
     base = None
     try:
-        from server.conductor.monitor import policy as policy_mod
+        from tandemapp.conductor.monitor import policy as policy_mod
         base = policy_mod.load_default()
     except Exception as exc:                                       # noqa: BLE001
         print(f"[conductor] the monitor's policy file did not load ({type(exc).__name__}): "
@@ -1174,7 +1168,7 @@ def laya_of(cond):
     """Laya for `/v1/laya/ask` on the standalone proxy: the `decider` role's Jev endpoint over
     HTTP (another engine's decision models, arbiter), as the engine's own registry answers."""
     from concurrent.futures import Future
-    from server.conductor.classify import JevHttp
+    from tandemapp.conductor.classify import JevHttp
     _, roles = cond.store.peek("roles")
     r = roles.get("decider") or {}
     ep = str(r.get("endpoint") or "")

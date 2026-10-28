@@ -37,8 +37,8 @@ from __future__ import annotations
 import hashlib
 import time
 
-from server.conductor import schema
-from server.conductor.packages import _FRONT, CHARS_PER_TOKEN, CUT_NOTE, split_reference
+from tandemapp.conductor import schema
+from tandemapp.conductor.packages import _FRONT, CHARS_PER_TOKEN, CUT_NOTE, split_reference
 
 HOUSE = {"library": 350, "library_card": 200}       # tools/library_install.py BODY_CAP, CARD_CAP
 MAX_TEXTS, MAX_CHARS = 20, 200_000

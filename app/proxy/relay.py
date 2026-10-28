@@ -67,7 +67,7 @@ import time
 from proxy import http1
 from proxy.adapters import ENDPOINTS, Stamps
 from proxy.measure import RelayRecord
-from server.parallel import _fetch_json
+from tandemapp.parallel import _fetch_json
 
 RETRYABLE = (429, 502, 503)
 MAX_RETRIES = 2

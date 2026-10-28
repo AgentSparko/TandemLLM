@@ -37,8 +37,8 @@ import re
 import threading
 import time
 
-from server.conductor import redact as redact_mod
-from server.conductor.notes import Refused, _write_private, _now_iso
+from tandemapp.conductor import redact as redact_mod
+from tandemapp.conductor.notes import Refused, _write_private, _now_iso
 
 MODES = ("replace", "append")
 STATUSES = ("open", "applied", "rejected")

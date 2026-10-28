@@ -25,8 +25,8 @@ import hashlib
 import time
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from server.library_api import Rate, Refused
-from server.conductor import notes as notes_mod
+from tandemapp.library_api import Rate, Refused
+from tandemapp.conductor import notes as notes_mod
 
 PREFIX = "/v1/memory"
 RATE_PER_MIN = 120

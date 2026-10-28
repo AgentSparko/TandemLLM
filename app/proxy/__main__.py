@@ -41,7 +41,7 @@ if sys.version_info < (3, 11):                                    # pragma: no c
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from proxy import config as config_mod  # noqa: E402
-from server import ledger as ledger_mod  # noqa: E402
+from tandemapp import ledger as ledger_mod  # noqa: E402
 
 
 def load_env_file(path: str, env=None) -> list[str]:

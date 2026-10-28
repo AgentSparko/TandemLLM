@@ -83,7 +83,7 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
                    collate=_S.get("DECIDER_COLLATE"),
                    policy=lambda: load_policy(state), routers=routers(models),
                    log=lambda s: log(s, flush=True), contract=_contract(state))
-    from server.conductor import classify
+    from tandemapp.conductor import classify
 
     def factory(model, timeout_ms):
         return classify.InProcess(reg, model, timeout_ms)
@@ -100,7 +100,7 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
 def _contract(state: dict):
     """The role contract the registry checks each model against: the conductor's (SRV-133),
     with the engine's tokenizer hash for a model that would share token ids."""
-    from server.conductor import schema
+    from tandemapp.conductor import schema
 
     def check(fields: dict, name: str) -> list[str]:
         return schema.role_errors(fields, name, state.get("tokenizer_sha"))
@@ -109,7 +109,7 @@ def _contract(state: dict):
 
 
 def _deciders_doc(state: dict) -> dict:
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     cond = state.get("conductor")
     if cond is not None:
         return cond.store.peek("deciders")[1]
@@ -165,7 +165,8 @@ def planner(state: dict, *, fake: bool = False, role: str = "decider"):
     registry, `narrator` for the small-model slot (P1)."""
 
     def check(name, *, loading, service_start, hold_restart):
-        from server.conductor import residency, schema
+        from server.conductor import residency
+        from tandemapp.conductor import schema
         cond = state.get("conductor")
         doc = cond.store.peek("residency")[1] if cond is not None else schema.seed("residency")
         roles = cond.store.peek("roles")[1] if cond is not None else schema.seed("roles")
@@ -347,7 +348,8 @@ def readyz(reg, state: dict) -> tuple[int, dict]:
 def status(reg, state: dict) -> dict:
     """`GET /v1/conductor/deciders/status`: what the engine serves, each model's state and
     numbers, the planner's answer for a load now, and the model behind each question id."""
-    from server.conductor import residency, schema
+    from server.conductor import residency
+    from tandemapp.conductor import schema
     cond = state.get("conductor")
     doc = _deciders_doc(state)
     if reg is None:
@@ -369,7 +371,7 @@ def status(reg, state: dict) -> dict:
     picks = reg.picks_by_source()
     questions = [{"id": qid, "model": m, "picks": picks.get(qid, {})}
                  for qid, m in sorted(doc["questions"].items())]
-    from server import laya_api
+    from tandemapp import laya_api
     return {"enabled": True, "why": None, "models": reg.status(), "planner": plan,
             "last_refusal": last, "questions": questions, "families": reg.families,
             "device": str(reg.device.device) if reg.device is not None else None,

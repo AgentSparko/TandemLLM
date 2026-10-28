@@ -778,7 +778,7 @@ def diagnostics(jid: str, n_lines: int = 200) -> str | None:
     (the job's report and a fresh check), the selection and the last log lines. Nothing secret:
     the log was filtered when it was written, and the whole text passes the filter again."""
     import platform
-    from server.conductor.redact import redact
+    from tandemapp.conductor.redact import redact
     from server.setup import doctor
     job = read_job(jid)
     if job is None:
@@ -910,7 +910,7 @@ class Runner:
         _write_json(os.path.join(self.dir, "state.json"), self.job)
 
     def log(self, text: str) -> None:
-        from server.conductor.redact import redact
+        from tandemapp.conductor.redact import redact
         for s in self.secrets:
             text = text.replace(s, "[redacted]")
         text, _ = redact(text)

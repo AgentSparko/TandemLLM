@@ -100,7 +100,7 @@ import re
 import time
 import uuid
 
-from server import callrepair
+from tandemapp import callrepair
 
 OPEN = "<tool_call>"
 CLOSE = "</tool_call>"
@@ -1264,7 +1264,7 @@ class ToolCallBuffer:
 
 def _format(fmt):
     """A tool-call format, its name or None (the default form), as a `ToolFormat` (server/toolformats)."""
-    from server import toolformats
+    from tandemapp import toolformats
     return toolformats.resolve(fmt)
 
 

@@ -112,7 +112,7 @@ import sqlite3
 import threading
 import time
 
-from server.conductor import signals
+from tandemapp.conductor import signals
 
 PRODUCTION = "~/.qwen38-spark-engine/usage/ledger.sqlite3"
 SCHEMA_VERSION = 12

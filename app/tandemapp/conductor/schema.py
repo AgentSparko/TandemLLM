@@ -38,10 +38,10 @@ import json
 import os
 import re
 
-from server.conductor.packages import literal_api_hosts as _literal_api_hosts
-from server.conductor.packages import shipped_root as _shipped_root
-from server.conductor.states import CHANNELS as STATE_CHANNELS, KINDS as STATE_KINDS
-from server.conductor.voice import DEFAULTS as VOICE_DEFAULTS
+from tandemapp.conductor.packages import literal_api_hosts as _literal_api_hosts
+from tandemapp.conductor.packages import shipped_root as _shipped_root
+from tandemapp.conductor.states import CHANNELS as STATE_CHANNELS, KINDS as STATE_KINDS
+from tandemapp.conductor.voice import DEFAULTS as VOICE_DEFAULTS
 
 MODES3 = ("off", "shadow", "on")            # a routing decision type
 # a profile's `memory` switch (server/conductor/memory.py): MODES3, and `none` (SRV-703), nothing at
@@ -149,7 +149,7 @@ IDENTITY_ASK = (
 
 
 def model_name() -> str:
-    from server.knobs import SETTINGS as _S
+    from tandemapp.knobs import SETTINGS as _S
     return (_S.get("MODEL_NAME") or "").strip() or SERVED_NAME or MODEL_NAME
 
 
@@ -1278,7 +1278,7 @@ DERIVED_PROFILES: dict[str, tuple[str, tuple[str, ...]]] = {
 
 def monitor_seed(path: str | None = None) -> dict:
     """The monitor's policy file (default ops/supervisor.yaml) as a document."""
-    from server.conductor.monitor import policy as mpolicy
+    from tandemapp.conductor.monitor import policy as mpolicy
     return copy.deepcopy(mpolicy.load_default(path).data)
 
 
@@ -1287,7 +1287,7 @@ def doc_errors(kind: str, doc) -> list[str]:
     schema has a branch per rule), every other kind by `validate`; a roles document's roles by
     the contract's rules too."""
     if kind == "monitor":
-        from server.conductor.monitor import policy as mpolicy
+        from tandemapp.conductor.monitor import policy as mpolicy
         try:
             mpolicy.Policy(doc)
         except (mpolicy.PolicyError, KeyError, TypeError, AttributeError) as exc:
@@ -1528,7 +1528,7 @@ def notes(settings: dict | None) -> dict:
 def side_requests(router: dict) -> dict:
     """The router's side-request handling (S1): `mode` (on for a router stored before it) and the
     shapes (the document's `side_shapes`, else the built-in ones of signals.py)."""
-    from server.conductor import signals
+    from tandemapp.conductor import signals
     st = router.get("structural") or {}
     shapes = st.get("side_shapes")
     return {"mode": st.get("side_requests", SIDE_REQUESTS_DEFAULT),
@@ -1928,7 +1928,7 @@ SCHEMAS: dict[str, dict] = {
 
 
 def _monitor_schema() -> dict:
-    from server.conductor.monitor import policy as mpolicy
+    from tandemapp.conductor.monitor import policy as mpolicy
     out = mpolicy.schema()
     out.pop("$schema", None)
     out.pop("title", None)

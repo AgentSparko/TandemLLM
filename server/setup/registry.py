@@ -48,7 +48,7 @@ import re
 import sys
 import threading
 
-from server.conductor.schema import validate
+from tandemapp.conductor.schema import validate
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODELS_DIR = os.path.join(ROOT, "models")

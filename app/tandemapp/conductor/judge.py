@@ -32,7 +32,7 @@ import queue
 import threading
 import time
 
-from server.conductor.classify import decider_for
+from tandemapp.conductor.classify import decider_for
 
 QUEUE_MAX = 64
 

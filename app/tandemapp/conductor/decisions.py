@@ -39,7 +39,7 @@ import threading
 import time
 import uuid
 
-from server.ledger import CONDUCTOR_DDL, next_local
+from tandemapp.ledger import CONDUCTOR_DDL, next_local
 
 JSON_COLS = ("stages", "decisions", "injected", "replayed", "shadow", "outcome", "next_checker",
              "extra", "detail", "probabilities")
@@ -571,7 +571,7 @@ class Journal:
 def family(task: str | None) -> str:
     """The task family the Overview's ribbon colours by (TandemLLM 4): thinking, end of turn,
     tool calls, session; `other` for a task the catalogue does not know."""
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     meta = schema.TASKS.get(task or "")
     return meta["family"] if meta else "other"
 

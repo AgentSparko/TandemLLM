@@ -29,11 +29,11 @@ import posixpath
 import re
 import shlex
 
-from server import toolcall
-from server.conductor import signals
-from server.conductor.monitor.policy import GIVE_UP, PASS, REGENERATE_CALL, REPAIR_CALL, Action
-from server.conductor.monitor.session import args_hash
-from server.conductor.monitor.tier0 import register
+from tandemapp import toolcall
+from tandemapp.conductor import signals
+from tandemapp.conductor.monitor.policy import GIVE_UP, PASS, REGENERATE_CALL, REPAIR_CALL, Action
+from tandemapp.conductor.monitor.session import args_hash
+from tandemapp.conductor.monitor.tier0 import register
 
 _TEXT = {"type": "string", "minLength": 1}
 _TEXTS = {"type": "array", "items": _TEXT, "minItems": 1,

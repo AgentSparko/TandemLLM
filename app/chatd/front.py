@@ -24,7 +24,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from chatd.__main__ import load_key, log
-from server import chat_forward, static
+from tandemapp import chat_forward, static
 
 
 class FrontHandler(BaseHTTPRequestHandler):

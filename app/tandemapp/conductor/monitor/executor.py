@@ -49,15 +49,15 @@ import json
 import threading
 import time
 
-from server.conductor.monitor import claimcheck, notify, tier0
-from server.conductor.monitor.journal import Journal
-from server.conductor.monitor.observe import RequestEvent
-from server.conductor.monitor.policy import (
+from tandemapp.conductor.monitor import claimcheck, notify, tier0
+from tandemapp.conductor.monitor.journal import Journal
+from tandemapp.conductor.monitor.observe import RequestEvent
+from tandemapp.conductor.monitor.policy import (
     CLOSE_REASONING, CONTINUE_HIDDEN, GIVE_UP, PASS, PROMPT_TAIL_NOTE, REGENERATE_CALL,
     REPAIR_CALL, SAFE_POINTS, SET_THINK_BUDGET, Action, Policy, lower,
 )
-from server.conductor.monitor.observe import ToolCallEvent
-from server.conductor.monitor.session import Sessions, args_hash
+from tandemapp.conductor.monitor.observe import ToolCallEvent
+from tandemapp.conductor.monitor.session import Sessions, args_hash
 
 
 class Monitor:
@@ -116,7 +116,7 @@ class Monitor:
                                              req.messages, now)
         session = self.sessions.touch(key, now)
         session.record_results(req.messages, now)
-        from server.conductor import signals
+        from tandemapp.conductor import signals
         shape = signals.shape({"messages": req.messages, "tools": req.tools,
                                "tool_choice": req.tool_choice},
                               client_kind=getattr(req, "client", None) or None)
@@ -324,14 +324,14 @@ class Supervisor:
             return True
         got = self.memo.get(("may_act", task.id))
         if got is None:
-            from server.conductor.monitor.toolcheck import can_repeat, can_sequence
+            from tandemapp.conductor.monitor.toolcheck import can_repeat, can_sequence
             can = can_repeat if task.rule == "repeated_call" else can_sequence
             got = self.memo[("may_act", task.id)] = bool(can(self, task))
         return got
 
     def _tool_meta(self) -> tuple:
         if self._tools is None:
-            from server.toolcall import schema_types
+            from tandemapp.toolcall import schema_types
             fns = [t.get("function") for t in self.req.tools or () if isinstance(t, dict)]
             fns = [f for f in fns if isinstance(f, dict) and isinstance(f.get("name"), str)]
             self._tools = ([f["name"] for f in fns], schema_types(self.req.tools) or None,
@@ -416,7 +416,7 @@ class Supervisor:
         st = self.session.tasks.get("A1")
         if not ev.tools_offered or ev.n != 1:
             return None
-        from server import argloop
+        from tandemapp import argloop
         stops = argloop.trailing_stops(ev.messages)
         pending = st.pop("pending", None) if st else None
         if pending is None and not stops:
@@ -540,7 +540,7 @@ class Supervisor:
         first: its calls are checked here, where the model can still write them again."""
         if (not ev.inside and ev.answer and self._at["SP3"] and self.req.tools_offered
                 and self.req.n == 1):
-            from server.toolcall import answer_items
+            from tandemapp.toolcall import answer_items
             items = self.as_sent(answer_items(ev.answer, self.tool_names or None, eos=True,
                                               types=self.tool_types))
             if items:
@@ -553,7 +553,7 @@ class Supervisor:
         """SRV-691: the calls of `items` as the server sends them, their tools and argument names matched to
         the offered ones (server/callrepair.py), so the checks judge what the client gets; the changes are
         added to `events` when given (the release journals them)."""
-        from server import callrepair
+        from tandemapp import callrepair
         schemas = self._tool_meta()[2]
         if not schemas:
             return items
@@ -583,7 +583,7 @@ class Supervisor:
         Findings that act become one REGENERATE_CALL for the whole answer (texts joined), or
         GIVE_UP when the caps say so, or when `final` (no end token: nothing can be written
         again). None: release them all as they are."""
-        from server.toolcall import diagnose
+        from tandemapp.toolcall import diagnose
         self.checked = True
         tasks = self._at["SP3"]
         if not tasks or not items:
@@ -805,7 +805,7 @@ class Supervisor:
         caps, no room, a failure: fail-open). Every way out is journaled."""
         sp, task, facts, eff, room, pos = self._pending
         self._pending = None
-        from server.conductor import incontext
+        from tandemapp.conductor import incontext
         tmpl, tok = self.policy.templates["hidden_turn"], self.monitor.tok
         t0 = time.perf_counter()
 

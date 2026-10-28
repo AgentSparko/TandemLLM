@@ -876,7 +876,7 @@ def _log_subscribers():
     buf = st.get("log_buffer")
     if buf is None:
         try:
-            from server import logbuf
+            from tandemapp import logbuf
             buf = logbuf.BUFFER
         except Exception:                                          # noqa: BLE001
             return {}

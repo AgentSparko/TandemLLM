@@ -296,7 +296,7 @@ class Ring:
         self._next_prune = 0.0
         self.stats = {"requests": 0, "records": 0, "bytes": 0, "skipped": 0, "missed": 0,
                       "day_cap": 0, "failed": 0, "dropped": 0, "pruned": 0}
-        from server.conductor.transcripts import in_repository
+        from tandemapp.conductor.transcripts import in_repository
         self.repo = in_repository(self.root)
         if self.repo is not None:
             raise ValueError(f"the probe snapshots may not live inside a repository "
@@ -357,7 +357,7 @@ class Ring:
                 finally:
                     self._q.task_done()
             if self.clock() >= self._next_prune:
-                from server.ledger import next_local
+                from tandemapp.ledger import next_local
                 self._next_prune = next_local(4, self.clock())
                 try:
                     self.prune()

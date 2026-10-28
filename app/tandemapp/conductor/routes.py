@@ -109,15 +109,24 @@ import re
 import time
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from server.conductor import decisions as dec_mod
-from server.conductor import schema, store as store_mod
-from server.conductor.store import ConfigError
+from tandemapp.conductor import decisions as dec_mod
+from tandemapp.conductor import schema, store as store_mod
+from tandemapp.conductor.store import ConfigError
 
 #: VIS-68: the speed-guard report a release tree ships (tools/speed_guard.py ship)
 SHIPPED_GUARD = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                              "release", "speed-guard.json")
 
 CONTRACT = "1.0"
+#: SRV-747: the state key under which an engine that runs this conductor in its own process hands
+#: over its engine-only screens (server/conductor/inproc.py ROUTES); absent in tandem-app
+ENGINE_ROUTES = "conductor_engine_routes"
+ENGINE_ONLY = "an engine screen: this server runs no TandemLLM engine in its process"
+# the engine's own words when it serves no such model (server/decider_api.py, server/conductor/shadow.py)
+DECIDERS_OFF_WHY = ("this engine serves no decision model: QWEN38_DECIDER_MODELS is empty (set it in "
+                    "ops/serve.env, e.g. laya-english,laya-multilingual,laya-typed-decisions, and restart)")
+SHADOW_OFF_WHY = ("this engine serves no shadow reader: QWEN38_SHADOW_MODEL is empty (set it in "
+                  "ops/serve.env, e.g. qwen3.5-0.8b, and restart)")
 DOCS = ("settings", "router", "roles", "packages", "monitor", "residency", "deciders")
 DECIDER_ROUTES = ("status", "models", "autoload", "test")
 CATALOG_ROUTES = ("catalog", "item", "tokens", "usage")
@@ -474,29 +483,8 @@ def _route(handler, cond, method, parts, q, body, auth):
         return _shadow(cond, method, parts[1], body)
     if head == "residency" and parts[1:] == ["plan"] and method == "GET":
         # OPS-41: the planner's view -- the limits, what fits now, the engine's own split, the
-        # journal's last refusal -- for the System view
-        from server import memsplit
-        from server.conductor import residency as res_mod
-        v, doc = st.get("residency")
-        _, roles = st.get("roles")
-        jr = res_mod.Journal(cond.root)
-        try:
-            split = memsplit.split(cond.state)
-        except Exception:                                          # noqa: BLE001
-            split = None
-        # OPS-47: the planner counts the engine's growth to its declared peak, and the panel
-        # shows every memory limit with what it holds now
-        from server import memlimits
-        peak, now = memlimits.engine_gib(cond.state)
-        try:
-            limits = memlimits.view(cond.state)
-        except Exception:                                          # noqa: BLE001
-            limits = None
-        return 200, {"version": v, "doc": doc,
-                     "plan": res_mod.plan(res_mod._mem_gib(), doc, roles, engine_peak_gib=peak,
-                                          engine_now_gib=now),
-                     "engine": split, "limits": limits, "last_refusal": jr.last_refusal(),
-                     "journal": jr.tail(20)}, None
+        # journal's last refusal -- for the System view: the engine's own (server/conductor/inproc.py)
+        return _engine_route(cond, "residency_plan")(cond)
     if head in DOCS or head == "profiles":
         kind, name, rest = _doc_ref(parts)
         if not st.exists(kind, name) and not (method == "PUT" and kind == "profiles"):
@@ -556,7 +544,7 @@ def _route(handler, cond, method, parts, q, body, auth):
 
 
 def summary_counts(d: str) -> dict | None:
-    from server.conductor import transcripts
+    from tandemapp.conductor import transcripts
     return (transcripts.read_meta(d) or {}).get("counts")
 
 
@@ -565,14 +553,7 @@ def _memory(cond, method: str, rest: list[str], q: dict, body: dict,
     """The Memory screen's routes over the session transcripts (VIS-48, SRV-137) and the disk
     tier (C1)."""
     if rest[:1] == ["disk"]:
-        from server import diskcache
-        if rest == ["disk"] and method == "GET":
-            return 200, diskcache.view(cond.state), None
-        if rest == ["disk", "clear"] and method == "POST":
-            got = diskcache.clear(cond.state)
-            if not got.get("cleared"):
-                raise ApiError(409, "not_running", got["why"])
-            return 200, {**got, "disk": diskcache.view(cond.state)}, None
+        return _engine_route(cond, "disk")(cond, method, rest)
     if rest[:1] == ["notes"]:
         return _notes(cond, method, rest[1:], q, body)
     if rest[:1] == ["proposals"]:
@@ -615,8 +596,8 @@ def _memory(cond, method: str, rest: list[str], q: dict, body: dict,
 
 def _notes(cond, method: str, rest: list[str], q: dict, body: dict):
     """The Memory screen's Notes tab (2026-10-05, server/conductor/notes.py)."""
-    from server.conductor import memory as memory_mod
-    from server.conductor import notes as notes_mod
+    from tandemapp.conductor import memory as memory_mod
+    from tandemapp.conductor import notes as notes_mod
     st = cond.notes
     user = q.get("user") or "owner"
     if not notes_mod.valid_user(user):
@@ -727,7 +708,7 @@ def _notes(cond, method: str, rest: list[str], q: dict, body: dict):
 def _proposals(cond, method: str, rest: list[str], body: dict, author: str):
     """P-M3: the model's package proposals (server/conductor/proposals.py): the list, one with
     the live text it would replace, Apply (the packages document's versioned PUT) and Reject."""
-    from server.conductor import notes as notes_mod
+    from tandemapp.conductor import notes as notes_mod
     pr = cond.proposals
     if rest == [] and method == "GET":
         return 200, {"proposals": [{k: v for k, v in p.items() if k not in ("proposed", "body")}
@@ -767,7 +748,7 @@ def _int(v, default: int, lo: int, hi: int) -> int:
 
 def _catalog(cond, method: str, rest: list[str], q: dict, body: dict):
     """The Packages and Skills screen's reads (G2, server/conductor/catalog.py); none writes."""
-    from server.conductor import catalog
+    from tandemapp.conductor import catalog
     if rest == ["catalog"] and method == "GET":
         return 200, catalog.catalog(cond), None
     if len(rest) == 2 and rest[0] == "item" and method == "GET":
@@ -798,7 +779,7 @@ def _catalog(cond, method: str, rest: list[str], q: dict, body: dict):
 def _narrator(cond, method: str, what: str, body: dict):
     """The narrator's routes over `STATE["narrator"]` (None: no narrator, and only `status`
     answers, saying so)."""
-    from server.conductor import narrator as narr_mod
+    from tandemapp.conductor import narrator as narr_mod
     n = cond.state.get("narrator")
     if what == "status" and method == "GET":
         return 200, narr_mod.status(cond.state), None
@@ -834,9 +815,8 @@ def _narrator(cond, method: str, what: str, body: dict):
                     "type": "role_off", "message": "the narrator role is off (the roles "
                                                    "document's narrator.mode); nothing loads"}}, None
             cond.state["narrator_keep"] = True
-            from server import decider_api
-            if n.slot.state not in ("loaded", "loading") and \
-                    decider_api._other_loading(cond.state, "narrator"):
+            reg = cond.state.get("deciders")
+            if n.slot.state not in ("loaded", "loading") and reg is not None and reg.loading():
                 # one load at a time: the keeper loads it once the decision models are in
                 return 202, {"state": n.slot.state, "queued": True}, None
             d = n.slot.load(service_start=bool(ss), hold_restart=bool(hr))
@@ -855,12 +835,14 @@ def _narrator(cond, method: str, what: str, body: dict):
 
 def _shadow(cond, method: str, what: str, body: dict):
     """The shadow reader's routes over `STATE["shadow"]` (SR1)."""
-    from server.conductor import shadow as sh_mod
     svc = cond.state.get("shadow")
     if what == "status" and method == "GET":
-        return 200, sh_mod.status(cond.state), None
+        if svc is None:
+            return 200, {"enabled": False, "why": cond.state.get("shadow_refused") or
+                         SHADOW_OFF_WHY}, None
+        return 200, svc.status(), None
     if svc is None:
-        raise ApiError(404, "not_found", cond.state.get("shadow_refused") or sh_mod.OFF_WHY)
+        raise ApiError(404, "not_found", cond.state.get("shadow_refused") or SHADOW_OFF_WHY)
     if what == "ask" and method == "POST":
         key, question, choices = body.get("session"), body.get("question"), body.get("choices")
         if not isinstance(key, str) or not key:
@@ -889,38 +871,23 @@ def _shadow(cond, method: str, what: str, body: dict):
 
 
 def _deciders(cond, method: str, rest: list[str], body: dict):
-    """The Deciders screen's routes over the registry in `STATE["deciders"]` (None: the engine
-    serves no decision model, and only `status` answers, saying so)."""
-    from server import decider_api
-    reg = cond.state.get("deciders")
+    """The Deciders screen's routes: the engine's own (server/conductor/inproc.py) over the registry
+    in `STATE["deciders"]`. A server that runs no engine answers `status` saying so, and 404."""
+    h = (cond.state.get(ENGINE_ROUTES) or {}).get("deciders")
+    if h is not None:
+        return h(cond, method, rest, body)
     if rest == ["status"] and method == "GET":
-        return 200, decider_api.status(reg, cond.state), None
-    if reg is None:
-        raise ApiError(404, "not_found", decider_api.OFF_WHY)
-    if rest == ["test"] and method == "POST":
-        status, out, _ = decider_api.ask(reg, body, source="test")
-        if status != 200:
-            raise ApiError(status, out["error"]["type"], out["error"]["message"])
-        return 200, out, None
-    if rest == ["autoload"] and method == "POST":
-        names = reg.autoload(service_start=bool(body.get("service_start")),
-                             hold_restart=bool(body.get("hold_restart")))
-        return 202, {"queued": names}, None
-    if len(rest) == 3 and rest[0] == "models" and rest[2] in ("load", "unload") and \
-            method == "POST":
-        name = rest[1]
-        if name not in reg.models:
-            raise ApiError(404, "not_found", f"this engine does not serve {name!r}; it serves "
-                                             f"{', '.join(reg.order)}")
-        if rest[2] == "load":
-            d = reg.load(name)
-            if not d.get("allowed"):
-                return 409, {"name": name, "state": reg.state[name], "decision": d,
-                             "error": {"type": d.get("reason") or "refused",
-                                       "message": f"the residency planner refused the load: "
-                                                  f"{d.get('reason')}"}}, None
-            return 202, {"name": name, "state": reg.state[name], "decision": d}, None
-        if not reg.unload(name):
-            raise ApiError(409, "not_loaded", f"{name} is {reg.state[name]}, not loaded")
-        return 200, {"name": name, "state": reg.state[name]}, None
-    raise ApiError(404, "not_found", f"no route {method} /v1/conductor/deciders/{'/'.join(rest)}")
+        return 200, {"enabled": False, "why": DECIDERS_OFF_WHY, "models": [], "planner": None,
+                     "last_refusal": None, "questions": [], "families": [], "device": None,
+                     "window": "idle", "ready": False}, None
+    raise ApiError(404, "not_found", DECIDERS_OFF_WHY)
+
+
+def _engine_route(cond, name: str):
+    """An engine-only screen's handler, which the engine that runs this conductor in its own
+    process puts in its state (server/conductor/inproc.py ROUTES, until ENG-413); a server with
+    no engine answers 404."""
+    h = (cond.state.get(ENGINE_ROUTES) or {}).get(name)
+    if h is None:
+        raise ApiError(404, "not_found", ENGINE_ONLY)
+    return h

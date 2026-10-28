@@ -3,6 +3,6 @@ the one server/toolcall.py parses and streams natively: the default `ToolFormat`
 
 from __future__ import annotations
 
-from server.toolformats import ToolFormat, register
+from tandemapp.toolformats import ToolFormat, register
 
 FORMAT = register(ToolFormat())

@@ -49,7 +49,7 @@ import time
 import uuid
 
 from proxy.adapters.base import CHAT, sse_data
-from server.conductor import inject_messages as im
+from tandemapp.conductor import inject_messages as im
 
 GROUPS = ("class", "effort", "packages", "side", "loops", "e1", "tools", "compaction",
           "states", "memory")
@@ -414,7 +414,7 @@ class BackendQuestion:
         self.timeout_ms, self.turn = int(timeout_ms), turn
 
     def choice(self, state: str, prompt: str, options: dict, max_chars: int = 2000):
-        from server.conductor.classify import Answer
+        from tandemapp.conductor.classify import Answer
         ids = list(options)
         adapter = self.hx.svc.adapter(self.backend)
         body, how = adapter.choice_body(prompt, state[:max_chars], ids, self.model)
@@ -545,7 +545,7 @@ class Turn:
         headers = _Headers(self.handler.headers, over)
         self.hdrs = headers
         # the state lines a client sends back are taken out before anything reads the messages
-        from server.conductor import states as states_mod
+        from tandemapp.conductor import states as states_mod
         msgs, stripped = states_mod.strip_messages(self.messages)
         body = self.client_body
         if stripped:
@@ -581,13 +581,13 @@ class Turn:
                 self.policy = cond.monitor_policy(plan, hx.base)
             except Exception:                                      # noqa: BLE001
                 self.policy = None
-        from server.conductor.monitor import tier0_words
+        from tandemapp.conductor.monitor import tier0_words
         self.word_cfg = tier0_words.words_cfg(self.policy.data if self.policy is not None
                                               else None)
         if self._task_mode("D1") != "off" or self._task_mode("D2") != "off":
             self.words = tier0_words.WordLoop(self.word_cfg)
         if self._task_mode("A1") != "off" and self.tools:
-            from server import argloop
+            from tandemapp import argloop
             self.arg_guard = argloop.ArgLoopGuard(
                 context_chars=argloop.longest_message_chars(self.messages))
         self._notes()
@@ -595,7 +595,7 @@ class Turn:
         if getattr(plan, "memory", None) is not None and getattr(cond, "memory", None) is not None:
             # 2026-10-05: the notes that went in count as used; the model's blocks are taken out
             # of the stream and written (server/memblock.py)
-            from server.conductor import memory as memory_mod
+            from tandemapp.conductor import memory as memory_mod
             memory_mod.mark_injected(cond.memory, plan)
             self.mem = cond.memory.filter(plan.memory, self.states)
 
@@ -701,7 +701,7 @@ class Turn:
         # the argument guard's note for this session's next request (A1), once, not replayed
         pend = hx.take_pending(sess.key, "argloop") if self.tools else None
         if pend is not None and at is not None and self._task_mode("A1") != "off":
-            from server import argloop
+            from tandemapp import argloop
             text = "\n\n" + argloop.note_text(pend)
             mode = self._task_mode("A1")
             ev = self._journal("SP4", "A1", "tool_arg_loop", "PROMPT_TAIL_NOTE",
@@ -731,7 +731,7 @@ class Turn:
         if self.sw["states"] != "on" or ui.get("states") != "on" or not self.stream or \
                 plan.res.mode != "on" or plan.side is not None:
             return
-        from server.conductor import states as states_mod
+        from tandemapp.conductor import states as states_mod
         _, packages = self.hx.cond.store.peek("packages")
         self.states = states_mod.States(ui.get("kinds") or {}, narrator=self._narrator(ui))
         self.states.route(plan.row, plan.injected, packages.get("packages") or {},
@@ -826,8 +826,8 @@ class Turn:
         reg = hx.cond.router.session_tokens
         key = plan.session.key if plan.session is not None else None
         if reg is not None and key:
-            from server import session_tokens as st_mod
-            from server.conductor import packages as packages_mod
+            from tandemapp import session_tokens as st_mod
+            from tandemapp.conductor import packages as packages_mod
             url = packages_mod.request_url(self.hdrs) or packages_mod.URL_DEFAULT
             lines.append("- this session's runtime address: "
                          + st_mod.with_token(url, reg.token_for(key)))
@@ -1066,7 +1066,7 @@ class Turn:
                 break
         if v is None:
             return
-        from server import argloop
+        from tandemapp import argloop
         mode = self._task_mode("A1")
         d = dict(v.as_dict(), name=e["name"] or None, backend=self.backend["id"],
                  model=self.route.model, streamed=not self.hold_tools)
@@ -1166,9 +1166,9 @@ class Turn:
         modes = {t: self._task_mode(t) for t in ("C1", "C2", "C3", "C4")}
         if all(m == "off" for m in modes.values()):
             return None
-        from server.conductor.monitor import tier0, toolcheck  # noqa: F401
-        from server.conductor.monitor.observe import ToolCallEvent
-        from server.conductor.monitor.policy import PASS, REGENERATE_CALL, REPAIR_CALL
+        from tandemapp.conductor.monitor import tier0, toolcheck  # noqa: F401
+        from tandemapp.conductor.monitor.observe import ToolCallEvent
+        from tandemapp.conductor.monitor.policy import PASS, REGENERATE_CALL, REPAIR_CALL
         schemas = {}
         for tl in self.client_body.get("tools") or []:
             fn = (tl or {}).get("function") or {}
@@ -1326,7 +1326,7 @@ class Turn:
         st = self.states
         if st is None or not st.pending or self.ident is None:
             return b""
-        from server.conductor import states as states_mod
+        from tandemapp.conductor import states as states_mod
         ui = (self.plan.res.doc or {}).get("ui") or {}
         caps = self.adapter.capabilities() if self.adapter is not None else {}
         fmt = "reasoning_content" if caps.get("reasoning_field") in ("reasoning_content",
@@ -1451,7 +1451,7 @@ class BackendNarrator:
         self.hx, self.backend, self.model, self.budget_ms = hx, backend, model, budget_ms
 
     def __call__(self, entry: dict):
-        from server.conductor import narrator as nar
+        from tandemapp.conductor import narrator as nar
         adapter = self.hx.svc.adapter(self.backend)
         body = {"model": self.model, "stream": False, "temperature": 0,
                 "max_tokens": nar.MAX_TOKENS, "messages": nar.messages(entry)}

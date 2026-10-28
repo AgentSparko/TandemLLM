@@ -46,7 +46,7 @@ import os
 import secrets
 import threading
 
-from server.conductor.monitor import toolcheck
+from tandemapp.conductor.monitor import toolcheck
 
 NEAR_CALLS = 3            # near-repeats: this many calls of one tool in a row
 REPEATS = 3               # C3's `repeats` when the request has no policy

@@ -422,18 +422,20 @@ def limits(reg, model) -> dict:
 
 
 def _error(exc) -> Refused:
-    """A runtime error as the route's answer."""
-    from engine.decision.base import DeadlineMissed, DecisionError
-    from engine.decision.registry import UnknownModel
-    if isinstance(exc, UnknownModel):
+    """A runtime error as the route's answer. The decision runtime's errors (engine/decision/base.py
+    DecisionError, engine/decision/registry.py UnknownModel) carry their `why` and `status`, which
+    is all this reads: TandemApp does not import the engine (SRV-747)."""
+    why, status = getattr(exc, "why", None), getattr(exc, "status", None)
+    if why == "unknown_model":
         return Refused(422, "invalid_request_error", str(exc), "model")
-    if isinstance(exc, DeadlineMissed):
+    if why == "deadline_missed":
         return Refused(503, "busy", f"{exc}; the engine served a request the whole time; ask "
                                     f"again, or send a longer deadline_ms", retry=exc.retry or 2)
-    if isinstance(exc, DecisionError):
-        kind = {422: "invalid_request_error", 529: "overloaded"}.get(exc.status, exc.why)
-        return Refused(exc.status if exc.status != 529 else 503, kind, str(exc),
-                       retry=(exc.retry or 2) if exc.status >= 500 else None)
+    if isinstance(why, str) and isinstance(status, int):
+        kind = {422: "invalid_request_error", 529: "overloaded"}.get(status, why)
+        retry = getattr(exc, "retry", None)
+        return Refused(status if status != 529 else 503, kind, str(exc),
+                       retry=(retry or 2) if status >= 500 else None)
     if isinstance(exc, TimeoutError):
         return Refused(504, "timeout", "the forward did not finish in time", retry=5)
     return Refused(500, "error", f"{type(exc).__name__}: {exc}")
@@ -541,9 +543,10 @@ def journal_detail(out: dict | None, err: Refused | None, body) -> tuple[str, di
 
 # ---------------------------------------------------------------------- server/app.py's routes
 def _cfg(state: dict) -> tuple[dict, str]:
-    from server import decider_api
-    from server.conductor import schema
-    doc = decider_api._deciders_doc(state)
+    from tandemapp.conductor import schema
+    cond = state.get("conductor")
+    # the conductor's `deciders` document, as server/decider_api.py `_deciders_doc` reads it
+    doc = cond.store.peek("deciders")[1] if cond is not None else schema.seed("deciders")
     return schema.decider_api(doc), (doc.get("questions") or {}).get("laya_api") or "auto"
 
 
@@ -612,7 +615,7 @@ def handle_post(handler, reg, state: dict, body) -> None:
         if tagged:
             detail["session_key"] = sess
         try:
-            from server import ledger as ledger_mod
+            from tandemapp import ledger as ledger_mod
             detail["client"] = ledger_mod.client_of(handler.headers)[1]
         except Exception:                                          # noqa: BLE001
             pass

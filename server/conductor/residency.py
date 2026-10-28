@@ -48,7 +48,7 @@ import sys
 import threading
 import time
 
-from server.conductor.store import DEFAULT_ROOT, Store
+from tandemapp.conductor.store import DEFAULT_ROOT, Store
 
 REASONS = ("refused_hold", "refused_load_in_progress", "refused_memory", "refused_unknown_role")
 JOURNAL = "residency.jsonl"

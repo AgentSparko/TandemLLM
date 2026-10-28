@@ -47,8 +47,8 @@ import shutil
 import threading
 import time
 
-from server.conductor import redact as redact_mod
-from server.conductor import schema, signals
+from tandemapp.conductor import redact as redact_mod
+from tandemapp.conductor import schema, signals
 
 DEFAULT_ROOT = "~/.qwen38-spark-engine/memory"
 DEFAULTS = dict(schema.SETTINGS["memory"]["transcripts"])
@@ -64,7 +64,7 @@ _NAME = re.compile(r"[^A-Za-z0-9._-]")
 def memory_root(conductor_root: str) -> str:
     """The production conductor's memory is its sibling under the engine's home; any other
     conductor directory (a test, a second server) keeps its memory inside itself."""
-    from server.conductor.store import DEFAULT_ROOT as COND_DEFAULT
+    from tandemapp.conductor.store import DEFAULT_ROOT as COND_DEFAULT
     cond = os.path.realpath(os.path.expanduser(conductor_root))
     if cond == os.path.realpath(os.path.expanduser(COND_DEFAULT)):
         return os.path.realpath(os.path.expanduser(DEFAULT_ROOT))
@@ -352,7 +352,7 @@ class Transcripts:
                 finally:
                     self._q.task_done()
             if self.clock() >= self._next_prune:
-                from server.ledger import next_local
+                from tandemapp.ledger import next_local
                 self._next_prune = next_local(4, self.clock())
                 try:
                     self.prune()
@@ -548,7 +548,7 @@ class Transcripts:
         """J1: `snapshots/turn-<n>.json` (n is the block's turn; at most the router document's
         `outcomes.limits.snapshot_bytes`) and the turn's images under `shots/`, 0600; a session
         keeps its newest `shots_kept` images, the older ones keep their hash in their snapshot."""
-        from server.conductor import outcomes
+        from tandemapp.conductor import outcomes
         lim = {**schema.OUTCOMES["limits"], **(snap.get("_limits") or {})}
         sdir, shots = os.path.join(d, "snapshots"), os.path.join(d, "shots")
         for p in (sdir, shots):

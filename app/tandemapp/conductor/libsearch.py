@@ -46,8 +46,8 @@ import threading
 import time
 import types
 
-from server.conductor import deferred, schema, signals
-from server.conductor.classify import PARENT
+from tandemapp.conductor import deferred, schema, signals
+from tandemapp.conductor.classify import PARENT
 from server.conductor.packages import SHIPPED_ROOT, split_frontmatter, split_reference
 from server.knobs import SETTINGS as _S
 
@@ -434,7 +434,7 @@ def attach(router, plan, body, router_doc, prof, packages, roles, sh, sess, cls,
                 trigger))
         return
     else:
-        from server.conductor.router import _about
+        from tandemapp.conductor.router import _about
         picks, how, asked = _ask(router, plan, hits, sh.user_text or "", line, cfg, router_doc,
                                  roles, _about(cls, {c["id"]: c for c in router_doc["classes"]}))
         info["stages"] = asked

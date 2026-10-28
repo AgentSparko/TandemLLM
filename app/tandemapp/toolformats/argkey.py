@@ -7,9 +7,9 @@ from __future__ import annotations
 import json
 import re
 
-from server.toolcall import _WS, CLOSE, OPEN, _call, _is_prefix_of, _typed
-from server.toolformats import BlockReader, ToolFormat, register
-from server.toolformats.pythonic import PythonicCalls
+from tandemapp.toolcall import _WS, CLOSE, OPEN, _call, _is_prefix_of, _typed
+from tandemapp.toolformats import BlockReader, ToolFormat, register
+from tandemapp.toolformats.pythonic import PythonicCalls
 
 # The arg-key form of a call: `<tool_call>NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>...
 # </tool_call>`, a string value as written and any other value as JSON. A block is rewritten into this module's
@@ -232,13 +232,14 @@ class ArgKeyReader(BlockReader):
 MARKERS = (OPEN, CLOSE, "<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>")
 
 
-def forced_regex(tools: list[dict], allowed: list[str], many: bool = True) -> tuple[str, dict[str, set[str]]]:
+def forced_regex(tools: list[dict], allowed: list[str], many: bool = True, *,
+                 grammar) -> tuple[str, dict[str, set[str]]]:
     """tool_choice required/named as a constraint in the arg-key form (SRV-689): the name, then the schema's
     parameters in declared order (the required ones present, no others), a string value any text without
     its closer (exact, as the parser reads it), an enum one of its values, anything else the schema's JSON;
     whitespace between the tags bounded as in the XML form's. Returns the regex and, per function, the
-    parameters whose values are JSON literals."""
-    from engine import grammar
+    parameters whose values are JSON literals. `grammar`: the engine's constraint builder
+    (engine/grammar.py), handed in by the engine (SRV-747)."""
     text = grammar.avoiding("</arg_value>")
     ws = grammar._S
     by_name = {}
@@ -256,7 +257,7 @@ def forced_regex(tools: list[dict], allowed: list[str], many: bool = True) -> tu
             required = set(params.get("required", []))
             members = []
             for k in props:
-                value, is_json = _value(props[k], text)
+                value, is_json = _value(props[k], text, grammar)
                 if is_json:
                     typed.setdefault(name, set()).add(k)
                 m = rf"{ws}<arg_key>{grammar.literal(k)}</arg_key>{ws}<arg_value>{value}</arg_value>"
@@ -267,10 +268,9 @@ def forced_regex(tools: list[dict], allowed: list[str], many: bool = True) -> tu
     return (f"{ws}(?:{one}{ws})+" if many else f"{ws}{one}{ws}"), typed
 
 
-def _value(schema: dict, text: str) -> tuple[str, bool]:
+def _value(schema: dict, text: str, grammar) -> tuple[str, bool]:
     """(a value's regex, whether it is a JSON literal), as the XML form's (engine/grammar.py `_xml_value`)
     with this form's closer."""
-    from engine import grammar
     t = schema.get("type") if isinstance(schema, dict) else None
     if isinstance(schema, dict) and "enum" in schema and all(isinstance(v, str) for v in schema["enum"]):
         return "(?:" + "|".join(grammar.literal(v) for v in schema["enum"]) + ")", False
@@ -308,8 +308,8 @@ class ArgKeyFormat(ToolFormat):
                 f"name), <arg_value>, its value, </arg_value>, " if key else "")
         return f"<tool_call>{name}, {args}then </tool_call>"
 
-    def forced_regex(self, tools: list[dict], allowed: list[str], many: bool):
-        return forced_regex(tools, allowed, many=many)
+    def forced_regex(self, tools: list[dict], allowed: list[str], many: bool, grammar):
+        return forced_regex(tools, allowed, many=many, grammar=grammar)
 
     def open_call_name(self, open_text: str) -> str | None:
         got = super().open_call_name(open_text)

@@ -1,9 +1,10 @@
-"""The knobs the conductor and the proxy read (#108), with or without the engine installed.
+"""The knobs the conductor and the proxy read (#108): the environment (prefix QWEN38_) with the
+defaults below.
 
-A box that runs the engine reads them through engine/settings.py's registry, as every other read does.
-The standalone proxy (`tandem-app`, its image) ships `proxy` and `server` only: there the same names
-are read from the environment (prefix QWEN38_) with the defaults below, which
-tests/test_knobs_standalone.py holds equal to the registry's.
+TandemApp never imports the engine (SRV-747). The engine's registry (engine/settings.py) reads the
+same live environment with the same prefix, so in an engine that runs the conductor in its process
+a name reads the same here as there: tests/test_knobs_standalone.py holds these defaults equal to
+the registry's.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ class StandaloneSettings:
     def get(self, name: str, default=_MISSING):
         if default is _MISSING:
             if name not in DEFAULTS:
-                raise KeyError(f"{self.prefix}{name} is not a knob the conductor or the proxy reads (server/knobs.py)")
+                raise KeyError(f"{self.prefix}{name} is not a knob the conductor or the proxy reads (tandemapp/knobs.py)")
             default = DEFAULTS[name]
         return os.environ.get(self.prefix + name, default)
 
@@ -40,9 +41,4 @@ class StandaloneSettings:
         return (self.prefix + name) in os.environ
 
 
-try:
-    from engine.settings import SETTINGS
-except ModuleNotFoundError as exc:          # the standalone proxy: no engine package
-    if exc.name not in ("engine", "engine.settings"):
-        raise
-    SETTINGS = StandaloneSettings()
+SETTINGS = StandaloneSettings()
