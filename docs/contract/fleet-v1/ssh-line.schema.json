@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/ssh-line.schema.json",
+  "title": "the body of POST /v1/fleet/discovery/target: a pasted ssh command line (a rented or remote node)",
+  "type": "object",
+  "properties": {
+    "line": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    }
+  },
+  "required": [
+    "line"
+  ],
+  "additionalProperties": false
+}

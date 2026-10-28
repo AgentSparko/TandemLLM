@@ -1,0 +1,307 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/discovered.schema.json",
+  "title": "POST /v1/fleet/discovery/address (200): the row of that address",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "row": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "stable while its strongest key stays: the node id, else the SSH host key, else the first address"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "spark",
+            "gb10",
+            "host",
+            "owned",
+            "unknown"
+          ],
+          "description": "spark: TandemNode answered (Spark with TandemLLM x.y); gb10: a GB10 box by its DMI, nothing installed; host: not a Spark; owned: a Spark another TandemApp owns; unknown"
+        },
+        "title": {
+          "type": "string",
+          "description": "the kind in words: 'Spark with TandemLLM 0.15.0', 'GB10 box, nothing installed', 'Linux host, not a Spark', 'Spark owned by another TandemApp', 'Unknown device'"
+        },
+        "detail": {
+          "type": "string",
+          "description": "the device and its state in words"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "the mDNS name or the ~/.ssh/config alias"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "mdns",
+              "scan",
+              "ssh_config",
+              "address",
+              "login",
+              "pair"
+            ]
+          }
+        },
+        "node": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "class": {
+              "type": "string"
+            },
+            "version": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "hw": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "paired": {
+              "type": "boolean"
+            },
+            "owner": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "this",
+                "other",
+                null
+              ]
+            },
+            "listen": {
+              "type": "string"
+            },
+            "window": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "port": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "virtual": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "class",
+            "version",
+            "hw",
+            "paired",
+            "owner",
+            "listen",
+            "window",
+            "port",
+            "virtual"
+          ],
+          "additionalProperties": false,
+          "description": "what its TandemNode says over mDNS (TXT); null without one"
+        },
+        "hw": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "spark": {
+              "type": "boolean"
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "mdns",
+                "dmi"
+              ]
+            }
+          },
+          "required": [
+            "label",
+            "spark",
+            "source"
+          ],
+          "additionalProperties": false,
+          "description": "the box by its DMI: over mDNS (the node's own word) or read in an SSH login"
+        },
+        "ssh": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "port": {
+              "type": "integer"
+            },
+            "banner": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "os": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "host_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "port",
+            "banner",
+            "os",
+            "host_key"
+          ],
+          "additionalProperties": false,
+          "description": "its SSH server: the banner it sent first, the OS it says, the host key known_hosts or the TXT has"
+        },
+        "ssh_config": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "alias": {
+              "type": "string"
+            },
+            "hostname": {
+              "type": "string"
+            },
+            "user": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "port": {
+              "type": "integer"
+            },
+            "identity_file": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "proxy_jump": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "alias",
+            "hostname",
+            "user",
+            "port",
+            "identity_file",
+            "proxy_jump"
+          ],
+          "additionalProperties": false
+        },
+        "fleet": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "the id of the fleet's node this is, null when it is not in the fleet"
+        },
+        "connect": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "code",
+              "ssh",
+              "takeover"
+            ]
+          },
+          "description": "how the wizard's Connect step can reach it; empty for a node in the fleet or a host that is not a Spark"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "what each source said, in words"
+        },
+        "seen_at": {
+          "type": "number"
+        },
+        "seq": {
+          "type": "integer",
+          "description": "the cursor at its last change"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "detail",
+        "name",
+        "addresses",
+        "sources",
+        "node",
+        "hw",
+        "ssh",
+        "ssh_config",
+        "fleet",
+        "connect",
+        "evidence",
+        "seen_at",
+        "seq"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "contract_version",
+    "row"
+  ],
+  "additionalProperties": false
+}

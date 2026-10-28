@@ -29,7 +29,8 @@
             "not_built",
             "confirm_required",
             "confirm_invalid",
-            "no_wire"
+            "no_wire",
+            "lan_denied"
           ]
         },
         "message": {
