@@ -264,6 +264,8 @@ The controller's settings for a box (`app.env`):
     TANDEM_DEFAULT_BACKEND=engine
     TANDEM_API_USERS_FROM=~/.qwen38-spark-engine/backends/config.sqlite3
 
+First run, 2026-10-28, on the test board (0.15.0: the engine with its conductor and a DeepSeek backend of its own, the controller beside it on the same Spark, the reverse proxy on another machine of the LAN, no users on the engine). Before the switch, on the controller's port: `/v1/models` gave the engine's three ids with the same card and `tandem` keys and its four decision models, an unknown card and a body that is not JSON the engine's 404 and 400, and three requests of 8 tokens (whole, streamed, the raw model's name) 200 in 3.1 to 4.0 s with `X-Tandem-Node` and `X-Tandem-Deployment`; each controller row's `upstream_request` found the engine's row of the request, client kind as the client sent it. After the switch, the same through the public address, and every engine-only route kept the status it had (health, dashboard, cache, conductor, Setup Guide, library, Laya, memory, chat-app, fleet). A fake engine quiet for 630 s (no byte at all for a whole answer; the head and then nothing for a stream) behind a controller with the default timeouts answered 200 after 630 s both ways. The rollback below took one reload: the next `/v1/models` came from the engine.
+
 ### Through a reverse proxy
 
 nginx in front of both sends the five route families to the controller and leaves every other path where it was. Exact (`=`) and `^~` locations win over a regular expression location, so an existing `location ~ ^/(v1|health|events|metrics)(/|$)` for the engine stays as it is:
