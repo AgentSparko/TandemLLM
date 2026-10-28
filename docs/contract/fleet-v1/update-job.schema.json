@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/update-job.schema.json",
+  "title": "a fleet update's job: its steps, each node's phase and the log; kept by the controller and resumed after its restart",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "update"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "running",
+        "done",
+        "failed",
+        "stopped"
+      ]
+    },
+    "target": {
+      "type": "string"
+    },
+    "by": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "number"
+    },
+    "ended_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "stop": {
+      "type": "boolean",
+      "description": "asked to stop after the step that runs"
+    },
+    "error": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "log": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "t",
+          "text"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "refused": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "deployment": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "deployment",
+          "name",
+          "nodes",
+          "why"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "node",
+          "why"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "n": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "replica",
+              "single",
+              "split"
+            ]
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "drain": {
+            "type": "boolean"
+          },
+          "deployments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "downtime": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "words": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "running",
+              "done",
+              "failed"
+            ]
+          }
+        },
+        "required": [
+          "n",
+          "kind",
+          "nodes",
+          "drain",
+          "deployments",
+          "downtime",
+          "words",
+          "state"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "nodes": {
+      "type": "object",
+      "description": "node id -> its progress",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "drain",
+              "drained",
+              "update",
+              "rejoin",
+              "done",
+              "failed",
+              "skipped"
+            ]
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "started_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "ended_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "drained_before": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "alias",
+          "from",
+          "to",
+          "phase",
+          "detail",
+          "started_at",
+          "ended_at",
+          "drained_before"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "state",
+    "target",
+    "by",
+    "started_at",
+    "ended_at",
+    "stop",
+    "error",
+    "log",
+    "refused",
+    "skipped",
+    "steps",
+    "nodes"
+  ],
+  "additionalProperties": false
+}

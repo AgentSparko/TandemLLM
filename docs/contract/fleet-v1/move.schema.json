@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/move.schema.json",
+  "title": "the body of POST /v1/fleet/controller/move (answers the job, move-job.schema.json)",
+  "type": "object",
+  "properties": {
+    "to": {
+      "type": "string"
+    },
+    "confirm": {
+      "type": "string"
+    },
+    "port": {
+      "type": "integer"
+    },
+    "password": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "description": "the new controller's systemd user unit (default tandemapp)"
+    },
+    "state_dir": {
+      "type": "string",
+      "description": "its state dir on the Spark (default ~/.tandemllm/app); one with a controller's database already is refused"
+    }
+  },
+  "required": [
+    "to",
+    "confirm"
+  ],
+  "additionalProperties": false
+}

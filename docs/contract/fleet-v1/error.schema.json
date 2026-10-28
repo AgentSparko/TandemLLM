@@ -34,7 +34,10 @@
             "host_key_unconfirmed",
             "secret_needed",
             "version_mismatch",
-            "preflight_failed"
+            "preflight_failed",
+            "partial_split",
+            "password_needed",
+            "not_empty"
           ]
         },
         "message": {

@@ -79,6 +79,8 @@ Up to 0.15.0 the image was `tandemllm-dash` and the volume `tandem-dash`; the vo
 | `tandem-app backends list` | the backends, one line each, from a copy of the database |
 | `tandem-app hostcollect` | the remote host collector (below) |
 | `tandem-app launch vllm\|sglang` | starts vLLM or SGLang with TandemLLM's plugin inside and registers it as a backend (below) |
+| `tandem-app service install\|uninstall\|status` | the controller as a background service of the user: a launchd agent on macOS, a systemd user unit on Linux (below) |
+| `tandem-app package [--version V]` | the wheel this controller installs on nodes and updates them to, built from its own copy; a local label (`0.15.0+fix`) marks a build of a release |
 | `tandem-app version` | the installed version |
 
 `tandem-dash`, the old name, still runs `tandem-app` with the same arguments and exit codes, after one line on stderr; it is removed in 0.17.0.
@@ -272,6 +274,31 @@ Settings → Add Spark walks Find, Connect, Check, Install, Link, Name and Done 
 **Permissions** are asked where they are needed, each with one line of why and what works without it: macOS's Local Network before the first search (denied: add by address, or a rented node by its ssh line), notifications in Done for a rented node's lease reminder (else Events & Alerts). The Keychain is not a browser app's to ask for: TandemApp running in a browser keeps no secret of the user's; the controller's own certificate and keys are 0600 files beside its config database. The native Mac shell (parked) is where a Keychain belongs.
 
 **Rented.** A target with a lease end is paired through its tunnel; its record gets `lease_end`, `cost_per_hour` and the tag `rented`. The rule `lease` reminds 24 h before the end by default (`lease_left`, warn, app and system notifications; editable like any rule), once per lease; it resolves when the lease is extended or the node is released.
+
+## TandemApp alone: install, the controller's host, the fleet update
+
+**Install.** TandemApp is the controller and its page, without an engine, torch or a GPU (OPS-234). On a Mac, `brew install ./packaging/homebrew/tandemapp.rb` (the formula is in the repository; no tap carries it yet) or, on macOS and Linux alike, `pip install '.[app]'` in a virtual environment (Python 3.11 or newer; the `app` extra adds psutil only). Then:
+
+    tandem-app service install --open     # launchd (macOS) or a systemd user unit (Linux); opens the page
+    tandem-app service status             # installed, running, its pid, whether it answers /health
+    tandem-app service uninstall          # stopped, unloaded, the plist or unit removed; the data stays
+
+`service install` writes `~/Library/LaunchAgents/org.tandemllm.app.plist` (started at login, kept alive, its log in `<state dir>/logs/tandem-app.log`) or `~/.config/systemd/user/tandemapp.service` (enabled, restarted on failure), runs `<its Python> -m proxy serve` with `--host` (default 127.0.0.1), `--port` (8080), the state dir's files (`--state-dir`, default `~/.tandemllm`) and `--env-file` when given, and waits until `/health` answers. `--name` gives the label or unit another name, so a second controller can run beside the first. A Linux user unit stops at logout unless the user lingers (`loginctl enable-linger`); status says so. A controller that listens beyond loopback needs `TANDEM_ADMIN_TOKEN` in its env file. `uninstall` leaves nothing loaded and no file of the service; the registry, the ledger and the keys in the state dir stay.
+
+The first open of the page without a route, on a controller with no Spark yet, lands on Add Spark.
+
+**The controller's host** (App settings, `GET /v1/fleet/controller`, code: `proxy/ctlmove.py`). The controller must stay on for the API to stay up, so a Spark is the better host; a Mac can run it, and the host-sleep rule and the page say what its sleep costs. Moving it to a Spark reads a plan first (`GET /v1/fleet/controller/move?to=<node>&port=`: the new API URL, each node and what happens to it, what stays) and runs with the plan's confirm:
+
+1. the fleet's export: the config database without its secrets, the wizard's sessions and the jobs (backends, routes, the proxy's keys as hashes, rules, nodes with their pins, layouts), and each stored API key, to be stored again under the new controller's own master key;
+2. the Spark's TandemNode starts a controller there (`POST /node/controller`: a systemd user unit, its own state dir with the export and an env file with the admin password, both 0600), which imports the export at its first start and makes its own certificate; a state dir that holds a controller's database already is refused;
+3. each paired node is handed to the new certificate by its current owner (`PUT /node/owner`): from then on the old controller is refused and the new one accepted. The Spark itself is released and read by the new controller over its loopback; a node reached through an SSH tunnel stays (its key is a file on this machine);
+4. the new controller is asked for the nodes until each answers it, the old controller's refusal is checked, and the old one says `moved_to`: its page follows to the new URL and the API URL is printed.
+
+The metric history stays where it was. The way back starts on the machine that takes the fleet: its App settings take it from the controller's URL with that controller's admin password (`POST /v1/fleet/controller/take`); the giver seals its export to the taker's certificate (ECDH P-256, HKDF-SHA256, AES-256-GCM), the taker imports it, the giver hands its nodes over and says `moved_to` the taker. Every move, handover and take needs pairing's rights.
+
+**The fleet update** (Sparks → Update fleet, `/v1/fleet/update`, code: `proxy/fleetupdate.py`, the node's half `proxy/nodeupdate.py`). One release on every node: the one in the package this controller installs (`tandem-app package`, or `TANDEM_NODE_WHEEL`). The plan orders the nodes: those that serve nothing first, then each Replicas member alone (drained, updated, rejoined while another member serves its model), then nodes with a deployment only they serve (the plan names the downtime), then each Split's members together. A Split never updates partly: a member that cannot be updated refuses the Split, and a selection with one member and not another is refused 409 `partial_split`. On a node the agent takes the wheel (sha256 checked), installs it into its own virtual environment with pip, runs the engine's runtime install at the same release (`install.sh --runtime-only`; simulated on a virtual node) and replaces itself with the new code (same process id). The job keeps each node's phase in the config database; a controller restarted during it resumes where it was. A node that runs outside a virtual environment of its own (a checkout) is skipped with the words to update it by hand.
+
+**Mixed versions.** The rule `version-mismatch` fires one alert for the fleet once the nodes that answer run more than one release for 60 s (a local build label counts as its release); it is held while an update runs. The fleet pill and the Overview say it, and its action opens Update fleet.
 
 ## vLLM and SGLang: their own metrics
 

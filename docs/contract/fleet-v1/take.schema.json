@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/take.schema.json",
+  "title": "the body of POST /v1/fleet/controller/take (answers the job, move-job.schema.json): the controller that runs the fleet now and its admin password",
+  "type": "object",
+  "properties": {
+    "url": {
+      "type": "string"
+    },
+    "password": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "url"
+  ],
+  "additionalProperties": false
+}

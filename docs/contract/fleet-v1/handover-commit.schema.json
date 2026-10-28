@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/handover-commit.schema.json",
+  "title": "POST /v1/fleet/controller/handover/{id}/commit (200): the nodes handed to the taker, and where this controller moved to",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "how": {
+            "type": "string",
+            "enum": [
+              "repin",
+              "release",
+              "own",
+              "stays"
+            ]
+          },
+          "why": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "handed",
+              "failed"
+            ]
+          },
+          "accepted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "alias",
+          "how",
+          "why"
+        ],
+        "additionalProperties": false,
+        "description": "repin: its owner pin handed to the new controller; release: the new controller's own machine, read over its loopback; own: this controller's own machine, its agent handed on with its LAN address; stays: not moved, with why"
+      }
+    },
+    "moved_to": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "contract_version",
+    "id",
+    "nodes",
+    "moved_to"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/update-plan.schema.json",
+  "title": "GET /v1/fleet/update/plan[?nodes=<a,b>] (200): the fleet update's order, what each step stops, what is refused or skipped and why, and the confirm its POST needs",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "target": {
+      "type": "string",
+      "description": "the version the controller's package carries (a local label kept): a node that reports another one is updated"
+    },
+    "controller": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "allowed": {
+      "type": "boolean"
+    },
+    "blocked": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "why it may not run: a partial Split, every node at the target, an update running"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "n": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "replica",
+              "single",
+              "split"
+            ]
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "node ids; more than one only for a Split, which updates together"
+          },
+          "drain": {
+            "type": "boolean"
+          },
+          "deployments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "the deployments on these nodes"
+          },
+          "downtime": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "what is not served while the step runs; null when every model stays served"
+          },
+          "words": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "n",
+          "kind",
+          "nodes",
+          "drain",
+          "deployments",
+          "downtime",
+          "words"
+        ],
+        "additionalProperties": false
+      },
+      "description": "in order: idle nodes, Replicas members one at a time, nodes with a Single deployment, each Split's members together"
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "node",
+          "why"
+        ],
+        "additionalProperties": false
+      },
+      "description": "nodes that need the update but cannot get it now (off, no agent, an older agent)"
+    },
+    "refused": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "deployment": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "deployment",
+          "name",
+          "nodes",
+          "why"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Splits that stay on their version: a member cannot be updated, and a Split never updates partly"
+    },
+    "current": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "the aliases of the nodes that run the target already"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "up",
+              "draining",
+              "off",
+              "alert"
+            ]
+          },
+          "updatable": {
+            "type": "boolean"
+          },
+          "why": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "alias",
+          "version",
+          "status",
+          "updatable",
+          "why"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "selected": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "description": "the nodes asked for (?nodes=), null for the whole fleet"
+    },
+    "confirm": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "expires_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "contract_version",
+    "target",
+    "controller",
+    "allowed",
+    "blocked",
+    "steps",
+    "skipped",
+    "refused",
+    "current",
+    "nodes",
+    "selected",
+    "confirm",
+    "expires_at"
+  ],
+  "additionalProperties": false
+}

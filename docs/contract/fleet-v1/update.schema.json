@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/update.schema.json",
+  "title": "GET /v1/fleet/update, POST /v1/fleet/update and /stop (200): the target and the last fleet update, null before the first",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "target": {
+      "type": "string"
+    },
+    "job": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "the last job (update-job.schema.json), null before the first"
+    }
+  },
+  "required": [
+    "contract_version",
+    "target",
+    "job"
+  ],
+  "additionalProperties": false
+}
