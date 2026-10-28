@@ -55,14 +55,17 @@ class FleetBody extends WindowBody {
 
 // ---- Logs ----------------------------------------------------------------------------------------
 
-type Level = 'all' | 'debug' | 'info' | 'warn' | 'error';
+// `every` adds the HTTP access lines; a window saved with the old `all` opens at info
+type Level = 'every' | 'debug' | 'info' | 'warn' | 'error';
 const LEVELS: [Level, string][] = [
-  ['all', 'All levels'],
+  ['every', 'Every line'],
   ['debug', 'Debug and up'],
   ['info', 'Info and up'],
   ['warn', 'Warn and error'],
   ['error', 'Errors'],
 ];
+
+const levelOf = (v: unknown): Level => (LEVELS.some(([k]) => k === v) ? (v as Level) : 'info');
 
 @customElement('qse-win-logs')
 export class QseWinLogs extends FleetBody {
@@ -99,10 +102,10 @@ export class QseWinLogs extends FleetBody {
   private async load(isCurrent: () => boolean): Promise<void> {
     const r = this.ref;
     const node = typeof r.node === 'string' ? r.node : 'all';
-    const level = (r.level as Level) || 'all';
+    const level = levelOf(r.level);
     const q = typeof r.q === 'string' ? r.q : '';
     try {
-      const a = this.boxOnly ? 'absent' : await fromFleet(() => fleet.logs({ node, level, q, limit: 300 }));
+      const a = this.boxOnly ? 'absent' : await fromFleet(() => fleet.logs({ node, level: level === 'every' ? 'debug' : level, access: level === 'every', q, limit: 300 }));
       if (a !== 'absent') {
         if (isCurrent()) [this.lines, this.error, this.loaded] = [a.lines, null, true];
         return;
@@ -113,7 +116,7 @@ export class QseWinLogs extends FleetBody {
         return;
       }
       // the box's own log: the engine and the proxy that serve this page
-      const own = await api.logsJson({ level: level === 'all' ? undefined : level === 'warn' ? 'warning' : level, grep: q || null, backlog: 300 });
+      const own = await api.logsJson({ level: level === 'every' ? 'debug' : level === 'warn' ? 'warning' : level, grep: q || null, backlog: 300 });
       if (isCurrent())
         [this.lines, this.error, this.loaded] = [own.lines.map((l) => ({ t: Date.parse(l.ts) / 1000, node: '', level: l.level === 'warning' ? 'warn' : l.level, source: l.source, msg: l.msg })), null, true];
     } catch (e) {
@@ -133,7 +136,7 @@ export class QseWinLogs extends FleetBody {
           ${this.nodes.map((n) => html`<option value=${n.id} ?selected=${node === n.id}>${n.alias}</option>`)}
         </select>
         <select class="wm-in" aria-label="Level" @change=${(e: Event) => this.setRef({ level: (e.target as HTMLSelectElement).value })}>
-          ${LEVELS.map(([v, l]) => html`<option value=${v} ?selected=${(r.level || 'all') === v}>${l}</option>`)}
+          ${LEVELS.map(([v, l]) => html`<option value=${v} ?selected=${levelOf(r.level) === v}>${l}</option>`)}
         </select>
         <input class="wm-in wm-filter" type="search" placeholder="Filter" aria-label="Filter" .value=${typeof r.q === 'string' ? r.q : ''} @change=${(e: Event) => this.setRef({ q: (e.target as HTMLInputElement).value })} />
         <span class="grow"></span>

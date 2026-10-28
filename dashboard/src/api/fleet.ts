@@ -282,7 +282,8 @@ export interface FleetMemory {
   nodes: NodeMemory[];
 }
 
-export type EventType = 'alert' | 'failover' | 'deploy' | 'link' | 'weights' | 'node' | 'update';
+export const EVENT_TYPES = ['alert', 'failover', 'deploy', 'link', 'weights', 'node', 'update', 'engine', 'controller'] as const;
+export type EventType = (typeof EVENT_TYPES)[number];
 export type Severity = 'warn' | 'err' | 'resolved';
 
 export interface FleetEvent {
@@ -312,11 +313,31 @@ export interface FleetAlert {
 
 export interface FleetRule {
   id: string;
+  name: string;
   metric: string;
   condition: string;
+  /** `all`, `node:<id>`, `host`, or a mock-only group */
   scope: string;
   notify: ('app' | 'system')[];
   enabled: boolean;
+  /** null for a rule without one (a node that does not answer) */
+  threshold: number | null;
+  unit: string | null;
+  /** how long the condition holds before it fires */
+  for_s: number;
+  severity: 'warn' | 'err';
+}
+
+/** the body of PATCH /v1/fleet/rules/{id}, any of these */
+export type RulePatch = Partial<Pick<FleetRule, 'enabled' | 'notify' | 'threshold' | 'for_s' | 'scope'>>;
+
+export interface EventQuery {
+  since?: number;
+  before?: number;
+  /** a node id, `all` or `host` */
+  node?: string;
+  type?: EventType[];
+  limit?: number;
 }
 
 export type LayoutDevice = 'desk' | 'tablet' | 'phone';
@@ -385,13 +406,22 @@ export const fleet = {
     return request<MetricSeries>(`/v1/fleet/metrics?${q}`);
   },
   memory: () => request<FleetMemory>('/v1/fleet/memory'),
-  events: (since?: number | null) => request<{ contract_version: string; events: FleetEvent[] }>(`/v1/fleet/events${since != null ? `?since=${since}` : ''}`),
+  events: (p: EventQuery = {}) => {
+    const q = new URLSearchParams();
+    for (const k of ['since', 'before', 'node', 'limit'] as const) if (p[k] != null) q.set(k, String(p[k]));
+    if (p.type?.length) q.set('type', p.type.join(','));
+    return request<{ contract_version: string; events: FleetEvent[] }>(`/v1/fleet/events${q.size ? `?${q}` : ''}`);
+  },
   alerts: () => request<{ contract_version: string; alerts: FleetAlert[] }>('/v1/fleet/alerts'),
   ack: (id: string) => request<FleetAlert>(`/v1/fleet/alerts/${encodeURIComponent(id)}/ack`, { method: 'POST' }),
   rules: () => request<{ contract_version: string; rules: FleetRule[] }>('/v1/fleet/rules'),
-  logs: (p: { node: string; level?: LogLevel | 'all'; q?: string; limit?: number }) => {
+  editRule: (id: string, p: RulePatch) =>
+    request<FleetRule>(`/v1/fleet/rules/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }),
+  /** `info` and up unless `level` says otherwise; HTTP access lines only with `access` */
+  logs: (p: { node: string; level?: LogLevel; q?: string; limit?: number; access?: boolean }) => {
     const q = new URLSearchParams({ node: p.node });
-    if (p.level && p.level !== 'all') q.set('level', p.level);
+    if (p.level) q.set('level', p.level);
+    if (p.access) q.set('access', '1');
     if (p.q) q.set('q', p.q);
     if (p.limit) q.set('limit', String(p.limit));
     return request<FleetLogs>(`/v1/fleet/logs?${q}`);

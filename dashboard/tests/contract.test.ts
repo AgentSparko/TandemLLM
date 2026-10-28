@@ -279,7 +279,10 @@ describe('fleet contract', () => {
   const q = (s = '') => new URLSearchParams(s);
 
   it('has a schema per route, and they are strict', () => {
-    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'hostkey', 'layout', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rules', 'session', 'topology', 'trust']);
+    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'hostkey', 'layout', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'session', 'topology', 'trust']);
+    expect(fleet['rule-patch']({})).toBe(false);
+    expect(fleet['rule-patch']({ notify: ['mail'] })).toBe(false);
+    expect(fleet['rule-patch']({ threshold: 80, metric: 'temp' })).toBe(false);
     expect(fleet.pair({ address: '192.0.2.60', code: '48291' })).toBe(false);
     expect(fleet.pair({ address: '192.0.2.60', code: '482913', owner: 'x' })).toBe(false);
     expect(fleet['pair-ssh']({ host: 'h' })).toBe(false);
@@ -346,6 +349,46 @@ describe('fleet contract', () => {
       const r = m.handle(method, path, q(qs), null, T0);
       expect(r.status, `${method} ${path}?${qs}`).toBe(status);
       fcheck('error', r.body);
+    }
+  });
+
+  it('rules: an edit comes back in the list, refused bodies; events by node, type and page', () => {
+    const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    const r = m.handle('PATCH', '/v1/fleet/rules/gpu-temp', q(), { threshold: 80, for_s: 30, notify: ['app', 'app'] }, T0);
+    expect(r.status).toBe(200);
+    fcheck('rule', r.body);
+    expect(r.body).toMatchObject({ id: 'gpu-temp', threshold: 80, for_s: 30, notify: ['app'], condition: '> 80 °C for 30 s' });
+    const listed = m.handle('GET', '/v1/fleet/rules', q(), null, T0).body as { rules: { id: string }[] };
+    fcheck('rules', listed);
+    expect(listed.rules.find((x) => x.id === 'gpu-temp')).toEqual(r.body);
+    for (const [id, body, status] of [
+      ['nope', { enabled: false }, 404],
+      ['gpu-temp', {}, 400],
+      ['gpu-temp', { metric: 'power' }, 400],
+      ['gpu-temp', { notify: ['mail'] }, 400],
+      ['gpu-temp', { threshold: '80' }, 400],
+      ['gpu-temp', { for_s: -1 }, 400],
+      ['gpu-temp', { scope: 'node:r9' }, 400],
+      ['reachable', { threshold: 10 }, 400],
+      ['host-sleep', { scope: 'all' }, 400],
+    ] as const) {
+      const got = m.handle('PATCH', `/v1/fleet/rules/${id}`, q(), body, T0);
+      expect(got.status, `${id} ${JSON.stringify(body)}`).toBe(status);
+      fcheck('error', got.body);
+    }
+    expect(m.handle('PATCH', '/v1/fleet/rules/gpu-temp', q(), { scope: 'node:r3', enabled: false }, T0).body).toMatchObject({ scope: 'node:r3', enabled: false });
+    type Ev = { events: { id: string; at: number; node: string; type: string }[] };
+    const all = m.handle('GET', '/v1/fleet/events', q(), null, T0).body as Ev;
+    const r3 = m.handle('GET', '/v1/fleet/events', q('node=r3&type=deploy,link'), null, T0).body as Ev;
+    fcheck('events', r3);
+    expect(r3.events.length).toBeGreaterThan(0);
+    expect(r3.events.every((e) => e.node === 'r3' && ['deploy', 'link'].includes(e.type))).toBe(true);
+    const page = (m.handle('GET', '/v1/fleet/events', q(`limit=2&before=${all.events[1].at}`), null, T0).body as Ev).events;
+    expect(page.map((e) => e.id)).toEqual(all.events.slice(2, 4).map((e) => e.id));
+    for (const qs of ['type=gossip', 'limit=0', 'limit=1001', 'before=soon']) {
+      const got = m.handle('GET', '/v1/fleet/events', q(qs), null, T0);
+      expect(got.status, qs).toBe(400);
+      fcheck('error', got.body);
     }
   });
 

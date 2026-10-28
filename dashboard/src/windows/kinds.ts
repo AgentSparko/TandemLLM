@@ -65,7 +65,7 @@ export const KINDS: Record<WindowKind, KindDef> = {
     icon: 'doc',
     hint: 'live, per Spark',
     group: 'Fleet',
-    init: () => ({ node: 'all', level: 'all', q: '' }),
+    init: () => ({ node: 'all', level: 'info', q: '' }),
     title: (r, alias) => `Logs · ${!r.node || r.node === 'all' ? 'all Sparks' : alias(str(r.node))}`,
     tag: 'qse-win-logs',
     load: loadFleet,

@@ -18,6 +18,9 @@
           "id": {
             "type": "string"
           },
+          "name": {
+            "type": "string"
+          },
           "metric": {
             "type": "string"
           },
@@ -39,15 +42,42 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "threshold": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "for_s": {
+            "type": "number"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warn",
+              "err"
+            ]
           }
         },
         "required": [
           "id",
+          "name",
           "metric",
           "condition",
           "scope",
           "notify",
-          "enabled"
+          "enabled",
+          "threshold",
+          "unit",
+          "for_s",
+          "severity"
         ],
         "additionalProperties": false
       }

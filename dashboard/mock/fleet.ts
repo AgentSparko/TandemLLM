@@ -22,6 +22,7 @@ import type {
   FleetLink,
   FleetNode,
   FleetRule,
+  EventType,
   FleetTopology,
   InfraItem,
   Layout,
@@ -35,9 +36,10 @@ import type {
   NodeStatus,
   PairBySsh,
   Range,
+  RulePatch,
   TrustAudit,
 } from '../src/api/fleet.ts';
-import { FLEET_CONTRACT, METRICS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
+import { EVENT_TYPES, FLEET_CONTRACT, METRICS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
 
 export const FLEET_SCENARIOS = ['fleet1', 'fleet4', 'fleet2-split', 'node-down', 'alert-thermal'] as const;
 export type FleetScenario = (typeof FLEET_SCENARIOS)[number];
@@ -121,6 +123,14 @@ interface Scheduled<T> {
   item: T;
   /** listed only while this holds */
   when?: (t: number) => boolean;
+}
+
+interface EventFilter {
+  since?: number;
+  before?: number;
+  node?: string;
+  types?: EventType[];
+  limit?: number;
 }
 
 interface Fleet {
@@ -211,15 +221,15 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     members: [a, b].map((node) => ({ node, from: dsvFrom, base: 80, span: 110, curve: 'dsv', share: 0.5 })),
   });
   const rules: FleetRule[] = [
-    { id: 'gpu-temp', metric: 'temp', condition: '> 84 °C for 60 s', scope: 'all', notify: ['app', 'system'], enabled: true },
-    { id: 'mem-avail', metric: 'mem', condition: 'MemAvailable < 4 GiB for 30 s', scope: 'all', notify: ['app', 'system'], enabled: true },
-    { id: 'reachable', metric: 'reachable', condition: 'no answer for 30 s', scope: 'all', notify: ['app', 'system'], enabled: true },
-    { id: 'fabric', metric: 'fabric', condition: '< 150 Gb/s or one logical interface', scope: 'fabric', notify: ['app'], enabled: true },
-    { id: 'disk', metric: 'disk_free', condition: '< 10 %', scope: 'all', notify: ['app'], enabled: true },
-    { id: 'version', metric: 'version', condition: 'members differ', scope: 'deployments', notify: ['app', 'system'], enabled: true },
-    { id: 'lease', metric: 'lease_end', condition: '< 3 days', scope: 'rented', notify: ['app', 'system'], enabled: true },
-    { id: 'host-sleep', metric: 'host_sleep', condition: 'sleep allowed', scope: 'host', notify: ['app'], enabled: true },
-    { id: 'power', metric: 'power', condition: '> 170 W for 5 min', scope: 'node:r3', notify: ['app'], enabled: false },
+    { id: 'gpu-temp', name: 'GPU temperature', metric: 'temp', condition: '> 84 °C for 60 s', scope: 'all', notify: ['app', 'system'], enabled: true, threshold: 84, unit: '°C', for_s: 60, severity: 'err' },
+    { id: 'mem-avail', name: 'Memory headroom', metric: 'mem_avail', condition: 'MemAvailable < 4 GiB for 30 s', scope: 'all', notify: ['app', 'system'], enabled: true, threshold: 4, unit: 'GiB', for_s: 30, severity: 'warn' },
+    { id: 'reachable', name: 'Node reachable', metric: 'reachable', condition: 'no answer for 30 s', scope: 'all', notify: ['app', 'system'], enabled: true, threshold: null, unit: null, for_s: 30, severity: 'err' },
+    { id: 'fabric', name: 'Fabric link', metric: 'fabric', condition: '< 150 Gb/s or one logical interface', scope: 'fabric', notify: ['app'], enabled: true, threshold: 150, unit: 'Gb/s', for_s: 0, severity: 'warn' },
+    { id: 'disk', name: 'Disk almost full', metric: 'disk_free', condition: '< 10 %', scope: 'all', notify: ['app'], enabled: true, threshold: 10, unit: '%', for_s: 300, severity: 'warn' },
+    { id: 'version', name: 'Version mismatch', metric: 'version', condition: 'members differ', scope: 'deployments', notify: ['app', 'system'], enabled: true, threshold: null, unit: null, for_s: 0, severity: 'warn' },
+    { id: 'lease', name: 'Lease ends', metric: 'lease_end', condition: '< 3 days', scope: 'rented', notify: ['app', 'system'], enabled: true, threshold: 3, unit: 'days', for_s: 0, severity: 'warn' },
+    { id: 'host-sleep', name: 'Controller host may sleep', metric: 'host_sleep', condition: 'sleep allowed', scope: 'host', notify: ['app'], enabled: true, threshold: null, unit: null, for_s: 0, severity: 'warn' },
+    { id: 'power', name: 'Power draw', metric: 'power', condition: '> 170 W for 5 min', scope: 'node:r3', notify: ['app'], enabled: false, threshold: 170, unit: 'W', for_s: 300, severity: 'warn' },
   ];
 
   if (scenario === 'fleet1') {
@@ -277,8 +287,8 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     { at: rentStart + 600, item: { id: 'e-pair-r12', type: 'node', severity: null, node: 'r1', deployment: null, text: 'R-1 and R-2 paired (rental, SSH tunnel)', detail: 'Lease 7 days, 2.40 per hour per node.' } },
   ];
   const alerts: Fleet['alerts'] = [
-    { at: t0 - 2.4 * H, item: { id: 'a-lease', severity: 'warn', node: 'all', title: 'Leases end in 2 days: R-1, R-2, R-3', rule: 'Lease ends in < 3 days', detail: 'DeepSeek-V4.1-Flash and the second Qwen replica stop when the leases end.', action: { label: 'Open Sparks', route: 'sparks' } } },
-    { at: t0 - 60 * D, item: { id: 'a-sleep', severity: 'warn', node: 'host', title: 'The controller runs on a Mac that can sleep', rule: 'Controller host may sleep', detail: 'If the Mac sleeps, the API and all metrics stop. Keep it awake or move the controller to Desk.', action: { label: 'App settings', route: 'app' } } },
+    { at: t0 - 2.4 * H, item: { id: 'a-lease', severity: 'warn', node: 'all', title: 'Leases end in 2 days: R-1, R-2, R-3', rule: 'Lease ends in < 3 days', detail: 'DeepSeek-V4.1-Flash and the second Qwen replica stop when the leases end.', action: { label: 'Open Sparks', route: '#/sparks' } } },
+    { at: t0 - 60 * D, item: { id: 'a-sleep', severity: 'warn', node: 'host', title: 'The controller runs on a Mac that can sleep', rule: 'Controller host may sleep', detail: 'If the Mac sleeps, the API and all metrics stop. Keep it awake or move the controller to Desk.', action: { label: 'App settings', route: '#/app' } } },
   ];
   const therm = r3.throttleFrom as number;
   events.push({ at: therm + MIN, item: { id: 'e-therm', type: 'alert', severity: 'warn', node: 'r3', deployment: null, text: 'R-3 GPU above 84 °C, thermal throttle', detail: 'SM clock down to 1.74 GHz. Decode on R-3 is 26 % lower while it lasts.' } });
@@ -288,12 +298,12 @@ function build(scenario: FleetScenario, t0: number): Fleet {
   alerts.unshift({
     at: therm + MIN,
     when: r3Up,
-    item: { id: 'a-therm', severity: 'err', node: 'r3', title: 'R-3 GPU above 84 °C, thermal throttle', rule: 'GPU temperature > 84 °C for 60 s', detail: 'Decode on R-3 down 26 %. Conversations stay; new ones go to Desk first while this is active.', action: { label: 'Open R-3', route: 'spark/r3' } },
+    item: { id: 'a-therm', severity: 'err', node: 'r3', title: 'R-3 GPU above 84 °C, thermal throttle', rule: 'GPU temperature > 84 °C for 60 s', detail: 'Decode on R-3 down 26 %. Conversations stay; new ones go to Desk first while this is active.', action: { label: 'Open R-3', route: '#/sparks/r3' } },
   });
   if (r3.offFrom != null) {
     const down = r3.offFrom + 30;
     events.push({ at: down, item: { id: 'e-down', type: 'node', severity: 'err', node: 'r3', deployment: 'qwen27', text: 'R-3 not reachable for 30 s; its conversations moved to Desk', detail: 'The SSH tunnel is up, the node agent does not answer. Qwen3.8-27B serves on Desk alone.' } });
-    alerts.unshift({ at: down, item: { id: 'a-down', severity: 'err', node: 'r3', title: 'R-3 not reachable', rule: 'Node reachable: no answer for 30 s', detail: 'Qwen3.8-27B runs on 1 of 2 members until R-3 answers again.', action: { label: 'Open R-3', route: 'spark/r3' } } });
+    alerts.unshift({ at: down, item: { id: 'a-down', severity: 'err', node: 'r3', title: 'R-3 not reachable', rule: 'Node reachable: no answer for 30 s', detail: 'Qwen3.8-27B runs on 1 of 2 members until R-3 answers again.', action: { label: 'Open R-3', route: '#/sparks/r3' } } });
   }
   return {
     host: { name: 'Mac', address: '192.0.2.10', api_url: 'http://192.0.2.10:8080', may_sleep: true },
@@ -351,6 +361,7 @@ export class MockFleet {
   private f: Fleet;
   private ph: (key: string) => number;
   private acked = new Map<string, number>();
+  private ruleEdits = new Map<string, RulePatch>();
   private layouts = new Map<string, Layout>();
   /** the code window of MOCK_PAIR.address: tries left (5 per code, as the node allows) */
   private triesLeft = 5;
@@ -509,11 +520,24 @@ export class MockFleet {
       });
   }
 
-  events(now: number, since: number | null): FleetEvent[] {
+  events(now: number, f: EventFilter = {}): FleetEvent[] {
     return this.f.events
-      .filter((e) => e.at <= now && (since == null || e.at > since))
+      .filter((e) => e.at <= now && (f.since == null || e.at > f.since) && (f.before == null || e.at < f.before))
       .map((e) => ({ ...e.item, at: e.at }))
-      .sort((a, b) => b.at - a.at);
+      .filter((e) => (f.node == null || e.node === f.node) && (!f.types?.length || f.types.includes(e.type)))
+      .sort((a, b) => b.at - a.at)
+      .slice(0, f.limit ?? 200);
+  }
+
+  /** a rule with its edits over it; the condition says the edited threshold and hold */
+  rule(r: FleetRule): FleetRule {
+    const e = this.ruleEdits.get(r.id);
+    if (!e) return r;
+    const out = { ...r, ...e };
+    let condition = r.condition;
+    if (e.threshold != null && r.threshold != null) condition = condition.replace(String(r.threshold), String(e.threshold));
+    if (e.for_s != null) condition = condition.replace(/ for \d+ (s|min)$/, '') + (e.for_s ? ` for ${e.for_s} s` : '');
+    return { ...out, condition };
   }
 
   alerts(now: number): FleetAlert[] {
@@ -650,20 +674,29 @@ export class MockFleet {
         case 'alerts':
           return { status: 200, body: { contract_version: v, alerts: this.alerts(now) } };
         case 'rules':
-          return { status: 200, body: { contract_version: v, rules: this.f.rules } };
+          return { status: 200, body: { contract_version: v, rules: this.f.rules.map((r) => this.rule(r)) } };
         case 'logs': {
           const node = q.get('node') ?? 'all';
-          const level = q.get('level');
+          const level = q.get('level') ?? 'info';
           const limit = Number(q.get('limit') ?? 200);
           if (node !== 'all' && !this.f.nodes.some((n) => n.node.id === node)) return bad(404, 'not_found', `no node ${node}`);
-          if (level != null && !['debug', 'info', 'warn', 'error'].includes(level)) return bad(400, 'bad_request', `level is debug, info, warn or error, not "${level}"`);
+          if (!['debug', 'info', 'warn', 'error'].includes(level)) return bad(400, 'bad_request', `level is debug, info, warn or error, not "${level}"`);
           if (!Number.isInteger(limit) || limit < 1 || limit > 1000) return bad(400, 'bad_request', 'limit is a whole number from 1 to 1000');
           return { status: 200, body: { contract_version: v, node, lines: this.logs(node, level as LogLevel | null, q.get('q') ?? '', limit, now) } };
         }
         case 'events': {
-          const s = q.get('since');
-          if (s != null && !Number.isFinite(Number(s))) return bad(400, 'bad_request', `since is a Unix time in seconds, not "${s}"`);
-          return { status: 200, body: { contract_version: v, events: this.events(now, s == null ? null : Number(s)) } };
+          const f: EventFilter = {};
+          for (const k of ['since', 'before'] as const) {
+            const s = q.get(k);
+            if (s != null && !Number.isFinite(Number(s))) return bad(400, 'bad_request', `${k} is a Unix time in seconds, not "${s}"`);
+            if (s != null) f[k] = Number(s);
+          }
+          const types = (q.get('type') ?? '').split(',').filter(Boolean);
+          const wrong = types.find((t) => !(EVENT_TYPES as readonly string[]).includes(t));
+          if (wrong) return bad(400, 'bad_request', `type is one or more of ${EVENT_TYPES.join(', ')}, not "${wrong}"`);
+          const limit = Number(q.get('limit') ?? 200);
+          if (!Number.isInteger(limit) || limit < 1 || limit > 1000) return bad(400, 'bad_request', 'limit is a whole number from 1 to 1000');
+          return { status: 200, body: { contract_version: v, events: this.events(now, { ...f, node: q.get('node') || undefined, types: types as EventType[], limit }) } };
         }
         case 'metrics': {
           const metric = q.get('metric') ?? '';
@@ -711,6 +744,16 @@ export class MockFleet {
       if (!this.acked.has(id)) this.acked.set(id, now);
       return { status: 200, body: this.alerts(now).find((a) => a.id === id) };
     }
+    if (method === 'PATCH' && parts.length === 2 && parts[0] === 'rules') {
+      const id = decodeURIComponent(parts[1]);
+      const r = this.f.rules.find((x) => x.id === id);
+      if (!r) return bad(404, 'not_found', `no rule ${id}`);
+      const why = rulePatchError(body, r, this.f.nodes.map((n) => n.node.id));
+      if (why) return bad(400, 'bad_request', why);
+      const p = body as RulePatch;
+      this.ruleEdits.set(id, { ...this.ruleEdits.get(id), ...p, ...(p.notify ? { notify: [...new Set(p.notify)] } : {}) });
+      return { status: 200, body: this.rule(r) };
+    }
     if (parts.length === 2 && parts[0] === 'layouts') {
       const page = decodeURIComponent(parts[1]);
       const device = (q.get('device') ?? 'desk') as LayoutDevice;
@@ -744,6 +787,26 @@ export function pairError(b: unknown, ssh: boolean): string | null {
   }
   if (typeof p.address !== 'string' || !/^[0-9a-fA-F.:]+$/.test(p.address)) return `address is an IP address (the node's LAN or fabric address), not "${String(p.address)}"`;
   if (typeof p.code !== 'string' || !/^[0-9]{6}$/.test(p.code)) return 'the code is 6 digits';
+  return null;
+}
+
+/** what is wrong with a rule's PATCH body (null: nothing), as the controller says it (proxy/fleetwatch.py) */
+export function rulePatchError(b: unknown, r: FleetRule, nodes: string[]): string | null {
+  const p = b as Record<string, unknown> | null;
+  if (!p || typeof p !== 'object' || Array.isArray(p) || !Object.keys(p).length) return 'the body is an object with enabled, notify, threshold, for_s or scope';
+  const extra = Object.keys(p).find((k) => !['enabled', 'notify', 'threshold', 'for_s', 'scope'].includes(k));
+  if (extra) return `rule: unknown field '${extra}'`;
+  if ('enabled' in p && typeof p.enabled !== 'boolean') return 'enabled is true or false';
+  if ('notify' in p && (!Array.isArray(p.notify) || !p.notify.every((x) => x === 'app' || x === 'system'))) return 'notify is a list of app and system';
+  if ('threshold' in p) {
+    if (r.threshold == null) return `${r.id} has no threshold`;
+    if (typeof p.threshold !== 'number' || !Number.isFinite(p.threshold)) return 'threshold is a number';
+  }
+  if ('for_s' in p && (typeof p.for_s !== 'number' || !(p.for_s >= 0 && p.for_s <= 86400))) return 'for_s is a number of seconds from 0 to 86400';
+  if ('scope' in p) {
+    if (r.scope === 'host') return `${r.id} is about the controller's machine; its scope stays`;
+    if (p.scope !== 'all' && !(typeof p.scope === 'string' && p.scope.startsWith('node:') && nodes.includes(p.scope.slice(5)))) return 'scope is all or node:<id> of a node in the fleet';
+  }
   return null;
 }
 

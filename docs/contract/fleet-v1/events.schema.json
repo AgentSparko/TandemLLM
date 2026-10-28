@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://qwen38-spark-engine/contract/fleet-v1/events.schema.json",
-  "title": "GET /v1/fleet/events?since= (200): the fleet timeline, newest first",
+  "title": "GET /v1/fleet/events?since=&before=&node=&type=&limit= (200): the fleet timeline, newest first",
   "type": "object",
   "properties": {
     "contract_version": {
@@ -30,7 +30,9 @@
               "link",
               "weights",
               "node",
-              "update"
+              "update",
+              "engine",
+              "controller"
             ]
           },
           "severity": {
