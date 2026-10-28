@@ -185,7 +185,9 @@ class Deployments:
         self._warm: dict[tuple, tuple[bool, str, float]] = {}  # (backend, model) -> verdict
         self._tokens: dict[str, tuple[str, str, float]] = {}
         self._running: set[str] = set()
-        self._index: tuple[float, dict, dict] | None = None    # (t, by backend, by (b, model))
+        # (t, config generation, by backend, by (backend, model)): rebuilt every 5 s and at once
+        # when the config changes (a backend made for a new member)
+        self._index: tuple[float, int, dict, dict] | None = None
         self._interrupted = False
 
     # ------------------------------------------------------------------ what the fleet has
@@ -250,16 +252,17 @@ class Deployments:
             return "leaving", "moving away: no new requests"
         if n["row"]["drain"]:
             return "draining", f"{n['row']['alias']} is drained"
-        job = (e or {}).get("job") or {}
-        if job.get("state") == "running" and job.get("action") in ("start", "restart"):
-            return "starting", f"its engine {mv['engine']} {job['action']}s"
         if not bid or self.svc.table.backend_for(bid) is None:
             return "down", "no backend reaches its engine"
         h = self.svc.health.view(bid)
+        w = self._warm.get((bid, mv["model"]))
+        if h["state"] == "up" and w is not None:
+            # this controller's own warm-up said it: newer than the agent's engine list
+            return ("serving", "serving") if w[0] else ("starting", f"warming up: {w[1]}")
+        job = (e or {}).get("job") or {}
+        if job.get("state") == "running" and job.get("action") in ("start", "restart"):
+            return "starting", f"its engine {mv['engine']} {job['action']}s"
         if h["state"] == "up":
-            w = self._warm.get((bid, mv["model"]))
-            if w is not None and not w[0]:
-                return "starting", f"warming up: {w[1]}"
             return "serving", "serving"
         if h["state"] == "down":
             return "down", f"down · {h['last_error'] or 'no answer'}"
@@ -440,23 +443,23 @@ class Deployments:
             for m in d["member_states"]:
                 if m["backend"]:
                     by_model[(m["backend"], m["model"])] = d["id"]
-        self._index = (time.monotonic(), by_backend, by_model)
+        self._index = (time.monotonic(), self.cfg.generation, by_backend, by_model)
 
     # ------------------------------------------------------------------ the gateway
     def locate(self, bid: str, model: str | None) -> tuple | None:
         """(node id, alias, deployment id or None) of a backend on a node; None for one on no
         node (a cloud API)."""
         idx = self._index
-        if idx is None or time.monotonic() - idx[0] > 5.0:
+        if idx is None or time.monotonic() - idx[0] > 5.0 or idx[1] != self.cfg.generation:
             try:
                 self.all()
             except Exception:                                        # noqa: BLE001
                 return None
             idx = self._index
-        got = idx[1].get(bid)
+        got = idx[2].get(bid)
         if got is None:
             return None
-        return got[0], got[1], idx[2].get((bid, model))
+        return got[0], got[1], idx[3].get((bid, model))
 
     def _by_api(self) -> dict:
         out = {}
@@ -1074,6 +1077,8 @@ class Deployments:
                 self.sleep(POLL_S)
         self._step(job, nid, a, "warm", "its engine answers; warming up with one token")
         self._warm_until(m["backend"], m["model"], WARM_WAIT_S)
+        if isinstance(m["_n"]["src"], nodesource.AgentNode):
+            m["_n"]["src"].forget_engines()
         self._step(job, nid, a, "serving", "warm: serves")
 
     def _check(self, bid: str) -> bool:
@@ -1170,6 +1175,7 @@ class Deployments:
             self.sleep(POLL_S)
         self._warm.pop((m["backend"], m["model"]), None)
         self._check(m["backend"])
+        src.forget_engines()
         self._step(job, nid, a, "stopped", "stopped")
 
     def _job_stop(self, job: dict, rec: dict, q: dict) -> None:

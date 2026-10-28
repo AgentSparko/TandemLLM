@@ -826,6 +826,10 @@ class AgentNode:
                 pass
         return self._eng or []
 
+    def forget_engines(self) -> None:
+        """The agent's engine list is read again at the next look (a job there just ended)."""
+        self._eng_at = -ENGINES_EVERY_S
+
     def maintenance(self) -> dict | None:
         """The agent's machine actions (GET /node/maintenance): reboot and update set up or not,
         simulated on a virtual node, the last job; None without an answer (an older agent)."""

@@ -164,6 +164,7 @@ def test_two_singles():
                 "R-3": Node("DEP-3-0001", "r3", ["fake-c"])})
     try:
         g, r1, r3 = fx.ids["Gold"], fx.ids["R-1"], fx.ids["R-3"]
+        fx.f.deps.all()       # the gateway's node index, made before the members' backends exist
         a = fx.record({"model": "fake-a", "type": "single", "members": [g], "pack": "pack-a"})
         b = fx.record({"model": "fake-b", "type": "single", "members": [{"node": r1,
                                                                           "engine": "e"}]})

@@ -59,6 +59,12 @@ GIB = float(1 << 30)
 JOBS_SHOWN = 10
 
 
+def size(n: int | None) -> str:
+    """Bytes in words: GiB from 1 GiB, MB below."""
+    n = n or 0
+    return f"{n / GIB:.2f} GiB" if n >= GIB else f"{n / 1e6:.1f} MB"
+
+
 class WeightsError(Exception):
     def __init__(self, status: int, kind: str, message: str):
         super().__init__(message)
@@ -231,7 +237,7 @@ class Weights:
             files = man["files"]
             job.update(bytes_total=man["bytes"], files_total=len(files))
             job["content_id"]["source"] = man.get("content_id")
-            self._say(job, f"{len(files)} files, {man['bytes'] / GIB:.2f} GiB, {job['via']}: "
+            self._say(job, f"{len(files)} files, {size(man['bytes'])}, {job['via']}: "
                            f"{job['via_why']}")
             st, rcv = tsrc.post("/node/weights/receive", {"copy": copy, "profile": name,
                                                           "files": files, "from": frow["id"]},
@@ -268,7 +274,7 @@ class Weights:
             self._say(job, f"verified: {expected}")
             self.fleet.store.add_event(
                 "weights", trow["id"], f"Weights copied {frow['alias']} → {trow['alias']}: {name}",
-                f"{job['bytes_done'] / GIB:.2f} GiB in {dt:.1f} s ({job['rate_gbps']} Gb/s, "
+                f"{size(job['bytes_done'])} in {dt:.1f} s ({job['rate_gbps']} Gb/s, "
                 f"{job['via']}); content id {expected[:23]}… verified")
         except Exception as exc:                                     # noqa: BLE001
             err = exc if isinstance(exc, (WeightsError, nodeweights.WeightsError)) else None
@@ -416,8 +422,7 @@ class Weights:
             if used:
                 p.update(allowed=False, blocked=f"{', '.join(used)} serves {name} on "
                                                 f"{row['alias']}: stop it first")
-            gib = f"{(w.get('bytes') or 0) / GIB:.2f} GiB" if w.get("bytes") is not None else \
-                "its space"
+            gib = size(w.get("bytes")) if w.get("bytes") is not None else "its space"
             p["impact"].append(f"{name} is removed from {row['alias']} ({w.get('dir')}): {gib} "
                                f"free again")
             others = [r["alias"] for k, (r, s) in srcs.items() if k != nid]
@@ -453,7 +458,7 @@ class Weights:
             raise WeightsError(st if st >= 400 else 502, err.get("type") or "refused",
                                err.get("message") or f"HTTP {st}")
         self.fleet.store.add_event("weights", nid, f"{name} deleted on {row['alias']}",
-                                   f"{(p['bytes'] or 0) / GIB:.2f} GiB freed · by {who}")
+                                   f"{size(p['bytes'])} freed · by {who}")
         return {"contract_version": CONTRACT, "node": nid, "profile": name, "deleted": True,
                 "bytes": p["bytes"]}
 
