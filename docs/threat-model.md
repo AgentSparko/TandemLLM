@@ -13,6 +13,7 @@ TandemLLM is a personal AI environment that runs on one machine on a home or off
 | chatd, 127.0.0.1:8016 | the Chat tab (beta): conversations, agent runs, tools, MCP, uploads; the engine server forwards `/v1/chat-app/*` to it | `chatd/`, `server/chat_forward.py` |
 | chat sandbox | one Docker or Podman container per chat, `--network none`; its only way out is chatd's egress proxy | `chatd/sandbox.py`, `chatd/egress.py` |
 | dashboard | the web UI, served by the engine server | `dashboard/` |
+| TandemNode, 7700 | the agent TandemApp's controller reads a node through; mTLS with pinned certificates after pairing, a pairing window on 7701 while a code is shown | `proxy/nodeagent.py`, `proxy/pairing.py` |
 
 The supported deployment, from [server.md](server.md#the-admin-rule) and `server/auth.py` (AU1): the server listens on the LAN, sometimes behind nginx or a tunnel. The admin password (`QSE_ADMIN_TOKEN`, at least 32 characters) is optional and off by default. With no password, every route answers anyone who reaches the port. With one, the admin routes and every chat route need the bearer token or the `qse_dash` session cookie. One exemption, trusted-local, lets a request in without a token: its TCP peer is loopback and it carries neither `X-Forwarded-For` nor `X-Real-IP`. The chat API (`/v1/chat/completions`, `/v1/completions`, `/v1/models`) is open in both modes. chatd trusts only requests that carry the forward key (`X-Tandem-Forward`).
 
@@ -40,6 +41,7 @@ In this order:
 5. HTTP handling we wrote: the chunked reader and keep-alive pool in `proxy/http1.py`, the byte forward and WebSocket splice in `server/chat_forward.py`, the egress proxy's request parsing. Request smuggling, header injection and unbounded reads count.
 6. Parsers for untrusted files: GGUF headers (`engine/models/nemotron_h/gguf.py`), safetensors and EXL3 headers (`engine/loader.py`, `engine/models/*/load.py`), images (`server/images.py`). Integer overflow in sizes and offsets, allocations of many GB and out-of-range reads count.
 7. The setup API: it downloads, applies and removes weights and runs install steps. A crafted request or community pack that deletes files outside the weight folders, or runs a command, is in scope.
+8. Node trust (docs/proxy.md, "Node trust"): a way to get a certificate pinned on a node or a controller without the code or SSH access, to beat the 5 tries of a pairing code, to reach a node's routes with an unpinned certificate or plain HTTP beyond loopback, or a password or key from SSH once that reaches a log, a file or an answer.
 
 These matter less and stay in scope: the dashboard's own XSS from server data, the conductor and memory routes, the metrics route.
 

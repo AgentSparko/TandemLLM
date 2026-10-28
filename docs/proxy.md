@@ -158,8 +158,10 @@ On one box the fleet has one node: the machine `tandem-app` runs on, when it has
 | `GET logs?node=&level=&q=&limit=` | `tandem-app`'s own log (`gateway`) and its TandemLLM engines' (`engine`), merged by time |
 | `GET`/`PUT layouts/{page}?device=` | a page's window layout per device class in the config database; `saved_at` is the controller's clock, the last write wins |
 | `GET events`, `alerts`, `rules` | empty lists until the fleet's event log and alert rules exist |
+| `POST pair`, `pair/ssh`, `pair/ssh/hostkey`, `DELETE nodes/{id}`, `GET trust` | node trust, below |
+| `GET`/`POST`/`DELETE session` | the controller's own sign-in for its writes |
 
-Reads follow the dashboard rule, writes the admin rule, as `/v1/config` does. The engine's own server has no fleet API; a dashboard it serves shows the box alone.
+Reads and a page's window layout follow the dashboard rule, the other writes the admin rule, as `/v1/config` does; pairing and release need the admin password or a caller on the controller's machine, and with no password set only the latter. The engine's own server has no fleet API; a dashboard it serves shows the box alone.
 
 ## TandemNode: `tandem node`
 
@@ -180,9 +182,36 @@ TandemNode is the agent on each Spark that TandemApp's controller talks to (code
 
 Engines come from `~/.tandemllm/node/engines.json` (`{"engines": [{"id", "port", "kind", "start", "stop", "restart"}]}`, commands as argument lists). An engine without a `start` command is listed and relayed but never started or stopped by the agent. Without the file: the install's engine, else a TandemLLM engine on :8000, not managed.
 
-**Who may call it.** Every route needs the caller check. Until pairing has filled the trust store (`~/.tandemllm/node/trust`: `node.crt`, `node.key`, `peers/*.pem`), the agent listens on loopback only, in plain HTTP, and every request carries the loopback secret from `~/.tandemllm/node/secret` (made at the first start, mode 0600; a file others can read is refused) as `Authorization: Bearer`. Any other address needs mTLS: a client without a certificate the store vouches for fails the handshake. It never listens on 0.0.0.0 or a WAN address; a remote node is reached through an SSH tunnel to its loopback. `tandem-node check` says how it would listen, and why not. Every change is a log line with its caller.
+**Who may call it.** Every route needs the caller check. Until pairing has filled the trust store (`~/.tandemllm/node/trust`: `node.crt`, `node.key`, `peers/*.pem`), the agent listens on loopback only, in plain HTTP, and every request carries the loopback secret from `~/.tandemllm/node/secret` (made at the first start, mode 0600; a file others can read is refused) as `Authorization: Bearer`. Any other address needs mTLS: a client without a certificate the store vouches for fails the handshake. After pairing, loopback is mTLS too, and the node's own CLI uses the node's certificate. The owner and the node itself reach every route; another node pinned for link tests only `/node/identity` and `/node/linktest`. It never listens on 0.0.0.0 or a WAN address; a remote node is reached through an SSH tunnel to its loopback. `tandem-node check` says how it would listen, and why not. Every change is a log line with its caller.
 
-**As a service.** `tandem-node unit > ~/.config/systemd/user/tandemnode.service`, then `systemctl --user daemon-reload && systemctl --user enable --now tandemnode`. A `tandem-app` on the same machine finds it at `http://127.0.0.1:7700` with that secret (`TANDEM_NODE_AGENT`, `TANDEM_NODE_SECRET`; `TANDEM_NODE_AGENT=off` for none).
+**As a service.** `tandem-node unit > ~/.config/systemd/user/tandemnode.service`, then `systemctl --user daemon-reload && systemctl --user enable --now tandemnode`. A `tandem-app` on the same machine finds it at `http://127.0.0.1:7700` with that secret (`TANDEM_NODE_AGENT`, `TANDEM_NODE_SECRET`; `TANDEM_NODE_AGENT=off` for none). `--virtual NAME` runs a second agent on the same machine as another node, with its own id (its own `--state-dir` and `--port`).
+
+## Node trust: pairing, ownership, reset
+
+A node and a controller trust each other through pinned certificates; no password is stored anywhere (code: `proxy/pairing.py`, `proxy/sshonce.py`, `proxy/fleettrust.py`, `proxy/nodetrust.py`).
+
+**What is pinned where.**
+
+| side | file | what |
+|-|-|-|
+| node | `~/.tandemllm/node/trust/node.crt`, `node.key` | its own EC P-256 certificate, self-signed, made at the first start |
+| node | `trust/peers/owner.pem`, `owner.json` | the one controller that owns it, and its name, how and when it paired |
+| node | `trust/peers/node-<id>.pem` | another node pinned for link tests (the owner pins it) |
+| node | `trust/listen.json`, `audit.log` | the addresses pairing listens on in mTLS; one line per pairing, release, take-over, reset |
+| controller | `controller/controller.crt`, `controller.key` beside the config database | its own certificate, made at the first start |
+| controller | the node's record (`trust`) | the node's pinned certificate and its fingerprint |
+| controller | `controller/known_hosts` | SSH host keys, trusted on first use |
+| controller | the config database's `audit` table | each pairing, take-over, release and forced forget |
+
+**Pairing by code.** `tandem node pair` on the node opens a window and prints a 6-digit code, the address and port, and the node's certificate fingerprint. The window is a TLS listener on the node's LAN address (default: its default route's source), port 7701 (the agent's + 1), and answers the pairing protocol only. In TandemApp, Add Spark (or `POST /v1/fleet/pair {address, code}`) runs SPAKE2 with the code: the RFC 9382 message flow, transcript and key confirmation, in the prime-order subgroup of RFC 3526's 2048-bit MODP group. Both certificates' SHA-256 fingerprints are SPAKE2's identities: a certificate swapped on the way, or a wrong code, makes the confirmations differ and nothing is pinned. A run gives an attacker one guess and nothing to test codes against offline. A code lives 5 minutes, allows 5 runs and is used once; the controller makes at most 10 attempts a minute. On success the node pins the controller as its owner and listens on that address in mTLS on 7700; the controller pins the node's certificate and records `https://<address>:7700`.
+
+**SSH once.** `POST /v1/fleet/pair/ssh {host, user, password | key}` logs in with the system's `ssh`, once. The password reaches ssh through `SSH_ASKPASS` (a script in a private temporary directory that prints a variable set for that child only); a pasted key is a 0600 file in the same directory; both are gone when the call returns and are scrubbed from every message. The host key is trusted on first use and remembered; `POST /v1/fleet/pair/ssh/hostkey` shows it before, `host_key` in the body insists on it, and a changed key is refused. Over the session, `tandem-node adopt` (found from the `tandemnode` user unit, the PATH, or an `install.sh` install) pins the controller, reloads the agent or starts its unit, and sends back the node's certificate, which the controller pins. A node without TandemNode is refused: installing is Add Spark's Install step.
+
+**Ownership and take-over.** A node has one owner. Another TandemApp gets 409 `owned` and nothing else (its certificate fails the handshake). Two ways to move a node: the owner releases it (`DELETE /v1/fleet/nodes/{id}`: the node forgets the controller, then the controller forgets the node; a node that does not answer only with `?force=1`), or the take-over is confirmed on the node: `tandem node takeover` (a code window marked as a take-over), or SSH once with `takeover: true` (SSH access proves the node is the user's). The old owner's pin goes and its open connections close; its records show the node off, "refuses this controller's certificate".
+
+**Who may pair.** Pairing, release and take-over need the admin password (`TANDEM_ADMIN_TOKEN`: the bearer token, or a session from `POST /v1/fleet/session {token}`), or a caller on the controller's machine. With no password set, only the latter: pairing never opens to the network by default.
+
+**Reset.** On a node: `tandem node reset` forgets the owner and every pin, then the agent listens on loopback with the secret again; `--keys` makes a new certificate too (every controller must pair again). `tandem node status` shows the owner, the fingerprint and the window. On the controller: removing `controller/` makes a new certificate at the next start, and every node must pair again; a node's line in `controller/known_hosts` is removed by hand after a reinstall.
 
 ## vLLM and SGLang: their own metrics
 

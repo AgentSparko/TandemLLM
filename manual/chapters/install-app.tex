@@ -147,6 +147,10 @@ TandemNode is the agent on each Spark that TandemApp's controller talks to. It s
 
 Every route needs its caller checked. Until pairing has filled the trust store (\code{~/.tandemllm/node/trust}), the agent listens on loopback only, in plain HTTP, and every request carries the loopback secret from \code{~/.tandemllm/node/secret} (mode 0600, made at the first start). Any other address needs mutual TLS: a client without a certificate the store vouches for fails the handshake. It never listens on \code{0.0.0.0} or a WAN address; a remote node is reached through an SSH tunnel to its loopback. \code{tandem-node check} says how it would listen. \code{tandem-node unit} prints a systemd user unit for the same options.
 
+\subsection{Pairing}\index{TandemNode!pairing}
+
+A node and a controller trust each other through pinned certificates; no password is stored. \code{tandem node pair} on the node prints a 6-digit code, valid 5 minutes for 5 tries and once; Add Spark in TandemApp takes the node's address and the code. The two run SPAKE2 (RFC 9382's flow in RFC 3526's 2048-bit group) with both certificates' fingerprints bound to the code, so a wrong code or a certificate swapped on the way pins nothing. Afterwards the node listens on that address in mutual TLS, owned by that one controller. SSH once is the other way in: the controller logs in a single time with a password or a key held in memory for that call, pins its certificate on the node and the node's on its side, and remembers the host key (a changed one is refused). Another TandemApp can take a node over only when the owner releases it, or with \code{tandem node takeover} on the node, or with SSH access. \code{tandem node reset} forgets the owner and every pin. Pairing and release need the admin password, or a caller on the controller's machine.
+
 \section{Access}
 
 The standalone proxy follows the engine's access rule (Section~\ref{sec:access}) with its own variable, \code{TANDEM_ADMIN_TOKEN}, and adds user keys for the OpenAI routes (Section~\ref{sec:users}). It binds \code{127.0.0.1} by default.
