@@ -2,7 +2,8 @@
 talks to (SRV-725). Port 7700.
 
     tandem-node [serve] [--host 127.0.0.1] [--port 7700] [--state-dir ~/.tandemllm/node]
-                [--tandem-dir DIR] [--virtual NAME]   the agent (systemd user unit: `tandem-node unit`)
+                [--tandem-dir DIR] [--virtual NAME] [--mdns on|off]
+                                                      the agent (systemd user unit: `tandem-node unit`)
     tandem-node check [...]                           how it would listen, and why; starts nothing
     tandem-node unit [...]                            a systemd user unit for these options, on stdout
     tandem-node pair [--address IP] [--takeover]      a pairing code for TandemApp (SEC-4), until used
@@ -70,6 +71,21 @@ connections are closed. `adopt` is the same pinning for SSH once (proxy/sshonce.
 controller's certificate on stdin, from a session the user's SSH login opened. Every pairing,
 release, take-over and reset is a line in the trust store's audit.log and the agent's log.
 
+MDNS (SRV-727, proxy/mdns.py). The agent advertises `_tandemnode._tcp` so that TandemApp's Add
+Spark wizard finds it, on the addresses its bind rule allows (LAN, link-local, fabric; never
+loopback, never a WAN address) and answers only askers on those subnets. The TXT carries no
+secret: `id` (the node id), `class` (spark for a GB10 by its DMI or GPU, else other), `ver`
+(TandemLLM), `hw` (the box by its DMI), `paired` (0 or 1) and `owner` (the first 16 hex of the
+owning controller's certificate fingerprint: public, as any TLS client sees it), `listen`
+(loopback or lan), `window` (the pairing window's port while one is open), `hk` (the SSH host
+key's fingerprint, which ssh-keyscan reads anyway; not on a virtual node, which shares its
+machine's) and `virtual` (a virtual node's name). An unpaired node advertises too, although its
+agent listens on loopback only: the advertisement opens no port, and it is what lets the wizard say
+"Spark with TandemLLM x.y, not paired" and, while `tandem node pair` shows a code, "pairing code
+showing on the node" (the TXT says `listen=loopback`, the SRV the agent's port it will listen on
+once paired). Every pairing, release and window is announced at once. `--mdns off` (or
+TANDEM_NODE_MDNS=off) advertises nothing.
+
 ENGINES. The engine's own routes are called on loopback without proxy headers, where it trusts its
 caller; the caller's secret is never passed on. The Setup Guide routes run in the engine, so the
 node's Setup Guide is the engine's, unchanged; the first TandemLLM engine in the list serves them.
@@ -96,7 +112,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 if __package__ in (None, ""):                                    # pragma: no cover
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from proxy import hostcollect, linktest, nodeclient, nodeengines, nodemaint  # noqa: E402
+from proxy import hostcollect, linktest, mdns, nodeclient, nodeengines, nodemaint  # noqa: E402
 from proxy import nodemetrics  # noqa: E402
 from proxy import nodesource, nodetrust, pairing  # noqa: E402
 
@@ -235,6 +251,7 @@ class Agent:
         self.code_sha = _code_sha()
         self._inv: dict | None = None
         self._inv_at = -INVENTORY_EVERY_S
+        self.mdns = None                         # the mDNS responder (main), or None
 
     def _sample(self, t: float) -> dict:
         with self._read_lock:
@@ -306,6 +323,53 @@ class Agent:
         self._inv, self._inv_at = inv, now
         return inv
 
+    def mdns_info(self) -> dict:
+        """The `_tandemnode._tcp` service this node advertises (MDNS above)."""
+        from proxy import _version, discovery
+        r = self.reader
+        dmi = {k: r._read("sys", "class", "dmi", "id", f) for k, f in (
+            ("vendor", "sys_vendor"), ("product", "product_name"),
+            ("version", "product_version"), ("family", "product_family"))}
+        got = discovery.classify_dmi(**dmi)
+        h = self.local._last_host or {}
+        gb10 = any("GB10" in (g.get("name") or "") for g in h.get("gpus") or [])
+        owner = self.store.owner()
+        nid = self.node_id()
+        txt = {"v": "1", "id": nid, "class": "spark" if (got and got[1]) or gb10 else "other",
+               "ver": _version.release() or None, "hw": got[0] if got else None,
+               "paired": "1" if owner else "0"}
+        if owner is not None:
+            txt["owner"] = owner["fingerprint"][:16]
+        lan = any(not nodetrust.parse_ip(a).is_loopback for a in self.listening)
+        txt["listen"] = "lan" if lan else "loopback"
+        w, srv = self.window, self.pair_server
+        if w is not None and srv is not None and w.view()["state"] == "open":
+            txt["window"] = str(srv.server_address[1])
+        if self.virtual:
+            txt["virtual"] = self.virtual
+        else:
+            txt["hk"] = self.ssh_host_key()
+        return {"instance": socket.gethostname().split(".")[0] + (
+                    f"-{self.virtual}" if self.virtual else ""),
+                "port": self.port, "target": "tandemnode-" + nid.removeprefix("n-")[:12],
+                "txt": {k: v for k, v in txt.items() if v is not None}}
+
+    def ssh_host_key(self) -> str | None:
+        """This machine's SSH host key fingerprint (the ed25519 one first), from its public file."""
+        from proxy import sshonce
+        for kind in ("ed25519", "ecdsa", "rsa"):
+            try:
+                with open(os.path.join(self.root, "etc", "ssh", f"ssh_host_{kind}_key.pub")) as f:
+                    return sshonce.fingerprint(f.read().split()[1])
+            except (OSError, IndexError, sshonce.SshError):
+                continue
+        return None
+
+    def advertise(self) -> None:
+        """The advertisement again, at once: the pairing state or the window changed."""
+        if self.mdns is not None:
+            self.mdns.update()
+
     def setup_engine(self) -> nodeengines.Engine | None:
         return next((e for e in self.engines.list if e.kind == "tandemllm"), None)
 
@@ -340,6 +404,7 @@ class Agent:
             threading.Thread(target=self._watch_window, args=(w, srv), daemon=True).start()
         self.log(f"[node] {who} opened a pairing window on {ip}:{srv.server_address[1]}"
                  f"{' (take-over)' if takeover else ''}, 5 minutes, 5 tries")
+        self.advertise()
         return dict(w.view(), port=srv.server_address[1])
 
     def _watch_window(self, w: pairing.Window, srv) -> None:
@@ -353,6 +418,7 @@ class Agent:
             if self.pair_server is srv:
                 self.pair_server = None
         _stop(srv)
+        self.advertise()
 
     def close_window(self) -> None:
         with self._trust:
@@ -362,6 +428,7 @@ class Agent:
             w.close()
         if srv is not None:
             _stop(srv)
+            self.advertise()
 
     def window_view(self, with_code: bool) -> dict | None:
         w = self.window
@@ -454,6 +521,7 @@ class Agent:
                 threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.25},
                                  daemon=True).start()
                 self.log(f"[node] listening on {ip}:{self.port} (mtls)")
+        self.advertise()
 
     # ------------------------------------------------------------------ logs
     def log_lines(self, level: str, q: str | None, source: str, limit: int) -> list[dict]:
@@ -1187,6 +1255,10 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--virtual", default=env.get("TANDEM_NODE_VIRTUAL") or None,
                     help="a second agent on this machine acting as another node (OPS-197): its "
                          "own node id and hostname suffix")
+    ap.add_argument("--mdns", choices=("on", "off"),
+                    default=env.get("TANDEM_NODE_MDNS", "on").lower() or "on",
+                    help="advertise _tandemnode._tcp on the LAN addresses the bind rule allows "
+                         "(TANDEM_NODE_MDNS, default on)")
     ap.add_argument("--address", default=None,
                     help="pair, takeover, adopt: the address TandemApp reaches this node at "
                          "(default: the default route's source address)")
@@ -1211,7 +1283,8 @@ def unit_text(a) -> str:
     cmd = exe if os.path.exists(exe) else f"{sys.executable} -m proxy.nodeagent"
     args = "".join(f" --host {h}" for h in _hosts(a)) + f" --port {a.port} --state-dir " \
         f"{a.state_dir}" + (f" --tandem-dir {a.tandem_dir}" if a.tandem_dir else "") + \
-        (f" --virtual {a.virtual}" if a.virtual else "")
+        (f" --virtual {a.virtual}" if a.virtual else "") + \
+        (" --mdns off" if a.mdns == "off" else "")
     return f"""[Unit]
 Description=TandemNode agent (tandem-node) on {', '.join(_hosts(a))}:{a.port}
 After=network-online.target
@@ -1438,6 +1511,11 @@ def main(argv=None) -> None:
         for h, m in modes:
             print(f"{h}:{a.port} {m}" + (" (plain HTTP, the loopback secret)" if m == "secret"
                                          else " (mTLS, the trust store)"))
+        lans = [str(i) for i in mdns.allowed([x for v in linktest.ip_addrs().values()
+                                               for x in v])]
+        print("mDNS: " + ("off" if a.mdns == "off" else
+                          f"{mdns.SERVICE} on {', '.join(lans)}" if lans else
+                          "no LAN address to advertise on"))
         return
     from server import logbuf
     buf = logbuf.install()
@@ -1457,6 +1535,12 @@ def main(argv=None) -> None:
     for s in agent.servers:
         threading.Thread(target=s.serve_forever, kwargs={"poll_interval": 0.5},
                          daemon=True).start()
+    if a.mdns == "on":
+        try:
+            agent.mdns = mdns.Responder(agent.mdns_info, lambda: [
+                x for v in agent.addrs().values() for x in v], log=agent.log).start()
+        except OSError as exc:
+            agent.log(f"[node] mDNS: not advertising ({exc}); add this node by address")
     import signal
     done = threading.Event()
     signal.signal(signal.SIGTERM, lambda signum, frame: done.set())
@@ -1465,6 +1549,9 @@ def main(argv=None) -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        if agent.mdns is not None:
+            agent.mdns.stop()
+            agent.mdns = None
         agent.sampler.close()
         agent.close_window()
         for s in list(agent.servers):

@@ -670,8 +670,10 @@ def test_bind_rule():
     ctl = ["bash", os.path.join(d, "bin", "tandem"), "node"]
     state = ["--state-dir", os.path.join(d, "node")]
     r = subprocess.run(ctl + ["check"] + state, capture_output=True, text=True, timeout=60)
-    assert r.returncode == 0 and r.stdout.strip() == \
+    lines = r.stdout.strip().splitlines()
+    assert r.returncode == 0 and lines[0] == \
         "127.0.0.1:7700 secret (plain HTTP, the loopback secret)", (r.stdout, r.stderr)
+    assert len(lines) == 2 and lines[1].startswith("mDNS: "), lines     # SRV-727
     r = subprocess.run(ctl + ["unit"] + state, capture_output=True, text=True, timeout=60)
     assert f"--tandem-dir {d}" in r.stdout, r.stdout
     r = subprocess.run(ctl + ["check", "--host", "0.0.0.0"] + state, capture_output=True,
