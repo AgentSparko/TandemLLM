@@ -22,7 +22,13 @@ ledger. Its tables:
                      (proxy/addspark.py)
     fleet_jobs       the fleet's long jobs (OPS-234): a fleet update (proxy/fleetupdate.py) and a
                      controller move (proxy/ctlmove.py), their steps per node and their log as
-                     JSON, so they resume or say where they stopped after a restart
+                     JSON, so they resume or say where they stopped after a restart; a
+                     deployment's start, stop and move and a weights copy (SRV-731)
+    deployments      what the fleet serves (SRV-731, proxy/deployments.py): one row per
+                     deployment, its model, pack, type (single, replicas, split, role), its
+                     members (node, engine, backend, the id that backend serves) and a Split's
+                     stages as JSON, its options (api id, context, role, affinity) and the state
+                     it should be in (serving or stopped)
     meta             schema_version, created_at
 
 Migrations are forward only and keyed on meta.schema_version, as the ledger's are.
@@ -177,7 +183,15 @@ CREATE TABLE IF NOT EXISTS add_sessions (
 CREATE TABLE IF NOT EXISTS fleet_jobs (
   id TEXT PRIMARY KEY, kind TEXT NOT NULL, state TEXT NOT NULL, doc TEXT NOT NULL,
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS deployments (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, model TEXT NOT NULL, pack TEXT NOT NULL DEFAULT '',
+  type TEXT NOT NULL, members TEXT NOT NULL DEFAULT '[]', stages TEXT NOT NULL DEFAULT '[]',
+  options TEXT NOT NULL DEFAULT '{}', state TEXT NOT NULL DEFAULT 'serving',
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 """
+DEPLOYMENT_COLS = ("id", "name", "model", "pack", "type", "members", "stages", "options", "state",
+                   "created_at", "updated_at")
+DEPLOYMENT_JSON = ("members", "stages", "options")
 
 
 # Columns of schema v1 added in place to a file that lacks them (forward only, additive): a later
@@ -358,6 +372,11 @@ def parse_env(env) -> dict:
                                    "cache_write": p[3] if len(p) > 3 else None}
     for var in sorted(env, key=lambda v: (len(v), v)):
         m = re.fullmatch(r"TANDEM_ROUTE_(\d+)", var)
+        if m and "+" in env[var].rpartition("=")[2]:
+            raise ConfigError(f"{var}: a replica set (SRV-467's <model>=<member>+<member>) is a "
+                              f"Replicas deployment since SRV-731: make it with POST "
+                              f"/v1/fleet/deployments (type replicas) and drop the variable",
+                              var=var)
         if m:
             pat, sep, bid = env[var].rpartition("=")
             if not sep or not pat.strip() or not bid.strip():
@@ -483,6 +502,7 @@ class ConfigDB:
                 # applied over the row at this start, as always)
                 c.execute("UPDATE backends SET max_inflight = 0 WHERE max_inflight = ?",
                           (OLD_DEFAULT_INFLIGHT,))
+            replica_rules(c)
             if was < SCHEMA_VERSION:
                 rows = [("schema_version", str(SCHEMA_VERSION))]
                 if not was:
@@ -1252,6 +1272,56 @@ class ConfigDB:
                 (doc["id"], doc["kind"], doc["state"], json.dumps(doc), now, now))
             self._conn.commit()
 
+    # ----------------------------------------------------------------- deployments (SRV-731)
+    def deployments(self) -> list[dict]:
+        """Every deployment record in the order they were made (proxy/deployments.py reads,
+        checks and writes them)."""
+        with self._lock:
+            rows = self._conn.execute(f"SELECT {', '.join(DEPLOYMENT_COLS)} FROM deployments "
+                                      f"ORDER BY created_at, id").fetchall()
+        out = []
+        for r in rows:
+            d = dict(zip(DEPLOYMENT_COLS, r))
+            for k in DEPLOYMENT_JSON:
+                d[k] = json.loads(d[k] or ("{}" if k == "options" else "[]"))
+            out.append(d)
+        return out
+
+    def deployment(self, did: str) -> dict | None:
+        return next((d for d in self.deployments() if d["id"] == did), None)
+
+    def put_deployment(self, doc: dict, who: str = "gui") -> dict:
+        """A deployment as it is now (the caller checked it): made, or every column replaced."""
+        now = _now_ms()
+        vals = {k: json.dumps(doc.get(k) or ({} if k == "options" else []))
+                if k in DEPLOYMENT_JSON else doc.get(k) for k in DEPLOYMENT_COLS
+                if k not in ("created_at", "updated_at")}
+        with self._lock:
+            had = self._conn.execute("SELECT 1 FROM deployments WHERE id = ?",
+                                     (doc["id"],)).fetchone()
+            if had:
+                self._conn.execute(
+                    f"UPDATE deployments SET {''.join(f'{k} = ?, ' for k in vals if k != 'id')}"
+                    f"updated_at = ? WHERE id = ?",
+                    [v for k, v in vals.items() if k != "id"] + [now, doc["id"]])
+            else:
+                self._conn.execute(
+                    f"INSERT INTO deployments({', '.join(vals)}, created_at, updated_at) "
+                    f"VALUES ({', '.join('?' * (len(vals) + 2))})", [*vals.values(), now, now])
+            self._audit(who, "update" if had else "create", "deployment", doc["id"],
+                        [k for k in vals if k != "id"])
+            self._conn.commit()
+            self._bump()
+        return self.deployment(doc["id"])
+
+    def delete_deployment(self, did: str, who: str = "gui") -> None:
+        with self._lock:
+            if not self._conn.execute("DELETE FROM deployments WHERE id = ?", (did,)).rowcount:
+                raise ConfigError(f"no deployment {did}", status=404)
+            self._audit(who, "delete", "deployment", did)
+            self._conn.commit()
+            self._bump()
+
     def audit(self, limit: int = 50) -> list[dict]:
         with self._lock:
             rows = self._conn.execute("SELECT ts_ms, who, action, object, object_id, fields, "
@@ -1265,6 +1335,58 @@ class ConfigDB:
         """No backend at all: the dashboard opens on the Setup screen."""
         with self._lock:
             return not self._conn.execute("SELECT 1 FROM backends LIMIT 1").fetchone()
+
+
+def replica_rules(c) -> list[str]:
+    """SRV-467's replica sets, from a file that branch wrote (its `routing_rules.backends` and
+    `replica` columns: the members, `self` the engine the proxy ran in, and the affinity and
+    windows), each made a Replicas deployment record once (SRV-731): its id the rule's pattern,
+    its members the backends (`self` this machine's engine, resolved when the fleet reads it), its
+    options the set's. The rule is turned off, its row kept. Idempotent: a rule already moved is
+    skipped (meta `replica_rules`). The ids of the deployments made."""
+    cols = {r[1] for r in c.execute("PRAGMA table_info(routing_rules)")}
+    if "backends" not in cols or c.execute(
+            "SELECT 1 FROM meta WHERE key = 'replica_rules'").fetchone():
+        return []
+    made = []
+    now = _now_ms()
+    replica = "replica" if "replica" in cols else "NULL"
+    for rid, pat, members, opts in c.execute(
+            f"SELECT id, pattern, backends, {replica} FROM routing_rules "
+            f"WHERE backends IS NOT NULL ORDER BY position, id").fetchall():
+        ms = _members(members)
+        if len(ms) < 2:
+            continue
+        o = _json(opts) or {}
+        did = re.sub(r"[^a-z0-9._-]+", "-", pat.lower()).strip("-")[:64] or f"rule-{rid}"
+        if c.execute("SELECT 1 FROM deployments WHERE id = ?", (did,)).fetchone():
+            continue
+        doc = {"api_id": pat, "affinity": o.get("affinity") if o.get("affinity") in
+               ("root", "own") else "root", "windows": o.get("windows") if o.get("windows") in
+               ("same", "mixed") else "same", "from": f"SRV-467 rule {rid}"}
+        c.execute("INSERT INTO deployments(id, name, model, pack, type, members, stages, options, "
+                  "state, created_at, updated_at) VALUES (?, ?, ?, '', 'replicas', ?, '[]', ?, "
+                  "'serving', ?, ?)",
+                  (did, pat, pat, json.dumps([{"backend": m} for m in ms]), json.dumps(doc),
+                   now, now))
+        c.execute("UPDATE routing_rules SET enabled = 0 WHERE id = ?", (rid,))
+        made.append(did)
+    c.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('replica_rules', ?)",
+              (json.dumps(made),))
+    return made
+
+
+def _json(text):
+    try:
+        return json.loads(text) if text else None
+    except ValueError:
+        return None
+
+
+def _members(text) -> list[str]:
+    """A replica set's members from SRV-467's column: a list of ids, [] for anything else."""
+    got = _json(text)
+    return [m for m in got if isinstance(m, str) and m] if isinstance(got, list) else []
 
 
 def glob(pattern: str, model: str) -> bool:
