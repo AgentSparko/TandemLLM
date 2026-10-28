@@ -391,6 +391,13 @@ qse-fleet-page .ok-ink,
   top: auto;
   bottom: -17px;
 }
+/* a mark near either end keeps its label inside the bar */
+.umem-mark.is-end span {
+  transform: translateX(-100%);
+}
+.umem-mark.is-start span {
+  transform: none;
+}
 .umem-legend {
   display: flex;
   flex-wrap: wrap;

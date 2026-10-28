@@ -82,11 +82,12 @@ export function memBar(m: NodeMemory | null | undefined, sm = false): TemplateRe
   if (!m) return html`<div class="umem ${sm ? 'is-sm' : ''} is-empty" title="no memory split from this Spark"></div>`;
   const used = MEM_PARTS.reduce((a, [k]) => a + m[k], 0);
   const pct = (v: number) => `${Math.max(0, Math.min(100, (v / m.usable) * 100)).toFixed(2)}%`;
+  const edge = (v: number) => (v / m.usable > 0.88 ? 'is-end' : v / m.usable < 0.12 ? 'is-start' : '');
   const title = `${MEM_PARTS.map(([k, l]) => `${l} ${m[k].toFixed(1)}`).join(' · ')} · free ${Math.max(0, m.usable - used).toFixed(1)} of ${m.usable} GiB`;
   return html`<div class="umem ${sm ? 'is-sm' : ''}" role="img" aria-label=${title} title=${title}>
     ${MEM_PARTS.map(([k]) => html`<i class="m-${k}" style="width:${pct(m[k])}"></i>`)}
-    ${m.ceiling > 0 ? html`<span class="umem-mark" style="left:${pct(m.ceiling)}">${sm ? nothing : html`<span>ceiling ${m.ceiling}</span>`}</span>` : nothing}
-    ${m.peak > 0 ? html`<span class="umem-mark is-peak" style="left:${pct(m.peak)}">${sm ? nothing : html`<span>24 h peak ${m.peak.toFixed(1)}</span>`}</span>` : nothing}
+    ${m.ceiling > 0 ? html`<span class="umem-mark ${edge(m.ceiling)}" style="left:${pct(m.ceiling)}">${sm ? nothing : html`<span>ceiling ${m.ceiling}</span>`}</span>` : nothing}
+    ${m.peak > 0 ? html`<span class="umem-mark is-peak ${edge(m.peak)}" style="left:${pct(m.peak)}">${sm ? nothing : html`<span>24 h peak ${m.peak.toFixed(1)}</span>`}</span>` : nothing}
   </div>`;
 }
 
