@@ -14,7 +14,8 @@ serves on one port:
     GET  /v1/dashboard/*           summary, usage, requests, system, live, logs, metrics, session
     *    /v1/config/*              the Backends and Setup screens (proxy/config_api.py)
     *    /v1/fleet/*               TandemApp's controller: the fleet registry, its nodes'
-                                   figures and the saved layouts (proxy/fleet.py, SRV-723)
+                                   figures and the saved layouts (proxy/fleet.py, SRV-723);
+                                   each node's Setup Guide relayed (proxy/fleetsetup.py)
     GET  /metrics                  the proxy's families in the Prometheus text format
     GET  /health                   {"status": "ok"}; the full body for the admin or the machine
     *    /v1/conductor/*           the conductor's documents, journal and sessions (P4, with
@@ -37,7 +38,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, parse_qsl, unquote, urlencode, urlsplit
 
 from proxy import config as proxy_config
 from proxy import config_api
@@ -433,6 +434,9 @@ class Handler(BaseHTTPRequestHandler):
         the configuration's, pairing, release, forget, a lease's release and the wizard's
         connect, check and install under `fleet_trust` (server/auth.py), and the controller's
         own sign-in at /v1/fleet/session."""
+        sub = path.rstrip("/").split("/")[3:]
+        if len(sub) >= 4 and sub[0] == "nodes" and sub[2] == "setup":
+            return self._fleet_setup(method, unquote(sub[1]), [unquote(x) for x in sub[3:]], raw)
         body = None
         if raw:
             try:
@@ -443,7 +447,10 @@ class Handler(BaseHTTPRequestHandler):
         if path.rstrip("/") == "/v1/fleet/session":
             return self._session(method, body, fleet=True)
         parts = path.rstrip("/").split("/")[3:]
-        if parts[:1] == ["discovery"]:
+        if len(parts) >= 4 and parts[0] == "nodes" and parts[2] == "setup-confirm":
+            # VIS-252: a Setup Guide write's plan, under the rule of the engine's own /v1/setup
+            route = "setup"
+        elif parts[:1] == ["discovery"]:
             # SRV-727: the LAN scan's consent is a write, and the list (~/.ssh/config's hosts,
             # what answers on the LAN) is read with a write's rights too
             route = "conductor_write"
@@ -480,6 +487,70 @@ class Handler(BaseHTTPRequestHandler):
         code, out = STATE["fleet"].handle(method, path, q, body,
                                           who=config_api._who(self, STATE["svc"]))
         return self._json(code, out, extra_headers=(("Cache-Control", "no-store"),))
+
+    def _fleet_setup(self, method: str, nid: str, sub: list[str], raw: bytes | None) -> None:
+        """`/v1/fleet/nodes/{id}/setup/<route>` (proxy/fleetsetup.py, VIS-252): the node's Setup
+        Guide through its agent, under the rule of the engine's own /v1/setup; a POST is a
+        same-origin JSON request, a write carries its plan's confirm (?confirm=, never passed on).
+        A stream (a job's log, Wren's answer) is passed on as it arrives."""
+        if not self._allowed("setup"):
+            return
+        if method not in ("GET", "POST"):
+            return self._json(405, {"error": {"type": "method_not_allowed",
+                                              "code": "method_not_allowed",
+                                              "message": "the Setup Guide takes GET and POST"}})
+        if method == "POST":
+            from server.setup_api import same_origin_json
+            bad = same_origin_json(self.headers)
+            if bad is not None:
+                return self._json(bad[0], {"error": {"type": bad[1], "code": bad[1],
+                                                     "message": bad[2]}})
+        pairs = parse_qsl(urlsplit(self.path).query, keep_blank_values=True)
+        confirm = next((v for k, v in pairs if k == "confirm"), None)
+        query = urlencode([(k, v) for k, v in pairs if k != "confirm"])
+        headers = {"Accept": self.headers.get("Accept") or "application/json",
+                   "Content-Type": self.headers.get("Content-Type"),
+                   "Last-Event-ID": self.headers.get("Last-Event-ID")}
+        try:
+            st, ctype, extra, conn, r = STATE["fleet"].setup.open(
+                nid, method, sub, query, raw, headers, confirm,
+                config_api._who(self, STATE["svc"]))
+        except fleet_mod.FleetError as exc:
+            return self._json(exc.status, exc.body(), extra_headers=(("Cache-Control",
+                                                                      "no-store"),))
+        from proxy import nodeclient
+        from proxy.relay import client_gone
+        try:
+            if "text/event-stream" not in ctype:
+                data = r.read()
+                conn.close()
+                self.send_response(st)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Cache-Control", "no-store")
+                for k, v in extra:
+                    self.send_header(k, v)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            self.send_response(st)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Accel-Buffering", "no")
+            self.send_header("Connection", "close")
+            for k, v in extra:
+                self.send_header(k, v)
+            self.end_headers()
+            self.close_connection = True
+
+            def write(piece: bytes) -> None:
+                self.wfile.write(piece)
+                self.wfile.flush()
+            nodeclient.pipe(r, conn, write, lambda: client_gone(self))
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            self.close_connection = True
+        finally:
+            conn.close()
 
     def _metrics(self) -> None:
         raw = STATE["registry"].render().encode()

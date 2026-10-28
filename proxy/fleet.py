@@ -27,6 +27,11 @@ dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_wri
     *     /v1/fleet/weights[/...]                   the packs on every node, a copy node to node
                                                     verified by content id, a removal with its
                                                     confirm (proxy/fleetweights.py)
+    *     /v1/fleet/nodes/{id}/setup/<route>       the node's Setup Guide through its agent,
+                                                    streams as they come; a write with the confirm
+                                                    of GET /v1/fleet/nodes/{id}/setup-confirm/
+                                                    <route> (proxy/fleetsetup.py, VIS-252; the
+                                                    relay itself is proxy/app.py's)
     GET   /v1/fleet/metrics?source=&metric=&range=  per-node series from the sampler's rings
     GET   /v1/fleet/memory                          the unified memory split per node, GiB
     GET   /v1/fleet/logs?node=&level=&q=&limit=     the nodes' log lines, oldest first
@@ -312,6 +317,8 @@ class Fleet:
         svc.place, svc.listing, svc.locate = self._place, self._listing, self._locate
         self.placement = placement.Planner(self)
         self.weights = fleetweights.Weights(self)
+        from proxy import fleetsetup
+        self.setup = fleetsetup.SetupRelay(self)
         self._discovery = None
         self._wizard = None
         self._tunnels = None
@@ -1164,6 +1171,9 @@ class Fleet:
                 return {"contract_version": v, "rules": self.watch.rules()}
         if method == "GET" and len(parts) == 3 and parts[0] == "nodes" and parts[2] == "sample":
             return self.sample_view(parts[1], now)
+        if method == "GET" and len(parts) >= 4 and parts[0] == "nodes" and \
+                parts[2] == "setup-confirm":
+            return self.setup.plan(parts[1], "/".join(parts[3:]), q, now)
         if len(parts) == 4 and parts[0] == "nodes" and parts[2] == "actions":
             if method == "GET":
                 return self.ops.plan(parts[1], parts[3], now, q.get("engine") or None)
