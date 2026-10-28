@@ -538,6 +538,7 @@ env = {k: v for k, v in os.environ.items()
        if k not in ("TANDEM_SSH_SECRET", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE")}
 env.update(HOME=st["home"], PATH=st["path"], PYTHONPATH=st["root"],
            SSH_CONNECTION="127.0.0.1 50000 127.0.0.1 " + port)
+env.update(st.get("env") or {})
 sys.exit(subprocess.run(["sh", "-c", command], env=env, cwd=st["home"]).returncode)
 '''
 
