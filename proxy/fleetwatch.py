@@ -166,6 +166,16 @@ def _mixed(nodes: list[dict]) -> dict[str, list[str]] | None:
     return got if len(got) > 1 else None
 
 
+def _split_groups(groups: list[dict], nodes: list[dict]) -> str:
+    """The Replicas and Split records (SRV-731) whose members run more than one release, in
+    words: `Qwen3.8-27B (Replicas)`."""
+    rel = {n["id"]: _release(n["version"]) for n in nodes
+           if n.get("version") and n.get("status") != "off"}
+    out = [f"{d['name']} ({d['type'].title()})" for d in groups
+           if len({rel[m] for m in d["members"] if m in rel}) > 1]
+    return ", ".join(out)
+
+
 def default_rules() -> dict:
     return {d[0]: Rule(*d) for d in DEFAULTS}
 
@@ -194,6 +204,7 @@ class Watch:
         self.nodes: dict[str, dict] = {}         # node id -> {"status", "since", "said"}
         self.engines: dict[str, dict] = {}       # backend id -> {"state", "since", "restarts"}
         self.deps: dict[str, str] | None = None  # deployment id -> status
+        self.groups: list[dict] = []             # the Replicas and Splits, as last read
 
     # ------------------------------------------------------------------ rules
     @_locked
@@ -332,6 +343,8 @@ class Watch:
         self._engine_events(now, nodes)
         if readings.get("deployments") is not None:
             self._deployment_events(now, readings["deployments"])
+            self.groups = [d for d in readings["deployments"] if d.get("type") in
+                           ("replicas", "split")]
         self._evaluate(now, nodes, readings.get("host") or {}, readings)
 
     def _evaluate(self, now: float, nodes: list[dict], host: dict,
@@ -351,11 +364,14 @@ class Watch:
                 mixed = _mixed(nodes)
                 v = None if (readings or {}).get("updating") else mixed is not None
                 target = (readings or {}).get("target")
-                self._check(now, r, aid, "all", v, lambda v, resolved=False, m=mixed, t=target: (
+                split = _split_groups(self.groups, nodes)
+                self._check(now, r, aid, "all", v, lambda v, resolved=False, m=mixed, t=target,
+                            g=split: (
                     "every node runs one release" if resolved else
                     ("Mixed versions: " + " · ".join(f"{k} on {', '.join(a)}"
                                                     for k, a in sorted(m.items())),
-                     "Replicas and Split members must run one release, and a node on another "
+                     (f"{g} run their members on more than one release; " if g else "")
+                     + "Replicas and Split members must run one release, and a node on another "
                      "one is refused by Add Spark's Install. "
                      + (f"This controller carries {t}: update the fleet." if t else
                         "Update the fleet."),

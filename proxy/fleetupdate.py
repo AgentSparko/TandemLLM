@@ -30,16 +30,25 @@ THE ORDER (`order`, the same rules as the dashboard's lib/fleet-update.ts):
 One node at a time otherwise; a Replicas member waits until another member serves before it
 drains (REPLICA_WAIT_S at most, then its step fails and the job stops: the model would go down).
 
-EACH NODE: drain (the node's drain, proxy/fleetops.py; one a person set stays after the update),
-the package sent to the agent and its update job (proxy/nodeupdate.py: pip into its environment,
-the engine's runtime, the agent restarted on the new code), the agent's version checked, the
-drain ended and its engines up again (rejoin). The job is kept in `fleet_jobs` at every step; a
-controller that restarts during it resumes it where it was: each phase checks first whether it is
-done already (a node that runs the target skips the update, a drained node the wait).
+EACH NODE: drain (the node's drain, proxy/fleetops.py: the gateway sends it no new request, and a
+Replicas member no new conversation; its conversations go to another member at their next turn;
+one a person set stays after the update), the requests in flight finished (DRAIN_WAIT_S), the
+package sent to the agent and its update job (proxy/nodeupdate.py: pip into its environment, the
+engine's runtime, the agent restarted on the new code), the agent's version checked, then the
+rejoin: its engines healthy AND each deployment it serves loaded and warm (one token from the
+model, proxy/deployments.py `warm_node`), only then is the drain ended (REJOIN_WAIT_S for both).
+The job is kept in `fleet_jobs` at every step; a controller that restarts during it resumes it
+where it was: each phase checks first whether it is done already (a node that runs the target
+skips the update, a drained node the wait).
 
-UNTIL STEP 6 a deployment is what an engine on a node serves; one model id served on two or more
-nodes is Replicas (proxy/fleet.py deployments: the gateway reaches the others through the route's
-fallbacks), and a Split is what ENG-307 will name. Step 6 rechecks this with SRV-467's Replicas.
+DEPLOYMENTS are the records (proxy/deployments.py, SRV-731): Replicas and Split are what a record
+says; a node with an engine nobody manages and no record (the box's own engine) serves a derived
+Single, so it updates as `single` with its downtime named.
+
+TIMEOUTS: DRAIN_WAIT_S 600 s for the requests in flight on a drained node, UPDATE_WAIT_S 1800 s
+for the agent's update, REJOIN_WAIT_S 300 s for the engines up and the warm-up, REPLICA_WAIT_S
+300 s for another Replicas member to serve before one drains. Past any of them the step fails
+and the job stops (the node stays drained).
 """
 
 from __future__ import annotations
@@ -552,15 +561,25 @@ class Updater:
         if n["phase"] != "rejoin":
             return
         end = self.clock() + REJOIN_WAIT_S
+        said = None
         while True:
             row, src = self._src(nid)
             probes = src.engines() if hasattr(src, "engines") else []
             states = [self.fleet.svc.health.view(p.id)["state"] for p in probes]
+            cold = []
             if src.status()[0] != "off" and all(s == "up" for s in states):
-                break
+                # healthy is not enough: each deployment it serves answers one token (warm)
+                cold = [f"{d}: {why}" for d, ok, why in self.fleet.deps.warm_node(nid) if not ok]
+                if not cold:
+                    break
+                if cold[0] != said:
+                    said = cold[0]
+                    self._node(job, nid, "rejoin", f"up; warming up ({cold[0]})")
             if self.clock() >= end:
-                raise UpdateError(504, "rejoin_timeout", f"{n['alias']}'s engines are not up "
-                                                         f"{REJOIN_WAIT_S:.0f} s after the update")
+                raise UpdateError(504, "rejoin_timeout", f"{n['alias']} is not "
+                                                         f"{'warm' if cold else 'up'} "
+                                                         f"{REJOIN_WAIT_S:.0f} s after the update"
+                                                         + (f": {cold[0]}" if cold else ""))
             for p in probes:
                 b = self.fleet.cfg.backend(p.id)
                 if b is not None:
