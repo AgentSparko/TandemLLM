@@ -710,6 +710,13 @@ class AgentNode:
                 return
             wait = min(30.0, wait * 2)
 
+    def latest(self) -> dict | None:
+        """The newest one-second sample the stream brought, as the agent sent it; None before
+        the first."""
+        self._ensure_stream()
+        with self._lock:
+            return None if self._latest is None else dict(self._latest)
+
     def _opened(self, conn) -> None:
         self._conn = conn
 

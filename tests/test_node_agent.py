@@ -956,6 +956,11 @@ def test_agent_node_in_fleet():
             [("TandemLLM", [nid], "pack-4.0")], deps
         nodes = tf.get(px, "/v1/fleet/nodes")[1]["nodes"]
         assert nodes[0]["version"] == "0.15.0-test"
+        # the newest sample as the agent sent it: every block the fake board exposes
+        sm = tf.ok(tf.get(px, f"/v1/fleet/nodes/{nid}/sample")[1], "sample")
+        assert sm["via"] == "agent" and sm["note"] is None and sm["age_s"] is not None, sm
+        assert {"node", "gpus", "memory", "cpu"} <= set(sm["sample"]), sm["sample"].keys()
+        assert sm["sample"]["cpu"]["cores"], sm["sample"]["cpu"]
         lines = tf.ok(tf.get(px, "/v1/fleet/logs?level=debug")[1], "logs")["lines"]
         assert {"agent", "engine", "gateway"} <= {x["source"] for x in lines}, lines
         # a remote node's agent (the loopback secret stands in for pairing's mTLS here)
@@ -972,6 +977,8 @@ def test_agent_node_in_fleet():
         assert (nodes["R-2"]["status"], nodes["R-2"]["status_text"]) == \
             ("off", "not paired: no trust for its agent yet (SEC-4)")
         assert nodes["R-3"]["status"] == "off"
+        sm = tf.ok(tf.get(px, "/v1/fleet/nodes/n-unpaired/sample")[1], "sample")
+        assert (sm["via"], sm["sample"]) == ("none", None) and sm["note"].startswith("not paired")
         for _ in range(100):
             if f.agents["n-remote"][1]._buf:
                 break

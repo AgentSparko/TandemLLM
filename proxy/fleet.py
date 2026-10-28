@@ -10,6 +10,10 @@ to tandem-app only: every figure of a node is read here, server-side, and the ro
 dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_write`).
 
     GET   /v1/fleet/nodes, /v1/fleet/nodes/{id}     the nodes, with status and inventory
+    GET   /v1/fleet/nodes/{id}/sample               the node's newest one-second sample, every
+                                                    block its agent reads (VIS-248)
+    GET   /v1/fleet/host                            the machine the controller runs on and the
+                                                    controller's own process (VIS-248)
     PATCH /v1/fleet/nodes/{id}                      {alias?, colour?, icon?, tags?}
     GET   /v1/fleet/links, /v1/fleet/topology       the LAN and the internet as this host sees them
     GET   /v1/fleet/deployments                     each model an engine on a node serves: Single
@@ -87,9 +91,11 @@ from proxy import config as config_mod
 from proxy import fleetstore
 from proxy import fleetwatch
 from proxy import hostcollect
+from proxy import nodemetrics
 from proxy import nodesource
 
 CONTRACT = "1.0"
+GIB = 1024 ** 3
 SAMPLE_S = 2.0
 # a dashboard read the fleet this recently: the engines are read at every sample
 WATCHED_S = 60.0
@@ -246,6 +252,8 @@ class Fleet:
         self._thread: threading.Thread | None = None
         self._trust = None
         self._migrated = False
+        self.started = clock()
+        self._proc_prev: tuple[float, float] | None = None
 
     def trust(self):
         """The controller's side of node trust (proxy/fleettrust.py), its certificate made at
@@ -742,6 +750,104 @@ class Fleet:
                         "usable": m["usable"]})
         return {"contract_version": CONTRACT, "unit": "GiB", "nodes": out}
 
+    def sample_view(self, nid: str, now: float) -> dict:
+        """A node's newest one-second sample as its agent sent it (proxy/nodemetrics.py): every
+        block the board exposes, the rest absent. This machine read in-process has the fleet's
+        keys, its GPUs and memory only; a node without a source has none, and says why."""
+        row = self._node_row(nid)
+        src = self.source(row)
+        out = {"contract_version": CONTRACT, "node": nid, "via": "none", "t": None,
+               "age_s": None, "sample": None, "note": None}
+        if isinstance(src, nodesource.AgentNode):
+            s = src.latest()
+            out["via"] = "agent"
+            if s is None:
+                out["note"] = src.status()[1] if src.status()[0] == "off" else \
+                    "no sample from its agent yet"
+                return out
+            t = s.get("t")
+            out.update(t=t, age_s=None if t is None else round(max(0.0, now - t), 1),
+                       sample={k: v for k, v in s.items() if k != "t"})
+            return out
+        if isinstance(src, nodesource.LocalNode):
+            h = src.host() or {}
+            mem = h.get("memory") or {}
+            gib = (lambda b: None if b is None else round(b / GIB, 2))  # noqa: E731
+            gpus = [{"index": g.get("index", i), "name": g.get("name"),
+                     "util": None if g.get("utilization") is None else
+                     round(g["utilization"] * 100.0, 2), "sm_mhz": g.get("sm_clock_mhz"),
+                     "mem_mhz": g.get("mem_clock_mhz"), "power_w": g.get("power_w"),
+                     "power_cap_w": g.get("power_limit_w"), "temp_c": g.get("temperature_c")}
+                    for i, g in enumerate(h.get("gpus") or []) if isinstance(g, dict)]
+            memory = {"total": gib(mem.get("total_bytes")),
+                      "available": gib(mem.get("available_bytes")),
+                      "used": gib(mem.get("used_bytes")),
+                      "swap_total": gib(mem.get("swap_total_bytes")),
+                      "swap_used": gib(mem.get("swap_used_bytes")), "unified": mem.get("unified")}
+            sample = {"node": self._figures_now(nid, now), "gpus": gpus, "memory": memory}
+            out.update(via="process", t=now, age_s=0.0, sample=nodemetrics.prune(sample),
+                       note="read in-process: per-core, disk, network and board figures come "
+                            "through a TandemNode agent on the node")
+            return out
+        out["note"] = src.status()[1]
+        return out
+
+    def _figures_now(self, nid: str, now: float) -> dict:
+        """The newest 2 s slot of each of a node's fleet keys."""
+        out = {}
+        k = math.ceil(now / 2)
+        with self._lock:
+            for key in nodesource.FLEET_KEYS:
+                r = self.rings.get(("node", nid, key))
+                got = r and (r.slot(2, k) or r.slot(2, k - 1) or r.slot(2, k - 2))
+                if got and got[1]:
+                    out[key] = round(got[0] / got[1], 3)
+        return out
+
+    def host_view(self, now: float) -> dict:
+        """The machine the controller runs on (its host collector's entry), the controller's own
+        process, whether the machine may sleep, and which node it is when it is one."""
+        lid = self.ensure_local()
+        h = self.local.host() or {}
+        mem, cpu = h.get("memory") or {}, h.get("cpu") or {}
+        gib = (lambda b: None if b is None else round(b / GIB, 2))  # noqa: E731
+        util = cpu.get("utilization")
+        try:
+            os_name = self.local.inventory().get("os")
+        except Exception:                                            # noqa: BLE001
+            os_name = None
+        addr = self.local.address() if self.bind in ("0.0.0.0", "::", "") else self.bind
+        return {"contract_version": CONTRACT, "name": self.host_name(), "os": os_name,
+                "address": addr, "node": lid, "may_sleep": self.may_sleep,
+                "cpu": {"util": None if not isinstance(util, (int, float)) else
+                        round(util * 100.0, 1), "cores": cpu.get("count")},
+                "memory": {"used_gib": gib(mem.get("used_bytes")),
+                           "total_gib": gib(mem.get("total_bytes"))},
+                "controller": self._process(now)}
+
+    def _process(self, now: float) -> dict:
+        """The controller's process: resident memory, CPU % since the last read (since the start
+        at the first), threads and uptime."""
+        t = os.times()
+        cpu_s = t.user + t.system
+        prev, self._proc_prev = self._proc_prev, (now, cpu_s)
+        base = prev if prev is not None and now > prev[0] else (self.started, 0.0)
+        util = None if now <= base[0] else round(max(0.0, (cpu_s - base[1]) / (now - base[0]))
+                                                 * 100.0, 1)
+        rss = None
+        try:
+            import psutil  # type: ignore
+            rss = psutil.Process().memory_info().rss
+        except Exception:                                            # noqa: BLE001
+            try:
+                with open("/proc/self/statm") as f:
+                    rss = int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+            except (OSError, ValueError, IndexError):
+                rss = None
+        return {"rss_mib": None if rss is None else round(rss / 2 ** 20, 1), "cpu": util,
+                "threads": threading.active_count(),
+                "uptime_s": round(max(0.0, now - self.started), 1)}
+
     def logs(self, q: dict) -> dict:
         node = q.get("node") or "all"
         level = q.get("level") or "info"
@@ -831,6 +937,8 @@ class Fleet:
                 return self.metrics(q, now)
             if name == "memory":
                 return self.memory(now)
+            if name == "host":
+                return self.host_view(now)
             if name == "logs":
                 return self.logs(q)
             if name == "events":
@@ -839,6 +947,8 @@ class Fleet:
                 return {"contract_version": v, "alerts": self.watch.alerts()}
             if name == "rules":
                 return {"contract_version": v, "rules": self.watch.rules()}
+        if method == "GET" and len(parts) == 3 and parts[0] == "nodes" and parts[2] == "sample":
+            return self.sample_view(parts[1], now)
         if len(parts) == 2 and parts[0] == "nodes":
             if method == "GET":
                 return self.node_view(self._node_row(parts[1]), now)

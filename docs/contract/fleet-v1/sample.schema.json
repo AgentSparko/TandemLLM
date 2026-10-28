@@ -1,0 +1,457 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/sample.schema.json",
+  "title": "GET /v1/fleet/nodes/{id}/sample (200): the node's newest one-second sample; a block or field the board does not expose is absent, never null or 0",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ]
+    },
+    "node": {
+      "type": "string"
+    },
+    "via": {
+      "description": "agent: the node's TandemNode stream; process: this machine read in-process (the fleet's keys, GPUs and memory only); none: no source",
+      "type": "string",
+      "enum": [
+        "agent",
+        "process",
+        "none"
+      ]
+    },
+    "t": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "age_s": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "sample": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "node": {
+          "type": "object",
+          "properties": {
+            "gpu": {
+              "type": "number"
+            },
+            "power": {
+              "type": "number"
+            },
+            "temp": {
+              "type": "number"
+            },
+            "sm": {
+              "type": "number"
+            },
+            "memclk": {
+              "type": "number"
+            },
+            "mem": {
+              "type": "number"
+            },
+            "cpu": {
+              "type": "number"
+            },
+            "disk": {
+              "type": "number"
+            },
+            "lan": {
+              "type": "number"
+            },
+            "fabric": {
+              "type": "number"
+            },
+            "rtt": {
+              "type": "number"
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "gpus": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "util": {
+                "type": "number"
+              },
+              "sm_mhz": {
+                "type": "number"
+              },
+              "mem_mhz": {
+                "type": "number"
+              },
+              "power_w": {
+                "type": "number"
+              },
+              "power_cap_w": {
+                "type": "number"
+              },
+              "temp_c": {
+                "type": "number"
+              },
+              "throttled": {
+                "type": "boolean"
+              },
+              "throttle": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "enc": {
+                "type": "number"
+              },
+              "dec": {
+                "type": "number"
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "memory": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "number"
+            },
+            "available": {
+              "type": "number"
+            },
+            "used": {
+              "type": "number"
+            },
+            "swap_total": {
+              "type": "number"
+            },
+            "swap_used": {
+              "type": "number"
+            },
+            "weights": {
+              "type": "number"
+            },
+            "kv": {
+              "type": "number"
+            },
+            "cache": {
+              "type": "number"
+            },
+            "other": {
+              "type": "number"
+            },
+            "ceiling": {
+              "type": "number"
+            },
+            "page": {
+              "type": "number"
+            },
+            "unified": {
+              "type": "boolean"
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "cpu": {
+          "type": "object",
+          "properties": {
+            "util": {
+              "type": "number"
+            },
+            "load": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "temp_c": {
+              "type": "number"
+            },
+            "cores": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "cpu": {
+                    "type": "integer"
+                  },
+                  "util": {
+                    "type": "number"
+                  },
+                  "mhz": {
+                    "type": "number"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "performance",
+                      "efficiency"
+                    ]
+                  }
+                },
+                "required": [
+                  "cpu"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "disks": {
+          "type": "object",
+          "properties": {
+            "devices": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "nvme": {
+                    "type": "boolean"
+                  },
+                  "read_mbps": {
+                    "type": "number"
+                  },
+                  "write_mbps": {
+                    "type": "number"
+                  },
+                  "busy": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "fs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "total_gb": {
+                    "type": "number"
+                  },
+                  "free_gb": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "nvme": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "temp_c": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "name",
+                  "temp_c"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "net": {
+          "type": "object",
+          "properties": {
+            "lan": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "iface": {
+                    "type": "string"
+                  },
+                  "rx_mbps": {
+                    "type": "number"
+                  },
+                  "tx_mbps": {
+                    "type": "number"
+                  },
+                  "speed_mbps": {
+                    "type": "number"
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "iface"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "fabric": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "iface": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "speed_mbps": {
+                    "type": "number"
+                  },
+                  "mtu": {
+                    "type": "number"
+                  },
+                  "rx_gbps": {
+                    "type": "number"
+                  },
+                  "tx_gbps": {
+                    "type": "number"
+                  },
+                  "rdma": {
+                    "type": "object",
+                    "properties": {
+                      "device": {
+                        "type": "string"
+                      },
+                      "port": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "link_layer": {
+                        "type": "string"
+                      },
+                      "rx_gbps": {
+                        "type": "number"
+                      },
+                      "tx_gbps": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "iface"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "board": {
+          "type": "object",
+          "properties": {
+            "zones": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "zone": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "temp_c": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "zone",
+                  "temp_c"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "fans": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "rpm": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "name",
+                  "rpm"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "uptime_s": {
+              "type": "number"
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "note": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "contract_version",
+    "node",
+    "via",
+    "t",
+    "age_s",
+    "sample",
+    "note"
+  ],
+  "additionalProperties": false
+}

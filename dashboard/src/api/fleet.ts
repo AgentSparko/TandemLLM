@@ -1,8 +1,9 @@
 // The fleet API of TandemApp's controller (docs/contract/fleet-v1, SRV-723, SRV-725, SRV-729,
-// SRV-731): the Sparks, the links between them, the deployments, per-node metric series, memory,
-// events, alerts, rules and the saved window layouts. Times are Unix seconds. The controller sends
-// every metric per node; the page computes Total, Stacked, Lines, Split and Table itself
-// (charts/modes.ts), so one answer serves every chart mode.
+// SRV-731, VIS-248): the Sparks, the links between them, the deployments, per-node metric series,
+// each node's newest sample, the controller's host, memory, events, alerts, rules and the saved
+// window layouts. Times are Unix seconds. The controller sends every metric per node; the page
+// computes Total, Stacked, Lines, Split and Table itself (charts/modes.ts), so one answer serves
+// every chart mode.
 
 import { request } from './client';
 
@@ -282,6 +283,85 @@ export interface FleetMemory {
   nodes: NodeMemory[];
 }
 
+/** One GPU in a node's sample; a field the board does not expose is absent (a GB10 has no power
+ *  cap and no memory clock of its own). */
+export interface SampleGpu {
+  index?: number;
+  name?: string;
+  util?: number;
+  sm_mhz?: number;
+  mem_mhz?: number;
+  power_w?: number;
+  power_cap_w?: number;
+  temp_c?: number;
+  /** the driver answered for its clock event reasons; `throttle` names the active ones */
+  throttled?: boolean;
+  throttle?: string[];
+  /** the video encoder and decoder, % */
+  enc?: number;
+  dec?: number;
+}
+
+export interface SampleCore {
+  cpu: number;
+  util?: number;
+  mhz?: number;
+  kind?: 'performance' | 'efficiency';
+}
+
+/** A node's newest one-second sample (GET /v1/fleet/nodes/{id}/sample): every block its agent reads,
+ *  each present only when the board exposes it. */
+export interface NodeSample {
+  node?: Partial<Record<MetricKey, number>>;
+  gpus?: SampleGpu[];
+  memory?: Partial<Record<'total' | 'available' | 'used' | 'swap_total' | 'swap_used' | 'weights' | 'kv' | 'cache' | 'other' | 'ceiling' | 'page', number>> & { unified?: boolean };
+  cpu?: { util?: number; load?: number[]; temp_c?: number; cores?: SampleCore[] };
+  disks?: {
+    devices?: { name: string; nvme?: boolean; read_mbps?: number; write_mbps?: number; busy?: number }[];
+    fs?: { path: string; total_gb?: number; free_gb?: number }[];
+    nvme?: { name: string; temp_c: number }[];
+  };
+  net?: {
+    lan?: { iface: string; rx_mbps?: number; tx_mbps?: number; speed_mbps?: number; state?: string }[];
+    fabric?: {
+      iface: string;
+      state?: string;
+      speed_mbps?: number;
+      mtu?: number;
+      rx_gbps?: number;
+      tx_gbps?: number;
+      rdma?: { device?: string; port?: string; state?: string; link_layer?: string; rx_gbps?: number; tx_gbps?: number };
+    }[];
+  };
+  board?: { zones?: { zone: string; type?: string; temp_c: number }[]; fans?: { name: string; rpm: number }[]; uptime_s?: number };
+}
+
+export interface FleetSample {
+  contract_version: string;
+  node: string;
+  /** agent: the node's TandemNode stream; process: this machine without its agent (the fleet's keys,
+   *  GPUs and memory only); none: no source, `note` says why */
+  via: 'agent' | 'process' | 'none';
+  t: number | null;
+  age_s: number | null;
+  sample: NodeSample | null;
+  note: string | null;
+}
+
+/** The machine the controller runs on and the controller's own process (GET /v1/fleet/host). */
+export interface FleetHost {
+  contract_version: string;
+  name: string;
+  os: string | null;
+  address: string;
+  /** this machine's node id when it is a node, else null */
+  node: string | null;
+  may_sleep: boolean;
+  cpu: { util: number | null; cores: number | null };
+  memory: { used_gib: number | null; total_gib: number | null };
+  controller: { rss_mib: number | null; cpu: number | null; threads: number; uptime_s: number };
+}
+
 export const EVENT_TYPES = ['alert', 'failover', 'deploy', 'link', 'weights', 'node', 'update', 'engine', 'controller'] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 export type Severity = 'warn' | 'err' | 'resolved';
@@ -406,6 +486,8 @@ export const fleet = {
     return request<MetricSeries>(`/v1/fleet/metrics?${q}`);
   },
   memory: () => request<FleetMemory>('/v1/fleet/memory'),
+  sample: (id: string) => request<FleetSample>(`/v1/fleet/nodes/${encodeURIComponent(id)}/sample`),
+  host: () => request<FleetHost>('/v1/fleet/host'),
   events: (p: EventQuery = {}) => {
     const q = new URLSearchParams();
     for (const k of ['since', 'before', 'node', 'limit'] as const) if (p[k] != null) q.set(k, String(p[k]));

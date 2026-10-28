@@ -10,7 +10,8 @@ list, system snapshot and log. Time is injected; nothing sleeps.
                                                          test_one_box_upgrade_registers_once
   2  a machine without a GPU or an engine of its own is no node    test_a_mac_in_front_of_clouds
   3  alias, colour, icon and tags: PATCH, refused values, kept     test_alias_and_colour
-  4  every route answers the contract, the engine's own model only test_every_route_validates
+  4  every route answers the contract, the engine's own model only, the host and this
+     machine's sample read in-process                              test_every_route_validates
   5  the sampler: slots, ranges, nulls before history, a deployment's own figures
                                                                    test_ring_and_ranges
   6  memory split and the engine's log beside tandem-app's        test_memory_and_logs
@@ -386,6 +387,18 @@ def test_every_route_validates():
             assert topo["host"]["name"] == HOSTNAME and topo["infra"] == \
                 [{"id": "lan", "kind": "lan", "label": "LAN"}]
             ok(get(px, "/v1/fleet/memory")[1], "memory")
+            # the host: this machine is the node; the controller's own process
+            h = ok(get(px, "/v1/fleet/host")[1], "host")
+            assert (h["name"], h["node"], h["may_sleep"]) == (HOSTNAME, lid, False), h
+            assert h["cpu"] == {"util": 25.0, "cores": 20} and h["memory"]["total_gib"] == 121.6
+            assert h["controller"]["threads"] >= 1 and h["controller"]["uptime_s"] >= 0
+            # this machine read in-process: the fleet's keys, its GPU and memory, said so
+            sm = ok(get(px, f"/v1/fleet/nodes/{lid}/sample")[1], "sample")
+            assert sm["via"] == "process" and sm["note"].startswith("read in-process"), sm
+            assert sm["sample"]["node"]["temp"] == 55.0 and sm["sample"]["node"]["power"] == 60.0
+            assert sm["sample"]["gpus"][0]["temp_c"] == 55 and "mem_mhz" not in \
+                sm["sample"]["gpus"][0] and "power_cap_w" not in sm["sample"]["gpus"][0]
+            assert sm["sample"]["memory"]["total"] == 121.6
             for name in ("events", "alerts"):
                 assert ok(get(px, f"/v1/fleet/{name}")[1], name)[name] == []
             assert [r["id"] for r in ok(get(px, "/v1/fleet/rules")[1], "rules")["rules"]] == \
@@ -414,6 +427,7 @@ def test_every_route_validates():
                                  ("/v1/fleet/logs?node=r9", 404),
                                  ("/v1/fleet/logs?node=all&level=loud", 400),
                                  ("/v1/fleet/logs?node=all&limit=0", 400),
+                                 ("/v1/fleet/nodes/r9/sample", 404),
                                  ("/v1/fleet/sparks", 404)):
                 st, err = get(px, path)
                 assert st == status, (path, st, err)
