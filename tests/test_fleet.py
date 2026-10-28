@@ -248,11 +248,14 @@ class Clock:
         return self.t
 
 
-def fleet_on(px: Proxy, node, clock=None, cfg=None) -> fleet_mod.Fleet:
+def fleet_on(px: Proxy, node, clock=None, cfg=None, store=None) -> fleet_mod.Fleet:
     """The proxy's fleet with a fake machine (proxy_app.build made one with the real one), over
-    `cfg` when a test keeps its own file."""
-    f = fleet_mod.Fleet(px.svc, node, port=px.port, clock=clock or time.time, log=px.logs.append)
+    `cfg` when a test keeps its own file, and `store` (else one in memory). The controller's
+    machine never sleeps here, whatever runs the test."""
+    f = fleet_mod.Fleet(px.svc, node, port=px.port, clock=clock or time.time, log=px.logs.append,
+                        store=store)
     f.cfg = cfg or px.svc.cfg
+    f.may_sleep = False
     proxy_app.STATE["fleet"] = f
     return f
 
@@ -383,8 +386,11 @@ def test_every_route_validates():
             assert topo["host"]["name"] == HOSTNAME and topo["infra"] == \
                 [{"id": "lan", "kind": "lan", "label": "LAN"}]
             ok(get(px, "/v1/fleet/memory")[1], "memory")
-            for name in ("events", "alerts", "rules"):
+            for name in ("events", "alerts"):
                 assert ok(get(px, f"/v1/fleet/{name}")[1], name)[name] == []
+            assert [r["id"] for r in ok(get(px, "/v1/fleet/rules")[1], "rules")["rules"]] == \
+                ["gpu-temp", "throttle", "mem-avail", "disk-free", "node-down", "engine-down",
+                 "host-sleep"]
             assert ok(get(px, "/v1/fleet/events?since=1800000000")[1], "events")["events"] == []
             ok(get(px, "/v1/fleet/logs?node=all")[1], "logs")
             ok(get(px, f"/v1/fleet/logs?node={lid}&level=warn&limit=20")[1], "logs")
