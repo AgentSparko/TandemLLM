@@ -214,9 +214,11 @@ export function olderCursor(list: FleetEvent[]): number | null {
   return list.length ? Math.min(...list.map((e) => e.at)) : null;
 }
 
-/** The `since` of a poll for newer events. */
-export function newerCursor(list: FleetEvent[]): number | null {
-  return list.length ? Math.max(...list.map((e) => e.at)) : null;
+/** The `since` of a poll for newer events: a little before the newest shown, because another event
+ *  of that same second (an acknowledgement right after its alert fired) may not be written yet;
+ *  mergeEvents drops the ones already shown. */
+export function newerCursor(list: FleetEvent[], overlap = 5): number | null {
+  return list.length ? Math.max(...list.map((e) => e.at)) - overlap : null;
 }
 
 /** A page that came back full may have more behind it. */

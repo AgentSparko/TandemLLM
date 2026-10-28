@@ -130,11 +130,13 @@ const ev = (id: string, at: number, extra: Partial<FleetEvent> = {}): FleetEvent
 describe('the timeline', () => {
   it('pages back with `before` = the oldest shown, polls with `since` = the newest; each event once, newest first', () => {
     const first = [ev('c', 30), ev('b', 20)];
-    expect([olderCursor(first), newerCursor(first)]).toEqual([20, 30]);
+    expect([olderCursor(first), newerCursor(first), newerCursor(first, 0)]).toEqual([20, 25, 30]);
     const older = [ev('b', 20), ev('a', 10)];
     const merged = mergeEvents(first, older);
     expect(merged.map((e) => e.id)).toEqual(['c', 'b', 'a']);
     expect(mergeEvents([ev('d', 40)], merged).map((e) => e.id)).toEqual(['d', 'c', 'b', 'a']);
+    // a poll from before the newest brings it again, and it shows once
+    expect(mergeEvents([ev('e', 30), ev('c', 30)], merged).map((e) => e.id)).toEqual(['e', 'c', 'b', 'a']);
     expect([olderCursor([]), newerCursor([])]).toEqual([null, null]);
     expect([mayHaveMore(Array(50).fill(ev('x', 1)), 50), mayHaveMore([ev('x', 1)], 50)]).toEqual([true, false]);
   });
