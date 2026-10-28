@@ -1,12 +1,25 @@
 // Dev — the LM Studio-style developer view: a live log console, the recent requests
 // with a to-scale timing bar, the server's effective configuration, and a test request box
 // that goes through the public chat endpoint like every other client.
+//
+// VIS-254: with a fleet (two Sparks or more) a source picker leads the page (`?node=`): This server
+// (all of the above, as before), All Sparks or one Spark. A Spark's log is its agent's and engines'
+// lines through the controller (/v1/fleet/logs, read every 2 s), All Sparks interleaves them by
+// time with each line's Spark chip; the requests then come from the controller's ledger, filtered
+// to that Spark, with Spark and deployment columns (this server's own rows are attributed to its
+// Spark, lib/where.ts); the configuration is what the controller knows of that Spark (its
+// inventory, its release, what it serves with which pack and window).
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { api, describeError } from '../api/client';
-import type { ChatMetrics, ChatTimings, ChatUsage, LogLevel, LogLine, RequestRow, SystemInfo } from '../api/types';
+import type { ChatMetrics, ChatTimings, ChatUsage, LogLevel, LogLine, RequestRow, ServerSystem } from '../api/types';
+import { fleet as fleetApi, type FleetNode, type LogLevel as FleetLevel } from '../api/fleet';
+import { onFleet, type FleetState } from '../lib/fleet-state';
+import { hereNode, isFleet, rowWhere } from '../lib/where';
+import { nodeChip } from '../ui/node-chip';
+import { setParams } from '../lib/router';
 import { exact, fixed, money, ms, NOT_REPORTED, pct, tps, timeShort, dateTimeShort } from '../lib/format';
 import { poll, type Poller } from '../lib/poll';
 import { isReplay } from '../lib/cache-source';
@@ -22,7 +35,10 @@ const ROW_H = 22;
 const MAX_LINES = 10_000;
 const LEVELS: LogLevel[] = ['debug', 'info', 'warning', 'error'];
 
-type ConsoleLine = LogLine | { seq: number; gap: number };
+/** a line of the console; a Spark's (VIS-254) names it */
+type ConsoleLine = (LogLine & { node?: string }) | { seq: number; gap: number };
+const FLEET_LEVEL: Record<LogLevel, FleetLevel> = { debug: 'debug', info: 'info', warning: 'warn', error: 'error' };
+const FROM_FLEET: Record<FleetLevel, LogLevel> = { debug: 'debug', info: 'info', warn: 'warning', error: 'error' };
 
 @customElement('qse-dev')
 export class QseDev extends LightElement {
@@ -46,6 +62,11 @@ export class QseDev extends LightElement {
   @state() private exportError: { endpoint: string; message: string; cannotSave: boolean } | null = null;
   /** the name of the file the last good export handed to the browser */
   @state() private exportSaved: string | null = null;
+  /** VIS-254: the fleet, and the Sparks' log read every 2 s when one or all are picked */
+  @state() private fleet: FleetState | null = null;
+  private offFleet: (() => void) | null = null;
+  private fleetLog: Poller | null = null;
+  private fleetSeen = new Set<string>();
 
   // requests
   @state() private requests: Loadable<RequestRow[]> = { state: 'loading' };
@@ -57,7 +78,7 @@ export class QseDev extends LightElement {
   private reqPoll: Poller | null = null;
 
   // config
-  @state() private system: Loadable<SystemInfo> = { state: 'loading' };
+  @state() private system: Loadable<ServerSystem> = { state: 'loading' };
   @state() private cfgSearch = '';
 
   // test box
@@ -73,23 +94,86 @@ export class QseDev extends LightElement {
 
   connectedCallback(): void {
     super.connectedCallback();
-    this.openStream();
+    this.source = this.pickedSource();
+    this.openLog();
     this.reqPoll = poll(() => this.loadRequests(), 10_000);
     this.reqPoll.start();
     void this.loadSystem();
+    this.offFleet = onFleet((f) => {
+      const was = isFleet(this.fleet);
+      this.fleet = f;
+      // a fleet that shrank to one Spark is this server again
+      if (was !== isFleet(f) && this.source !== 'here') this.switchSource();
+    });
   }
   disconnectedCallback(): void {
     if (this.grepTimer) clearTimeout(this.grepTimer);
     this.grepTimer = null;
     this.stream?.close();
+    this.fleetLog?.stop();
     this.reqPoll?.stop();
     this.testCtrl?.abort();
+    this.offFleet?.();
     super.disconnectedCallback();
+  }
+
+  // ---- VIS-254: the source ----------------------------------------------------------------------
+  /** `here` (this server), `all` (every Spark, interleaved) or a Spark's id */
+  private source = 'here';
+  private pickedSource(): string {
+    const n = this.params.get('node');
+    return n && /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(n) ? n : 'here';
+  }
+  private get fleetSource(): boolean {
+    return this.source !== 'here' && isFleet(this.fleet);
+  }
+  private switchSource(): void {
+    this.source = isFleet(this.fleet) ? this.pickedSource() : 'here';
+    this.requests = { state: 'loading' };
+    this.nextBefore = null;
+    this.expanded = null;
+    this.openLog();
+    void this.reqPoll?.refresh();
+  }
+  /** the console's feed: this server's stream, or the Sparks' lines through the controller */
+  private openLog(resume = false): void {
+    this.fleetLog?.stop();
+    this.fleetLog = null;
+    if (!this.fleetSource) return this.openStream(resume);
+    this.stream?.close();
+    this.stream = null;
+    this.streamState = 'connecting';
+    if (!resume) {
+      this.lines = [];
+      this.maxSeq = 0;
+      this.pending = 0;
+      this.fleetSeen.clear();
+    }
+    this.fleetLog = poll((cur) => this.loadFleetLog(cur), 2000);
+    this.fleetLog.start();
+  }
+  private async loadFleetLog(isCurrent: () => boolean): Promise<void> {
+    const node = this.source;
+    try {
+      const r = await fleetApi.logs({ node, level: FLEET_LEVEL[this.level], q: this.grep || undefined, limit: 500 });
+      if (!isCurrent() || node !== this.source) return;
+      this.streamState = 'open';
+      for (const x of r.lines) {
+        const key = `${x.t}|${x.node}|${x.source}|${x.msg}`;
+        if (this.fleetSeen.has(key)) continue;
+        this.fleetSeen.add(key);
+        this.maxSeq += 1;
+        this.push({ seq: this.maxSeq, ts: new Date(x.t * 1000).toISOString(), level: FROM_FLEET[x.level], source: x.source, msg: x.msg, request_id: null, node: x.node });
+      }
+    } catch {
+      if (isCurrent()) this.streamState = 'reconnecting';
+    }
   }
 
   /** `#/dev?request=<id>` (the Live panel's Last 20 list): open that request's detail. */
   updated(changed: Map<string, unknown>): void {
     if (changed.has('params')) {
+      if (this.pickedSource() !== this.source && isFleet(this.fleet)) this.switchSource();
       const rid = this.params.get('request');
       if (rid && rid !== this.jumped) {
         this.jumped = rid;
@@ -168,12 +252,12 @@ export class QseDev extends LightElement {
 
   private setLevel(l: LogLevel): void {
     this.level = l;
-    this.openStream();
+    this.openLog();
   }
   private setGrep(v: string): void {
     this.grep = v;
     if (this.grepTimer) clearTimeout(this.grepTimer);
-    this.grepTimer = setTimeout(() => this.openStream(), 350);
+    this.grepTimer = setTimeout(() => this.openLog(), 350);
   }
 
   /** SRV-803: save the engine's whole log as one text file. The engine builds it: a build header
@@ -288,8 +372,9 @@ export class QseDev extends LightElement {
                 (l) =>
                   'gap' in l
                     ? html`<div class="log-line log-gap" style="height:${ROW_H}px">gap: ${l.gap} lines dropped</div>`
-                    : html`<div class="log-line level-${l.level}" data-seq=${l.seq} style=${virtual ? `height:${ROW_H}px` : ''}>
+                    : html`<div class="log-line level-${l.level}" data-seq=${l.seq} data-node=${l.node ?? nothing} style=${virtual ? `height:${ROW_H}px` : ''}>
                         <span class="log-ts">${timeShort(l.ts)}</span>
+                        ${l.node ? html`<span class="log-node">${this.chipOf(l.node)}</span>` : nothing}
                         <span class="log-tag tag-${l.source}">${l.source}</span>
                         <span class="log-msg">${l.request_id && l.source === 'req'
                           ? html`<a href="#/dev" class="log-req" @click=${(e: Event) => {
@@ -307,7 +392,8 @@ export class QseDev extends LightElement {
         ${total === 0 && this.streamState === 'open' ? html`<div class="console-empty">No lines at this level yet.</div>` : nothing}
       </div>
     `;
-    return panel('Log', body, { sub: 'the engine\'s log, live; no prompt or answer text is ever logged', tools, cls: 'panel-console', id: 'console' });
+    const sub = !this.fleetSource ? "the engine's log, live; no prompt or answer text is ever logged" : this.source === 'all' ? "every Spark's agent and engines, interleaved by time, read every 2 s through the controller" : `${this.chipAlias(this.source)}'s agent and engines, read every 2 s through the controller`;
+    return panel('Log', body, { sub, tools, cls: 'panel-console', id: 'console' });
   }
 
   private async jumpToRequest(rid: string): Promise<void> {
@@ -334,8 +420,9 @@ export class QseDev extends LightElement {
     const my = ++this.reqSeq;
     const mine = () => my === this.reqSeq;
     const internal = this.showInternal; // captured before the await
+    const from = this.ledgerQuery();
     try {
-      const r = await api.requests({ limit: 25, internal });
+      const r = await api.requests({ limit: 25, internal, ...from });
       if (!mine()) return;
       if (this.requests.state === 'ready') {
         // Keep the older pages already loaded: merge newest-first by id.
@@ -358,7 +445,7 @@ export class QseDev extends LightElement {
     if (this.requests.state !== 'ready' || this.nextBefore == null) return;
     this.loadingMore = true;
     try {
-      const r = await api.requests({ limit: 25, before: this.nextBefore, internal: this.showInternal });
+      const r = await api.requests({ limit: 25, before: this.nextBefore, internal: this.showInternal, ...this.ledgerQuery() });
       this.requests = { state: 'ready', data: [...this.requests.data, ...r.requests] };
       this.nextBefore = r.next_before;
     } catch {
@@ -368,8 +455,38 @@ export class QseDev extends LightElement {
     }
   }
 
+  /** VIS-254: this server's ledger, or the controller's for a Spark or all of them */
+  private ledgerQuery(): { ledger: 'here' | 'fleet'; node?: string | null } {
+    if (!this.fleetSource) return { ledger: 'here' };
+    return { ledger: 'fleet', node: this.source === 'all' ? null : this.source };
+  }
+  private chipAlias(id: string): string {
+    return this.fleet?.nodes.find((n) => n.id === id)?.alias ?? id;
+  }
+  private chipOf(id: string | null): TemplateResult | typeof nothing {
+    const n = id ? this.fleet?.nodes.find((x) => x.id === id) : null;
+    return n ? nodeChip(n, { status: false }) : id ? html`<span class="muted small">${id}</span>` : nothing;
+  }
+
+  /** the source picker: This server, All Sparks, each Spark */
+  private renderSource(): TemplateResult | typeof nothing {
+    const f = this.fleet;
+    if (!isFleet(f)) return nothing;
+    const here = hereNode(f);
+    const pick = (v: string) => setParams({ node: v === 'here' ? null : v, request: null });
+    const on = (v: string) => this.source === v;
+    return html`<div class="dev-source" role="radiogroup" aria-label="Log and requests of" data-dev-source>
+      <span class="eyebrow">Of</span>
+      <button type="button" role="radio" class="dev-src ${on('here') ? 'is-on' : ''}" aria-checked=${on('here')} data-src="here" @click=${() => pick('here')}>This server${here ? html` · ${nodeChip(here, { status: false })}` : nothing}</button>
+      <button type="button" role="radio" class="dev-src ${on('all') ? 'is-on' : ''}" aria-checked=${on('all')} data-src="all" @click=${() => pick('all')}>All Sparks</button>
+      ${f.nodes.map((n: FleetNode) => html`<button type="button" role="radio" class="dev-src ${on(n.id) ? 'is-on' : ''}" aria-checked=${on(n.id)} data-src=${n.id} @click=${() => pick(n.id)}>${nodeChip(n)}</button>`)}
+    </div>`;
+  }
+
   private renderRequests(): TemplateResult {
     const r = this.requests;
+    const fleet = isFleet(this.fleet) ? this.fleet : null;
+    const cols = fleet ? 13 : 11;
     const body = (() => {
       if (r.state === 'loading') return skeleton(6);
       if (r.state === 'error') return errorState(r.endpoint, r.message, () => this.reqPoll?.refresh());
@@ -377,7 +494,7 @@ export class QseDev extends LightElement {
       return html`<div class="table-scroll">
           <table class="table table-req">
             <thead>
-              <tr><th>Time</th><th>Client</th><th>Endpoint</th><th>Finish</th><th class="num-col">Prompt</th><th class="num-col">Cached</th><th class="num-col">Out</th><th class="num-col">Reasoning</th><th class="num-col">TTFT</th><th class="num-col">Decode</th><th class="num-col">tok/blk</th></tr>
+              <tr><th>Time</th>${fleet ? html`<th>Spark</th><th>Deployment</th>` : nothing}<th>Client</th><th>Endpoint</th><th>Finish</th><th class="num-col">Prompt</th><th class="num-col">Cached</th><th class="num-col">Out</th><th class="num-col">Reasoning</th><th class="num-col">TTFT</th><th class="num-col">Decode</th><th class="num-col">tok/blk</th></tr>
             </thead>
             <tbody>
               ${repeat(
@@ -387,6 +504,7 @@ export class QseDev extends LightElement {
                     @click=${() => (this.expanded = this.expanded === x.id ? null : x.id)}
                     @keydown=${(e: KeyboardEvent) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), (this.expanded = this.expanded === x.id ? null : x.id))}>
                     <td class="num">${timeShort(x.ts)}</td>
+                    ${fleet ? this.whereCells(x) : nothing}
                     <td>${x.client.label ?? x.client.id}${x.client.label !== x.client.kind ? html`<span class="muted"> ${x.client.kind}</span>` : nothing}${x.parent_request ? html`<span class="muted live-sub clip" title=${`served ${x.parent_request}`}>for ${x.parent_request.slice(0, 18)}…</span>` : nothing}</td>
                     <td>${x.backend ? html`<span class="proxy-tag ${x.l2 ? 'is-l2' : ''}" data-backend=${x.backend.id} data-l2=${x.l2?.join ?? ''} title=${`relayed to ${x.backend.label ?? x.backend.id}, measured at the proxy${x.l2 ? `; queue, prefill and decode from the engine's plugin (${x.l2.join})${x.l2.preemptions ? `, ${x.l2.preemptions} preempted` : ''}` : ''}`}>${x.backend.label ?? x.backend.id}</span> ` : nothing}${x.endpoint}${x.stream ? '' : html`<span class="muted"> sync</span>`}${x.thinking ? html` <span class="tag tag-think">think</span>` : nothing}${x.tool_calls ? html` <span class="tag">tools ${x.tool_calls}</span>` : nothing} ${supBadge(badge(x.conductor), this.expanded === x.id, () => (this.expanded = this.expanded === x.id ? null : x.id))}</td>
                     <td><span class="finish finish-${x.finish_reason ?? 'none'}">${x.finish_reason ?? x.status}</span></td>
@@ -399,7 +517,7 @@ export class QseDev extends LightElement {
                     <td class="num-col num">${fixed(x.tokens_per_block, 2)}</td>
                   </tr>
                   ${this.expanded === x.id
-                    ? html`<tr class="req-expand"><td colspan="11">
+                    ? html`<tr class="req-expand"><td colspan=${cols}>
                         <div class="req-detail">
                           <div class="req-detail-head"><code>${x.request_id}</code>${copyButton(x.request_id, 'Copy request id')}<span class="muted">${dateTimeShort(x.ts)} · status ${x.status} · max_tokens not recorded here · text is not recorded</span></div>
                           ${x.measured_at === 'proxy' ? proxyDetail(x) : html`<qse-timing-bar .queue=${x.queue_ms} .prefill=${x.prompt_ms} .decode=${x.decode_ms}></qse-timing-bar>`}
@@ -431,7 +549,17 @@ export class QseDev extends LightElement {
         ${this.nextBefore != null ? html`<button class="btn btn-ghost" ?disabled=${this.loadingMore} @click=${() => this.loadMore()}>${this.loadingMore ? 'Loading…' : 'Load older'}</button>` : nothing}`;
     })();
     const tools = html`<label class="switch" data-filter="internal" title="TandemLLM's own calls to itself (the router's question to the engine)"><input type="checkbox" .checked=${this.showInternal} @change=${(e: Event) => { this.showInternal = (e.target as HTMLInputElement).checked; this.requests = { state: 'loading' }; this.nextBefore = null; void this.loadRequests(); }} /><span>show internal</span></label>`;
-    return panel('Recent requests', body, { sub: 'newest first, refreshed every 10 s; click a row for its timing', id: 'requests', tools });
+    const where = !this.fleetSource ? "this server's ledger" : this.source === 'all' ? "the controller's ledger, every Spark" : `the controller's ledger, ${this.chipAlias(this.source)}'s rows`;
+    return panel('Recent requests', body, { sub: `newest first, refreshed every 10 s; click a row for its timing${fleet ? ` · ${where}` : ''}`, id: 'requests', tools });
+  }
+
+  /** a row's Spark and deployment: the controller's ledger names them, this server's own rows are
+   *  attributed to its Spark */
+  private whereCells(x: RequestRow): TemplateResult {
+    const f = this.fleet!;
+    const w = rowWhere(f, x);
+    const d = w.deployment ? f.deployments.find((y) => y.id === w.deployment) : null;
+    return html`<td data-col="node">${w.node ? this.chipOf(w.node) : html`<span class="muted small">no Spark</span>`}</td><td data-col="deployment" class="small">${d ? d.name : (w.deployment ?? html`<span class="muted">—</span>`)}</td>`;
   }
 
   // ---- config -------------------------------------------------------------------------------
@@ -444,7 +572,43 @@ export class QseDev extends LightElement {
     }
   }
 
+  /** VIS-254: what the controller knows of one Spark: its inventory, release and what it serves */
+  private renderNodeConfig(n: FleetNode): TemplateResult {
+    const f = this.fleet!;
+    const deps = f.deployments.filter((d) => d.members.includes(n.id));
+    const inv = n.inventory;
+    const rows: [string, string][] = [
+      ['release', n.version || '—'],
+      ['hardware', n.hw],
+      ['os', inv.os ?? '—'],
+      ['kernel', inv.kernel ?? '—'],
+      ['driver', inv.driver ?? '—'],
+      ['cuda', inv.cuda ?? '—'],
+      ['disk', inv.disk ?? '—'],
+      ['network', inv.nics ?? '—'],
+      ['reached', `${n.transport === 'tunnel' ? 'SSH tunnel' : 'LAN'} · ${n.address}`],
+    ];
+    const body = html`<div class="model-card">
+        <dl class="kv kv-grid">${rows.map(([k, v]) => html`<div><dt>${k}</dt><dd class="num">${v}</dd></div>`)}</dl>
+      </div>
+      <table class="table table-cfg" data-node-deps>
+        <thead><tr><th>Deployment</th><th>Type</th><th>Pack</th><th class="num-col">Window</th><th>Here</th></tr></thead>
+        <tbody>
+          ${deps.length
+            ? deps.map((d) => {
+                const m = d.member_states?.find((x) => x.node === n.id);
+                return html`<tr><td>${d.name} <span class="muted small">${d.api_id}</span></td><td>${d.type}</td><td class="num">${d.pack}</td><td class="num-col num">${exact(d.ctx)}</td><td class="small">${m ? `${m.state} · ${m.engine ?? 'engine'}${m.managed ? '' : ', not managed'}` : d.status_text}</td></tr>`;
+              })
+            : html`<tr><td colspan="5" class="muted">serves nothing</td></tr>`}
+        </tbody>
+      </table>
+      <p class="muted small">The engine's flags and environment are read from the server this page talks to; another Spark's come with its Setup Guide (<a href=${`#/models/serve?node=${encodeURIComponent(n.id)}`}>open ${n.alias}'s</a>).</p>`;
+    return panel(`${n.alias}'s configuration`, body, { sub: 'what the controller knows of this Spark', id: 'config' });
+  }
+
   private renderConfig(): TemplateResult {
+    const node = this.fleetSource && this.source !== 'all' ? this.fleet?.nodes.find((n) => n.id === this.source) : null;
+    if (node && node.id !== hereNode(this.fleet)?.id) return this.renderNodeConfig(node);
     const s = this.system;
     const body = (() => {
       if (s.state === 'loading') return skeleton(6);
@@ -644,6 +808,7 @@ export class QseDev extends LightElement {
 
   render() {
     return html`<div class="view view-dev">
+      ${this.renderSource()}
       ${this.renderConsole()}
       ${this.renderRequests()}
       <div class="grid-2 grid-2-config">

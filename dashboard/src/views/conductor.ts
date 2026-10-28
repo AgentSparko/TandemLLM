@@ -11,6 +11,13 @@
 // (timelines and the export, router and monitor in one), Memory (the session transcripts on the
 // box, VIS-48) and Compare (precision and promotion, the eval tables, the classifier report).
 // Loaded on demand, like the Playground.
+//
+// VIS-254: on a fleet (two Sparks or more) the header's Deployment picks whose conductor this is
+// (`?dep=`). The conductor runs where a deployment's requests are served: this page reads the one of
+// the server it talks to, so the deployments on its Spark are the ones it shows (a Replicas member on
+// another Spark runs its own copy of the profiles, said beside it); a deployment only other Sparks
+// serve is listed with why it is not here. On a controller with no Spark of its own the conductor is
+// its gateway's, for every deployment whose backend has its harness on.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -22,6 +29,10 @@ import { poll, type Poller } from '../lib/poll';
 import { setParams } from '../lib/router';
 import { LightElement } from '../ui/base';
 import { icon } from '../ui/bits';
+import type { FleetDeployment } from '../api/fleet';
+import { onFleet, type FleetState } from '../lib/fleet-state';
+import { deploymentOf, hereNode, isFleet } from '../lib/where';
+import { placeLine } from '../ui/place';
 import { confirmDialog, modeSeg } from './conductor/shared';
 import './conductor/overview';
 import './conductor/routing';
@@ -49,16 +60,52 @@ export class QseConductor extends LightElement {
   @state() private switching = false;
   @state() private reloaded: string | null = null;
   @state() private switchError: string | null = null;
+  @state() private fleet: FleetState | null = null;
   private poller: Poller | null = null;
+  private offFleet: (() => void) | null = null;
 
   connectedCallback(): void {
     super.connectedCallback();
     this.poller = poll(() => this.load(), 15_000);
     this.poller.start();
+    this.offFleet = onFleet((f) => (this.fleet = f));
   }
   disconnectedCallback(): void {
     this.poller?.stop();
+    this.offFleet?.();
     super.disconnectedCallback();
+  }
+
+  // ---- VIS-254: whose conductor ------------------------------------------------------------------
+  /** a deployment whose requests this server's conductor sees: one on its Spark, or any when this
+   *  server is a gateway with no Spark of its own */
+  private mine(d: FleetDeployment): boolean {
+    const here = hereNode(this.fleet);
+    return !here || d.members.includes(here.id);
+  }
+  /** the picked deployment (`?dep=`), else the one this server's own model runs as */
+  private get deployment(): FleetDeployment | null {
+    const f = this.fleet;
+    if (!isFleet(f)) return null;
+    const picked = f.deployments.find((d) => d.id === this.params.get('dep'));
+    return picked ?? deploymentOf(f, this.config?.server.composite ?? 'TandemLLM', true) ?? f.deployments.find((d) => this.mine(d)) ?? null;
+  }
+
+  private renderDeployment(): TemplateResult | typeof nothing {
+    const f = this.fleet;
+    if (!isFleet(f)) return nothing;
+    const here = hereNode(f);
+    const d = this.deployment;
+    const others = d ? d.members.filter((m) => m !== here?.id).map((m) => f.nodes.find((n) => n.id === m)?.alias ?? m) : [];
+    const whose = !here ? "TandemApp's gateway (this server): it acts on a deployment's requests when its backend's harness is on (API → Backends)" : `${here.alias}'s engine, the server this page talks to`;
+    return html`<div class="cond-dep" data-cond-dep>
+      <label class="field"><span>deployment</span>
+        <select aria-label="whose conductor" @change=${(e: Event) => setParams({ dep: (e.target as HTMLSelectElement).value || null })}>
+          ${f.deployments.map((x) => html`<option value=${x.id} ?selected=${x.id === d?.id} ?disabled=${!this.mine(x)} title=${this.mine(x) ? x.name : `${x.name}: its Sparks' own engines run its conductor`}>${x.name}${this.mine(x) ? '' : ' · on other Sparks'}</option>`)}
+        </select></label>
+      ${d ? placeLine(d, f.nodes) : nothing}
+      <span class="muted small">the conductor of ${whose}${d?.type === 'replicas' && others.length && here ? `; ${others.join(', ')} run${others.length === 1 ? 's' : ''} their own copy of the profiles` : ''}</span>
+    </div>`;
   }
 
   private get screen(): Screen {
@@ -129,6 +176,7 @@ export class QseConductor extends LightElement {
             ${this.reloaded ? html`<span class="reload" role="status" data-reloaded>${this.reloaded}</span>` : nothing}
           </div>
         </div>
+        ${this.renderDeployment()}
         ${this.switchError ? html`<div class="guard-line" role="alert">${icon('warn')} ${this.switchError}</div>` : nothing}
         ${this.error ? html`<div class="guard-line" role="alert">${icon('warn')} ${this.error}</div>` : nothing}
         ${loadErrors.map(([k, d]) => html`<div class="guard-line" role="alert">${icon('warn')} ${k}: ${d.error?.message} (kept version ${d.version})</div>`)}

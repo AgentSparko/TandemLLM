@@ -1069,6 +1069,81 @@ qse-pg-setup {
 }
 
 /* ---- responsive ---------------------------------------------------------------------------- */
+/* ---- VIS-254: the target, the Spark an answer came from, Compare ---------------------------------- */
+.pg-target select {
+  max-width: 240px;
+}
+.pg-on {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+}
+.pg-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--rule);
+  background: var(--bg-inset);
+}
+.pg-cmp-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pg-cmp-bar select {
+  max-width: 220px;
+}
+.pg-cmp-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-height: 46vh;
+  overflow: auto;
+}
+.pg-cmp-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+}
+.pg-cmp-col.is-error {
+  border-color: color-mix(in srgb, var(--err) 50%, var(--rule));
+}
+.pg-cmp-h {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: var(--fs-sm);
+}
+.pg-cmp-figs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  font-size: var(--fs-xs);
+}
+.pg-cmp-figs dt {
+  color: var(--ink-3);
+}
+.pg-cmp-figs dd {
+  margin: 0;
+  font-weight: 600;
+}
+.pg-cmp-engine {
+  margin: 0;
+}
+.pg-cmp-col .btn {
+  align-self: flex-start;
+}
+
 @media (max-width: 1180px) {
   .pg {
     --setup-w: 320px;
@@ -1078,6 +1153,13 @@ qse-pg-setup {
   }
 }
 @media (max-width: 768px) {
+  .pg-cmp-cols {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: none;
+  }
+  .pg-cmp-figs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .pg {
     /* the shell pads the content by the gutter above and tab bar + 16 px below */
     height: calc(100vh - var(--topbar-h) - var(--gutter) - var(--tabbar-space) - 16px);

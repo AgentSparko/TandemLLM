@@ -2049,6 +2049,19 @@ qse-chat-composer {
   color: var(--ink-2);
   font-size: var(--fs-xs);
 }
+/* VIS-254: the deployment a model runs as, on a fleet */
+.ch-pop-models .ch-pop-item {
+  flex-wrap: wrap;
+}
+.ch-pop-where {
+  display: flex;
+  flex-basis: 100%;
+  font-size: var(--fs-xs);
+}
+.ch-ctx-place {
+  display: block;
+  margin-top: 2px;
+}
 .ch-pop-switch {
   padding: 2px 8px 6px;
 }

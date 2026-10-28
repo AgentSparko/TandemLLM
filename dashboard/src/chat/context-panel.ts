@@ -19,6 +19,9 @@ import { effortWord, type Conversation, type ContextPartKind, type WorkerContext
 import { etaWords, lastWorkerLine, runningWorkers, waitingWords, workerCacheWords, workerParts, workerPrefill, type WorkerView } from './tasks';
 import { elapsedWords } from './thread';
 import { budgetWords, cacheWords, draftFigure, HARNESS_PENDING, kvWords, liveFigure, memoryWords, partWords, residentWords, sandboxWords, skillTokens, slotWords, turnFigure } from './context-words';
+import { onFleet, type FleetState } from '../lib/fleet-state';
+import { deploymentOf, isFleet } from '../lib/where';
+import { placeLine } from '../ui/place';
 
 const PART_COLOR: Record<ContextPartKind, string> = {
   system: 'var(--series-muted)',
@@ -47,6 +50,18 @@ export class QseChatContext extends LightElement {
   @property({ type: Number }) now = Date.now();
   @state() private openSummary: string | null = null;
   @state() private hover: ContextPartKind | null = null;
+  /** VIS-254: the fleet, for where the conversation runs */
+  @state() private fleet: FleetState | null = null;
+  private offFleet: (() => void) | null = null;
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    this.offFleet = onFleet((f) => (this.fleet = f));
+  }
+  disconnectedCallback(): void {
+    this.offFleet?.();
+    super.disconnectedCallback();
+  }
 
   private fire(name: string, detail: unknown = {}): void {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
@@ -256,8 +271,19 @@ export class QseChatContext extends LightElement {
         <div><dt>drafter</dt><dd>${m.drafter ?? 'none'}</dd></div>
         <div><dt>window</dt><dd class="num">${m.max_len ? exact(m.max_len) : 'not reported by this backend'}</dd></div>
         <div><dt>effort</dt><dd>${m.thinking ? effortWord(m.effort) : 'thinking off'}</dd></div>
+        ${this.renderPlace(c)}
       </dl>
     </section>`;
+  }
+
+  /** VIS-254: on a fleet, the deployment the chat's model runs as and its Sparks */
+  private renderPlace(c: Conversation): TemplateResult | typeof nothing {
+    const f = this.fleet;
+    if (!isFleet(f)) return nothing;
+    const id = c.settings.model;
+    const d = deploymentOf(f, id, true);
+    const how = !d ? '' : d.type === 'replicas' ? `${d.name}: the conversation stays on one member; it moves to another only when its member fails` : d.type === 'split' ? `${d.name}: every stage carries each turn` : d.name;
+    return html`<div data-runs-on><dt>runs on</dt><dd>${d ? html`${placeLine(d, f.nodes)}<span class="small muted ch-ctx-place">${how}</span>` : html`<span class="muted">no Spark of this fleet (a model this server relays)</span>`}</dd></div>`;
   }
 
   /** SRV-361: the chat's pins with their tokens, and what the harness put in last */

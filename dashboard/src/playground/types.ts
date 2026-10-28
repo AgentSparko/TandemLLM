@@ -40,6 +40,8 @@ export interface TurnStats {
   elapsedMs?: number;
   chunks?: number;
   bytes?: number;
+  /** VIS-254: the Spark that answered (TandemApp's gateway names it, `X-Tandem-Node`) */
+  node?: string | null;
 }
 
 /** A parameter that has not been touched is `undefined` and is not sent. */

@@ -19,12 +19,14 @@ import { refreshContext, registerContext, type ContextContent } from '../../lib/
 import { onFleet, refreshFleet, type FleetState } from '../../lib/fleet-state';
 import { poll, type Poller } from '../../lib/poll';
 import { colourChoices } from '../../lib/sparks';
+import { lastValue, liveValues } from '../../lib/monitor';
 import { LightElement } from '../../ui/base';
 import { icon } from '../../ui/bits';
 import { isHollow, nodeChip, nodeColour } from '../../ui/node-chip';
 import { clock, signInCard } from '../monitor/bits';
 import { checkSession, needsSignIn, onSession } from '../monitor/data';
 import '../monitor/topology';
+import type { TopoNow } from '../monitor/topology';
 import '../../styles/wizard.css';
 
 const POLL_MS = 1000;
@@ -60,6 +62,9 @@ export class QseAddSpark extends LightElement {
   @state() private disc: Discovery | null = null;
   @state() private fleetState: FleetState | null = null;
   @state() private topo: FleetTopology | null = null;
+  /** the Done step's figures on each Spark: decode, temperature, power, LAN and fabric now (VIS-254:
+   *  the graph said "no figures yet" for every Spark without them) */
+  @state() private topoNow: TopoNow = {};
   @state() private busy = '';
   @state() private err: Record<string, string> = {};
   @state() private manual: 'addr' | 'rent' | null = null;
@@ -606,7 +611,11 @@ export class QseAddSpark extends LightElement {
 
   // ---- Done ------------------------------------------------------------------------------------
   private async readTopology(): Promise<void> {
-    this.topo = await fleet.topology().catch(() => null);
+    const keys = ['tps', 'temp', 'power', 'lan', 'fabric'] as const;
+    const [topo, ...ms] = await Promise.all([fleet.topology().catch(() => null), ...keys.map((k) => fleet.metrics({ source: 'all', metric: k, range: '5m' }).catch(() => null))]);
+    this.topo = topo;
+    const nodes = this.fleetState?.nodes ?? topo?.nodes ?? [];
+    this.topoNow = Object.fromEntries(keys.map((k, i) => [k, liveValues(Object.fromEntries((ms[i]?.series ?? []).map((x) => [x.node, lastValue(x.values)])), nodes)]));
   }
 
   private doneStep(): TemplateResult {
@@ -630,7 +639,7 @@ export class QseAddSpark extends LightElement {
       </section>
       <section class="panel" data-panel="topology">
         <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">The fleet with the new Spark${added.length > 1 ? 's' : ''}</h2><p class="panel-sub">New: ${added.map((n) => n.alias).join(', ') || '…'}.</p></div></header>
-        ${this.topo ? html`<qse-topology class="wz-topo" .topo=${this.topo} .deployments=${this.fleetState?.deployments ?? []} .selected=${added[0] ? `node:${added[0].id}` : ''}></qse-topology>` : html`<div class="skeleton" style="height:220px"></div>`}
+        ${this.topo ? html`<qse-topology class="wz-topo" .topo=${this.topo} .now=${this.topoNow} .deployments=${this.fleetState?.deployments ?? []} .selected=${added[0] ? `node:${added[0].id}` : ''}></qse-topology>` : html`<div class="skeleton" style="height:220px"></div>`}
       </section>
       <div class="wz-row"><button type="button" class="btn btn-ghost" data-act="again" @click=${async () => ((this.names = {}), (this.drafts = {}), this.set(await fleet.startAdd()), await this.find())}>Add another Spark</button></div>`;
   }

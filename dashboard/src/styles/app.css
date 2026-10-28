@@ -1393,6 +1393,38 @@ a.node-chip:hover .node-alias {
 .history {
   margin-top: 16px;
 }
+/* VIS-254: the ledger Usage reads, and the switch between this server's and the controller's */
+.ledger-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: -4px 0 16px;
+}
+.ledger-line .seg-btn[disabled] {
+  opacity: 0.5;
+}
+.chip .node-chip {
+  pointer-events: none;
+}
+/* VIS-254: where a deployment runs: its type and its Sparks (ui/place.ts) */
+.place-line {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+}
+/* VIS-254: on a fleet, the part of Performance that is this server's own engine */
+.here-head {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  margin: 4px 0 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
 .history-head {
   justify-content: space-between;
   align-items: flex-start;
@@ -1518,6 +1550,43 @@ a.node-chip:hover .node-alias {
 .log-ts {
   color: var(--ink-3);
   flex: none;
+}
+/* VIS-254: a Spark's line in the interleaved log, and the Dev page's source picker */
+.log-node {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  max-width: 120px;
+  overflow: hidden;
+}
+.log-node .node-chip {
+  font-size: var(--fs-xs);
+}
+.dev-source {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.dev-src {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.dev-src.is-on {
+  border-color: var(--cobalt);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--cobalt) 12%, var(--bg-2));
 }
 .log-tag {
   flex: none;

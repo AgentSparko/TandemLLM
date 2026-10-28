@@ -15,6 +15,9 @@ import { modeDesc, modeOf, modeWord, PERMISSION_MODES } from './permission';
 import { chatProvider, providerWord } from './websearch';
 import { attachmentWords } from './context-words';
 import { AGENTS_HINT, agentsAsk } from './tasks';
+import { onFleet, type FleetState } from '../lib/fleet-state';
+import { deploymentOf, isFleet } from '../lib/where';
+import { placeLine } from '../ui/place';
 
 const MAX_PREVIEW_BYTES = 400_000;
 
@@ -51,16 +54,21 @@ export class QseChatComposer extends LightElement {
   private onMedia = () => (this.phone = !!this.mqPhone?.matches);
   /** the phone's pill strip: which edge has more behind it, so that edge fades */
   @state() private edge: Edge = 'none';
+  /** VIS-254: the fleet, for the deployment a model runs as */
+  @state() private fleet: FleetState | null = null;
+  private offFleet: (() => void) | null = null;
 
   connectedCallback(): void {
     super.connectedCallback();
     this.text = this.draft;
     document.addEventListener('click', this.onDocClick);
     this.mqPhone?.addEventListener('change', this.onMedia);
+    this.offFleet = onFleet((f) => (this.fleet = f));
   }
   disconnectedCallback(): void {
     document.removeEventListener('click', this.onDocClick);
     this.mqPhone?.removeEventListener('change', this.onMedia);
+    this.offFleet?.();
     super.disconnectedCallback();
   }
   updated(changed: Map<string, unknown>): void {
@@ -326,7 +334,12 @@ export class QseChatComposer extends LightElement {
   private renderModelPop(caps: Capabilities, s: ChatSettings | null): TemplateResult {
     const cur = caps.models.find((m) => m.id === s?.model) ?? caps.models[0];
     return html`<div class="ch-pop ch-pop-models" role="menu">
-      ${caps.models.map((m) => html`<button type="button" role="menuitemradio" aria-checked=${m === cur} class="ch-pop-item ${m === cur ? 'is-on' : ''}" data-model=${m.id} @click=${() => (this.patch(modelPatch(m)), (this.pop = 'none'))}><span class="ch-pop-name">${m.name}</span><span class="ch-pop-desc">${modelDesc(m)}</span></button>`)}
+      ${caps.models.map((m) => {
+        // VIS-254: on a fleet, the deployment that serves it and its Sparks (a model with no backend
+        // named is the engine's own, as an older chatd lists it)
+        const d = isFleet(this.fleet) ? deploymentOf(this.fleet, m.id, m.backend !== 'proxy' && m.backend !== 'cloud') : null;
+        return html`<button type="button" role="menuitemradio" aria-checked=${m === cur} class="ch-pop-item ${m === cur ? 'is-on' : ''}" data-model=${m.id} @click=${() => (this.patch(modelPatch(m)), (this.pop = 'none'))}><span class="ch-pop-name">${m.name}</span><span class="ch-pop-desc">${modelDesc(m)}</span>${d ? html`<span class="ch-pop-where">${placeLine(d, this.fleet!.nodes)}</span>` : nothing}</button>`;
+      })}
     </div>`;
   }
 

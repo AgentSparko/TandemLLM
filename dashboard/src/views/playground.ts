@@ -2,13 +2,19 @@
 // public chat endpoint with the reasoning shown, editable roles and a system prompt, a
 // parameters column that sends only what was changed, the function-calling flow with mock
 // results, a per-turn readout of the engine's figures, presets in the browser, and exports.
+//
+// VIS-254: on a fleet (two Sparks or more) the toolbar's Target picks what the turns go to: this
+// server's own model, a deployment through TandemApp's gateway, or one member of it pinned
+// (playground/targets.ts, `?target=`); each answer names the Spark that wrote it. Compare sends the
+// next turn to two targets at once and shows both answers side by side with their Spark and their
+// timings (time to first token, decode, total, tokens); either answer can be kept in the chat.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { api, describeError } from '../api/client';
-import type { SystemInfo } from '../api/types';
+import type { ServerSystem } from '../api/types';
 import { exact } from '../lib/format';
 import { LightElement } from '../ui/base';
 import { copyButton, icon } from '../ui/bits';
@@ -22,9 +28,30 @@ import { echoResult, prettyArgs, templateFor, toolResultMessages, validateTools 
 import { emptySetup, ROLES, uid, type Message, type Role, type Setup, type TurnStats } from '../playground/types';
 import type { PresetAction, QsePgSetup } from '../playground/setup-panel';
 import '../playground/setup-panel';
+import { onFleet, type FleetState } from '../lib/fleet-state';
+import { isFleet } from '../lib/where';
+import { setParams } from '../lib/router';
+import { nodeChip } from '../ui/node-chip';
+import { comparePair, sendTo, targetOf, targetsOf, type Target } from '../playground/targets';
 
 /** The server serves one model (2026-10-01); the raw engine's old name is only a hidden alias. */
 const MODEL = 'TandemLLM';
+
+/** one side of Compare: a target's answer as it streams, and its figures */
+interface CompareRun {
+  key: string;
+  label: string;
+  content: string;
+  reasoning: string;
+  /** the Spark's alias, from the gateway's X-Tandem-Node */
+  node: string | null;
+  state: 'streaming' | 'done' | 'error' | 'aborted';
+  error: string | null;
+  /** browser-measured, from the request to the first content or reasoning */
+  ttftMs: number | null;
+  elapsedMs: number;
+  stats: TurnStats | null;
+}
 
 interface LastResponse {
   message: { role: 'assistant'; content: string; reasoning_content?: string; tool_calls?: Message['tool_calls'] };
@@ -62,6 +89,13 @@ export class QsePlayground extends LightElement {
   @state() private lastRequest: ChatRequestBody | null = null;
   @state() private lastResponse: LastResponse | null = null;
   @state() private toolResults: Record<string, string> = {};
+  /** VIS-254: the fleet (targets), Compare's two targets and their answers */
+  @state() private fleet: FleetState | null = null;
+  @state() private compare: { a: string; b: string } | null = null;
+  @state() private compareRuns: CompareRun[] = [];
+  @state() private compareUser: Message | null = null;
+  private compareCtrl: AbortController | null = null;
+  private offFleet: (() => void) | null = null;
   private ctrl: AbortController | null = null;
   private draftTimer: ReturnType<typeof setTimeout> | null = null;
   private noticeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -78,9 +112,12 @@ export class QsePlayground extends LightElement {
     // a reload or a tab switch inside the debounce window must not lose the draft
     window.addEventListener('pagehide', this.flushDraft);
     void this.loadSystem();
+    this.offFleet = onFleet((f) => (this.fleet = f));
   }
   disconnectedCallback(): void {
     this.ctrl?.abort();
+    this.compareCtrl?.abort();
+    this.offFleet?.();
     window.removeEventListener('pagehide', this.flushDraft);
     this.flushDraft();
     super.disconnectedCallback();
@@ -88,7 +125,7 @@ export class QsePlayground extends LightElement {
 
   private async loadSystem(): Promise<void> {
     try {
-      const s: SystemInfo = await api.system();
+      const s: ServerSystem = await api.system();
       this.defaults = defaultsFrom(s);
       this.defaultsReady = true;
       this.model = s.engine.model;
@@ -161,8 +198,20 @@ export class QsePlayground extends LightElement {
     return this.params.get('profile');
   }
 
-  private currentRequest(extra: Message[] = []): ChatRequestBody {
-    return buildRequest(this.setup, [...this.messages, ...extra], { model: MODEL, tools: this.toolsValidation.tools });
+  private currentRequest(extra: Message[] = [], t: Target = this.target): ChatRequestBody {
+    return buildRequest(this.setup, [...this.messages, ...extra], { model: sendTo(t, MODEL).model, tools: this.toolsValidation.tools });
+  }
+
+  // ---- VIS-254: the target ------------------------------------------------------------------
+  private get targets(): Target[] {
+    return isFleet(this.fleet) ? targetsOf(this.fleet) : [];
+  }
+  /** the turns' target: this server's own model unless a fleet's is picked (`?target=`) */
+  private get target(): Target {
+    return targetOf(this.targets, this.params.get('target'));
+  }
+  private nodeByAlias(alias: string | null | undefined) {
+    return alias ? this.fleet?.nodes.find((n) => n.alias === alias) ?? null : null;
   }
 
   private scrollTranscript(): void {
@@ -175,6 +224,7 @@ export class QsePlayground extends LightElement {
 
   // ---- the conversation -------------------------------------------------------------------
   private send(): void {
+    if (this.compare) return void this.runCompare();
     if (this.streaming) return;
     const text = this.composer.trim();
     if (text) {
@@ -195,6 +245,11 @@ export class QsePlayground extends LightElement {
 
   private stop(): void {
     this.ctrl?.abort();
+    this.compareCtrl?.abort();
+  }
+  /** a Compare turn streams on either side */
+  private get comparing(): boolean {
+    return this.compareRuns.some((r) => r.state === 'streaming');
   }
 
   private newChat(): void {
@@ -234,7 +289,7 @@ export class QsePlayground extends LightElement {
         content: st.content,
         reasoning: st.reasoning,
         tool_calls: st.toolCalls.length ? st.toolCalls : undefined,
-        stats: { ...(this.messages[idx].stats ?? { finish: null }), finish: final ? st.finish ?? (st.error ? 'error' : 'stop') : null, usage: st.usage, timings: st.timings, metrics: st.metrics, error: st.error ?? null, elapsedMs: performance.now() - started, chunks: st.chunks, bytes },
+        stats: { ...(this.messages[idx].stats ?? { finish: null }), finish: final ? st.finish ?? (st.error ? 'error' : 'stop') : null, usage: st.usage, timings: st.timings, metrics: st.metrics, error: st.error ?? null, elapsedMs: performance.now() - started, chunks: st.chunks, bytes, node },
       };
       const msgs = this.messages.slice();
       msgs[idx] = next;
@@ -242,14 +297,17 @@ export class QsePlayground extends LightElement {
       this.scrollTranscript();
       return next;
     };
+    const to = sendTo(this.target, MODEL);
+    let node: string | null = null;
     try {
-      const res = await fetch(api.chatUrl(), {
+      const res = await fetch(to.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'qse-dashboard', ...(this.profile ? { 'X-Tandem-Profile': this.profile } : {}) },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'qse-dashboard', ...(this.profile ? { 'X-Tandem-Profile': this.profile } : {}), ...to.headers },
         body: JSON.stringify(body),
         signal: ctrl.signal,
         credentials: 'same-origin',
       });
+      node = res.headers.get('X-Tandem-Node');
       if (!res.ok || !res.body) {
         let msg = `HTTP ${res.status}`;
         let type: string | undefined;
@@ -300,6 +358,138 @@ export class QsePlayground extends LightElement {
       }
       this.persist();
     }
+  }
+
+  // ---- VIS-254: Compare -----------------------------------------------------------------------
+  private toggleCompare(): void {
+    if (this.compare) {
+      this.compareCtrl?.abort();
+      this.compare = null;
+      this.compareRuns = [];
+      this.compareUser = null;
+      return;
+    }
+    const [a, b] = comparePair(this.targets);
+    this.compare = { a, b };
+  }
+
+  /** the same next turn on both targets at once, each answer streaming in its column */
+  private async runCompare(): Promise<void> {
+    const c = this.compare;
+    if (!c || this.compareRuns.some((r) => r.state === 'streaming')) return;
+    const blocked = this.blocked;
+    if (blocked) return this.say('warn', blocked);
+    const text = this.composer.trim();
+    if (!text && !this.messages.length) return;
+    const user: Message | null = text ? { uid: uid(), role: 'user', content: text } : null;
+    this.composer = '';
+    this.compareUser = user;
+    const msgs = user ? [...this.messages, user] : this.messages;
+    const pair = [c.a, c.b].map((k) => targetOf(this.targets, k));
+    this.compareCtrl?.abort();
+    const ctrl = new AbortController();
+    this.compareCtrl = ctrl;
+    this.compareRuns = pair.map((t) => ({ key: t.key, label: this.targetLabel(t), content: '', reasoning: '', node: t.pin?.alias ?? null, state: 'streaming', error: null, ttftMs: null, elapsedMs: 0, stats: null }));
+    await Promise.all(pair.map((t, i) => this.streamOne(t, msgs, ctrl, i)));
+  }
+
+  private async streamOne(t: Target, msgs: Message[], ctrl: AbortController, i: number): Promise<void> {
+    const to = sendTo(t, MODEL);
+    const body = buildRequest(this.setup, msgs, { model: to.model, tools: this.toolsValidation.tools });
+    const t0 = performance.now();
+    const reducer = new ChatStreamReducer();
+    const set = (patch: Partial<CompareRun>) => {
+      if (this.compareCtrl !== ctrl) return;
+      const runs = this.compareRuns.slice();
+      runs[i] = { ...runs[i], ...patch, elapsedMs: performance.now() - t0 };
+      this.compareRuns = runs;
+    };
+    try {
+      const res = await fetch(to.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'qse-dashboard', ...to.headers },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+        credentials: 'same-origin',
+      });
+      const node = res.headers.get('X-Tandem-Node') ?? t.pin?.alias ?? null;
+      if (!res.ok || !res.body) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          msg = (await res.json())?.error?.message ?? msg;
+        } catch {
+          /* no body */
+        }
+        return set({ state: 'error', error: `${res.status}: ${msg}`, node });
+      }
+      let ttft: number | null = null;
+      for await (const chunk of readChatStream(res.body, { signal: ctrl.signal })) {
+        reducer.feed(chunk);
+        const st = reducer.state;
+        if (ttft == null && (st.content || st.reasoning)) ttft = performance.now() - t0;
+        set({ content: st.content, reasoning: st.reasoning, node, ttftMs: ttft });
+      }
+      const st = reducer.end();
+      set({ content: st.content, reasoning: st.reasoning, node, ttftMs: ttft, state: st.error ? 'error' : 'done', error: st.error?.message ?? null, stats: { finish: st.finish, usage: st.usage, timings: st.timings, metrics: st.metrics, error: st.error ?? null, chunks: st.chunks, node } });
+    } catch (e) {
+      set({ state: (e as Error).name === 'AbortError' ? 'aborted' : 'error', error: (e as Error).name === 'AbortError' ? null : (e as Error).message });
+    }
+  }
+
+  /** keeps one side's answer in the chat: the compared turn and that answer */
+  private keepCompare(r: CompareRun): void {
+    const kept: Message = { uid: uid(), role: 'assistant', content: r.content, reasoning: r.reasoning, stats: { ...(r.stats ?? { finish: 'stop' }), elapsedMs: r.elapsedMs, node: r.node } };
+    this.setMessages([...this.messages, ...(this.compareUser ? [this.compareUser] : []), kept]);
+    this.compareRuns = [];
+    this.compareUser = null;
+    this.stickToEnd = true;
+    this.scrollTranscript();
+  }
+
+  private targetLabel(t: Target): string {
+    return t.deployment ? t.label : `This server · ${MODEL}`;
+  }
+
+  /** the client's own figures beside the engine's: time to first token, decode, total, tokens */
+  private compareFigures(r: CompareRun): TemplateResult {
+    const out = r.stats?.usage?.completion_tokens ?? null;
+    const tps = out != null && r.ttftMs != null && r.elapsedMs > r.ttftMs ? (Math.max(0, out - 1) * 1000) / (r.elapsedMs - r.ttftMs) : null;
+    return html`<dl class="pg-cmp-figs num">
+      <div data-fig="ttft"><dt>first token</dt><dd>${r.ttftMs == null ? '—' : `${(r.ttftMs / 1000).toFixed(2)} s`}</dd></div>
+      <div data-fig="decode"><dt>decode</dt><dd>${tps == null ? '—' : `${tps.toFixed(1)} tok/s`}</dd></div>
+      <div data-fig="total"><dt>total</dt><dd>${(r.elapsedMs / 1000).toFixed(2)} s</dd></div>
+      <div data-fig="tokens"><dt>tokens</dt><dd>${out == null ? '—' : exact(out)}</dd></div>
+    </dl>
+    ${r.stats ? html`<p class="pg-cmp-engine muted small">${readoutLine(r.stats)}</p>` : nothing}`;
+  }
+
+  private renderCompare(): TemplateResult | typeof nothing {
+    const c = this.compare;
+    if (!c) return nothing;
+    const list = this.targets;
+    const pick = (side: 'a' | 'b') => html`<label class="field"><span>${side.toUpperCase()}</span>
+      <select data-cmp=${side} .value=${c[side]} @change=${(e: Event) => (this.compare = { ...c, [side]: (e.target as HTMLSelectElement).value })}>
+        ${list.map((t) => html`<option value=${t.key} ?selected=${t.key === c[side]}>${this.targetLabel(t)}</option>`)}
+      </select></label>`;
+    const runs = this.compareRuns;
+    return html`<section class="pg-compare" data-compare aria-label="compare two targets">
+      <div class="pg-cmp-bar">${pick('a')}<span class="muted">vs</span>${pick('b')}<span class="grow"></span><span class="muted small">the next turn goes to both; keep the answer you want in the chat</span></div>
+      ${runs.length
+        ? html`<div class="pg-cmp-cols">
+            ${runs.map((r) => {
+              const n = this.nodeByAlias(r.node);
+              return html`<article class="pg-cmp-col is-${r.state}" data-cmp-col=${r.key}>
+                <header class="pg-cmp-h"><b>${r.label}</b>${n ? nodeChip(n) : r.node ? html`<span class="small">${r.node}</span>` : nothing}<span class="grow"></span>${r.state === 'streaming' ? html`<span class="pulse"></span>` : nothing}</header>
+                ${r.reasoning ? html`<details class="pg-think"><summary>thinking</summary><div class="pg-think-body">${r.reasoning}</div></details>` : nothing}
+                ${r.content || r.state === 'streaming' ? html`<div class="pg-md ${r.state === 'streaming' ? 'is-streaming' : ''}">${unsafeHTML(renderMarkdown(r.content))}</div>` : nothing}
+                ${r.error ? html`<div class="pg-msg-error" role="alert">${icon('warn')} <span>${r.error}</span></div>` : nothing}
+                ${this.compareFigures(r)}
+                ${r.state === 'done' ? html`<button type="button" class="btn btn-sm" data-keep @click=${() => this.keepCompare(r)}>Keep this answer</button>` : nothing}
+              </article>`;
+            })}
+          </div>`
+        : nothing}
+    </section>`;
   }
 
   private finishTurn(id: string, stats: TurnStats): void {
@@ -435,7 +625,7 @@ export class QsePlayground extends LightElement {
           : nothing}
       </header>
       <div class="pg-msg-body">${editing ? this.renderEditor(m) : this.renderBody(m, live, answered)}</div>
-      ${m.role === 'assistant' && m.stats && !editing ? html`<footer class="pg-msg-foot num" data-testid="readout-line">${m.stats.finish === null ? html`<span class="pulse"></span> streaming` : readoutLine(m.stats)}${m.stats.finish === 'aborted' ? html` · <span class="warn-ink">aborted</span>` : nothing}</footer>` : nothing}
+      ${m.role === 'assistant' && m.stats && !editing ? html`<footer class="pg-msg-foot num" data-testid="readout-line">${m.stats.finish === null ? html`<span class="pulse"></span> streaming` : readoutLine(m.stats)}${m.stats.finish === 'aborted' ? html` · <span class="warn-ink">aborted</span>` : nothing}${m.stats.node ? html` <span class="pg-on" data-node-on>on ${this.nodeByAlias(m.stats.node) ? nodeChip(this.nodeByAlias(m.stats.node)!, { status: false }) : m.stats.node}</span>` : nothing}</footer>` : nothing}
     </article>`;
   }
 
@@ -530,7 +720,7 @@ export class QsePlayground extends LightElement {
         </div>
         <span class="grow"></span>
         ${blocked ? html`<span class="pg-blocked warn-ink small" role="status">${blocked}</span>` : nothing}
-        ${this.streaming
+        ${this.streaming || this.comparing
           ? html`<button type="button" class="btn pg-stop" @click=${() => this.stop()}>${icon('stop')} Stop</button>`
           : html`<button type="submit" class="btn btn-primary pg-send" ?disabled=${!!blocked || (!this.composer.trim() && !this.messages.length)}>${icon('send')} Send</button>`}
       </div>
@@ -559,7 +749,7 @@ export class QsePlayground extends LightElement {
       const body = this.currentRequest(pending ? [{ uid: 'pending', role: 'user', content: pending }] : []);
       const json = JSON.stringify(body, null, 2);
       return html`<section class="pg-drawer" data-drawer="raw">
-        <header class="pg-drawer-head"><h3>Raw request</h3><span class="muted small">what the next Send posts to <code>POST /v1/chat/completions</code></span><span class="grow"></span>${copyButton(json, 'Copy JSON')}<button type="button" class="btn btn-ghost btn-sm" @click=${async () => {
+        <header class="pg-drawer-head"><h3>Raw request</h3><span class="muted small">what the next Send posts to <code>POST ${this.target.deployment ? '/v1/fleet/gateway/chat/completions' : '/v1/chat/completions'}</code>${this.target.pin ? html` with <code>X-Tandem-Pin: ${this.target.pin.id}</code>` : nothing}</span><span class="grow"></span>${copyButton(json, 'Copy JSON')}<button type="button" class="btn btn-ghost btn-sm" @click=${async () => {
           try {
             await navigator.clipboard.writeText(asCurl(body, location.origin));
             this.say('ok', 'curl copied.');
@@ -614,6 +804,13 @@ export class QsePlayground extends LightElement {
         this.updateComplete.then(() => panel?.querySelector<HTMLInputElement>('#pg-preset-name')?.focus());
       }}>Save preset</button>
       ${this.profile ? html`<span class="badge badge-on" data-pg-profile title="model TandemLLM, header X-Tandem-Profile: ${this.profile}">TandemLLM · ${this.profile}</span>` : nothing}
+      ${this.targets.length > 1
+        ? html`<label class="field pg-target" data-pg-target><span>target</span>
+              <select aria-label="Where the turns go" .value=${this.target.key} @change=${(e: Event) => setParams({ target: (e.target as HTMLSelectElement).value || null })}>
+                ${this.targets.map((t) => html`<option value=${t.key} ?selected=${t.key === this.target.key}>${this.targetLabel(t)}</option>`)}
+              </select></label>
+            <button type="button" class="btn btn-sm ${this.compare ? 'is-on' : ''}" aria-pressed=${!!this.compare} data-pg-compare title="The same next turn on two targets, side by side" @click=${() => this.toggleCompare()}>Compare</button>`
+        : nothing}
       <button type="button" class="btn btn-sm pg-setup-toggle" aria-expanded=${this.setupOpen} aria-controls="pg-setup" @click=${() => (this.setupOpen = !this.setupOpen)}>${icon('sliders')} Setup${this.presetDirty || Object.keys(this.setup.params).length || this.setup.system ? html`<span class="pg-dot" aria-hidden="true"></span>` : nothing}</button>
     </div>`;
   }
@@ -640,6 +837,7 @@ export class QsePlayground extends LightElement {
                   <p class="muted">Type a message and send it, or set a system prompt, parameters and tools on the right first. Every turn shows the engine's own figures; nothing typed here leaves this browser except the request itself.</p>
                 </div>`}
           </div>
+          ${this.renderCompare()}
           ${this.renderComposer()}
           ${this.renderReadout()}
           ${this.renderDrawer()}
