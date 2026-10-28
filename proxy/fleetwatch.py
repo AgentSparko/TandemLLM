@@ -256,6 +256,21 @@ class Watch:
                  f"{'on' if r.enabled else 'off'}, scope {r.scope}")
         return r.view()
 
+    @_locked
+    def edited(self) -> dict:
+        """{rule id: its edit} for the rules changed from their seed."""
+        return {k: v for k, v in self.store.rule_edits().items() if k in self._rules}
+
+    @_locked
+    def reset(self, rid: str, who: str) -> dict:
+        """The rule as it was seeded: its edit dropped (an import that replaces, 6.3b)."""
+        if rid not in self._rules:
+            raise RuleError(404, f"no rule {rid}")
+        self.store.delete_rule_edit(rid)
+        self._rules[rid] = default_rules()[rid]
+        self.log(f"[fleet] rule {rid} back to its default ({who})")
+        return self._rules[rid].view()
+
     # ------------------------------------------------------------------ alerts
     @staticmethod
     def public(a: dict) -> dict:

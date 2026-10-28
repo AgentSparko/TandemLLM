@@ -261,13 +261,17 @@ def unseal(sealed: dict, key_path: str) -> dict:
 # ---------------------------------------------------------------------- another controller
 
 def call(url: str, method: str, path: str, body=None, token: str | None = None,
-         timeout: float = 20.0) -> tuple[int, dict]:
-    """A JSON call to another TandemApp controller: (status, body); 502 when it does not answer."""
+         timeout: float = 20.0, cookie: str | None = None) -> tuple[int, dict]:
+    """A JSON call to another TandemApp controller: (status, body); 502 when it does not answer.
+    `token` goes as the bearer, `cookie` as its session (a sign-in with its password)."""
     data = None if body is None else json.dumps(body).encode()
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    if cookie:
+        headers["Cookie"] = f"qse_dash={cookie}"
     req = urllib.request.Request(url.rstrip("/") + path, data=data, method=method,
-                                 headers={"Content-Type": "application/json",
-                                          **({"Authorization": f"Bearer {token}"} if token
-                                             else {})})
+                                 headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, json.loads(r.read() or b"{}")
@@ -281,6 +285,24 @@ def call(url: str, method: str, path: str, body=None, token: str | None = None,
                                                                  f"{type(exc).__name__}: {exc}"}}
 
 
+def sign_in(url: str, password: str, timeout: float = 20.0) -> str | None:
+    """A session at another controller with its admin password (one set in App settings is no
+    bearer, server/auth.py): the cookie's value, or None."""
+    req = urllib.request.Request(url.rstrip("/") + "/v1/fleet/session",
+                                 data=json.dumps({"token": password}).encode(), method="POST",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            got = r.headers.get_all("Set-Cookie") or []
+    except (OSError, ValueError):
+        return None
+    for c in got:
+        k, _, v = c.split(";", 1)[0].strip().partition("=")
+        if k == "qse_dash" and v:
+            return v
+    return None
+
+
 def _err(doc: dict, fallback: str) -> str:
     return ((doc or {}).get("error") or {}).get("message") or fallback
 
@@ -288,9 +310,10 @@ def _err(doc: dict, fallback: str) -> str:
 # ---------------------------------------------------------------------- the mover
 
 class Mover:
-    def __init__(self, fleet, *, clock=time.time, spawn=None, sleep=time.sleep, call=call):
+    def __init__(self, fleet, *, clock=time.time, spawn=None, sleep=time.sleep, call=call,
+                 sign_in=sign_in):
         self.fleet = fleet
-        self.clock, self.sleep, self.call = clock, sleep, call
+        self.clock, self.sleep, self.call, self.sign_in = clock, sleep, call, sign_in
         self.spawn = spawn or (lambda fn: threading.Thread(target=fn, daemon=True).start())
         self._tokens: dict[str, tuple] = {}
         self._handovers: dict[str, dict] = {}
@@ -434,6 +457,9 @@ class Mover:
                        "(fleet.sqlite3)",
                        "this controller keeps running for its page; it no longer reads the "
                        "moved nodes"]
+        if getattr(getattr(f.svc, "auth", None), "has_password", False):
+            p["keeps"].append("this controller's admin password (App settings) stays here: the "
+                              "new controller has the admin token it runs with")
         if p["needs_password"]:
             p["impact"].append(f"the new controller listens on the LAN: give it an admin "
                                f"password ({MIN_PASSWORD} or more characters)")
@@ -759,7 +785,14 @@ class Mover:
         sid = "check"
         try:
             self._step(job, sid, "running")
-            st, doc = self.call(url, "GET", "/v1/fleet/controller", token=password)
+            auth = {"token": password}
+            st, doc = self.call(url, "GET", "/v1/fleet/controller", **auth)
+            if st == 401 and password:
+                # a password set in its App settings signs in; the admin token is a bearer too
+                c = self.sign_in(url, password)
+                if c:
+                    auth = {"cookie": c}
+                    st, doc = self.call(url, "GET", "/v1/fleet/controller", **auth)
             if st != 200:
                 return self._fail(job, sid, "unreachable", _err(doc, f"{url} answered HTTP {st}"))
             self._step(job, sid, "done", f"{doc['host']['name']} ({url})")
@@ -768,7 +801,7 @@ class Mover:
             tr = f.trust()
             st, got = self.call(url, "POST", "/v1/fleet/controller/handover",
                                 {"certificate": tr.pem, "name": tr.name,
-                                 "api_url": self.api_url()}, token=password, timeout=60.0)
+                                 "api_url": self.api_url()}, timeout=60.0, **auth)
             if st != 200:
                 return self._fail(job, sid, (got.get("error") or {}).get("type") or
                                   "refused", _err(got, f"HTTP {st}"))
@@ -784,7 +817,7 @@ class Mover:
             sid = "repin"
             self._step(job, sid, "running")
             st, c = self.call(url, "POST", f"/v1/fleet/controller/handover/{got['id']}/commit",
-                              {}, token=password, timeout=60.0)
+                              {}, timeout=60.0, **auth)
             if st != 200:
                 return self._fail(job, sid, "refused", _err(c, f"HTTP {st}"))
             job["nodes"] = c["nodes"]

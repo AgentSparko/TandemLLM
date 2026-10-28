@@ -115,10 +115,16 @@ def same_origin_json(headers) -> tuple[int, str, str] | None:
     `Sec-Fetch-Site: cross-site` is refused, and an `Origin` must name this server's host (the
     `Host` the browser sent, which nginx passes on as $host, or `X-Forwarded-Host`). A tool
     without a browser sends no Origin and no Sec-Fetch-Site and passes on its JSON alone."""
-    from urllib.parse import urlsplit
     ctype = (headers.get("Content-Type") or "").split(";")[0].strip().lower()
     if ctype != "application/json":
         return 415, "json_only", "the setup routes take a JSON body (Content-Type: application/json)"
+    return same_origin(headers)
+
+
+def same_origin(headers) -> tuple[int, str, str] | None:
+    """same_origin_json without the body's type: for a write whose body may be empty (a DELETE)
+    or that a tool sends without one (proxy/app.py, every /v1/fleet/* write)."""
+    from urllib.parse import urlsplit
     if (headers.get("Sec-Fetch-Site") or "").strip().lower() == "cross-site":
         return 403, "cross_site", "a request from another site cannot change the setup"
     origin = headers.get("Origin")

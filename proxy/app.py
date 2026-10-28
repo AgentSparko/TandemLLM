@@ -66,6 +66,9 @@ from server import static
 
 STATE: dict = {}
 GATEWAY = "/v1/fleet/gateway/chat/completions"
+# a /v1/fleet/* request body (not the gateway's chat body) is read only up to this: the body is
+# read before the route's guard, so a bigger one is refused unread (an import is a few KiB)
+FLEET_BODY_MAX = 4 * 1024 * 1024
 # SRV-605: the request phase has a timeout, the answer has none. A client that connects and sends
 # nothing, stops halfway through its request, or keeps a connection idle between requests gives
 # the thread back after this many seconds (`--idle-timeout`, TANDEM_IDLE_TIMEOUT_S; 0 for none).
@@ -240,6 +243,21 @@ class Handler(BaseHTTPRequestHandler):
         closes afterwards: the unread body would be the next request."""
         self._json(exc.code, {"error": {"type": exc.type, "message": exc.message}})
 
+    def _fleet_too_big(self, path: str) -> bool:
+        """A /v1/fleet/* body over FLEET_BODY_MAX: 413, unread, and the connection closed."""
+        if not path.startswith("/v1/fleet/") or path == GATEWAY:
+            return False
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = -1
+        if 0 <= n <= FLEET_BODY_MAX:
+            return False
+        self.close_connection = True
+        self._json(413, {"error": {"type": "too_large", "message": f"a fleet request's body is "
+                                   f"at most {FLEET_BODY_MAX // (1024 * 1024)} MiB"}})
+        return True
+
     def _peer(self) -> str:
         return (self.client_address or ("",))[0]
 
@@ -256,6 +274,19 @@ class Handler(BaseHTTPRequestHandler):
                                                   "needed"}},
                        extra_headers=(("WWW-Authenticate", 'Bearer realm="TandemLLM"'),))
         return False
+
+    def _cross_site(self) -> bool:
+        """A write from another site or origin (server/setup_api.py same_origin): 403, True. The
+        configuration's and the conductor's writes take no cookie on an open controller or from
+        this machine, and a form's POST needs no preflight (6.3b)."""
+        from server.setup_api import same_origin
+        bad = same_origin(self.headers)
+        if bad is None:
+            return False
+        self._json(bad[0], {"error": {"type": bad[1], "code": bad[1], "message":
+                                      "a request from another site or origin cannot change "
+                                      "this server"}})
+        return True
 
     def _reader_gone(self) -> bool:
         from proxy.relay import client_gone
@@ -355,6 +386,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = self.path.split("?")[0].rstrip("/")
         t_arrival = time.perf_counter()
+        if self._fleet_too_big(path):
+            return
         try:
             raw = self._read_raw()
         except BodyError as exc:
@@ -368,11 +401,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._fleet("POST", path, raw)
         try:
             body = json.loads(raw or b"{}")
-        except ValueError as exc:
+        except (ValueError, RecursionError) as exc:
             return self._json(400, {"error": {"message": f"bad json: {exc}",
                                               "type": "invalid_request_error"}})
         if path == "/v1/dashboard/session":
             return self._session("POST", body)
+        if (path == "/v1/config" or path.startswith(("/v1/config/", "/v1/conductor/"))) and \
+                self._cross_site():
+            return
         if path == "/v1/config" or path.startswith("/v1/config/"):
             return config_api.handle(self, STATE["svc"], "POST", path, body)
         if path in PROXY_PATHS:
@@ -419,7 +455,7 @@ class Handler(BaseHTTPRequestHandler):
                                                  "message": words.get(bad[1], bad[2])}})
         try:
             body = json.loads(raw or b"{}")
-        except ValueError as exc:
+        except (ValueError, RecursionError) as exc:
             return self._json(400, {"error": {"message": f"bad json: {exc}",
                                               "type": "invalid_request_error"}})
         return self._complete("/v1/chat/completions", raw, body, t_arrival)
@@ -444,6 +480,8 @@ class Handler(BaseHTTPRequestHandler):
         if chat_forward.route(self, method, STATE["auth"]):
             return
         path = self.path.split("?")[0].rstrip("/")
+        if self._fleet_too_big(path):
+            return
         try:
             raw = self._read_raw()
         except BodyError as exc:
@@ -452,11 +490,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._fleet(method, path, raw)
         try:
             body = json.loads(raw) if raw else None
-        except ValueError as exc:
+        except (ValueError, RecursionError) as exc:
             return self._json(400, {"error": {"message": f"bad json: {exc}",
                                               "type": "invalid_request_error"}})
         if method == "DELETE" and path == "/v1/dashboard/session":
             return self._session("DELETE")
+        if (path == "/v1/config" or path.startswith(("/v1/config/", "/v1/conductor/"))) and \
+                self._cross_site():
+            return
         if path == "/v1/config" or path.startswith("/v1/config/"):
             return config_api.handle(self, STATE["svc"], method, path, body)
         if path.startswith("/v1/conductor/"):
@@ -480,6 +521,16 @@ class Handler(BaseHTTPRequestHandler):
         connect, check and install under `fleet_trust` (server/auth.py), and the controller's
         own sign-in at /v1/fleet/session."""
         sub = path.rstrip("/").split("/")[3:]
+        if method != "GET":
+            # a write from another site or origin is refused before anything reads it: the
+            # session cookie is SameSite=Strict, but trusted-local and an open controller need no
+            # cookie, and a form's POST needs no preflight (6.3b)
+            from server.setup_api import same_origin
+            bad = same_origin(self.headers)
+            if bad is not None:
+                return self._json(bad[0], {"error": {"type": bad[1], "code": bad[1], "message": (
+                    "a request from another site cannot change the fleet" if bad[1] ==
+                    "cross_site" else "a request from another origin cannot change the fleet")}})
         if method == "GET" and len(sub) == 2 and sub[0] == "ledger":
             return self._fleet_ledger(sub[1])
         if len(sub) >= 4 and sub[0] == "nodes" and sub[2] == "setup":
@@ -488,13 +539,25 @@ class Handler(BaseHTTPRequestHandler):
         if raw:
             try:
                 body = json.loads(raw)
-            except ValueError as exc:
+            except (ValueError, RecursionError) as exc:
                 return self._json(400, {"error": {"type": "bad_request",
                                                   "message": f"bad json: {exc}"}})
         if path.rstrip("/") == "/v1/fleet/session":
             return self._session(method, body, fleet=True)
         parts = path.rstrip("/").split("/")[3:]
-        if len(parts) >= 4 and parts[0] == "nodes" and parts[2] == "setup-confirm":
+        if parts == ["app", "password"]:
+            return self._app_password(method, body)
+        if parts[:1] == ["app"] and method == "POST":
+            from server.setup_api import same_origin_json
+            bad = same_origin_json(self.headers)
+            if bad is not None:
+                return self._json(bad[0], {"error": {"type": bad[1], "message": bad[2]}})
+        if parts[:1] == ["app"]:
+            # 6.3b: the page's view follows the reads; the export (the whole registry, a backup)
+            # and a plan need write rights, an import that writes pairing's
+            route = ("dashboard" if method == "GET" and parts == ["app"] else
+                     "fleet_trust" if parts == ["app", "import", "apply"] else "conductor_write")
+        elif len(parts) >= 4 and parts[0] == "nodes" and parts[2] == "setup-confirm":
             # VIS-252: a Setup Guide write's plan, under the rule of the engine's own /v1/setup
             route = "setup"
         elif parts[:1] == ["discovery"]:
@@ -526,14 +589,103 @@ class Handler(BaseHTTPRequestHandler):
                 a.decide(route, self._peer(), self.headers) != "ok":
             return self._json(401, {"error": {
                 "type": "unauthorized", "message": "pairing and release change who controls a "
-                "node: set an admin password (TANDEM_ADMIN_TOKEN) to do it from another "
+                "node: set an admin password (App settings, or TANDEM_ADMIN_TOKEN) to do it from another "
                 "machine, or ask from this one"}})
         if not self._allowed(route):
             return
         q = {k: v[-1] for k, v in parse_qs(urlsplit(self.path).query).items()}
         code, out = STATE["fleet"].handle(method, path, q, body,
                                           who=config_api._who(self, STATE["svc"]))
-        return self._json(code, out, extra_headers=(("Cache-Control", "no-store"),))
+        if code == 200 and parts in (["app"], ["app", "permissions", "local-network"]):
+            out["password"] = self._password_view()
+        extra = (("Cache-Control", "no-store"),)
+        if code == 200 and parts == ["app", "export"]:
+            extra += (("Content-Disposition", 'attachment; filename="tandemapp-fleet-config.json"'),)
+        return self._json(code, out, extra_headers=extra)
+
+    # ----------------------------------------------------------------- the admin password (6.3b)
+    def _password_view(self) -> dict:
+        from proxy import adminpw
+        a = STATE["auth"]
+        return {"set": a.password_set, "password": a.has_password, "token": bool(a.admin),
+                "set_at": a.password.set_at if a.has_password else None,
+                "min_length": adminpw.MIN_LEN, "max_length": adminpw.MAX_LEN,
+                "this_machine": a.trusted_local(self._peer(), self.headers)}
+
+    def _app_password(self, method: str, body) -> None:
+        """`/v1/fleet/app/password` (proxy/adminpw.py): GET its state under the reads' rule; PUT
+        {current?, password} sets or changes it, DELETE {current} removes it, under pairing's rule
+        (no password yet: from this machine only), each with the current password or the admin
+        token whenever one is set, as a JSON request of this origin. Setting, changing or
+        removing it ends every other session; this browser gets a new cookie."""
+        from proxy import adminpw
+        from server.setup_api import same_origin_json
+        a = STATE["auth"]
+        nostore = (("Cache-Control", "no-store"),)
+        if method == "GET":
+            if not self._allowed("dashboard"):
+                return
+            return self._json(200, {"contract_version": fleet_mod.CONTRACT,
+                                    **self._password_view()}, extra_headers=nostore)
+        if method not in ("PUT", "DELETE"):
+            return self._json(405, {"error": {"type": "method_not_allowed", "message":
+                                              "the password takes GET, PUT and DELETE"}})
+        bad = same_origin_json(self.headers)
+        if bad is not None:
+            return self._json(bad[0], {"error": {"type": bad[1], "message": bad[2]}})
+        if not a.password_set and not a.trusted_local(self._peer(), self.headers):
+            return self._json(401, {"error": {"type": "unauthorized", "message":
+                                              "no admin password is set yet: set the first one "
+                                              "from this machine (its own browser), or run "
+                                              "`tandem-app password set` on it"}})
+        if not self._allowed("fleet_trust"):
+            return
+        want = {"current", "password"} if method == "PUT" else {"current"}
+        if not isinstance(body, dict) or set(body) - want or \
+                (method == "PUT" and "password" not in body):
+            return self._json(400, {"error": {"type": "bad_request", "message": (
+                "the body is {current?, password}" if method == "PUT" else
+                "the body is {current}")}})
+        who = self.headers.get("X-Real-IP") or self._peer()
+        if a.password_set:
+            v = a.sign_in(body.get("current"), who)
+            if v == "held":
+                return self._json(429, {"error": {"type": "too_many", "message":
+                                                  "too many wrong passwords; wait a minute"}},
+                                  extra_headers=(("Retry-After", "60"),))
+            if v != "ok":
+                return self._json(403, {"error": {"type": "wrong_password", "message":
+                                                  "the current password (or the admin token) "
+                                                  "is not right"}})
+        actor = config_api._who(self, STATE["svc"])
+        if method == "PUT":
+            had = a.has_password
+            try:
+                a.password.set(body["password"])
+            except adminpw.PasswordError as exc:
+                return self._json(exc.status, {"error": {"type": exc.kind,
+                                                         "message": exc.message}})
+            what = "changed" if had else "set"
+        else:
+            if not a.has_password:
+                return self._json(409, {"error": {"type": "conflict", "message": (
+                    "no password is set here: the admin token stays, change it in the env "
+                    "file" if a.admin else "no admin password is set")}})
+            a.password.remove()
+            what = "removed"
+        STATE["svc"].cfg.log_audit(actor, "password", "controller", None,
+                                   detail={"text": f"admin password {what}"})
+        STATE["svc"].log(f"[fleet] admin password {what} ({actor}); every session before it "
+                         f"ends")
+        secure = "; Secure" if (self.headers.get("X-Forwarded-Proto") or "") == "https" else ""
+        if a.password_set:
+            value, _ = a.make_cookie()
+            cookie = (f"{auth_mod.COOKIE}={value}; HttpOnly; SameSite=Strict; Path=/; "
+                      f"Max-Age={auth_mod.SESSION_S}{secure}")
+        else:
+            cookie = f"{auth_mod.COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0{secure}"
+        return self._json(200, {"contract_version": fleet_mod.CONTRACT, **self._password_view()},
+                          extra_headers=nostore + (("Set-Cookie", cookie),))
 
     def _fleet_setup(self, method: str, nid: str, sub: list[str], raw: bytes | None) -> None:
         """`/v1/fleet/nodes/{id}/setup/<route>` (proxy/fleetsetup.py, VIS-252): the node's Setup
@@ -676,13 +828,13 @@ class Handler(BaseHTTPRequestHandler):
         # the one rule, in server/auth.py: X-Real-IP counts from loopback (an nginx on this
         # host) or from a peer named by TANDEM_TRUSTED_PROXY; every other peer is keyed as
         # itself, so a browser that reached us directly cannot pick its own bucket.
-        if a.login_blocked(who):
+        token = (body or {}).get("token") if isinstance(body, dict) else None
+        v = a.sign_in(token, who)
+        if v == "held":
             return self._json(429, {"error": {"type": "too_many",
                                               "message": "too many failed logins; wait a minute"}},
                               extra_headers=(("Retry-After", "60"),))
-        token = (body or {}).get("token") if isinstance(body, dict) else None
-        if not isinstance(token, str) or not auth_mod._eq(token, a.admin):
-            a.login_failed(who)
+        if v != "ok":
             return self._json(401, {"error": {"type": "unauthorized", "message": "wrong token"}},
                               extra_headers=(("WWW-Authenticate", 'Bearer realm="TandemLLM"'),))
         value, _ = a.make_cookie()
@@ -719,13 +871,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {"error": {"type": "not_found",
                                               "message": f"no route {method} /v1/fleet/session"}})
         who = self.headers.get("X-Real-IP") or self._peer()
-        if a.login_blocked(who):
+        token = body.get("token") if isinstance(body, dict) else None
+        v = a.sign_in(token, who)
+        if v == "held":
             return self._json(429, {"error": {"type": "too_many",
                                               "message": "too many failed logins; wait a minute"}},
                               extra_headers=(("Retry-After", "60"),))
-        token = body.get("token") if isinstance(body, dict) else None
-        if not isinstance(token, str) or not auth_mod._eq(token, a.admin):
-            a.login_failed(who)
+        if v != "ok":
             return self._json(401, {"error": {"type": "unauthorized", "message": "wrong token"}})
         value, _ = a.make_cookie()
         return self._send_empty(204, (("Set-Cookie", f"{auth_mod.COOKIE}={value}; HttpOnly; "
@@ -891,9 +1043,12 @@ def build(args, env=None) -> Service:
         led = ledger_mod.Ledger(args.usage_ledger, retention_days=args.usage_retention_days).open()
     login = (args.dashboard_login == "on")
     admin = env.get("TANDEM_ADMIN_TOKEN") or env.get("QSE_ADMIN_TOKEN") or None
+    from proxy import adminpw
     a = auth_mod.Auth(admin, env.get("QSE_METRICS_TOKEN") or None, login=login,
-                      trust_loopback=args.trust_loopback == "on",
-                      trusted_proxies=env.get("TANDEM_TRUSTED_PROXY", "").split(","))
+                      trust_loopback=args.trust_loopback == "on", local_host_only=True,
+                      trusted_proxies=env.get("TANDEM_TRUSTED_PROXY", "").split(","),
+                      password=adminpw.Password(os.path.join(os.path.dirname(cfg.path),
+                                                             "admin.json")))
     registry = metrics_mod.Registry()
     live = live_mod.LiveRegistry(blocks=lambda: None, last_prefill=lambda: None,
                                  engine=_live_engine, hz=live_mod.DEFAULT_HZ, activity=False,

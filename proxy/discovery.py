@@ -733,6 +733,32 @@ class Discovery:
             self.mdns.update(state="done", ended_at=self.clock())
             self.seq += 1
 
+    def check_lan(self) -> str:
+        """App settings' Local Network check (6.3b): one short mDNS browse (on macOS the first one
+        shows the system's prompt), the state after it: `not_needed` off macOS, `granted`,
+        `denied`, or `unknown` when this machine has no network to send on."""
+        with self._lock:
+            if self.lan == "not_needed":
+                return self.lan
+            if self._ifaces is None:
+                self._choose(None)
+            iface = self.iface["address"] if self.iface else None
+        try:
+            self.browser.browse([mdns.SERVICE], 1.0, iface=iface)
+        except mdns.LanDenied:
+            with self._lock:
+                self.lan = "denied"
+                self._ask()
+                self.seq += 1
+            return "denied"
+        except OSError:
+            return "unknown"
+        with self._lock:
+            self.lan = "granted"
+            self._ask()
+            self.seq += 1
+        return "granted"
+
     # ------------------------------------------------------------------ the scan
     def consent(self, body, who: str) -> dict:
         if not isinstance(body, dict) or set(body) != {"subnet"} or \

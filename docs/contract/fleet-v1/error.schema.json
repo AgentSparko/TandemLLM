@@ -43,8 +43,17 @@
             "in_use",
             "exists",
             "no_space",
-            "refused"
+            "refused",
+            "wrong_password",
+            "cross_site",
+            "cross_origin",
+            "json_only",
+            "too_large",
+            "method_not_allowed"
           ]
+        },
+        "code": {
+          "type": "string"
         },
         "message": {
           "type": "string"

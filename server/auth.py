@@ -82,6 +82,15 @@ story for `/v1/setup/*`, which writes
 all, and a text/plain POST from any page needs no preflight. So every /v1/setup POST must also be
 declared JSON, carry no `Sec-Fetch-Site: cross-site`, and name this server's host in its `Origin`
 when it sends one (server/setup_api.py same_origin_json).
+
+THE CONTROLLER'S PASSWORD (tandem-app only; proxy/adminpw.py, set in App settings, 6.3b). A
+second admin secret beside the token, a salted scrypt hash in `admin.json` beside the config
+database. It counts for `password_set`, signs in where the token does (`sign_in`: the token first,
+then the hash; the per-address limit above, plus the file's own cap over every address), and is
+never a bearer: tools keep the token. While it is set the session key is made from its hash and the
+token's key together, so setting, changing or removing it ends every session signed in before
+(the page that changed it gets a new cookie); with no password the key is the token's alone, as
+before, and the token's sessions keep working.
 """
 
 from __future__ import annotations
@@ -105,6 +114,21 @@ LOGIN_MAX_KEYS = 10_000               # a memory bound on `_fails`, not a ban re
 LOOPBACK = ("127.0.0.1", "::1", "::ffff:127.0.0.1")
 
 
+def loopback_host(host: str) -> bool:
+    """A Host header that names this machine's loopback: localhost, *.localhost, 127.x, ::1
+    (with or without a port). An empty one (HTTP/1.0 tools) counts."""
+    h = (host or "").strip().lower()
+    if not h:
+        return True
+    if h.startswith("["):
+        h = h[1:h.find("]")] if "]" in h else h
+    elif h.count(":") == 1:
+        h = h.split(":", 1)[0]
+    if h == "localhost" or h.endswith(".localhost") or h == "::1":
+        return True
+    return h.startswith("127.") and all(p.isdigit() for p in h.split(".")) and h.count(".") == 3
+
+
 def _eq(a: str | None, b: str | None) -> bool:
     return bool(a) and bool(b) and hmac.compare_digest(a.encode(), b.encode())
 
@@ -112,7 +136,7 @@ def _eq(a: str | None, b: str | None) -> bool:
 class Auth:
     def __init__(self, admin_token: str | None = None, metrics_token: str | None = None, *,
                  trust_loopback: bool = True, login: bool = True, clock=time.time,
-                 trusted_proxies=()):
+                 trusted_proxies=(), password=None, local_host_only: bool = False):
         for name, tok in (("QSE_ADMIN_TOKEN", admin_token), ("QSE_METRICS_TOKEN", metrics_token)):
             if tok is not None and len(tok) < MIN_TOKEN:
                 raise SystemExit(f"[auth] {name} is shorter than {MIN_TOKEN} characters; make a "
@@ -120,13 +144,19 @@ class Auth:
         self.admin = admin_token or None
         self.metrics = metrics_token or None
         self.trust_loopback = bool(trust_loopback)
+        # tandem-app (6.3b): trusted-local also needs a loopback Host, so a page whose name was
+        # rebound to 127.0.0.1 (DNS rebinding) is not "this machine"
+        self.local_host_only = bool(local_host_only)
         # the object on its own is the strict policy; the server's default (off) comes from
         # `--dashboard-login`, and from_env reads the same variable with the same default
         self.login = bool(login)
         self.clock = clock
-        self._key = (hmac.new(self.admin.encode(), b"qse-dash-session-v1", hashlib.sha256).digest()
-                     if self.admin else None)
+        self._token_key = (hmac.new(self.admin.encode(), b"qse-dash-session-v1",
+                                    hashlib.sha256).digest() if self.admin else None)
         self.trusted_proxies = frozenset(p.strip() for p in trusted_proxies if p and p.strip())
+        # THE CONTROLLER'S PASSWORD (proxy/adminpw.py, set in App settings; the engine has none):
+        # a second secret beside the token, for sign-in only
+        self.password = password
         self._fails: dict = collections.defaultdict(collections.deque)
         self._revoked: dict[str, int] = {}          # logged-out cookie values, until they expire
         self._lock = threading.Lock()
@@ -141,9 +171,25 @@ class Auth:
 
     @property
     def password_set(self) -> bool:
-        """THE switch (AU1): an admin password (the admin token) is configured. False: every
-        admin route is open and the dashboard asks for nothing."""
-        return bool(self.admin)
+        """THE switch (AU1): an admin password (the admin token, or the controller's password from
+        App settings) is configured. False: every admin route is open and the dashboard asks for
+        nothing."""
+        return bool(self.admin) or self.has_password
+
+    @property
+    def has_password(self) -> bool:
+        return self.password is not None and self.password.is_set
+
+    @property
+    def _key(self) -> bytes | None:
+        """The session cookies' key. The token's alone while no password is set (the sessions of
+        before keep working); with one, made from both, so a new password, or a new token, ends
+        every session made before it."""
+        m = self.password.material() if self.password is not None else None
+        if m is None:
+            return self._token_key
+        return hmac.new(m, b"qse-dash-session-v2" + (self._token_key or b""),
+                        hashlib.sha256).digest()
 
     def describe(self) -> str:
         """The startup line: whether auth is on, never a token."""
@@ -155,7 +201,9 @@ class Auth:
             dash = "off (its read API needs no token)"
         else:
             dash = "on"
-        return (f"admin password: set, dashboard login: {dash}, "
+        how = " and ".join(x for x, on in (("token", bool(self.admin)),
+                                            ("password file", self.has_password)) if on)
+        return (f"admin password: set ({how}), dashboard login: {dash}, "
                 f"metrics token: {'set' if self.metrics else 'not set'}, "
                 f"trusted loopback: {'on' if self.trust_loopback else 'off'}")
 
@@ -169,6 +217,8 @@ class Auth:
 
     def trusted_local(self, peer: str, headers) -> bool:
         if not self.trust_loopback or peer not in LOOPBACK:
+            return False
+        if self.local_host_only and not loopback_host(self._header(headers, "Host")):
             return False
         return not (self._header(headers, "X-Forwarded-For") or self._header(headers, "X-Real-IP"))
 
@@ -230,6 +280,24 @@ class Auth:
 
     def admin_any(self, headers) -> bool:
         return self.admin_bearer(headers) or self.session(headers) is not None
+
+    # ----------------------------------------------------------------- signing in
+    def sign_in(self, value, who: str) -> str:
+        """`ok`, `wrong` or `held` (429: too many failures from `who`, or from anywhere for the
+        password, or its checks all busy) for a sign-in or a change's `current`. The token is
+        compared first, in constant time; then the password (proxy/adminpw.py). A failure counts
+        for `who`."""
+        if self.login_blocked(who):
+            return "held"
+        if isinstance(value, str) and _eq(value, self.admin):
+            return "ok"
+        if self.has_password:
+            if self.password.held() or self.password.busy():
+                return "held"
+            if self.password.verify(value):
+                return "ok"
+        self.login_failed(who)
+        return "wrong"
 
     # ----------------------------------------------------------------- login rate limit
     def login_blocked(self, who: str) -> bool:

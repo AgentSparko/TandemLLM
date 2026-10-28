@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/import-result.schema.json",
+  "title": "POST /v1/fleet/app/import/apply (200): the import applied: how many items were added, changed and removed, how many conflicts were skipped, and the plan's items",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "merge",
+        "replace"
+      ]
+    },
+    "applied": {
+      "type": "object",
+      "properties": {
+        "add": {
+          "type": "integer"
+        },
+        "change": {
+          "type": "integer"
+        },
+        "remove": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "add",
+        "change",
+        "remove"
+      ],
+      "additionalProperties": false
+    },
+    "skipped": {
+      "type": "integer"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "node",
+              "deployment",
+              "rule",
+              "layout",
+              "setting"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "op": {
+            "enum": [
+              "add",
+              "change",
+              "remove",
+              "keep",
+              "conflict"
+            ]
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "label",
+          "op",
+          "detail",
+          "fields"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract_version",
+    "mode",
+    "applied",
+    "skipped",
+    "items"
+  ],
+  "additionalProperties": false
+}

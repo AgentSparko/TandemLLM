@@ -68,6 +68,11 @@ dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_wri
                                                     (proxy/fleetupdate.py, OPS-234)
     *     /v1/fleet/controller[/move|/handover|/take]   where the controller runs and moving it
                                                     to a Spark or back (proxy/ctlmove.py, OPS-234)
+    *     /v1/fleet/app[/permissions/local-network|/export|/import[/apply]]   App settings: the
+                                                    machine's permissions, the service, the
+                                                    configuration as a file and its import
+                                                    (proxy/appsettings.py); /v1/fleet/app/password
+                                                    is proxy/app.py's (it sets the cookie)
 
 A FLEET OF ONE. The machine tandem-app runs on is a node when it is Spark-class (an NVIDIA GPU or an
 engine of its own, proxy/nodesource.py): at the first start it is registered with its hostname as
@@ -308,6 +313,7 @@ class Fleet:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._trust = None
+        self._app = None
         self._migrated = False
         self.started = clock()
         self._proc_prev: tuple[float, float] | None = None
@@ -366,6 +372,16 @@ class Fleet:
                 if self._updater is None:
                     self._updater = fleetupdate.Updater(self, clock=self.clock)
         return self._updater
+
+    def app(self):
+        """App settings: permissions, the service, the configuration file (proxy/appsettings.py),
+        made at the first call."""
+        if self._app is None:
+            from proxy import appsettings
+            with self._reg:
+                if self._app is None:
+                    self._app = appsettings.AppSettings(self, clock=self.clock)
+        return self._app
 
     def mover(self):
         """The controller's host and its moves (proxy/ctlmove.py), made at the first call."""
@@ -1129,6 +1145,12 @@ class Fleet:
             try:
                 return self.mover().handle(method, parts, q, body, who, now)
             except ctlmove.MoveError as exc:
+                raise FleetError(exc.status, exc.message, exc.kind)
+        if parts[:1] == ["app"]:
+            from proxy import appsettings
+            try:
+                return self.app().handle(method, parts, q, body, who, now)
+            except appsettings.AppError as exc:
                 raise FleetError(exc.status, exc.message, exc.kind)
         if parts[:1] == ["deployments"]:
             from proxy import deployments

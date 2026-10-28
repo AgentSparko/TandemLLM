@@ -1147,6 +1147,20 @@ class ConfigDB:
             r = self._conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
         return json.loads(r[0]) if r else default
 
+    def settings_under(self, prefix: str) -> dict:
+        """{key: value} of the settings whose key starts with `prefix`."""
+        with self._lock:
+            rows = self._conn.execute("SELECT key, value FROM settings WHERE substr(key, 1, ?) "
+                                      "= ? ORDER BY key", (len(prefix), prefix)).fetchall()
+        return {k: json.loads(v) for k, v in rows}
+
+    def delete_setting(self, key: str, who: str = "gui") -> None:
+        with self._lock:
+            if self._conn.execute("DELETE FROM settings WHERE key = ?", (key,)).rowcount:
+                self._audit(who, "delete", "setting", key)
+            self._conn.commit()
+            self._bump()
+
     def set_setting(self, key: str, value, who: str = "gui") -> None:
         with self._lock:
             self._conn.execute("INSERT OR REPLACE INTO settings(key, value, updated_at) "
@@ -1222,6 +1236,18 @@ class ConfigDB:
             r = self._conn.execute("SELECT doc FROM layouts WHERE page = ? AND device = ?",
                                    (page, device)).fetchone()
         return json.loads(r[0]) if r else None
+
+    def layouts(self) -> list[dict]:
+        """Every saved layout, by page and device (an export, proxy/appsettings.py)."""
+        with self._lock:
+            rows = self._conn.execute("SELECT doc FROM layouts ORDER BY page, device").fetchall()
+        return [json.loads(r[0]) for r in rows]
+
+    def delete_layout(self, page: str, device: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM layouts WHERE page = ? AND device = ?",
+                               (page, device))
+            self._conn.commit()
 
     def set_layout(self, doc: dict) -> None:
         """A page's layout on a device class, as the dashboard saved it (`saved_at` set): the

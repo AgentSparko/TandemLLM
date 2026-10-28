@@ -16,6 +16,10 @@
                                                      (Linux); proxy/appservice.py, OPS-234
     tandem-app package [--version V] [--out DIR]     the wheel this controller installs on nodes
                                                      and updates them to (proxy/nodeinstall.py)
+    tandem-app password set|remove|status [--state-dir D]
+                                                     the controller's admin password on this
+                                                     machine, without the current one (the way
+                                                     back from a lost one; proxy/adminpw.py)
     tandem-app version
 
 `python -m proxy` takes the same commands; with none it serves, so `python -m proxy --port 8080`
@@ -132,7 +136,7 @@ def parser() -> argparse.ArgumentParser:
 
 
 COMMANDS = ("serve", "check", "secrets", "backends", "hostcollect", "launch", "service", "package",
-            "version")
+            "password", "version")
 
 
 def main(argv=None) -> None:
@@ -154,6 +158,9 @@ def main(argv=None) -> None:
     if cmd == "service":
         from proxy import appservice
         raise SystemExit(appservice.main(argv))
+    if cmd == "password":
+        from proxy import adminpw
+        raise SystemExit(adminpw.main(argv))
     if cmd == "package":
         from proxy import nodeinstall
         raise SystemExit(nodeinstall.package_main(argv))

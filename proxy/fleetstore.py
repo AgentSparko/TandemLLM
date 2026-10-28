@@ -436,6 +436,10 @@ class Store:
             self._conn.execute("INSERT OR REPLACE INTO rule_edits VALUES (?, ?, ?, ?)",
                                (rid, json.dumps(doc, sort_keys=True), at, who))
 
+    def delete_rule_edit(self, rid: str) -> None:
+        with self._db, self._conn:
+            self._conn.execute("DELETE FROM rule_edits WHERE id = ?", (rid,))
+
     # ------------------------------------------------------------------ link tests
     def link_tests(self) -> dict:
         """{link id: its last test} (proxy/fleetops.py)."""
