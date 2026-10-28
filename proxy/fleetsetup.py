@@ -158,8 +158,10 @@ class SetupRelay:
         if not deps:
             p["impact"].append(f"{a} serves nothing through this gateway now")
         for d in deps:
-            other = next((m["alias"] for m in d.get("member_states") or []
-                          if m["node"] != nid and m["routable"]), None)
+            # a Split needs every stage: no other member takes its requests
+            other = None if d["type"] == "split" else next(
+                (m["alias"] for m in d.get("member_states") or []
+                 if m["node"] != nid and m["routable"]), None)
             p["impact"].append(f"{d['name']}: new requests go to {other}, another member" if other
                                else f"{d['name']} does not answer until {a}'s engine is back")
         n = self.fleet.ops.inflight(self.fleet.source(self.fleet._node_row(nid)))
