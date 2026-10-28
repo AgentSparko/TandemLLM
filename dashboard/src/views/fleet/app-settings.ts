@@ -248,7 +248,8 @@ export class QseAppSettings extends LightElement {
       ${v.moved_to
         ? nothing
         : html`<div class="app-acts">
-            <button type="button" class="btn btn-primary" data-act="move" ?disabled=${sel.current || !sel.allowed || running} @click=${() => this.openMove()}>${sel.current ? 'Pick a Spark to move it to' : `Move the controller to ${sel.title.replace(/^Spark /, '')}…`}</button>
+            <button type="button" class="btn btn-primary" data-act="move" ?disabled=${sel.current || !sel.allowed || running} @click=${() => this.openMove()}>${!v.targets.length ? 'No other Spark to move it to' : sel.current ? 'Pick a Spark to move it to' : `Move the controller to ${sel.title.replace(/^Spark /, '')}…`}</button>
+            ${v.targets.length ? nothing : html`<a class="btn btn-ghost" href="#/add-spark">+ Add Spark</a>`}
           </div>`}
       <p class="xs faint">Rented Sparks are not offered: their leases end. This page and a phone’s browser stay the controller’s UI wherever it runs.</p>
       ${v.job ? html`<h3 class="eyebrow" style="margin-top:12px">${v.job.direction === 'pull' ? 'The last take' : 'The last move'}</h3>${this.jobView(v.job)}` : nothing}
@@ -259,7 +260,7 @@ export class QseAppSettings extends LightElement {
     const own = (this.fleetState?.nodes ?? []).some((n) => n.pairing.state !== 'local');
     if (own || v.moved_to) return nothing;
     return html`<section class="panel" data-panel="take-fleet">
-      <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">Run the controller here instead</h2><p class="panel-sub">${v.host.kind === 'mac' ? 'This Mac' : 'This machine'} has no fleet of its own. Take the fleet from the controller that runs it now: its nodes then trust this one, and its API moves here.</p></div></header>
+      <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">Run the controller here instead</h2><p class="panel-sub">No other Spark is paired with ${v.host.kind === 'mac' ? 'this Mac' : 'this controller'}. Take the fleet from the controller that runs it now: its nodes then trust this one, and its API moves here.</p></div></header>
       <form class="app-form" @submit=${(e: Event) => (e.preventDefault(), void this.take())}>
         <label class="field"><span>The controller now</span><input data-in="take-url" placeholder="http://192.0.2.40:8080" .value=${this.takeUrl} @input=${(e: Event) => (this.takeUrl = (e.target as HTMLInputElement).value)} /></label>
         <label class="field"><span>Its admin password</span><input type="password" data-in="take-pw" autocomplete="off" .value=${this.takePw} @input=${(e: Event) => (this.takePw = (e.target as HTMLInputElement).value)} /></label>
