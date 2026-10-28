@@ -1,7 +1,7 @@
 // The fleet API of TandemApp's controller (docs/contract/fleet-v1, SRV-723, SRV-725, SRV-729,
-// SRV-731, VIS-248): the Sparks, the links between them, the deployments, per-node metric series,
-// each node's newest sample, the controller's host, memory, events, alerts, rules and the saved
-// window layouts. Times are Unix seconds. The controller sends every metric per node; the page
+// SRV-731, VIS-248, VIS-250): the Sparks, the links between them, the deployments, per-node metric
+// series, each node's newest sample, the controller's host, memory, events, alerts, rules, the node
+// actions and the saved window layouts. Times are Unix seconds. The controller sends every metric per node; the page
 // computes Total, Stacked, Lines, Split and Table itself (charts/modes.ts), so one answer serves
 // every chart mode.
 
@@ -47,6 +47,73 @@ export interface FleetNode {
   cost_per_hour: number | null;
   inventory: NodeInventory;
   pairing: NodePairing;
+  /** maintenance (VIS-250): no new requests through the gateway; null when the node takes them */
+  drain: NodeDrain | null;
+}
+
+/** A drained node: `draining` while requests are in flight, `drained` once none are. */
+export interface NodeDrain {
+  state: 'draining' | 'drained';
+  since: number;
+  by: string | null;
+  inflight: number;
+}
+
+export const NODE_ACTIONS = ['drain', 'undrain', 'restart-engine', 'reboot', 'update', 'forget', 'release-lease'] as const;
+export type NodeAction = (typeof NODE_ACTIONS)[number];
+
+/** A job the node's agent runs for an action (an engine's restart, a reboot, an update). */
+export interface AgentJob {
+  id?: string;
+  action?: string;
+  state?: 'running' | 'done' | 'failed';
+  simulated?: boolean;
+  started_at?: number;
+  ended_at?: number | null;
+  message?: string | null;
+  [k: string]: unknown;
+}
+
+/** What an action would do, said before it is done (GET /v1/fleet/nodes/{id}/actions/{action}). */
+export interface ActionPlan {
+  contract_version: string;
+  node: string;
+  action: NodeAction;
+  title: string;
+  allowed: boolean;
+  /** why it may not run here; null when it may */
+  blocked: string | null;
+  /** it stops or removes something: the POST needs `confirm` */
+  destructive: boolean;
+  impact: string[];
+  removes: string[];
+  keeps: string[];
+  /** restart-engine: the node's engines, the one to restart first */
+  engines: { id: string; kind: string | null; port: number | null; managed: boolean; state: string | null; job: AgentJob | null }[];
+  job: AgentJob | null;
+  /** single use until `expires_at` */
+  confirm: string | null;
+  expires_at: number | null;
+}
+
+export interface ActionResult {
+  contract_version: string;
+  node: string;
+  action: NodeAction;
+  state: 'done' | 'running';
+  text: string;
+  job: AgentJob | null;
+  at: number;
+}
+
+export interface LinkTest {
+  contract_version: string;
+  link: FleetLink;
+  result: {
+    rtt: { n: number; min_ms: number; median_ms: number; p90_ms: number } | null;
+    bandwidth: { gbps?: number; bytes?: number; streams?: number; s?: number; error?: string };
+    notes: string[];
+  };
 }
 
 /** How the controller trusts a node (SEC-4): its own machine, a pinned certificate from pairing by
@@ -144,8 +211,8 @@ export interface FleetLink {
   mtu: number | null;
   state: LinkState;
   note: string | null;
-  /** the last link test (B4) */
-  test?: { gbps: number; at: number };
+  /** the last link test (B4): `gbps` null when the bandwidth part failed (`note` says why) */
+  test?: { gbps: number | null; at: number; rtt_ms?: number | null; note?: string | null };
   roce?: 'on' | 'off';
   /** logical interfaces up of those the port has (a fabric port on one interface runs at half) */
   interfaces?: { up: number; total: number };
@@ -522,6 +589,12 @@ export const fleet = {
   hostKey: (host: string, port?: number) => request<HostKey>('/v1/fleet/pair/ssh/hostkey', post(port == null ? { host } : { host, port })),
   release: (id: string, force = false) => request<Released>(`/v1/fleet/nodes/${encodeURIComponent(id)}${force ? '?force=1' : ''}`, { method: 'DELETE' }),
   trust: () => request<FleetTrust>('/v1/fleet/trust'),
+  // node actions (VIS-250): read the plan, then run it with the plan's confirm (destructive ones)
+  plan: (id: string, action: NodeAction, engine?: string) =>
+    request<ActionPlan>(`/v1/fleet/nodes/${encodeURIComponent(id)}/actions/${action}${engine ? `?engine=${encodeURIComponent(engine)}` : ''}`),
+  act: (id: string, action: NodeAction, body: { confirm?: string; engine?: string } = {}) =>
+    request<ActionResult>(`/v1/fleet/nodes/${encodeURIComponent(id)}/actions/${action}`, post(body)),
+  testLink: (id: string) => request<LinkTest>(`/v1/fleet/links/${encodeURIComponent(id)}/test`, { method: 'POST' }),
   session: () => request<FleetSession>('/v1/fleet/session'),
   signIn: (password: string) => request<void>('/v1/fleet/session', post({ token: password }), 'none'),
   signOut: () => request<void>('/v1/fleet/session', { method: 'DELETE' }, 'none'),

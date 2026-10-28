@@ -13,6 +13,13 @@
 //   node-down     fleet4, and R-3 stops answering 30 s after the scenario starts
 //   alert-thermal fleet4 without the old alert: R-3 heats up and the alert fires a minute in
 //
+// The node actions (VIS-250, proxy/fleetops.py): a drain ends the requests in flight one by one
+// (4 s apart) while the node's rate falls with them, then the node is drained; a reboot takes the
+// node off for 20 s, an engine's restart and an update are jobs of a few seconds; a release of a
+// rented node removes it, its links and a Split it was a stage of. fleet1 is today's box: its
+// engine is not managed by TandemNode and its reboot and update are not set up, as on the real
+// one; the other scenarios' nodes have both. Each destructive action needs its plan's confirm.
+//
 // The rules, alerts and events are the controller's (proxy/fleetwatch.py: its seeded rules, an
 // alert's id `<rule>:<subject>`, its title, rule text and action route, "Acknowledged: …" events),
 // plus three rules the controller does not have yet (fabric, lease, power) with mock-only scopes.
@@ -20,6 +27,9 @@
 // clock; a field a GB10 does not expose (the power cap, Desk's fan) is absent, as on the board.
 
 import type {
+  ActionPlan,
+  ActionResult,
+  AgentJob,
   DeploymentStatus,
   FleetAlert,
   FleetDeployment,
@@ -38,6 +48,8 @@ import type {
   LogLevel,
   MetricKey,
   MetricSeries,
+  NodeAction,
+  NodeDrain,
   NodeMemory,
   NodePairing,
   NodeSample,
@@ -48,7 +60,7 @@ import type {
   RulePatch,
   TrustAudit,
 } from '../src/api/fleet.ts';
-import { EVENT_TYPES, FLEET_CONTRACT, METRICS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
+import { EVENT_TYPES, FLEET_CONTRACT, METRICS, NODE_ACTIONS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
 
 export const FLEET_SCENARIOS = ['fleet1', 'fleet4', 'fleet2-split', 'node-down', 'alert-thermal'] as const;
 export type FleetScenario = (typeof FLEET_SCENARIOS)[number];
@@ -96,7 +108,7 @@ interface MemPlan {
 
 /** how one node behaves over time */
 interface NodeSim {
-  node: Omit<FleetNode, 'status' | 'status_text'>;
+  node: Omit<FleetNode, 'status' | 'status_text' | 'drain'>;
   /** the load curve it follows (a Split's stages share one) */
   curve: string;
   /** before this it idles (nothing deployed yet) */
@@ -420,6 +432,13 @@ export class MockFleet {
   /** the code window of MOCK_PAIR.address: tries left (5 per code, as the node allows) */
   private triesLeft = 5;
   private audit: TrustAudit[] = [];
+  /** drained nodes: since when, by whom, and when each request in flight then ends */
+  private drains = new Map<string, { since: number; by: string; ends: number[] }>();
+  /** per node, its newest job: an engine's restart, a reboot (the node is off meanwhile), an update */
+  private jobs = new Map<string, AgentJob & { action: 'restart' | 'reboot' | 'update'; started_at: number; ends: number }>();
+  /** a plan's confirm: single use, five minutes */
+  private tokens = new Map<string, { node: string; action: NodeAction; until: number }>();
+  private seq = 0;
 
   /** `now` in Unix seconds: the scenario's start */
   constructor(o: { seed?: number; scenario?: FleetScenario; now?: number } = {}) {
@@ -439,13 +458,29 @@ export class MockFleet {
     return clamp(0.12 + 0.6 * dayCurve(t) + 0.3 * wave(this.ph(curve), t), 0.04, 1);
   }
   private alive(n: NodeSim, t: number): boolean {
-    return t >= n.node.since && (n.offFrom == null || t < n.offFrom);
+    return t >= n.node.since && (n.offFrom == null || t < n.offFrom) && !this.rebooting(n.node.id, t);
+  }
+  private rebooting(id: string, t: number): boolean {
+    const j = this.jobs.get(id);
+    return !!j && j.action === 'reboot' && t >= j.started_at && t < j.ends;
+  }
+  /** the share of a drained node's requests at its drain still in flight at t (1 before a drain) */
+  private drainLeft(id: string, t: number): number {
+    const d = this.drains.get(id);
+    if (!d || t < d.since) return 1;
+    return d.ends.length ? d.ends.filter((e) => e > t).length / d.ends.length : 0;
+  }
+  private drainView(id: string, now: number): NodeDrain | null {
+    const d = this.drains.get(id);
+    if (!d) return null;
+    const inflight = d.ends.filter((e) => e > now).length;
+    return { state: inflight ? 'draining' : 'drained', since: d.since, by: d.by, inflight };
   }
   private throttled(n: NodeSim, t: number): boolean {
     return n.throttleFrom != null && t >= n.throttleFrom;
   }
   private nodeLoad(n: NodeSim, t: number): number {
-    return t < n.busyFrom ? 0.02 : this.load(n.curve, t);
+    return t < n.busyFrom ? 0.02 : Math.max(0.02, this.load(n.curve, t) * this.drainLeft(n.node.id, t));
   }
   private memberTps(n: NodeSim, m: Member, t: number): number {
     if (t < m.from) return 0;
@@ -457,7 +492,7 @@ export class MockFleet {
       if (dep && d.dep.id !== dep) continue;
       for (const m of d.members) if (m.node === n.node.id) v += this.memberTps(n, m, t);
     }
-    return v;
+    return v * this.drainLeft(n.node.id, t);
   }
 
   /** one node's value of one metric at t (null: no sample); `dep` narrows tok/s and requests to a deployment */
@@ -470,8 +505,11 @@ export class MockFleet {
     switch (key) {
       case 'tps':
         return this.tps(n, t, dep);
-      case 'req':
+      case 'req': {
+        const d = this.drains.get(nodeId);
+        if (d && t >= d.since) return d.ends.filter((e) => e > t).length;
         return Math.max(0, Math.round(this.tps(n, t, dep) / 31 + 0.4 * w('q')));
+      }
       case 'ttft':
         return n.ttft[0] + n.ttft[1] * L + (hot ? 220 : 0);
       case 'gpu':
@@ -509,7 +547,9 @@ export class MockFleet {
 
   // ---- state at a time ---------------------------------------------------------------------
   private status(n: NodeSim, now: number): { status: NodeStatus; text: string } {
-    if (!this.alive(n, now)) return { status: 'off', text: 'not reachable' };
+    if (!this.alive(n, now)) return { status: 'off', text: this.rebooting(n.node.id, now) ? 'rebooting' : 'not reachable' };
+    const d = this.drainView(n.node.id, now);
+    if (d) return { status: 'draining', text: d.state === 'draining' ? `draining · ${d.inflight} in flight` : 'drained · nothing in flight' };
     if (this.throttled(n, now)) return { status: 'alert', text: `thermal throttle, GPU ${Math.round(this.value('temp', n.node.id, now) ?? 0)} °C` };
     return { status: 'up', text: 'up' };
   }
@@ -517,7 +557,7 @@ export class MockFleet {
   nodes(now: number): FleetNode[] {
     return this.f.nodes.filter((n) => n.node.since <= now).map((n) => {
       const s = this.status(n, now);
-      return { ...n.node, status: s.status, status_text: s.text };
+      return { ...n.node, status: s.status, status_text: s.text, drain: this.drainView(n.node.id, now) };
     });
   }
 
@@ -775,12 +815,225 @@ export class MockFleet {
   /** a released node leaves the fleet, its deployments' members and its links */
   private forget(id: string): void {
     this.f.nodes = this.f.nodes.filter((n) => n.node.id !== id);
+    // a Split that loses a stage stops: it needs every stage
+    this.f.deps = this.f.deps.filter((d) => !(d.dep.type === 'split' && d.dep.members.includes(id)));
     for (const d of this.f.deps) {
       d.members = d.members.filter((m) => m.node !== id);
-      d.dep = { ...d.dep, members: d.dep.members.filter((m) => m !== id), ...(d.dep.stages ? { stages: d.dep.stages.filter((s) => s.node !== id) } : {}) };
+      d.dep = { ...d.dep, members: d.dep.members.filter((m) => m !== id) };
     }
     this.f.deps = this.f.deps.filter((d) => d.members.length > 0);
     this.f.links = this.f.links.filter((l) => l.a !== id && l.b !== id);
+    this.drains.delete(id);
+    this.jobs.delete(id);
+  }
+
+  // ---- node actions (VIS-250) --------------------------------------------------------------------
+  /** fleet1 is today's box: its engine and its machine are not TandemNode's to restart or reboot */
+  private get managed(): boolean {
+    return this.scenario !== 'fleet1';
+  }
+  private sim(id: string): NodeSim | undefined {
+    return this.f.nodes.find((x) => x.node.id === id);
+  }
+  private job(id: string, action: 'restart' | 'reboot' | 'update', now: number): AgentJob | null {
+    const j = this.jobs.get(id);
+    if (!j || j.action !== action) return null;
+    const { ends, ...rest } = j;
+    if (now < ends) return { ...rest, state: 'running', ended_at: null, message: null };
+    return { ...rest, state: 'done', ended_at: ends, message: action === 'update' ? 'TandemLLM 0.15.0 is the newest release: nothing to update' : action === 'reboot' ? `up again after ${ends - j.started_at} s` : `up after ${ends - j.started_at} s` };
+  }
+  private inflight(id: string, now: number): number {
+    const d = this.drains.get(id);
+    return d ? d.ends.filter((e) => e > now).length : Math.max(0, Math.round(this.value('req', id, now) ?? 0));
+  }
+  /** what an action stops on the node: each deployment it serves, the requests in flight */
+  private stops(p: ActionPlan, n: NodeSim, now: number, what: string): void {
+    const a = n.node.alias;
+    const deps = this.deployments(now).filter((d) => d.members.includes(n.node.id));
+    p.impact.push(...(deps.length ? deps.map((d) => (d.type === 'split' ? `${d.name} stops on ${a} ${what}: a Split needs every stage` : d.type === 'replicas' ? `${d.name} keeps serving on ${d.members.filter((m) => m !== n.node.id).map((m) => this.sim(m)?.node.alias ?? m).join(', ')}; on ${a} it stops ${what}` : `${d.name} stops on ${a} ${what}`)) : [`${a} serves nothing through this gateway now`]));
+    const k = this.inflight(n.node.id, now);
+    if (k) p.impact.push(`${k} request${k === 1 ? '' : 's'} in flight on ${a} are cut off: drain it first to let them finish`);
+  }
+
+  plan(id: string, action: NodeAction, now: number, engine?: string | null): ActionPlan {
+    const n = this.sim(id)!;
+    const a = n.node.alias;
+    const p: ActionPlan = { contract_version: FLEET_CONTRACT, node: id, action, title: '', allowed: true, blocked: null, destructive: !['drain', 'undrain'].includes(action), impact: [], removes: [], keeps: [], engines: [], job: null, confirm: null, expires_at: null };
+    const block = (why: string) => Object.assign(p, { allowed: false, blocked: why });
+    const local = n.node.pairing.state === 'local';
+    const deps = this.deployments(now).filter((d) => d.members.includes(id));
+    const off = !this.alive(n, now);
+    switch (action) {
+      case 'drain': {
+        p.title = `Drain ${a}`;
+        if (this.drains.has(id)) block(`${a} is drained already: Undrain ends it`);
+        const k = this.inflight(id, now);
+        p.impact.push(k ? `${k} request${k === 1 ? '' : 's'} in flight on ${a} finish` : `nothing is in flight on ${a}: it is drained at once`);
+        for (const d of deps) {
+          const others = d.type === 'replicas' ? d.members.filter((m) => m !== id && !this.drains.has(m) && this.alive(this.sim(m)!, now)) : [];
+          p.impact.push(others.length ? `${d.name}: new requests go to ${others.map((m) => this.sim(m)!.node.alias).join(', ')}, its other replica` : `${d.name}: new requests wait, the gateway answers 503 with Retry-After 30 s until ${a} takes them again`);
+        }
+        p.keeps.push(`everything on ${a} keeps running: only new requests through this gateway stop; a client that calls an engine's port directly is not turned away`, 'the drain lasts until Undrain, across a restart of the controller');
+        break;
+      }
+      case 'undrain':
+        p.title = `Undrain ${a}`;
+        if (!this.drains.has(id)) block(`${a} is not drained`);
+        p.impact.push(`new requests go to ${a} again`);
+        break;
+      case 'restart-engine': {
+        p.title = `Restart the engine on ${a}`;
+        if (off) {
+          block(this.status(n, now).text);
+          break;
+        }
+        const j = this.job(id, 'restart', now);
+        p.engines = [{ id: 'engine', kind: 'tandemllm', port: 8000, managed: this.managed, state: j?.state === 'running' ? 'restarting' : 'up', job: j }];
+        if (engine && engine !== 'engine') {
+          block(`${a} has no engine ${engine}`);
+          break;
+        }
+        p.job = j;
+        if (!this.managed) {
+          block('this engine (engine, port 8000) is not managed by TandemNode: it was started outside TandemNode, so TandemNode never stops or starts it');
+          break;
+        }
+        this.stops(p, n, now, 'until the engine answers its health check again');
+        p.keeps.push('the weights stay on the disk; a warm page cache makes the start short');
+        break;
+      }
+      case 'reboot':
+      case 'update': {
+        p.title = `${action === 'reboot' ? 'Reboot' : 'Update'} ${a}`;
+        if (off) {
+          block(this.status(n, now).text);
+          break;
+        }
+        p.job = this.job(id, action, now);
+        if (!this.managed) {
+          block(action === 'reboot' ? "reboot is not set up on this node: add a reboot command to node.json in the agent's state directory (it needs a right to reboot: a sudoers or polkit rule for the agent's user)" : "update is not set up on this node: add an update command to node.json in the agent's state directory");
+          break;
+        }
+        if (action === 'update') p.impact.push(`${a} runs TandemLLM ${n.node.version}; this controller runs 0.15.0`);
+        this.stops(p, n, now, action === 'reboot' ? 'until it is up again' : 'while its engine restarts with the update');
+        if (action === 'reboot') p.impact.push(`${a} does not answer while it starts: a few minutes${n.node.owned ? '' : '; a rented node reboots through its provider and the tunnel finds it again by its id'}`);
+        p.keeps.push(action === 'reboot' ? `the record, the pairing and the drain: ${a} rejoins by its id` : 'the weights, the record and the pairing');
+        break;
+      }
+      case 'forget': {
+        p.title = `Forget ${a}`;
+        if (local) {
+          block(`${a} is the machine this controller runs on: it is its own node and cannot be forgotten`);
+          break;
+        }
+        p.removes.push(`this controller's pin of ${a}'s certificate, and ${a}'s pin of this controller (it can be paired again: tandem node pair)`, `${a}'s record here: alias, colour, icon, tags and the drain`, `${a}'s metric history on this controller`);
+        p.keeps.push(`TandemNode stays installed and running on ${a}, without an owner`, `its engines keep running${deps.length ? `: ${deps.map((d) => d.name).join(', ')}` : ''}`, `weights and caches stay on ${a}'s disk`, `the event log's lines about ${a}`);
+        if (off) p.impact.push(`${a} does not answer: it is forgotten here only, and keeps its pin until \`tandem node reset\` on it`);
+        break;
+      }
+      case 'release-lease': {
+        p.title = `Release ${a}`;
+        if (n.node.lease_end == null) {
+          block(`${a} is not rented: Forget removes an owned Spark`);
+          break;
+        }
+        const mem = this.memory(now).find((m) => m.node === id);
+        p.removes.push(`the weights and caches on ${a}, wiped${mem ? ` (${Math.round((mem.weights + mem.cache) * 10) / 10} GiB)` : ''}`, `the node certificate, this controller's pin and the app's SSH key on ${a}`, `TandemNode, uninstalled from ${a}`, `${a}'s record and its history here`);
+        p.keeps.push(`nothing of TandemApp stays on ${a}; the lease ends with the provider${n.node.cost_per_hour ? ` (${n.node.cost_per_hour.toFixed(2)} an hour until then)` : ''}`);
+        this.stops(p, n, now, 'for good');
+        break;
+      }
+    }
+    if (p.allowed && p.destructive) {
+      const token = `mock-confirm-${++this.seq}-${id}`;
+      this.tokens.set(token, { node: id, action, until: now + 300 });
+      Object.assign(p, { confirm: token, expires_at: now + 300 });
+    }
+    return p;
+  }
+
+  private act(id: string, action: NodeAction, body: unknown, now: number): Reply {
+    const b = (body ?? {}) as { confirm?: unknown; engine?: unknown };
+    if (typeof b !== 'object' || Array.isArray(b) || Object.keys(b).some((k) => k !== 'confirm' && k !== 'engine')) return bad(400, 'bad_request', 'the body is {confirm?, engine?}');
+    const p = this.plan(id, action, now, typeof b.engine === 'string' ? b.engine : null);
+    if (p.confirm) this.tokens.delete(p.confirm);
+    if (!p.allowed) {
+      const why = p.blocked ?? '';
+      const kind = action === 'release-lease' ? 'not_rented' : /not managed|not set up/.test(why) ? 'not_managed' : 'conflict';
+      return bad(409, kind, why);
+    }
+    if (p.destructive) {
+      if (!b.confirm) return bad(428, 'confirm_required', `${action} needs its plan's confirm: GET the plan (/v1/fleet/nodes/${id}/actions/${action}) and send its \`confirm\``);
+      const t = typeof b.confirm === 'string' ? this.tokens.get(b.confirm) : undefined;
+      if (typeof b.confirm === 'string') this.tokens.delete(b.confirm);
+      if (!t || t.node !== id || t.action !== action || t.until <= now) return bad(409, 'confirm_invalid', "that confirm is spent, too old or another action's: read the plan again");
+    }
+    const n = this.sim(id)!;
+    const a = n.node.alias;
+    const ev = (type: EventType, text: string, detail: string, at = now) => this.f.events.push({ at, item: { id: `e-${action}-${id}-${++this.seq}`, type, severity: null, node: id, deployment: null, text, detail } });
+    const out: ActionResult = { contract_version: FLEET_CONTRACT, node: id, action, state: 'done', text: '', job: null, at: now };
+    switch (action) {
+      case 'drain': {
+        const k = this.inflight(id, now);
+        const ends = Array.from({ length: k }, (_, i) => now + 4 * (i + 1));
+        this.drains.set(id, { since: now, by: 'admin', ends });
+        ev('node', `${a} drains: no new requests`, `${k} request${k === 1 ? '' : 's'} in flight · by admin`);
+        this.f.events.push({ at: ends.at(-1) ?? now, item: { id: `e-drained-${id}-${++this.seq}`, type: 'node', severity: null, node: id, deployment: null, text: `${a} is drained`, detail: 'nothing in flight: it can be updated or rebooted' } });
+        out.text = `${a} takes no new requests; ${k} request${k === 1 ? '' : 's'} in flight finish`;
+        break;
+      }
+      case 'undrain':
+        this.drains.delete(id);
+        this.f.events = this.f.events.filter((e) => !(e.item.id.startsWith(`e-drained-${id}-`) && e.at > now));
+        ev('node', `${a} takes new requests again`, 'by admin');
+        out.text = `${a} takes new requests again`;
+        break;
+      case 'restart-engine':
+      case 'reboot':
+      case 'update': {
+        const kind = action === 'restart-engine' ? 'restart' : action;
+        const span = kind === 'reboot' ? 20 : kind === 'update' ? 8 : 6;
+        this.jobs.set(id, { id: `${kind}-${now}`, action: kind, who: 'owner', simulated: false, started_at: now, ends: now + span, rc: null });
+        const what = kind === 'restart' ? 'the engine engine restarts' : `${kind}s`;
+        ev(kind === 'update' ? 'update' : kind === 'restart' ? 'engine' : 'node', `${a}: ${what}`, 'by admin');
+        if (kind === 'reboot') ev('node', `${a} is up again`, `after ${span} s`, now + span);
+        out.state = 'running';
+        out.job = this.job(id, kind, now);
+        out.text = kind === 'restart' ? `on ${a}, ${what}` : `${a} ${what}`;
+        break;
+      }
+      case 'forget':
+      case 'release-lease': {
+        const rel = action === 'release-lease';
+        this.forget(id);
+        this.audit.unshift({ t: now, action: 'release', node: id, who: 'dashboard session', via: n.node.pairing.via, fingerprint: n.node.pairing.fingerprint, detail: rel ? `${a} released from its lease: wiped and uninstalled` : `${a} released (node side: unpinned)` });
+        this.f.events.push({ at: now, item: { id: `e-${action}-${id}-${++this.seq}`, type: 'node', severity: null, node: 'all', deployment: null, text: rel ? `${a} released: weights and caches wiped, keys removed, TandemNode uninstalled` : `${a} released`, detail: rel ? 'it left the fleet; the lease ends with the provider' : 'node side: unpinned' } });
+        out.text = rel ? `${a} released: weights and caches wiped, keys removed, TandemNode uninstalled; it left the fleet` : `${a} forgotten; its side: unpinned`;
+        break;
+      }
+    }
+    return { status: 200, body: out };
+  }
+
+  /** a link test: a fabric link over its port, a tunnel over the internet, a LAN link to the agent */
+  private testLink(lid: string, now: number): Reply {
+    const l = this.f.links.find((x) => x.id === lid);
+    if (!l) return bad(404, 'not_found', `no link ${lid}`);
+    const node = [l.a, l.b].map((x) => this.sim(x)).find(Boolean);
+    if (!node || (l.kind === 'wan' && !l.a.startsWith('gw'))) return bad(409, 'no_agent', 'only a link to a node\'s agent is tested from here: the internet link has no agent at its far end');
+    if (this.f.host.name === node.node.alias && l.kind === 'lan') return bad(409, 'no_wire', `the controller runs on ${node.node.alias}: there is no wire between them to test`);
+    if (!this.alive(node, now)) return bad(409, 'unreachable', `${node.node.alias} does not answer: not reachable`);
+    const w = Math.abs(wave(this.ph(`lt:${lid}`), now));
+    const test =
+      l.kind === 'fabric'
+        ? { gbps: Math.round((193 + 4 * w) * 10) / 10, at: now, rtt_ms: 0.011, note: 'RoCE on, both logical interfaces up · bandwidth over RDMA' }
+        : l.kind === 'wan'
+          ? { gbps: Math.round((0.38 + 0.1 * w) * 100) / 100, at: now, rtt_ms: Math.round((37 + 2 * w) * 10) / 10, note: 'through the SSH tunnel; bandwidth is TCP through the agent\'s mTLS: a floor of what the link carries' }
+          : { gbps: Math.round((9.1 + 0.4 * w) * 100) / 100, at: now, rtt_ms: Math.round((0.38 + 0.1 * w) * 1000) / 1000, note: 'bandwidth is TCP through the agent\'s mTLS: a floor of what the link carries' };
+    l.test = test;
+    const peer = l.kind === 'fabric' ? (this.f.infra.find((i) => i.id === l.b)?.label ?? this.sim(l.b)?.node.alias ?? l.b) : 'controller';
+    this.f.events.push({ at: now, item: { id: `e-lt-${lid}-${++this.seq}`, type: 'link', severity: null, node: node.node.id, deployment: null, text: `Link test ${node.node.alias} ↔ ${peer}: ${test.gbps} Gb/s, RTT ${test.rtt_ms} ms`, detail: `${test.note} · by admin` } });
+    return { status: 200, body: { contract_version: FLEET_CONTRACT, link: l, result: { rtt: { n: 10, min_ms: test.rtt_ms * 0.9, median_ms: test.rtt_ms, p90_ms: test.rtt_ms * 1.2 }, bandwidth: { gbps: test.gbps, bytes: 67108864, streams: 4, s: Math.round((0.537 / test.gbps) * 1000) / 1000 }, notes: [test.note] } } };
   }
 
   // ---- the routes ----------------------------------------------------------------------------
@@ -852,6 +1105,14 @@ export class MockFleet {
       return { status: 200, body: { contract_version: v, controller: { id: 'c-3dmock0c0n7r', name: `TandemApp on ${this.f.host.name}`, fingerprint: '7c'.repeat(32), since: this.t0 - 60 * D }, audit: this.audit } };
     }
     if (method === 'POST' && parts[0] === 'pair') return this.pair(parts.slice(1), body, now);
+    if (parts.length === 4 && parts[0] === 'nodes' && parts[2] === 'actions' && (method === 'GET' || method === 'POST')) {
+      const id = decodeURIComponent(parts[1]);
+      if (!this.f.nodes.some((x) => x.node.id === id && x.node.since <= now)) return bad(404, 'not_found', `no node ${id}`);
+      const action = parts[3] as NodeAction;
+      if (!(NODE_ACTIONS as readonly string[]).includes(action)) return bad(404, 'not_found', `no action ${action} (one of ${NODE_ACTIONS.join(', ')})`);
+      return method === 'GET' ? { status: 200, body: this.plan(id, action, now, q.get('engine')) } : this.act(id, action, body, now);
+    }
+    if (method === 'POST' && parts.length === 3 && parts[0] === 'links' && parts[2] === 'test') return this.testLink(decodeURIComponent(parts[1]), now);
     if (method === 'DELETE' && parts.length === 2 && parts[0] === 'nodes') {
       const id = decodeURIComponent(parts[1]);
       const n = this.f.nodes.find((x) => x.node.id === id && x.node.since <= now);

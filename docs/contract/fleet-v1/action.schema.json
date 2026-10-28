@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/action.schema.json",
+  "title": "the body of POST /v1/fleet/nodes/{id}/actions/{action}: the plan's confirm (the destructive actions) and, for restart-engine, the engine",
+  "type": "object",
+  "properties": {
+    "confirm": {
+      "type": "string"
+    },
+    "engine": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

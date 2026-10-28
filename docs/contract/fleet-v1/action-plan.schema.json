@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/action-plan.schema.json",
+  "title": "GET /v1/fleet/nodes/{id}/actions/{action}[?engine=<id>] (200): what the action would do, and whether it may run",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "node": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "drain",
+        "undrain",
+        "restart-engine",
+        "reboot",
+        "update",
+        "forget",
+        "release-lease"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "allowed": {
+      "type": "boolean"
+    },
+    "blocked": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "why it may not run here, in words; null when it may"
+    },
+    "destructive": {
+      "type": "boolean",
+      "description": "it stops or removes something: its POST needs `confirm`"
+    },
+    "impact": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "what it stops or changes while it runs: the deployments on the node and where their new requests go, requests in flight"
+    },
+    "removes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "what it removes for good"
+    },
+    "keeps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "what stays (on the node and here)"
+    },
+    "engines": {
+      "type": "array",
+      "description": "restart-engine: the node's engines as its agent lists them, the one to restart first",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "job": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "the agent's job for the action (an engine's restart, the machine's reboot or update), as the agent answers it"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "port",
+          "managed",
+          "state",
+          "job"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "job": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "the agent's job for the action (an engine's restart, the machine's reboot or update), as the agent answers it"
+    },
+    "confirm": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "single use, until expires_at: the POST's `confirm`; null for an action that needs none or may not run"
+    },
+    "expires_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "contract_version",
+    "node",
+    "action",
+    "title",
+    "allowed",
+    "blocked",
+    "destructive",
+    "impact",
+    "removes",
+    "keeps",
+    "engines",
+    "job",
+    "confirm",
+    "expires_at"
+  ],
+  "additionalProperties": false
+}

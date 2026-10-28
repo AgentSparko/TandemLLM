@@ -12,7 +12,7 @@ import { MockLive } from '../mock/live.ts';
 import { makeRow } from '../mock/generate.ts';
 import { rng } from '../mock/generate.ts';
 import { FLEET_SCENARIOS, MOCK_PAIR, MockFleet } from '../mock/fleet.ts';
-import { METRIC_KEYS, RANGE_KEYS, WINDOW_KINDS } from '../src/api/fleet.ts';
+import { METRIC_KEYS, NODE_ACTIONS, RANGE_KEYS, WINDOW_KINDS } from '../src/api/fleet.ts';
 import { addDays, dayKey } from '../src/lib/time.ts';
 
 const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'dashboard-v1');
@@ -279,7 +279,9 @@ describe('fleet contract', () => {
   const q = (s = '') => new URLSearchParams(s);
 
   it('has a schema per route, and they are strict', () => {
-    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'host', 'hostkey', 'layout', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'session', 'topology', 'trust']);
+    expect(Object.keys(fleet).sort()).toEqual(['action', 'action-plan', 'action-result', 'alert', 'alerts', 'deployments', 'error', 'events', 'host', 'hostkey', 'layout', 'link-test', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'session', 'topology', 'trust']);
+    expect(fleet.action({ confirm: 'x', force: true })).toBe(false);
+    expect(fleet['action-plan']({ contract_version: '1.0', node: 'x', action: 'explode' })).toBe(false);
     expect(fleet.sample({ contract_version: '1.0', node: 'x', via: 'agent', t: 1, age_s: 0, sample: { gpus: [{ fan: 1 }] }, note: null })).toBe(false);
     expect(fleet.host({ contract_version: '1.0', name: 'x' })).toBe(false);
     expect(fleet['rule-patch']({})).toBe(false);
@@ -309,6 +311,7 @@ describe('fleet contract', () => {
         for (const n of get('/v1/fleet/nodes').nodes as { id: string }[]) {
           fcheck('node', get(`/v1/fleet/nodes/${n.id}`));
           fcheck('sample', get(`/v1/fleet/nodes/${n.id}/sample`));
+          for (const a of NODE_ACTIONS) fcheck('action-plan', get(`/v1/fleet/nodes/${n.id}/actions/${a}`));
         }
         fcheck('host', get('/v1/fleet/host'));
         fcheck('links', get('/v1/fleet/links'));
@@ -428,6 +431,122 @@ describe('fleet contract', () => {
 
     }
     expect(m.handle('GET', '/v1/fleet/nodes/r9', q(), null, T0).status).toBe(404);
+  });
+
+  // the node actions (VIS-250): the Gherkin of VIS-250 against the mock, every answer held to the schemas
+  type Plan = { allowed: boolean; blocked: string | null; confirm: string | null; impact: string[]; removes: string[]; keeps: string[]; engines: { managed: boolean }[] };
+  type Node = { id: string; alias: string; status: string; status_text: string; drain: { state: string; inflight: number } | null };
+  it('drain: Desk renamed Gold serves conversations, drains, they finish, it shows drained; undrain', () => {
+    const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    expect(m.handle('PATCH', '/v1/fleet/nodes/desk', q(), { alias: 'Gold' }, T0).status).toBe(200);
+    const node = (at: number) => {
+      const r = m.handle('GET', '/v1/fleet/nodes/desk', q(), null, at).body as Node;
+      fcheck('node', r);
+      return r;
+    };
+    const plan = m.handle('GET', '/v1/fleet/nodes/desk/actions/drain', q(), null, T0).body as Plan;
+    fcheck('action-plan', plan);
+    const k = (m.handle('GET', '/v1/fleet/metrics', q('source=node:desk&metric=req&range=5m'), null, T0).body as { series: { values: number[] }[] }).series[0].values.at(-1)!;
+    expect(plan.allowed && plan.confirm).toBe(null);
+    expect(plan.impact).toContain('Qwen3.8-27B: new requests go to R-3, its other replica');
+    expect(plan.impact).toContain('Wren: new requests wait, the gateway answers 503 with Retry-After 30 s until Gold takes them again');
+    const r = m.handle('POST', '/v1/fleet/nodes/desk/actions/drain', q(), {}, T0 + 1000);
+    expect(r.status).toBe(200);
+    fcheck('action-result', r.body);
+    const n0 = node(T0 + 1000);
+    const inflight = n0.drain!.inflight;
+    expect(inflight).toBeGreaterThan(0);
+    expect(Math.abs(inflight - Math.round(k))).toBeLessThanOrEqual(1);
+    expect(n0).toMatchObject({ status: 'draining', status_text: `draining · ${inflight} in flight`, drain: { state: 'draining' } });
+    // they finish one by one; the rate falls with them; then drained, and said so
+    expect(node(T0 + 1000 + 4500).drain!.inflight).toBe(inflight - 1);
+    const done = T0 + 1000 + 4000 * inflight + 500;
+    expect(node(done)).toMatchObject({ status: 'draining', status_text: 'drained · nothing in flight', drain: { state: 'drained', inflight: 0 } });
+    const tps = (m.handle('GET', '/v1/fleet/metrics', q('source=node:desk&metric=tps&range=5m'), null, done + 30_000).body as { series: { values: number[] }[] }).series[0].values.at(-1);
+    expect(tps).toBe(0);
+    const evs = (m.handle('GET', '/v1/fleet/events', q('node=desk&type=node'), null, done).body as { events: { text: string }[] }).events.map((e) => e.text);
+    expect(evs.slice(0, 2)).toEqual(['Gold is drained', 'Gold drains: no new requests']);
+    expect((m.handle('GET', '/v1/fleet/nodes/desk/actions/drain', q(), null, done).body as Plan).blocked).toBe('Gold is drained already: Undrain ends it');
+    expect(m.handle('POST', '/v1/fleet/nodes/desk/actions/drain', q(), {}, done).status).toBe(409);
+    // the topology and the list show it too
+    expect((m.handle('GET', '/v1/fleet/topology', q(), null, done).body as { nodes: Node[] }).nodes[0].status).toBe('draining');
+    expect(m.handle('POST', '/v1/fleet/nodes/desk/actions/undrain', q(), null, done).status).toBe(200);
+    expect(node(done + 1000)).toMatchObject({ status: 'up', drain: null });
+  });
+
+  it('release a rented node: its plan says what goes, the confirm, then it leaves the fleet', () => {
+    const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    const plan = m.handle('GET', '/v1/fleet/nodes/r2/actions/release-lease', q(), null, T0).body as Plan;
+    fcheck('action-plan', plan);
+    expect(plan.allowed).toBe(true);
+    expect(plan.removes[0]).toMatch(/^the weights and caches on R-2, wiped \(\d+(\.\d)? GiB\)$/);
+    expect(plan.removes.slice(1)).toEqual(["the node certificate, this controller's pin and the app's SSH key on R-2", 'TandemNode, uninstalled from R-2', "R-2's record and its history here"]);
+    expect(plan.impact).toContain('DeepSeek-V4.1-Flash stops on R-2 for good: a Split needs every stage');
+    const no = m.handle('POST', '/v1/fleet/nodes/r2/actions/release-lease', q(), {}, T0);
+    expect(no.status).toBe(428);
+    fcheck('error', no.body);
+    const r = m.handle('POST', '/v1/fleet/nodes/r2/actions/release-lease', q(), { confirm: plan.confirm }, T0 + 1000);
+    expect(r.status).toBe(200);
+    fcheck('action-result', r.body);
+    const nodes = (m.handle('GET', '/v1/fleet/nodes', q(), null, T0 + 2000).body as { nodes: Node[] }).nodes.map((n) => n.id);
+    expect(nodes).toEqual(['desk', 'r1', 'r3']);
+    const deps = (m.handle('GET', '/v1/fleet/deployments', q(), null, T0 + 2000).body as { deployments: { id: string }[] }).deployments.map((d) => d.id);
+    expect(deps).toEqual(['qwen27', 'wren']);
+    expect((m.handle('GET', '/v1/fleet/links', q(), null, T0 + 2000).body as { links: { a: string; b: string }[] }).links.some((l) => l.a === 'r2' || l.b === 'r2')).toBe(false);
+    // the token was single use; an owned node has no lease to release
+    expect(m.handle('POST', '/v1/fleet/nodes/r1/actions/release-lease', q(), { confirm: plan.confirm }, T0).status).toBe(409);
+    const own = m.handle('POST', '/v1/fleet/nodes/desk/actions/release-lease', q(), {}, T0);
+    expect(own.status).toBe(409);
+    expect(own.body).toMatchObject({ error: { type: 'not_rented' } });
+  });
+
+  it('forget, restart, reboot and update: confirms, jobs, what fleet1’s box refuses; link tests', () => {
+    const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    const get = (id: string, a: string, at = T0) => m.handle('GET', `/v1/fleet/nodes/${id}/actions/${a}`, q(), null, at).body as Plan;
+    const forget = get('desk', 'forget');
+    expect(forget.keeps).toContain('TandemNode stays installed and running on Desk, without an owner');
+    expect(forget.keeps).toContain('its engines keep running: Qwen3.8-27B, Wren');
+    const wrong = m.handle('POST', '/v1/fleet/nodes/desk/actions/forget', q(), { confirm: get('r1', 'forget').confirm }, T0);
+    expect(wrong.status).toBe(409);
+    expect(wrong.body).toMatchObject({ error: { type: 'confirm_invalid' } });
+    const reboot = get('r3', 'reboot');
+    const rb = m.handle('POST', '/v1/fleet/nodes/r3/actions/reboot', q(), { confirm: reboot.confirm }, T0);
+    expect(rb.status).toBe(200);
+    fcheck('action-result', rb.body);
+    expect(rb.body).toMatchObject({ state: 'running', text: 'R-3 reboots', job: { state: 'running' } });
+    expect((m.handle('GET', '/v1/fleet/nodes/r3', q(), null, T0 + 5000).body as Node)).toMatchObject({ status: 'off', status_text: 'rebooting' });
+    expect((m.handle('GET', '/v1/fleet/nodes/r3', q(), null, T0 + 21_000).body as Node).status).not.toBe('off');
+    expect(get('r3', 'reboot', T0 + 21_000)).toMatchObject({ job: { state: 'done' } });
+    const rs = m.handle('POST', '/v1/fleet/nodes/r1/actions/restart-engine', q(), { confirm: get('r1', 'restart-engine').confirm }, T0);
+    expect(rs.body).toMatchObject({ state: 'running', text: 'on R-1, the engine engine restarts' });
+    // fleet1: today's box, its engine not TandemNode's and its machine's actions not set up
+    const one = new MockFleet({ seed: 42, scenario: 'fleet1', now: T0 / 1000 });
+    const p1 = one.handle('GET', '/v1/fleet/nodes/desk/actions/restart-engine', q(), null, T0).body as Plan;
+    expect(p1).toMatchObject({ allowed: false, confirm: null, engines: [{ managed: false }] });
+    expect(p1.blocked).toContain('is not managed by TandemNode');
+    for (const a of ['reboot', 'update', 'restart-engine']) {
+      const r = one.handle('POST', `/v1/fleet/nodes/desk/actions/${a}`, q(), {}, T0);
+      expect(r.status, a).toBe(409);
+      expect(r.body, a).toMatchObject({ error: { type: 'not_managed' } });
+    }
+    expect((one.handle('GET', '/v1/fleet/nodes/desk/actions/forget', q(), null, T0).body as Plan).blocked).toContain('the machine this controller runs on');
+    // link tests: a fabric link again, the controller's own node has no wire, the internet no agent
+    const lt = m.handle('POST', '/v1/fleet/links/r1-sw/test', q(), null, T0 + 3000);
+    expect(lt.status).toBe(200);
+    fcheck('link-test', lt.body);
+    expect((lt.body as { link: { test: { at: number } } }).link.test.at).toBe(T0 / 1000 + 3);
+    fcheck('links', m.handle('GET', '/v1/fleet/links', q(), null, T0 + 3000).body);
+    expect(m.handle('POST', '/v1/fleet/links/host-inet/test', q(), null, T0).status).toBe(409);
+    expect(one.handle('POST', '/v1/fleet/links/lan-desk/test', q(), null, T0).body).toMatchObject({ error: { type: 'no_wire' } });
+    for (const [method, path, status] of [
+      ['GET', '/v1/fleet/nodes/r9/actions/drain', 404],
+      ['GET', '/v1/fleet/nodes/desk/actions/explode', 404],
+      ['POST', '/v1/fleet/links/nope/test', 404],
+    ] as const) {
+      const r = m.handle(method, path, q(), null, T0);
+      expect(r.status, path).toBe(status);
+      fcheck('error', r.body);
+    }
   });
 
   // node trust (SEC-4): the Gherkin of SEC-4 against the mock, every answer held to the schemas

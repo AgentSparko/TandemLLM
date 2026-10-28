@@ -210,6 +210,42 @@
               "host_key"
             ],
             "additionalProperties": false
+          },
+          "drain": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "maintenance (VIS-250): no new requests through the gateway; `draining` while requests are in flight, then `drained`; null when the node takes requests",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "draining",
+                  "drained"
+                ]
+              },
+              "since": {
+                "type": "number"
+              },
+              "by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "inflight": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "state",
+              "since",
+              "by",
+              "inflight"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -231,7 +267,8 @@
           "lease_end",
           "cost_per_hour",
           "inventory",
-          "pairing"
+          "pairing",
+          "drain"
         ],
         "additionalProperties": false
       }

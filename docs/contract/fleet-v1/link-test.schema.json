@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/link-test.schema.json",
+  "title": "POST /v1/fleet/links/{id}/test (200): the link with its new test, and what was measured",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "link": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "lan",
+            "wan",
+            "fabric"
+          ]
+        },
+        "speed": {
+          "type": "string"
+        },
+        "rtt_ms": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "mtu": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "up",
+            "degraded",
+            "down"
+          ]
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "test": {
+          "type": "object",
+          "properties": {
+            "gbps": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "at": {
+              "type": "number"
+            },
+            "rtt_ms": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "gbps",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        "roce": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ]
+        },
+        "interfaces": {
+          "type": "object",
+          "properties": {
+            "up": {
+              "type": "integer"
+            },
+            "total": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "up",
+            "total"
+          ],
+          "additionalProperties": false
+        },
+        "port": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "a",
+        "b",
+        "kind",
+        "speed",
+        "rtt_ms",
+        "mtu",
+        "state",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "rtt": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "n": {
+              "type": "integer"
+            },
+            "min_ms": {
+              "type": "number"
+            },
+            "median_ms": {
+              "type": "number"
+            },
+            "p90_ms": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "n",
+            "min_ms",
+            "median_ms",
+            "p90_ms"
+          ],
+          "additionalProperties": false
+        },
+        "bandwidth": {
+          "type": "object",
+          "properties": {
+            "gbps": {
+              "type": "number"
+            },
+            "bytes": {
+              "type": "integer"
+            },
+            "streams": {
+              "type": "integer"
+            },
+            "s": {
+              "type": "number"
+            },
+            "error": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "rtt",
+        "bandwidth",
+        "notes"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "contract_version",
+    "link",
+    "result"
+  ],
+  "additionalProperties": false
+}

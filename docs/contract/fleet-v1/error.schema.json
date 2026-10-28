@@ -21,7 +21,15 @@
             "host_key_changed",
             "ssh_failed",
             "not_installed",
-            "too_many"
+            "too_many",
+            "not_managed",
+            "busy",
+            "no_agent",
+            "not_rented",
+            "not_built",
+            "confirm_required",
+            "confirm_invalid",
+            "no_wire"
           ]
         },
         "message": {

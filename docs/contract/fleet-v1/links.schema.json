@@ -65,10 +65,25 @@
             "type": "object",
             "properties": {
               "gbps": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "null"
+                ]
               },
               "at": {
                 "type": "number"
+              },
+              "rtt_ms": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "note": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
