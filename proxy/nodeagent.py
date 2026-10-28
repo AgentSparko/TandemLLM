@@ -2,7 +2,7 @@
 talks to (SRV-725). Port 7700.
 
     tandem-node [serve] [--host 127.0.0.1] [--port 7700] [--state-dir ~/.tandemllm/node]
-                [--tandem-dir DIR] [--virtual NAME] [--mdns on|off]
+                [--tandem-dir DIR] [--virtual NAME] [--mdns on|off] [--weights-dir DIR]
                                                       the agent (systemd user unit: `tandem-node unit`)
     tandem-node check [...]                           how it would listen, and why; starts nothing
     tandem-node unit [...]                            a systemd user unit for these options, on stdout
@@ -28,10 +28,21 @@ ROUTES (every one behind the caller check below; JSON unless an event stream):
     GET    /node/maintenance           the machine's actions (proxy/nodemaint.py): whether reboot and
                                        update are set up here, simulated on a virtual node, the job
     POST   /node/maintenance/reboot | update      202 and the job; 409 not set up or busy
-    GET    /node/weights               the engine's Setup Guide weights, each with a content id
-    DELETE /node/weights/{profile}?confirm=1 | ?dry_run=1   the Setup Guide's removal of one profile
-    POST   /node/weights/receive       501: a copy between paired nodes comes with the weights
-                                       matrix (VIS-252)
+    GET    /node/weights               the engine's Setup Guide weights and the weights store's
+                                       packs (proxy/nodeweights.py), each with a content id; the
+                                       store's folder and free space
+    GET    /node/weights/{profile}/manifest   every file of a pack: size, sha256 when known
+    GET    /node/weights/{profile}/files/{path}   one file's bytes (a copy the controller relays)
+    DELETE /node/weights/{profile}?confirm=1 | ?dry_run=1   a store pack removed, else the Setup
+                                       Guide's removal of one profile
+    POST   /node/weights/receive       {copy, profile, files}: a copy arriving (SRV-731): its token
+    GET    /node/weights/receive/{copy}               its progress
+    PUT    /node/weights/receive/{copy}/{path}        one file (a peer node: with the token only)
+    POST   /node/weights/receive/{copy}/commit        every file there, hashed: the pack in place
+    DELETE /node/weights/receive/{copy}               aborted, nothing left
+    POST   /node/weights/send {copy, profile, to, token}   202: this node pushes a pack to the
+                                       peer agent at `to` (pinned mTLS)
+    GET    /node/weights/send/{copy}, DELETE ...      its progress; stop it
     GET    /node/logs                  ?level=&q=&source=all|agent|<engine>&backlog=; events `log`;
                                        ?follow=0 the lines as JSON
     GET    /node/linktest/info         this node's interfaces (proxy/linktest.py)
@@ -39,7 +50,9 @@ ROUTES (every one behind the caller check below; JSON unless an event stream):
     POST   /node/linktest/sink         a body read and dropped: the bandwidth test's far end
     POST   /node/linktest              {peer, bytes?, streams?, rtt_n?}: this node to the peer's agent
     *      /node/setup/<route>         the engine's /v1/setup/<route> (the Setup Guide) as it answers;
-                                       its status responder (OPS-175) while it restarts
+                                       its status responder (OPS-175) while it restarts; POST
+                                       estimate is computed here (the same formula,
+                                       proxy/placement.py) when no engine serves the Setup Guide
     GET    /node/pair                  the owner, this node's fingerprint, the window (its code only
                                        to this node's own caller), the audit log's last lines
     POST   /node/pair                  {address?, port?, takeover?}: open a pairing window (this
@@ -74,7 +87,7 @@ behind the loopback secret (`<state dir>/secret`, 0600, made at the first start)
 store (`<state dir>/trust`) is filled, then mTLS; any other address only in mTLS; never 0.0.0.0 or a
 WAN address. A call without the secret, or a TLS client without a certificate the store vouches
 for, gets no answer from any route. The owner (the controller pinned as peers/owner.pem) and this
-node's own certificate reach every route; another pinned node only its identity and the link test.
+node's own certificate reach every route; another pinned node only its identity, the link test and a weights receive whose token it holds.
 Every change (an engine or machine action, a removal, a setup POST, a link test, a pairing) is a
 log line with the caller (`secret`, `self`, `owner:` or `peer:` and the certificate's
 fingerprint).
@@ -125,6 +138,7 @@ import http.client
 import queue
 import re
 import select
+import shutil
 import socket
 import ssl
 import subprocess
@@ -138,7 +152,7 @@ if __package__ in (None, ""):                                    # pragma: no co
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from proxy import hostcollect, linktest, mdns, nodeclient, nodeengines, nodemaint  # noqa: E402
-from proxy import nodemetrics, nodeupdate  # noqa: E402
+from proxy import nodemetrics, nodeupdate, nodeweights  # noqa: E402
 from proxy import nodesource, nodetrust, pairing  # noqa: E402
 
 DEFAULT_PORT = 7700
@@ -154,7 +168,8 @@ SYSTEM_EVERY_S = 60.0
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # who reaches which routes once the caller is known (CALLERS above)
 LOCAL_ROLES = ("secret", "self")
-PEER_ROUTES = (("GET", "identity"), ("GET", "linktest"), ("POST", "linktest"))
+PEER_ROUTES = (("GET", "identity"), ("GET", "linktest"), ("POST", "linktest"),
+               ("PUT", "weights"), ("POST", "weights"))
 UNIT = "~/.config/systemd/user/tandemnode.service"
 
 
@@ -231,7 +246,7 @@ class Agent:
     def __init__(self, state_dir: str, *, tandem_dir: str | None = None, root: str = "/",
                  collector=None, local=None, engines=None, clock=time.time, sample_wait=None,
                  addrs=None, ping=None, logbuf=None, log=None, virtual: str | None = None,
-                 maintenance=None):
+                 maintenance=None, weights_dir: str | None = None):
         self.state_dir = os.path.expanduser(state_dir)
         os.makedirs(self.state_dir, mode=0o700, exist_ok=True)
         self.log = log or (lambda m: print(m, flush=True))
@@ -250,6 +265,8 @@ class Agent:
                                                            clock=clock)
         self.maintenance = maintenance or nodemaint.Maintenance.load(
             self.state_dir, virtual=virtual, log=self.log, clock=clock)
+        self.weights = nodeweights.Store(weights_dir or os.path.join(self.state_dir, "weights"),
+                                         log=self.log, clock=clock)
         self.collector = collector or hostcollect.HostCollector(fast_period=0.5,
                                                                 paths=[self.state_dir])
         from proxy import _version
@@ -837,8 +854,8 @@ class Handler(BaseHTTPRequestHandler):
         """Another pinned node (a link test's peer) reaches its identity and the link test only."""
         if self._role() != "peer" or (method, head) in PEER_ROUTES:
             return True
-        self._err(403, "forbidden", "a pinned peer node reaches /node/identity and "
-                                    "/node/linktest only")
+        self._err(403, "forbidden", "a pinned peer node reaches /node/identity, /node/linktest "
+                                    "and a weights receive only")
         return False
 
     def _body(self, cap: int = MAX_JSON):
@@ -955,6 +972,8 @@ class Handler(BaseHTTPRequestHandler):
         except nodeengines.EngineError as exc:
             return self._json(exc.status, exc.body())
         except nodeupdate.UpdateError as exc:
+            return self._json(exc.status, exc.body())
+        except nodeweights.WeightsError as exc:
             return self._json(exc.status, exc.body())
         except (nodetrust.TrustError, nodetrust.BindRefused) as exc:
             return self._err(400, "bad_request", str(exc))
@@ -1128,12 +1147,15 @@ class Handler(BaseHTTPRequestHandler):
             conn.close()
 
     # ------------------------------------------------------------------ setup and weights
-    def _setup_call(self, method: str, target: str, body: bytes | None):
+    def _setup_call(self, method: str, target: str, body: bytes | None, quiet: bool = False):
         """The setup engine's answer to `target` (its status responder's while it restarts):
-        (status, content type, connection, response), or an error already sent (None)."""
+        (status, content type, connection, response), or an error already sent (None; `quiet`:
+        none sent)."""
         e = self.agent.setup_engine()
         if e is None:
-            self._err(503, "no_engine", "no TandemLLM engine on this node serves the Setup Guide")
+            if not quiet:
+                self._err(503, "no_engine", "no TandemLLM engine on this node serves the Setup "
+                                            "Guide")
             return None
         h = {"Accept": self.headers.get("Accept") or "application/json"}
         for k in ("Content-Type", "Last-Event-ID"):
@@ -1152,11 +1174,14 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 conn.close()
                 continue
-        self._err(503, "engine_down", f"the engine on :{e.port} does not answer")
+        if not quiet:
+            self._err(503, "engine_down", f"the engine on :{e.port} does not answer")
         return None
 
     def _setup(self, method: str, sub: str, query: str) -> None:
         body = self._body() if method == "POST" else None
+        if method == "POST" and sub == "estimate":
+            return self._estimate(body, query)
         got = self._setup_call(method, f"/v1/setup/{sub}" + (f"?{query}" if query else ""), body)
         if got is None:
             return
@@ -1166,28 +1191,105 @@ class Handler(BaseHTTPRequestHandler):
         extra = tuple((k, r.getheader(k)) for k in ("Retry-After",) if r.getheader(k))
         self._pass(st, ctype, conn, r, extra)
 
+    def _estimate(self, body: bytes | None, query: str) -> None:
+        """POST /node/setup/estimate: the engine's Setup Guide's, as it answers; when no engine
+        here serves one (none, down, or one without the Setup Guide), the same formula computed
+        by this agent (`source` agent)."""
+        got = self._setup_call("POST", "/v1/setup/estimate" + (f"?{query}" if query else ""),
+                               body, quiet=True)
+        if got is not None:
+            st, ctype, conn, r = got
+            if st not in (404, 405, 501, 503):
+                self._audit("POST setup/estimate", st)
+                return self._pass(st, ctype, conn, r)
+            conn.close()
+        from proxy import placement
+        try:
+            doc = json.loads(body or b"null")
+        except ValueError:
+            raise ValueError("the body is {selection}")
+        st, out = placement.estimate_here(doc)
+        return self._json(st, out)
+
+    def _setup_weights(self) -> dict:
+        """The engine's Setup Guide weights with content ids; {} when no engine serves them."""
+        got = self._setup_call("GET", "/v1/setup/weights", None, quiet=True)
+        if got is None:
+            return {"setup": "no TandemLLM engine on this node serves the Setup Guide"}
+        st, _, conn, r = got
+        try:
+            doc = json.loads(r.read() or b"null")
+        except ValueError:
+            doc = None
+        finally:
+            conn.close()
+        if st != 200 or not isinstance(doc, dict):
+            return {"setup": f"the engine's Setup Guide answered HTTP {st}"}
+        for w in doc.get("weights") or []:
+            cid, basis = content_id(w.get("dir") or "")
+            w["content_id"], w["content_basis"] = cid, basis
+            w.setdefault("source", "setup")
+        return doc
+
+    def _pack_dir(self, name: str) -> str:
+        """A pack's folder: the store's, else the Setup Guide's of that profile."""
+        d = self.agent.weights.pack_dir(name)
+        if d is not None:
+            return d
+        for w in self._setup_weights().get("weights") or []:
+            if w.get("profile") == name and w.get("dir") and os.path.isdir(w["dir"]):
+                return w["dir"]
+        raise nodeweights.WeightsError(404, "not_found", f"no pack {name} on this node")
+
     def _weights(self, method: str, rest: list[str], q: dict) -> None:
-        if method == "POST" and rest == ["receive"]:
-            return self._err(501, "not_built", "a copy between paired nodes comes with the "
-                                               "weights matrix (VIS-252)")
+        store = self.agent.weights
+        role = self._role()
+        if role == "peer":
+            # a peer node (the source of a copy) reaches an open receive with its token only
+            if not (rest[:1] == ["receive"] and len(rest) >= 3 and method in ("PUT", "POST")):
+                return self._err(403, "forbidden", "a peer node reaches a weights receive only")
+            store.receive(rest[1], self.headers.get("X-Tandem-Copy-Token") or "")
+        if rest[:1] == ["receive"]:
+            return self._receive(method, rest[1:])
+        if rest[:1] == ["send"]:
+            return self._send_weights(method, rest[1:])
         if method == "GET" and not rest:
-            got = self._setup_call("GET", "/v1/setup/weights", None)
-            if got is None:
-                return
-            st, _, conn, r = got
-            try:
-                doc = json.loads(r.read() or b"null")
-            except ValueError:
-                doc = None
-            finally:
-                conn.close()
-            if st != 200 or not isinstance(doc, dict):
-                return self._json(st if st != 200 else 502, doc if isinstance(doc, dict) else
-                                  {"error": {"type": "bad_gateway",
-                                             "message": "the engine's weights answer"}})
-            for w in doc.get("weights") or []:
-                cid, basis = content_id(w.get("dir") or "")
-                w["content_id"], w["content_basis"] = cid, basis
+            doc = self._setup_weights()
+            setup = [dict(w, source=w.get("source") or "setup") for w in doc.get("weights") or []]
+            out = {k: v for k, v in doc.items() if k != "weights"}
+            out.update(weights=setup + store.packs(),
+                       store={"dir": store.root, "free_gib": round(store.free() / nodeweights.GIB,
+                                                                   2)})
+            return self._json(200, out)
+        if method == "GET" and len(rest) == 2 and rest[1] == "manifest":
+            d = self._pack_dir(nodeweights.check_name(rest[0]))
+            m = nodeweights.manifest(d)
+            cid, basis = content_id(d)
+            return self._json(200, {"profile": rest[0], "dir": d, "content_id": cid,
+                                    "content_basis": basis, **m})
+        if method == "GET" and len(rest) >= 3 and rest[1] == "files":
+            d = self._pack_dir(nodeweights.check_name(rest[0]))
+            rel = nodeweights.check_rel("/".join(rest[2:]))
+            path = os.path.realpath(os.path.join(d, *rel.split("/")))
+            if not os.path.isfile(path) or rel not in nodeweights.files_of(d):
+                return self._err(404, "not_found", f"no file {rel} in {rest[0]}")
+            size = os.path.getsize(path)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(size))
+            self.end_headers()
+            with open(path, "rb") as f:
+                try:
+                    shutil.copyfileobj(f, self.wfile, nodeweights.CHUNK)
+                except (BrokenPipeError, ConnectionResetError, ssl.SSLError, OSError):
+                    self.close_connection = True
+            return
+        if method == "DELETE" and len(rest) == 1 and store.pack_dir(
+                nodeweights.check_name(rest[0])) is not None:
+            dry = q.get("dry_run") in ("1", "true")
+            doc = store.remove(rest[0], dry, q.get("confirm") in ("1", "true"))
+            self._audit(f"remove weights {rest[0]} from the store{' (dry run)' if dry else ''}",
+                        200)
             return self._json(200, doc)
         if method == "DELETE" and len(rest) == 1:
             dry = q.get("dry_run") in ("1", "true")
@@ -1201,6 +1303,74 @@ class Handler(BaseHTTPRequestHandler):
             self._audit(f"remove weights {rest[0]}{' (dry run)' if dry else ''}", st)
             return self._pass(st, ctype, conn, r)
         return self._err(404, "not_found", f"no route {method} /node/weights/{'/'.join(rest)}")
+
+    def _receive(self, method: str, rest: list[str]) -> None:
+        store = self.agent.weights
+        if method == "POST" and not rest:
+            if self._role() not in ("owner",) + LOCAL_ROLES:
+                return self._err(403, "forbidden", "the owner opens a receive")
+            doc = json.loads(self._body() or b"null")
+            rcv = store.open_receive(doc, (doc or {}).get("from"))
+            self._audit(f"receive {rcv.profile} as copy {rcv.copy}", 200)
+            return self._json(200, dict(rcv.view(), token=rcv.token, dir=rcv.dir,
+                                        free_gib=round(store.free() / nodeweights.GIB, 2)))
+        if not rest:
+            return self._err(404, "not_found", "a receive is /node/weights/receive/<copy>")
+        rcv = store.receive(rest[0])
+        if method == "GET" and len(rest) == 1:
+            return self._json(200, rcv.view())
+        if method == "DELETE" and len(rest) == 1:
+            rcv.abort()
+            self._audit(f"abort copy {rcv.copy}", 200)
+            return self._json(200, rcv.view())
+        if method == "PUT" and len(rest) >= 2:
+            try:
+                n = int(self.headers.get("Content-Length") or -1)
+            except ValueError:
+                n = -1
+            if n < 0:
+                raise ValueError("a file is sent with its Content-Length")
+            try:
+                return self._json(200, rcv.put("/".join(rest[1:]), self.rfile, n))
+            except nodeweights.WeightsError:
+                self.close_connection = True             # what is left of the body is unread
+                raise
+        if method == "POST" and rest[1:] == ["commit"]:
+            try:
+                doc = rcv.commit()
+            except nodeweights.WeightsError as exc:
+                if exc.kind != "incomplete":
+                    rcv.abort()
+                raise
+            self._audit(f"copy {rcv.copy}: {rcv.profile} in place", 200)
+            return self._json(200, doc)
+        return self._err(404, "not_found", f"no route {method} /node/weights/receive/"
+                                           f"{'/'.join(rest)}")
+
+    def _send_weights(self, method: str, rest: list[str]) -> None:
+        store = self.agent.weights
+        if self._role() not in ("owner",) + LOCAL_ROLES:
+            return self._err(403, "forbidden", "the owner sends a pack")
+        if method == "POST" and not rest:
+            doc = json.loads(self._body() or b"null")
+            if not isinstance(doc, dict) or not all(isinstance(doc.get(k), str) for k in
+                                                    ("copy", "profile", "to", "token")):
+                raise ValueError("the body is {copy, profile, to, token}")
+            d = self._pack_dir(nodeweights.check_name(doc["profile"]))
+            files = nodeweights.manifest(d)["files"]
+            job = store.start_send(doc["copy"], d, files, self._peer_client(doc["to"]),
+                                   doc["token"], self._who())
+            self._audit(f"send {doc['profile']} to {doc['to']} as copy {doc['copy']}", 202)
+            return self._json(202, job)
+        if len(rest) == 1 and method == "GET":
+            job = store.sends.get(rest[0])
+            if job is None:
+                return self._err(404, "not_found", f"no send {rest[0]}")
+            return self._json(200, job)
+        if len(rest) == 1 and method == "DELETE":
+            return self._json(200, store.stop_send(rest[0]))
+        return self._err(404, "not_found", f"no route {method} /node/weights/send/"
+                                           f"{'/'.join(rest)}")
 
     # ------------------------------------------------------------------ logs
     def _logs(self, q: dict) -> None:
@@ -1517,6 +1687,9 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--virtual", default=env.get("TANDEM_NODE_VIRTUAL") or None,
                     help="a second agent on this machine acting as another node (OPS-197): its "
                          "own node id and hostname suffix")
+    ap.add_argument("--weights-dir", default=env.get("TANDEM_NODE_WEIGHTS") or None,
+                    help="the weights store a copy from another node lands in "
+                         "(TANDEM_NODE_WEIGHTS, default <state dir>/weights)")
     ap.add_argument("--mdns", choices=("on", "off"),
                     default=env.get("TANDEM_NODE_MDNS", "on").lower() or "on",
                     help="advertise _tandemnode._tcp on the LAN addresses the bind rule allows "
@@ -1553,7 +1726,8 @@ def unit_text(a) -> str:
     args = "".join(f" --host {h}" for h in _hosts(a)) + f" --port {a.port} --state-dir " \
         f"{a.state_dir}" + (f" --tandem-dir {a.tandem_dir}" if a.tandem_dir else "") + \
         (f" --virtual {a.virtual}" if a.virtual else "") + \
-        (" --mdns off" if a.mdns == "off" else "")
+        (" --mdns off" if a.mdns == "off" else "") + \
+        (f" --weights-dir {a.weights_dir}" if a.weights_dir else "")
     return f"""[Unit]
 Description=TandemNode agent (tandem-node) on {', '.join(_hosts(a))}:{a.port}
 After=network-online.target
@@ -1788,7 +1962,8 @@ def main(argv=None) -> None:
     from server import logbuf
     buf = logbuf.install()
     try:
-        agent = Agent(a.state_dir, tandem_dir=a.tandem_dir, logbuf=buf, virtual=a.virtual)
+        agent = Agent(a.state_dir, tandem_dir=a.tandem_dir, logbuf=buf, virtual=a.virtual,
+                      weights_dir=a.weights_dir)
         listen(agent, _hosts(a), a.port)
     except (nodetrust.TrustError, nodetrust.BindRefused, ValueError, OSError) as exc:
         raise SystemExit(f"[node] not starting: {exc}")
