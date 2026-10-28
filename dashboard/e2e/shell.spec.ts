@@ -257,7 +257,7 @@ test.describe('TandemApp shell (VIS-242)', () => {
     await expect(bar.getByRole('button', { name: '1h' })).toHaveAttribute('aria-pressed', 'true');
     await expect(bar.locator('.live-btn')).toHaveText(/Paused/);
     // the chart follows the scope: one Spark, one series
-    await expect(page.locator('#fleet-tps qse-fleet-chart')).toBeVisible();
+    await expect(page.locator('[data-panel="decode"] qse-fleet-chart')).toBeVisible();
     await page.locator('.lpanel .nav-i[data-section="performance"]').click();
     await expect(page).toHaveURL(/#\/performance\?scope=node%3Ar3&range=1h&live=0$/);
     await expect(bar.locator('.scope-dd-btn')).toContainText('R-3');
