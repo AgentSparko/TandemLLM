@@ -769,7 +769,8 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         } catch {
           return error(res, 400, 'bad_request', 'the body is not JSON');
         }
-        const write = path.startsWith('/v1/fleet/discovery') || (req.method !== 'GET' && !(req.method === 'PUT' && path.startsWith('/v1/fleet/layouts/')));
+        // SRV-731: the placement planner is a read in a POST
+        const write = path.startsWith('/v1/fleet/discovery') || (req.method !== 'GET' && !(req.method === 'PUT' && path.startsWith('/v1/fleet/layouts/')) && !(req.method === 'POST' && path === '/v1/fleet/placement'));
         if (fleetPassword && write && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
         const r = fleetFor(req).handle(req.method ?? 'GET', path, q, body);
         return json(res, r.status, r.body);

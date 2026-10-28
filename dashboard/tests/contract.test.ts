@@ -279,7 +279,12 @@ describe('fleet contract', () => {
   const q = (s = '') => new URLSearchParams(s);
 
   it('has a schema per route, and they are strict', () => {
-    expect(Object.keys(fleet).sort()).toEqual(['action', 'action-plan', 'action-result', 'add', 'add-connect', 'add-link', 'add-patch', 'add-run', 'add-session', 'add-start', 'add-target', 'alert', 'alerts', 'controller', 'deployments', 'discovered', 'discovery', 'discovery-address', 'discovery-start', 'error', 'events', 'handover', 'handover-commit', 'host', 'hostkey', 'layout', 'link-test', 'links', 'logs', 'memory', 'metrics', 'move', 'move-job', 'move-plan', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'scan-consent', 'session', 'ssh-line', 'ssh-target', 'take', 'topology', 'trust', 'update', 'update-job', 'update-plan', 'update-start']);
+    expect(Object.keys(fleet).sort()).toEqual(['action', 'action-plan', 'action-result', 'add', 'add-connect', 'add-link', 'add-patch', 'add-run', 'add-session', 'add-start', 'add-target', 'alert', 'alerts', 'controller', 'deployment', 'deployment-action', 'deployment-deleted', 'deployment-job', 'deployment-new', 'deployment-patch', 'deployment-plan', 'deployments', 'discovered', 'discovery', 'discovery-address', 'discovery-start', 'error', 'events', 'handover', 'handover-commit', 'host', 'hostkey', 'layout', 'link-test', 'links', 'logs', 'memory', 'metrics', 'move', 'move-job', 'move-plan', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'placement', 'placement-request', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'scan-consent', 'session', 'ssh-line', 'ssh-target', 'take', 'topology', 'trust', 'update', 'update-job', 'update-plan', 'update-start', 'weights', 'weights-copy', 'weights-deleted', 'weights-job', 'weights-plan']);
+    expect(fleet['deployment-new']({ model: 'm', type: 'single' })).toBe(false);
+    expect(fleet['deployment-new']({ model: 'm', type: 'pool', members: ['a'] })).toBe(false);
+    expect(fleet['deployment-patch']({})).toBe(false);
+    expect(fleet['placement-request']({ model: 'm', pack: 'p', ctx: 0 })).toBe(false);
+    expect(fleet['weights-copy']({ from: 'a', to: 'b', profile: '../x' })).toBe(false);
     expect(fleet['update-start']({})).toBe(false);
     expect(fleet['update-start']({ confirm: 'x', force: true })).toBe(false);
     expect(fleet.move({ to: 'desk' })).toBe(false);
@@ -327,6 +332,18 @@ describe('fleet contract', () => {
         fcheck('topology', get('/v1/fleet/topology'));
         const deps = get('/v1/fleet/deployments');
         fcheck('deployments', deps);
+        // SRV-731: each deployment, its plans, the planner and the weights
+        for (const d of deps.deployments as { id: string; members: string[] }[]) {
+          fcheck('deployment', get(`/v1/fleet/deployments/${d.id}`));
+          for (const a of ['start', 'stop', 'move']) fcheck('deployment-plan', get(`/v1/fleet/deployments/${d.id}/actions/${a}`));
+        }
+        const nodeIds = (get('/v1/fleet/nodes').nodes as { id: string }[]).map((n) => n.id);
+        if (nodeIds.length) {
+          const pl = m.handle('POST', '/v1/fleet/placement', q(), { model: 'qwen3.8-27b', pack: 'exl3-4.0', ctx: 65536 }, at);
+          expect(pl.status).toBe(200);
+          fcheck('placement', pl.body);
+        }
+        fcheck('weights', get('/v1/fleet/weights'));
         fcheck('memory', get('/v1/fleet/memory'));
         fcheck('events', get('/v1/fleet/events'));
         fcheck('events', get('/v1/fleet/events', `since=${at / 1000 - 3600}`));

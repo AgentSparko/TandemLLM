@@ -1,7 +1,9 @@
 // The fleet API of TandemApp's controller (docs/contract/fleet-v1, SRV-723, SRV-725, SRV-727,
 // SRV-729, SRV-731, VIS-246, VIS-248, VIS-250): the Sparks, the links between them, the deployments,
 // per-node metric series, each node's newest sample, the controller's host, memory, events, alerts,
-// rules, the node actions, the saved window layouts, discovery and the Add Spark wizard's session. Times are Unix seconds. The controller sends every metric per node; the page
+// rules, the node actions, the saved window layouts, discovery and the Add Spark wizard's session;
+// SRV-731: the deployment records and their actions, the placement planner and the weights across
+// the fleet. Times are Unix seconds. The controller sends every metric per node; the page
 // computes Total, Stacked, Lines, Split and Table itself (charts/modes.ts), so one answer serves
 // every chart mode.
 
@@ -259,6 +261,209 @@ export interface FleetDeployment {
   role_of?: string;
   role?: string;
   warn?: string;
+  /** SRV-731: a record (false: a Single derived from what an engine serves that no record covers) */
+  record?: boolean;
+  /** SRV-731: what the record says should be */
+  state?: 'serving' | 'stopped';
+  /** SRV-731: TandemNode starts and stops every member's engine */
+  managed?: boolean;
+  member_states?: DeploymentMember[];
+  /** SRV-731: the record's last start, stop or move */
+  job?: DeploymentJobShort | null;
+  /** SRV-731: a Replicas' conversation key: root keeps a chat and its workers on one member */
+  affinity?: 'root' | 'own';
+}
+
+export type MemberState = 'serving' | 'starting' | 'down' | 'draining' | 'leaving' | 'mismatch' | 'off' | 'gone';
+export interface DeploymentMember {
+  node: string;
+  alias: string;
+  engine: string | null;
+  /** the backend through which the gateway reaches the member's engine */
+  backend: string | null;
+  /** the id that backend serves the model under */
+  model: string;
+  managed: boolean;
+  state: MemberState;
+  text: string;
+  /** takes requests now (only `serving` does) */
+  routable: boolean;
+}
+
+export type DeploymentAction = 'start' | 'stop' | 'move';
+export type DeployJobState = 'running' | 'done' | 'failed';
+export interface DeploymentJobShort {
+  id: string;
+  action: DeploymentAction;
+  state: DeployJobState;
+  started_at: number;
+  ended_at: number | null;
+  text: string;
+  error: { type: string; message: string } | null;
+}
+export interface DeploymentJob {
+  id: string;
+  kind: 'deploy';
+  deployment: string;
+  action: DeploymentAction;
+  state: DeployJobState;
+  by: string;
+  started_at: number;
+  ended_at: number | null;
+  steps: { node: string; alias: string; phase: 'start' | 'warm' | 'serving' | 'stop' | 'stopped' | 'kept' | 'failed'; text: string }[];
+  log: { t: number; text: string }[];
+  error: { type: string; message: string } | null;
+  from: string | null;
+  to: string | null;
+}
+export interface DeploymentJobView {
+  contract_version: string;
+  deployment: string;
+  action: DeploymentAction;
+  state: DeployJobState;
+  job: DeploymentJob;
+}
+/** POST /v1/fleet/deployments: a member is a node id or {node, engine?, model?} */
+export interface DeploymentNew {
+  model: string;
+  type: DeploymentType;
+  members: (string | { node: string; engine?: string; model?: string })[];
+  pack?: string;
+  name?: string;
+  id?: string;
+  api_id?: string;
+  ctx?: number;
+  stages?: DeploymentStage[];
+  role?: string;
+  role_of?: string;
+  affinity?: 'root' | 'own';
+  state?: 'serving' | 'stopped';
+}
+export type DeploymentPatch = Partial<Pick<DeploymentNew, 'name' | 'api_id' | 'ctx' | 'pack' | 'type' | 'members' | 'stages' | 'role' | 'role_of' | 'affinity'>>;
+export interface DeploymentPlan {
+  contract_version: string;
+  deployment: string;
+  action: DeploymentAction;
+  title: string;
+  allowed: boolean;
+  blocked: string | null;
+  destructive: boolean;
+  impact: string[];
+  keeps: string[];
+  /** single use, five minutes: a stop's and a move's POST needs it */
+  confirm: string | null;
+  expires_at: number | null;
+  job: DeploymentJobShort | null;
+  from: string | null;
+  to: string | null;
+  engine?: string;
+}
+
+/** POST /v1/fleet/placement: a Setup Guide model and pack, the context a lane holds; `nodes` in
+ *  pipeline order for a Split (without it every node is planned) */
+export interface PlacementRequest {
+  model: string;
+  pack: string;
+  ctx: number;
+  slots?: number;
+  nodes?: string[];
+}
+export interface PlacementNode {
+  node: string;
+  alias: string;
+  status: string;
+  version: string | null;
+  transport: string;
+  fits: boolean;
+  /** the new engine's own parts: the estimate's total less the OS, GiB */
+  need_gib: number | null;
+  /** MemAvailable now, GiB */
+  free_gib: number | null;
+  budget_gib: number | null;
+  total_gib: number | null;
+  /** serves something now: the new engine must fit beside it */
+  serving: boolean;
+  /** engine: its Setup Guide's estimate; agent: the agent's own; process: the controller's machine */
+  source: 'engine' | 'agent' | 'process' | 'none';
+  /** why it does not fit ("needs 98 GiB, Gold has 61 free") */
+  reason: string | null;
+  parts: { id: string; label: string; gib: number }[];
+}
+export interface PlacementType {
+  type: DeploymentType;
+  allowed: boolean;
+  /** false for a Split until ENG-307: planned and recorded only */
+  built: boolean;
+  nodes: string[];
+  reason: string | null;
+  warn: string | null;
+  stages: DeploymentStage[];
+}
+export interface Placement {
+  contract_version: string;
+  model: string;
+  pack: string;
+  ctx: number;
+  slots: number;
+  nodes: PlacementNode[];
+  types: PlacementType[];
+}
+
+export interface WeightsCopyJob {
+  id: string;
+  kind: 'weights';
+  state: 'running' | 'done' | 'failed' | 'stopped';
+  from: string;
+  to: string;
+  from_alias: string;
+  to_alias: string;
+  profile: string;
+  /** direct: the source's agent pushes to the receiver's; relay: through the controller */
+  via: 'direct' | 'relay';
+  via_why: string;
+  by: string;
+  started_at: number;
+  ended_at: number | null;
+  bytes_total: number | null;
+  bytes_done: number;
+  files_total: number | null;
+  files_done: number;
+  rate_gbps: number | null;
+  content_id: { source: string | null; expected: string | null; copy: string | null };
+  /** the copy's content id is the source's (or its hashes') */
+  verified: boolean;
+  log: { t: number; text: string }[];
+  error: { type: string; message: string } | null;
+}
+export interface WeightsOnNode {
+  node: string;
+  present: boolean;
+  source: 'setup' | 'store';
+  dir: string | null;
+  bytes: number | null;
+  gib: number | null;
+  content_id: string | null;
+  /** a copy arriving there now: its job id */
+  copy: string | null;
+}
+export interface WeightsMatrix {
+  contract_version: string;
+  nodes: { node: string; alias: string; status: string; store: string | null; free_gib: number | null; note: string | null }[];
+  packs: { profile: string; model: string | null; nodes: WeightsOnNode[]; same: boolean }[];
+  copies: WeightsCopyJob[];
+}
+export interface WeightsPlan {
+  contract_version: string;
+  node: string;
+  profile: string;
+  title: string;
+  allowed: boolean;
+  blocked: string | null;
+  impact: string[];
+  keeps: string[];
+  bytes: number | null;
+  confirm: string | null;
+  expires_at: number | null;
 }
 
 export interface TopologyGroup {
@@ -889,6 +1094,30 @@ export const fleet = {
   links: () => request<{ contract_version: string; links: FleetLink[] }>('/v1/fleet/links'),
   topology: () => request<FleetTopology>('/v1/fleet/topology'),
   deployments: () => request<{ contract_version: string; deployments: FleetDeployment[] }>('/v1/fleet/deployments'),
+  // SRV-731: the records, their plans and jobs; the planner; the weights across the fleet
+  deployment: (id: string) => request<FleetDeployment & { contract_version: string }>(`/v1/fleet/deployments/${encodeURIComponent(id)}`),
+  createDeployment: (b: DeploymentNew) => request<FleetDeployment & { contract_version: string }>('/v1/fleet/deployments', post(b)),
+  patchDeployment: (id: string, p: DeploymentPatch) =>
+    request<FleetDeployment & { contract_version: string }>(`/v1/fleet/deployments/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }),
+  deleteDeployment: (id: string) => request<{ contract_version: string; deleted: string }>(`/v1/fleet/deployments/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  deploymentPlan: (id: string, action: DeploymentAction, p: { from?: string; to?: string; engine?: string } = {}) => {
+    const q = new URLSearchParams(Object.entries(p).filter((e): e is [string, string] => !!e[1]));
+    return request<DeploymentPlan>(`/v1/fleet/deployments/${encodeURIComponent(id)}/actions/${action}${q.size ? `?${q}` : ''}`);
+  },
+  deploymentAct: (id: string, action: DeploymentAction, body: { confirm?: string; from?: string; to?: string; engine?: string } = {}) =>
+    request<DeploymentJobView>(`/v1/fleet/deployments/${encodeURIComponent(id)}/actions/${action}`, post(body)),
+  deploymentJob: (job: string) => request<DeploymentJobView>(`/v1/fleet/deployments/jobs/${encodeURIComponent(job)}`),
+  placement: (b: PlacementRequest) => request<Placement>('/v1/fleet/placement', post(b)),
+  weights: () => request<WeightsMatrix>('/v1/fleet/weights'),
+  copyWeights: (b: { from: string; to: string; profile: string }) => request<{ contract_version: string; job: WeightsCopyJob }>('/v1/fleet/weights/copy', post(b)),
+  weightsCopy: (id: string) => request<{ contract_version: string; job: WeightsCopyJob }>(`/v1/fleet/weights/copy/${encodeURIComponent(id)}`),
+  stopWeightsCopy: (id: string) => request<{ contract_version: string; job: WeightsCopyJob }>(`/v1/fleet/weights/copy/${encodeURIComponent(id)}/stop`, post({})),
+  weightsPlan: (node: string, profile: string) => request<WeightsPlan>(`/v1/fleet/weights/${encodeURIComponent(node)}/${encodeURIComponent(profile)}`),
+  deleteWeights: (node: string, profile: string, confirm: string) =>
+    request<{ contract_version: string; node: string; profile: string; deleted: true; bytes: number | null }>(
+      `/v1/fleet/weights/${encodeURIComponent(node)}/${encodeURIComponent(profile)}?confirm=${encodeURIComponent(confirm)}`,
+      { method: 'DELETE' },
+    ),
   metrics: (p: { source: string; metric: MetricKey; range: Range }) => {
     const q = new URLSearchParams({ source: p.source, metric: p.metric, range: p.range });
     return request<MetricSeries>(`/v1/fleet/metrics?${q}`);

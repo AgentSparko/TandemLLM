@@ -21,6 +21,9 @@
 // The fleet update and the controller's host (OPS-234, /v1/fleet/update*, /v1/fleet/controller*) are
 // mock/fleetops.ts: jobs on the clock; a Spark's version and its drain follow the update.
 //
+// The deployment records, the placement planner and the weights (SRV-731, /v1/fleet/deployments/*,
+// /v1/fleet/placement, /v1/fleet/weights*) are mock/deploy.ts, over the scenario's own deployments.
+//
 // The node actions (VIS-250, proxy/fleetops.py): a drain ends the requests in flight one by one
 // (4 s apart) while the node's rate falls with them, then the node is drained; a reboot takes the
 // node off for 20 s, an engine's restart and an update are jobs of a few seconds; a release of a
@@ -76,6 +79,7 @@ import type {
 } from '../src/api/fleet.ts';
 import { EVENT_TYPES, FLEET_CONTRACT, METRICS, NODE_ACTIONS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
 import { MockWizard } from './addspark.ts';
+import { MockDeploy } from './deploy.ts';
 import { MockOps } from './fleetops.ts';
 import { MockDiscovery, MOCK_LAN } from './discovery.ts';
 
@@ -524,6 +528,8 @@ export class MockFleet {
   readonly wizard: MockWizard;
   /** the fleet update and the controller's host (mock/fleetops.ts) */
   readonly ops: MockOps;
+  /** the deployment records, the placement planner and the weights (mock/deploy.ts, SRV-731) */
+  readonly deploy: MockDeploy;
 
   /** `now` in Unix seconds: the scenario's start */
   constructor(o: { seed?: number; scenario?: FleetScenario; now?: number } = {}) {
@@ -533,6 +539,7 @@ export class MockFleet {
     this.discovery = new MockDiscovery({ onMac: this.f.host.may_sleep, host: this.f.host.address, nodes: () => this.f.nodes.map((n) => n.node) });
     this.wizard = new MockWizard(this);
     this.ops = new MockOps(this);
+    this.deploy = new MockDeploy(this);
     if (this.scenario === 'mixed') this.ops.seed('r3', '0.15.1');
     const seed = o.seed ?? 42;
     this.ph = (key) => hash(`${seed}:${key}`);
@@ -662,6 +669,11 @@ export class MockFleet {
   }
 
   deployments(now: number): FleetDeployment[] {
+    return this.deploy.decorate(this.baseDeployments(now), this.nodes(now), now);
+  }
+
+  /** the scenario's own deployments, as the story has them */
+  private baseDeployments(now: number): FleetDeployment[] {
     return this.f.deps.map((d) => {
       const up = d.members.filter((m) => m.from <= now && this.alive(this.f.nodes.find((n) => n.node.id === m.node)!, now)).length;
       const all = d.members.length;
@@ -682,7 +694,7 @@ export class MockFleet {
       infra: this.f.infra,
       nodes: this.nodes(now),
       links: this.f.links,
-      groups: this.f.deps.map((d) => ({ deployment: d.dep.id, type: d.dep.type, members: d.dep.members })),
+      groups: this.deployments(now).map((d) => ({ deployment: d.id, type: d.type, members: d.members })),
     };
   }
 
@@ -1185,6 +1197,7 @@ export class MockFleet {
     if (parts[0] === 'add') return this.wizard.handle(method, parts, body, nowMs);
     if (parts[0] === 'update') return this.ops.handleUpdate(method, parts, q, body, now);
     if (parts[0] === 'controller') return this.ops.handleController(method, parts, q, body, now);
+    if (parts[0] === 'placement' || parts[0] === 'weights' || (parts[0] === 'deployments' && (parts.length > 1 || method !== 'GET'))) return this.deploy.handle(method, parts, q, body, now);
     if (method === 'GET' && parts.length === 1) {
       switch (parts[0]) {
         case 'nodes':
