@@ -1,7 +1,8 @@
 // <qse-fleet-page>: TandemApp's new pages (VIS-242, concept §8), one chunk loaded when one of them
 // opens. Overview, Hardware and Events & Alerts (VIS-248, views/monitor/) and Sparks with its
-// topology and each Spark's page (VIS-250, views/fleet/) are built; Models, API, Add Spark and App
-// still show their head, what they will hold and the step of the program that builds them.
+// topology and each Spark's page (VIS-250, views/fleet/) are built, and Add Spark (VIS-246,
+// views/fleet/wizard.ts, a chunk of its own that loads when it opens); Models, API and App still show
+// their head, what they will hold and the step of the program that builds them.
 
 import { html, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -41,7 +42,6 @@ const PAGES: Partial<Record<View, PageDef>> = {
     step: 6,
     link: { href: '#/api/backends', label: 'Backends' },
   },
-  'add-spark': { eyebrow: 'Settings', title: 'Add Spark', text: 'Find, Connect, Check, Install, Link, Name, Done: a resumable wizard that asks for every permission where it needs it.', step: 5 },
   app: { eyebrow: 'Settings', title: 'App', text: 'Where the controller runs, the permissions, the admin password, updates, and the fleet’s config to export and import.', step: 5 },
 };
 
@@ -51,6 +51,10 @@ function subPage(view: View, path: string[]): PageDef | null {
   if (view === 'models' && p === 'weights') return { eyebrow: 'Models', title: 'Weights', text: 'Every model pack on every Spark: present, its size, copying; copy to a Spark, delete with a confirm.', step: 6 };
   return null;
 }
+
+/** The Add Spark wizard: its own chunk; the element upgrades in place once it has loaded. */
+let wizardChunk: Promise<unknown> | null = null;
+const loadWizard = () => (wizardChunk ??= import('./fleet/wizard'));
 
 @customElement('qse-fleet-page')
 export class QseFleetPage extends LightElement {
@@ -62,6 +66,10 @@ export class QseFleetPage extends LightElement {
     if (this.view === 'overview') return html`<qse-overview .summary=${this.summary}></qse-overview>`;
     if (this.view === 'hardware') return html`<qse-hardware></qse-hardware>`;
     if (this.view === 'events') return html`<qse-events></qse-events>`;
+    if (this.view === 'add-spark') {
+      void loadWizard();
+      return html`<qse-add-spark></qse-add-spark>`;
+    }
     if (this.view === 'sparks') {
       const p = this.path[0];
       return p && p !== 'topology' ? html`<qse-spark-node .nodeId=${p}></qse-spark-node>` : html`<qse-sparks .tab=${p === 'topology' ? 'topology' : 'list'}></qse-sparks>`;
