@@ -3,7 +3,7 @@
 //             without TandemApp's controller shows the box's own log and says so, and a Spark there
 //             is named as not reachable, never filled in.
 //  Chart      any fleet metric in <qse-fleet-chart> with its modes, following the scope bar or held on
-//             all Sparks or one.
+//             all Sparks or one, the fleet's events marked on it (VIS-248).
 //  Inspector  one Spark: status, its figures now, memory, what it serves, how it is reached, its
 //             hardware, version and lease, and Terminal, Logs and Chart windows on it.
 
@@ -12,11 +12,13 @@ import { customElement, state } from 'lit/decorators.js';
 import { api, describeError } from '../api/client';
 import { fleet, METRICS, METRIC_KEYS, type FleetLogLine, type FleetMemory, type FleetNode, type MetricKey, type MetricSeries } from '../api/fleet';
 import '../charts/fleet-chart';
+import type { ChartEvent } from '../charts/fleet-chart';
 import type { NodeSeries } from '../charts/modes';
 import { onFleet, type FleetState } from '../lib/fleet-state';
 import { currentScope, onScope, resolveScope, scopeSource, type Scope } from '../lib/scope';
 import { icon } from '../ui/bits';
 import { nodeChip, statusWords } from '../ui/node-chip';
+import { chartEvents } from '../views/monitor/data';
 import { Feed, WindowBody } from './base';
 
 const NO_CONTROLLER = 'TandemApp’s controller does not run on this server yet (SRV-723), so the fleet API does not answer here.';
@@ -160,6 +162,7 @@ export class QseWinLogs extends FleetBody {
 @customElement('qse-win-chart')
 export class QseWinChart extends FleetBody {
   @state() private data: MetricSeries | 'absent' | null = null;
+  @state() private marks: ChartEvent[] = [];
   @state() private error: string | null = null;
   @state() private scope: Scope = currentScope();
   private feed = new Feed((cur) => this.load(cur), 10_000);
@@ -199,7 +202,8 @@ export class QseWinChart extends FleetBody {
   private async load(isCurrent: () => boolean): Promise<void> {
     try {
       const m = await fromFleet(() => fleet.metrics({ source: this.source(), metric: this.metric, range: this.scope.range }));
-      if (isCurrent()) [this.data, this.error] = [m, null];
+      const marks = m === 'absent' ? [] : await chartEvents(m.t0).catch(() => []);
+      if (isCurrent()) [this.data, this.marks, this.error] = [m, marks, null];
     } catch (e) {
       if (isCurrent()) this.error = describeError(e).message;
     }
@@ -218,7 +222,7 @@ export class QseWinChart extends FleetBody {
         const n = this.node(s.node);
         return { id: s.node, alias: n?.alias ?? s.node, colour: n?.colour ?? 1, values: s.values };
       });
-      body = html`<qse-fleet-chart chart-id=${`win-${this.win?.id}-${this.metric}`} .series=${series} agg=${d.agg} unit=${d.unit} .t0=${d.t0} .step=${d.step_s} .decimals=${info.decimals} .cap=${d.cap} .max=${info.max ?? null} mode=${d.agg === 'sum' ? 'stacked' : 'lines'} aria-label=${`${info.label} over ${d.range}`}></qse-fleet-chart>`;
+      body = html`<qse-fleet-chart chart-id=${`win-${this.win?.id}-${this.metric}`} .series=${series} agg=${d.agg} unit=${d.unit} .t0=${d.t0} .step=${d.step_s} .decimals=${info.decimals} .cap=${d.cap} .max=${info.max ?? null} .events=${this.marks} mode=${d.agg === 'sum' ? 'stacked' : 'lines'} aria-label=${`${info.label} over ${d.range}`}></qse-fleet-chart>`;
     }
     return html`<div class="wm-pane">
       <div class="wm-bar">

@@ -48,6 +48,7 @@ import { resizeSide, setSide } from './lib/wm';
 import './ui/workspace';
 import { pageContext } from './ui/page-context';
 import { onFleet, readout, type FleetState } from './lib/fleet-state';
+import { watchAlerts } from './lib/alert-notify';
 import { LightElement, type Loadable } from './ui/base';
 import { icon } from './ui/bits';
 import { nodeColour, isHollow } from './ui/node-chip';
@@ -497,7 +498,10 @@ export class QseApp extends LightElement {
     this.summaryPoll = poll(() => this.loadSummary(), 60_000);
     this.summaryPoll.start();
     void this.loadVersion();
-    if (!this.fleetOff) this.fleetOff = onFleet((f) => (this.fleet = f));
+    if (!this.fleetOff) {
+      this.fleetOff = onFleet((f) => (this.fleet = f));
+      this.unsub.push(watchAlerts());
+    }
   }
   /** OPS-131: a page the worker served from its cache (the proxy answered 502, 503 or 504) says the
    *  engine restarts and reloads once /health answers */
@@ -784,7 +788,7 @@ export class QseApp extends LightElement {
         return html`<qse-setup .path=${this.route.path}></qse-setup>`;
       default:
         void loadFleetPages();
-        return html`<qse-fleet-page .view=${this.route.view} .path=${this.route.path}></qse-fleet-page>`;
+        return html`<qse-fleet-page .view=${this.route.view} .path=${this.route.path} .summary=${this.summary}></qse-fleet-page>`;
     }
   }
 }
