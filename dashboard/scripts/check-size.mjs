@@ -50,7 +50,7 @@
 // with every metric group, each Spark's sheet and the host, Events & Alerts with the rule editor, in the new pages'
 // chunk (22 KB) with their CSS (4.3 KB); the fleet client's sample and host calls and the alert notifications in the
 // main chunk (2.4 KB).
-// 547 KB with the Sparks pages (VIS-250, 2026-10-28: 543.5 KB from 531.1): the list, the full topology with each link's
+// 547 KB with the Sparks pages (VIS-250, 2026-10-28: 543.6 KB from 531.1): the list, the full topology with each link's
 // test, a Spark's page with its edit in place and the action dialog in the new pages' chunk (10.2 KB) with their CSS
 // (1.5 KB); the client's node actions, the drained status word and the chart's clustered markers in the main chunk
 // (0.4 KB). A use of lit's `query` decorator split shared code into another chunk (2.6 KB more): left out.
