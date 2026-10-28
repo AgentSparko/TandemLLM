@@ -165,6 +165,8 @@ class Service:
         self.metrics = Metrics(registry, self) if registry is not None else None
         self.started = time.time()
         self.harness = None
+        # the backend's drained node, or None (TandemApp's fleet sets it, proxy/fleetops.py)
+        self.drain_of = lambda bid: None
         # the monitor's policy: its stall watchdog's ntfy settings carry the push of a new model
         self.monitor_base = monitor_base
         self.notifier = None                   # notify.send; a test puts its own here

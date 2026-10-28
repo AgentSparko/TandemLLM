@@ -24,7 +24,8 @@ one transaction, `INSERT OR REPLACE` of the whole slot), so a sample that arrive
 agent's backlog or an engine's five minutes, lands in its own slot. The primary key puts the tier
 and the slot first: each flush appends at the end of the table, and the hourly prune deletes from
 its start. A crash loses at most one flush interval of the 30 s and 10 min tiers and the 2 s tier;
-a clean stop loses nothing. Events, alerts and rule edits are written when they happen.
+a clean stop loses nothing. Events, alerts, rule edits and each link's last test (VIS-250) are
+written when they happen.
 """
 
 from __future__ import annotations
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS alerts (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEX
 CREATE INDEX IF NOT EXISTS alerts_open ON alerts (resolved_at);
 CREATE TABLE IF NOT EXISTS rule_edits (id TEXT PRIMARY KEY, doc TEXT NOT NULL, at REAL NOT NULL,
   who TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS link_tests (link TEXT PRIMARY KEY, doc TEXT NOT NULL, at REAL NOT NULL);
 """
 
 
@@ -433,3 +435,15 @@ class Store:
         with self._db, self._conn:
             self._conn.execute("INSERT OR REPLACE INTO rule_edits VALUES (?, ?, ?, ?)",
                                (rid, json.dumps(doc, sort_keys=True), at, who))
+
+    # ------------------------------------------------------------------ link tests
+    def link_tests(self) -> dict:
+        """{link id: its last test} (proxy/fleetops.py)."""
+        with self._db:
+            return {r[0]: json.loads(r[1]) for r in
+                    self._conn.execute("SELECT link, doc FROM link_tests")}
+
+    def set_link_test(self, link: str, doc: dict, at: float) -> None:
+        with self._db, self._conn:
+            self._conn.execute("INSERT OR REPLACE INTO link_tests VALUES (?, ?, ?)",
+                               (link, json.dumps(doc, sort_keys=True), at))

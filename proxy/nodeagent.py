@@ -24,6 +24,9 @@ ROUTES (every one behind the caller check below; JSON unless an event stream):
     POST   /node/engines/{id}/start | stop | restart     202 and the job; 409 not managed or busy
     GET    /node/engines/{id}/<route>  the engine's /health, /v1/models, /v1/dashboard/live (its live
                                        stream), /v1/dashboard/system, /v1/dashboard/logs, /metrics
+    GET    /node/maintenance           the machine's actions (proxy/nodemaint.py): whether reboot and
+                                       update are set up here, simulated on a virtual node, the job
+    POST   /node/maintenance/reboot | update      202 and the job; 409 not set up or busy
     GET    /node/weights               the engine's Setup Guide weights, each with a content id
     DELETE /node/weights/{profile}?confirm=1 | ?dry_run=1   the Setup Guide's removal of one profile
     POST   /node/weights/receive       501: a copy between paired nodes comes with the weights
@@ -52,8 +55,9 @@ store (`<state dir>/trust`) is filled, then mTLS; any other address only in mTLS
 WAN address. A call without the secret, or a TLS client without a certificate the store vouches
 for, gets no answer from any route. The owner (the controller pinned as peers/owner.pem) and this
 node's own certificate reach every route; another pinned node only its identity and the link test.
-Every change (an engine action, a removal, a setup POST, a link test, a pairing) is a log line
-with the caller (`secret`, `self`, `owner:` or `peer:` and the certificate's fingerprint).
+Every change (an engine or machine action, a removal, a setup POST, a link test, a pairing) is a
+log line with the caller (`secret`, `self`, `owner:` or `peer:` and the certificate's
+fingerprint).
 
 PAIRING (SEC-4, proxy/pairing.py). `tandem node pair` asks this agent, on loopback, for a window:
 a 6-digit code (5 minutes, 5 tries, single use) and a TLS listener at the address the controller
@@ -92,7 +96,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 if __package__ in (None, ""):                                    # pragma: no cover
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from proxy import hostcollect, linktest, nodeclient, nodeengines, nodemetrics  # noqa: E402
+from proxy import hostcollect, linktest, nodeclient, nodeengines, nodemaint  # noqa: E402
+from proxy import nodemetrics  # noqa: E402
 from proxy import nodesource, nodetrust, pairing  # noqa: E402
 
 DEFAULT_PORT = 7700
@@ -184,7 +189,8 @@ class Agent:
 
     def __init__(self, state_dir: str, *, tandem_dir: str | None = None, root: str = "/",
                  collector=None, local=None, engines=None, clock=time.time, sample_wait=None,
-                 addrs=None, ping=None, logbuf=None, log=None, virtual: str | None = None):
+                 addrs=None, ping=None, logbuf=None, log=None, virtual: str | None = None,
+                 maintenance=None):
         self.state_dir = os.path.expanduser(state_dir)
         os.makedirs(self.state_dir, mode=0o700, exist_ok=True)
         self.log = log or (lambda m: print(m, flush=True))
@@ -199,7 +205,10 @@ class Agent:
         self.secret_path = os.path.join(self.state_dir, "secret")
         self.secret = nodetrust.load_secret(self.secret_path, create=True)
         self.engines = engines or nodeengines.Engines.load(self.state_dir, tandem_dir,
-                                                           log=self.log, clock=clock)
+                                                           virtual=virtual, log=self.log,
+                                                           clock=clock)
+        self.maintenance = maintenance or nodemaint.Maintenance.load(
+            self.state_dir, virtual=virtual, log=self.log, clock=clock)
         self.collector = collector or hostcollect.HostCollector(fast_period=0.5,
                                                                 paths=[self.state_dir])
         from proxy import _version
@@ -622,6 +631,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._metrics(q)
             if head == "engines":
                 return self._engines(method, parts[2:], u.query)
+            if head == "maintenance":
+                return self._maintenance(method, parts[2:])
             if head == "weights":
                 return self._weights(method, parts[2:], q)
             if method == "GET" and parts == ["node", "logs"]:
@@ -735,6 +746,17 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET":
             return self._relay_get(e, "/" + "/".join(rest[1:]), query)
         return self._err(404, "not_found", f"no route {method} /node/engines/{'/'.join(rest)}")
+
+    def _maintenance(self, method: str, rest: list[str]) -> None:
+        m = self.agent.maintenance
+        if method == "GET" and not rest:
+            return self._json(200, m.view())
+        if method == "POST" and len(rest) == 1:
+            job = m.act(rest[0], self._who())
+            self._audit(f"{rest[0]} the node{' (simulated)' if job['simulated'] else ''}", 202)
+            return self._json(202, job)
+        return self._err(404, "not_found", f"no route {method} /node/maintenance/"
+                                           f"{'/'.join(rest)}")
 
     def _relay_get(self, e, path: str, query: str) -> None:
         try:

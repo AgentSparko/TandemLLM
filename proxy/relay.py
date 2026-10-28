@@ -31,6 +31,10 @@ at most `max_inflight` requests at once when the user set one (none by default: 
 limit, a backend takes what it accepts): past it the request goes to a fallback when one has room,
 else a 503 with `Retry-After: 1`. The engine's queue, lock and `max_queue` are never
 touched.
+
+MAINTENANCE (VIS-250): a backend on a drained node (`svc.drain_of`, proxy/fleetops.py) takes no
+new request: the route's fallbacks are tried, and with none left the client gets a 503
+`node_draining` with `Retry-After: 30`. A request already relayed there runs to its end.
 """
 
 from __future__ import annotations
@@ -50,6 +54,7 @@ from proxy.measure import RelayRecord
 RETRYABLE = (429, 502, 503)
 MAX_RETRIES = 2
 RETRY_AFTER_CAP = 30.0
+DRAIN_RETRY_S = 30
 # response headers passed to the client (besides Content-Type)
 PASS_HEADERS = ("retry-after", "x-request-id", "openai-processing-ms")
 PASS_PREFIXES = ("x-ratelimit-",)
@@ -175,6 +180,15 @@ class Relay:
                 last = (404, "Not Found", [], json.dumps(_error_body(
                     f"backend '{bid}' ({backend['kind']}) does not serve {path}",
                     "invalid_request_error", "unsupported_route")).encode())
+                i += 1
+                continue
+            drained = self.svc.drain_of(bid)
+            if drained is not None:
+                rec.upstream_status = None
+                last = (503, "Service Unavailable", [("Retry-After", str(DRAIN_RETRY_S))],
+                        json.dumps(_error_body(f"{drained} is drained for maintenance and takes "
+                                               f"no new requests", "server_busy",
+                                               "node_draining")).encode())
                 i += 1
                 continue
             if not self.inflight.take(bid, backend.get("max_inflight")):

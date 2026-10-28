@@ -20,6 +20,12 @@ list, system snapshot and log. Time is injected; nothing sleeps.
   8  the guard: reads and layouts as the dashboard, writes as the configuration
                                                                          test_auth_guard
   9  tandem-app starts, answers the fleet API and stops on SIGTERM       test_start_stop
+ 10  drain (VIS-250): what is in flight finishes, a new request goes to the route's fallback or
+     gets 503 node_draining with Retry-After, draining then drained, kept across a restart,
+     undrain                                                         test_drain_and_the_gateway
+ 11  the node actions' plans: what goes and what stays, blocked with the reason, the confirm a
+     destructive one needs (missing, spent, another action's), forget, a lease's release 501
+     for a rented node and 409 for an owned one, a link with no wire  test_node_action_plans
 
     python tests/test_fleet.py
 """
@@ -44,6 +50,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import fake_backend  # noqa: E402
 from proxy_util import Proxy, run  # noqa: E402
 from ports import free_port  # noqa: E402
 from proxy import app as proxy_app  # noqa: E402
@@ -672,6 +679,174 @@ def test_auth_guard():
     with Proxy() as px:                                             # no password: all open
         fleet_on(px, local_node(fake_root()))
         assert send(px, "PUT", "/v1/fleet/layouts/overview", layout, lan)[0] == 200
+
+
+def _chat(px, text, stream=True, model="fake-a", out=None):
+    st, h, body = px.post("/v1/chat/completions", {"model": model, "stream": stream,
+                                                   "messages": [{"role": "user",
+                                                                 "content": text}]})
+    if out is not None:
+        out.append((st, body))
+    return st, h, body
+
+
+def _until(fn, s=10.0):
+    t = time.time() + s
+    while time.time() < t:
+        if fn():
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def test_drain_and_the_gateway():
+    srv, port = fake_backend.start(models=["fake-a"])
+    env = {"TANDEM_BACKENDS": "eng", "TANDEM_BACKEND_ENG_KIND": "generic",
+           "TANDEM_BACKEND_ENG_URL": f"http://127.0.0.1:{port}/v1",
+           "TANDEM_BACKEND_ENG_LABEL": "Engine"}
+    try:
+        with Proxy(env=env) as px:
+            px.sync()
+            root = fake_root()
+            f = fleet_on(px, local_node(root))
+            nid = get(px, "/v1/fleet/nodes")[1]["nodes"][0]["id"]
+            n = ok(get(px, f"/v1/fleet/nodes/{nid}")[1], "node")
+            assert (n["status"], n["drain"]) == ("up", None), n
+            # a request in flight: two seconds before its first token
+            first = []
+            t = threading.Thread(target=_chat, args=(px, "FAKE_SLOW_TTFT 2"),
+                                 kwargs={"out": first})
+            t.start()
+            assert _until(lambda: px.svc.relay.inflight.count("eng") == 1)
+            plan = ok(get(px, f"/v1/fleet/nodes/{nid}/actions/drain")[1], "action-plan")
+            assert plan["allowed"] and not plan["destructive"] and plan["confirm"] is None
+            assert f"1 request in flight on {HOSTNAME} finish" in plan["impact"], plan
+            assert any(x.startswith("fake-a: new requests wait, the gateway answers 503 with "
+                                    "Retry-After 30 s") for x in plan["impact"]), plan
+            st, res = send(px, "POST", f"/v1/fleet/nodes/{nid}/actions/drain", {})
+            assert st == 200 and ok(res, "action-result")["state"] == "done", res
+            n = ok(get(px, f"/v1/fleet/nodes/{nid}")[1], "node")
+            assert (n["status"], n["status_text"]) == ("draining", "draining · 1 in flight"), n
+            assert n["drain"]["state"] == "draining" and n["drain"]["inflight"] == 1
+            assert n["drain"]["by"] == "local"                  # a caller on this machine
+            # a new request: no fallback, so it waits
+            st, h, body = _chat(px, "hello", stream=False)
+            err = json.loads(body)["error"]
+            assert st == 503 and h.get("Retry-After") == "30", (st, h)
+            assert err["code"] == "node_draining" and HOSTNAME in err["message"], err
+            # the one in flight runs to its end
+            t.join(15)
+            assert first[0][0] == 200 and b"[DONE]" in first[0][1], first
+            f.tick()
+            n = ok(get(px, f"/v1/fleet/nodes/{nid}")[1], "node")
+            assert (n["status_text"], n["drain"]["state"], n["drain"]["inflight"]) == \
+                ("drained · nothing in flight", "drained", 0), n
+            texts = [e["text"] for e in get(px, "/v1/fleet/events?type=node")[1]["events"]]
+            assert texts[:2] == [f"{HOSTNAME} is drained", f"{HOSTNAME} drains: no new "
+                                                           f"requests"], texts
+            p2 = get(px, f"/v1/fleet/nodes/{nid}/actions/drain")[1]
+            assert not p2["allowed"] and "drained already" in p2["blocked"]
+            assert send(px, "POST", f"/v1/fleet/nodes/{nid}/actions/drain", {})[0] == 409
+            # the drain is the record's: a new controller over the file holds it at once
+            fleet_on(px, local_node(root))
+            assert _chat(px, "again", stream=False)[0] == 503
+            assert get(px, f"/v1/fleet/nodes/{nid}")[1]["status"] == "draining"
+            st, res = send(px, "POST", f"/v1/fleet/nodes/{nid}/actions/undrain", None)
+            assert st == 200 and ok(res, "action-result")["text"] == \
+                f"{HOSTNAME} takes new requests again"
+            assert _chat(px, "back", stream=False)[0] == 200
+            n = ok(get(px, f"/v1/fleet/nodes/{nid}")[1], "node")
+            assert (n["status"], n["drain"]) == ("up", None)
+            assert not get(px, f"/v1/fleet/nodes/{nid}/actions/undrain")[1]["allowed"]
+        # with a fallback on no node (a cloud API): the new requests go there
+        srv2, port2 = fake_backend.start(models=["fake-c"])
+        env2 = dict(env, TANDEM_BACKENDS="eng,cloud", TANDEM_BACKEND_ENG_FALLBACK="cloud/fake-c",
+                    TANDEM_BACKEND_CLOUD_KIND="openai", TANDEM_BACKEND_CLOUD_LABEL="Cloud",
+                    TANDEM_BACKEND_CLOUD_URL=f"http://127.0.0.1:{port2}/v1",
+                    TANDEM_BACKEND_CLOUD_KEY="sk-fixture-ABCDEFGH1234")
+        try:
+            with Proxy(env=env2) as px:
+                px.sync()
+                fleet_on(px, local_node(fake_root()))
+                nid = get(px, "/v1/fleet/nodes")[1]["nodes"][0]["id"]
+                plan = get(px, f"/v1/fleet/nodes/{nid}/actions/drain")[1]
+                assert "fake-a: new requests go to Cloud, its route's fallback" in \
+                    plan["impact"], plan
+                assert send(px, "POST", f"/v1/fleet/nodes/{nid}/actions/drain", {})[0] == 200
+                st, _, body = _chat(px, "elsewhere", stream=False)
+                assert st == 200, body
+                row = px.rows()[-1]
+                assert (row["backend"], row["fallback_from"]) == ("cloud", "eng"), row
+        finally:
+            srv2.shutdown()
+    finally:
+        srv.shutdown()
+
+
+def test_node_action_plans():
+    with Proxy() as px:
+        f = fleet_on(px, local_node(fake_root()))
+        nid = get(px, "/v1/fleet/nodes")[1]["nodes"][0]["id"]
+        cfg = px.svc.cfg
+        # this machine read in-process: no agent, so no restart, reboot or update; never forgotten
+        for action in ("restart-engine", "reboot", "update"):
+            p = ok(get(px, f"/v1/fleet/nodes/{nid}/actions/{action}")[1], "action-plan")
+            assert not p["allowed"] and "without its TandemNode agent" in p["blocked"], p
+            assert p["confirm"] is None and p["destructive"]
+            st, err = send(px, "POST", f"/v1/fleet/nodes/{nid}/actions/{action}", {})
+            assert st == 409 and ok(err, "error")["error"]["type"] == "no_agent", err
+        p = ok(get(px, f"/v1/fleet/nodes/{nid}/actions/forget")[1], "action-plan")
+        assert not p["allowed"] and "the machine this controller runs on" in p["blocked"]
+        st, err = send(px, "POST", f"/v1/fleet/nodes/{nid}/actions/release-lease", {})
+        assert st == 409 and err["error"]["type"] == "not_rented", err
+        # a rented record: what its release would remove; not built yet
+        cfg.add_node({"id": "n-r2", "alias": "R-2", "endpoint": "", "address": "203.0.113.21",
+                      "lease_end_ms": int((time.time() + 86400) * 1000), "cost_per_hour": 2.4})
+        p = ok(get(px, "/v1/fleet/nodes/n-r2/actions/release-lease")[1], "action-plan")
+        assert not p["allowed"] and "rental support" in p["blocked"]
+        assert p["removes"] == ["the weights and caches on R-2, wiped",
+                                "the node certificate, this controller's pin and the app's SSH "
+                                "key on R-2", "TandemNode, uninstalled from R-2",
+                                "R-2's record and its history here"], p["removes"]
+        st, err = send(px, "POST", "/v1/fleet/nodes/n-r2/actions/release-lease", {})
+        assert st == 501 and ok(err, "error")["error"]["type"] == "not_built"
+        # forget: what goes and what stays, and only with its plan's confirm
+        p = ok(get(px, "/v1/fleet/nodes/n-r2/actions/forget")[1], "action-plan")
+        assert p["allowed"] and p["destructive"] and p["confirm"] and p["expires_at"]
+        assert p["removes"][0] == "the record of R-2: it was never paired", p
+        assert "TandemNode stays installed and running on R-2, without an owner" in p["keeps"]
+        assert "weights and caches stay on R-2's disk" in p["keeps"]
+        st, err = send(px, "POST", "/v1/fleet/nodes/n-r2/actions/forget", {})
+        assert st == 428 and ok(err, "error")["error"]["type"] == "confirm_required"
+        other = get(px, f"/v1/fleet/nodes/{nid}/actions/drain")[1]
+        assert other["confirm"] is None                          # drain needs none
+        for bad in ("nope", 7, get(px, "/v1/fleet/nodes/n-r2/actions/forget")[1]["confirm"] +
+                    "x"):
+            st, err = send(px, "POST", "/v1/fleet/nodes/n-r2/actions/forget", {"confirm": bad})
+            assert st == 409 and err["error"]["type"] == "confirm_invalid", (bad, err)
+        # another action's token is refused, and a token is good once
+        cfg.add_node({"id": "n-x", "alias": "X", "endpoint": "", "address": "192.0.2.77"})
+        theirs = get(px, "/v1/fleet/nodes/n-x/actions/forget")[1]["confirm"]
+        st, err = send(px, "POST", "/v1/fleet/nodes/n-r2/actions/forget", {"confirm": theirs})
+        assert st == 409 and err["error"]["type"] == "confirm_invalid"
+        st, res = send(px, "POST", "/v1/fleet/nodes/n-r2/actions/forget",
+                       {"confirm": p["confirm"]})
+        assert st == 200 and ok(res, "action-result")["text"] == \
+            "R-2 forgotten; its side: not_paired", res
+        assert cfg.node("n-r2") is None and get(px, "/v1/fleet/nodes/n-r2")[0] == 404
+        assert send(px, "POST", "/v1/fleet/nodes/n-r2/actions/forget",
+                    {"confirm": p["confirm"]})[0] == 404
+        # refused bodies and names
+        for body in ([], {"confirm": "a", "force": True}):
+            assert send(px, "POST", f"/v1/fleet/nodes/{nid}/actions/drain", body)[0] == 400
+        st, err = get(px, f"/v1/fleet/nodes/{nid}/actions/explode")
+        assert st == 404 and ok(err, "error")
+        assert get(px, "/v1/fleet/nodes/n-nope/actions/drain")[0] == 404
+        # the link to the node the controller runs on: no wire to test
+        st, err = send(px, "POST", f"/v1/fleet/links/lan-{nid}/test", None)
+        assert st == 409 and ok(err, "error")["error"]["type"] == "no_wire", err
+        assert send(px, "POST", "/v1/fleet/links/nope/test", None)[0] == 404
+        assert f.ops.drain_of("eng") is None
 
 
 def test_start_stop():

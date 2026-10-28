@@ -34,6 +34,12 @@ dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_wri
                                                     takeover?}: SSH once
     DELETE /v1/fleet/nodes/{id}[?force=1]           release: the node forgets this controller,
                                                     then the controller forgets the node
+    GET   /v1/fleet/nodes/{id}/actions/{action}     what drain, undrain, restart-engine, reboot,
+                                                    update, forget or release-lease would do,
+                                                    and a confirm for the destructive ones
+    POST  /v1/fleet/nodes/{id}/actions/{action}     {confirm?, engine?}: done, or a job started
+                                                    (proxy/fleetops.py, VIS-250)
+    POST  /v1/fleet/links/{id}/test                 a LAN link's round trip and bandwidth, kept
 
 A FLEET OF ONE. The machine tandem-app runs on is a node when it is Spark-class (an NVIDIA GPU or an
 engine of its own, proxy/nodesource.py): at the first start it is registered with its hostname as
@@ -74,6 +80,12 @@ EVENTS AND ALERTS (proxy/fleetwatch.py). Each sample runs the alert rules over e
 figures and logs what changed: a node up or off, an engine down, up or restarted, a deployment's
 status, and here the controller's start and stop and a new address; pairing, release and
 take-over in proxy/fleettrust.py.
+
+NODE ACTIONS (proxy/fleetops.py). A drained node takes no new request through this gateway (the
+relay asks `svc.drain_of`); restart, reboot and update go to the node's agent; forget is the
+release above; each destructive one runs only with the confirm of the plan it was read from.
+A virtual node on this machine (a second agent, OPS-197) serves the engine backends whose port
+its agent lists, never this machine's own.
 """
 
 from __future__ import annotations
@@ -88,6 +100,7 @@ import time
 from urllib.parse import unquote, urlsplit
 
 from proxy import config as config_mod
+from proxy import fleetops
 from proxy import fleetstore
 from proxy import fleetwatch
 from proxy import hostcollect
@@ -254,6 +267,8 @@ class Fleet:
         self._migrated = False
         self.started = clock()
         self._proc_prev: tuple[float, float] | None = None
+        self.ops = fleetops.Ops(self)
+        svc.drain_of = self.ops.drain_of        # the gateway's question, per request
 
     def trust(self):
         """The controller's side of node trust (proxy/fleettrust.py), its certificate made at
@@ -346,6 +361,7 @@ class Fleet:
             self.watch.observe(now, self.readings(now))
         except Exception as exc:                                     # noqa: BLE001
             self.log(f"[fleet] the alert rules did not run: {type(exc).__name__}: {exc}")
+        self.ops.refresh()
         if self.store.due(now):
             self.store.flush(now)
 
@@ -388,17 +404,44 @@ class Fleet:
                 "deployments": deps}
 
     # ------------------------------------------------------------------ the registry
-    def engine_backends(self, address: str | None = None) -> list[dict]:
-        """The engine backends, enabled, on this machine (the URL is), or on the node at
-        `address` (the URL's host is that address)."""
+    def engine_backends(self, address: str | None = None, ports=None) -> list[dict]:
+        """The engine backends, enabled, on this machine (the URL is) less those a virtual
+        node claims, or on the node at `address` (the URL's host is that address; with `ports`,
+        a node on this machine, only on those ports)."""
+        claimed = self._claimed() if address is None else {}
         out = []
         for b in self.cfg.backends():
             if not b["enabled"] or b["cloud"] or b["kind"] not in nodesource.ENGINE_KINDS:
                 continue
-            if address is None and self.locality.is_local(b["url"]):
+            if address is None and self.locality.is_local(b["url"]) and b["id"] not in claimed:
                 out.append(b)
-            elif address is not None and _host_of(b["url"]) == address:
+            elif address is not None and _host_of(b["url"]) == address and (
+                    ports is None or _port_of(b["url"]) in ports):
                 out.append(b)
+        return out
+
+    def _virtual_ports(self, row: dict, src) -> set | None:
+        """A node on this machine read through an agent of its own (a virtual node): the ports
+        of the engines its agent lists; None for a node elsewhere."""
+        addr = row["address"] or (src.address() if isinstance(src, nodesource.AgentNode) else "")
+        if not isinstance(src, nodesource.AgentNode) or src is self.agent or \
+                row["id"] == self._local_id or not addr or \
+                not self.locality.is_local(f"http://[{addr}]/" if ":" in addr else
+                                           f"http://{addr}/"):
+            return None
+        return {e.get("port") for e in src.agent_engines()}
+
+    def _claimed(self) -> dict:
+        """{backend id: node id} of this machine's engine backends a virtual node serves."""
+        out = {}
+        for row in self.cfg.nodes():
+            if row["endpoint"] in ("local", "") or row["id"] == self._local_id:
+                continue
+            src = self.source(row)
+            ports = self._virtual_ports(row, src)
+            if ports:
+                for b in self.engine_backends(row["address"] or src.address(), ports):
+                    out[b["id"]] = row["id"]
         return out
 
     def ensure_local(self) -> str | None:
@@ -440,7 +483,8 @@ class Fleet:
         for row in self.cfg.nodes():
             src = self.source(row)
             if isinstance(src, nodesource.AgentNode) and src is not self.agent:
-                src.sync(self.engine_backends(row["address"] or src.address()))
+                src.sync(self.engine_backends(row["address"] or src.address(),
+                                              self._virtual_ports(row, src)))
             out.append((row, src))
         return out
 
@@ -498,6 +542,11 @@ class Fleet:
         if inv.get("serial") is None:
             inv["serial"] = row["serial"]
         lease = row["lease_end_ms"]
+        drain = self.ops.drain_view(row, src)
+        if drain is not None and status != "off":
+            status = "draining"
+            text = f"draining · {drain['inflight']} in flight" if drain["state"] == "draining" \
+                else "drained · nothing in flight"
         return {"id": row["id"], "alias": row["alias"], "colour": row["colour"],
                 "icon": row["icon"], "tags": row["tags"], "class": row["class"],
                 "hw": row["hw"] or "unknown", "dmi": row["dmi"] or "unknown",
@@ -506,7 +555,7 @@ class Fleet:
                 "status": status, "status_text": text, "since": row["added_at"] / 1000,
                 "lease_end": None if lease is None else lease / 1000,
                 "cost_per_hour": row["cost_per_hour"], "inventory": inv,
-                "pairing": pairing_view(row)}
+                "pairing": pairing_view(row), "drain": drain}
 
     def nodes(self, now: float) -> list[dict]:
         self.ensure_local()
@@ -642,6 +691,10 @@ class Fleet:
                           ("degraded" if up else "down"),
                           "note": "cloud backends: " + ", ".join(b["label"] or b["id"]
                                                                 for b in cloud)})
+        tests = self.ops.tests()
+        for x in links:
+            if x["id"] in tests:
+                x["test"] = tests[x["id"]]
         return infra, links
 
     def host_name(self) -> str:
@@ -949,6 +1002,14 @@ class Fleet:
                 return {"contract_version": v, "rules": self.watch.rules()}
         if method == "GET" and len(parts) == 3 and parts[0] == "nodes" and parts[2] == "sample":
             return self.sample_view(parts[1], now)
+        if len(parts) == 4 and parts[0] == "nodes" and parts[2] == "actions":
+            if method == "GET":
+                return self.ops.plan(parts[1], parts[3], now, q.get("engine") or None)
+            if method == "POST":
+                self._node_row(parts[1])
+                return self.ops.act(parts[1], parts[3], body, who, now)
+        if method == "POST" and len(parts) == 3 and parts[0] == "links" and parts[2] == "test":
+            return self.ops.test_link(parts[1], who, now)
         if len(parts) == 2 and parts[0] == "nodes":
             if method == "GET":
                 return self.node_view(self._node_row(parts[1]), now)
@@ -1006,5 +1067,13 @@ def pairing_view(row: dict) -> dict:
 def _host_of(url: str) -> str | None:
     try:
         return urlsplit(url).hostname
+    except ValueError:
+        return None
+
+
+def _port_of(url: str) -> int | None:
+    try:
+        u = urlsplit(url)
+        return u.port or (443 if u.scheme == "https" else 80)
     except ValueError:
         return None

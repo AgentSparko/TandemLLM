@@ -29,6 +29,12 @@ the engine a box serves on :8000 is never addressed. Time is injected where the 
  10  the controller: a node read through its agent in /v1/fleet/* (nodes, metrics from the 1 s
      stream, memory, logs, deployments through the relay), this machine switching to its agent
      and back, a remote agent node, an unpaired one                  test_agent_node_in_fleet
+ 11  the machine's reboot and update (VIS-250): refused until node.json sets them up, a job that
+     ends done or failed, busy; a virtual node simulates both and never runs a command, and has
+     no engine of the machine's                                      test_machine_actions
+ 12  the controller's node actions through the agent: an engine's restart with its plan's
+     confirm, refused for an engine TandemNode did not start; reboot refused when not set up and
+     simulated on a virtual node; a LAN link's test                  test_actions_through_the_agent
 
     python tests/test_node_agent.py
 """
@@ -54,7 +60,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_fleet as tf  # noqa: E402
 from ports import free_port  # noqa: E402
-from proxy import nodeagent, nodeclient, nodeengines, nodemetrics  # noqa: E402
+from proxy import nodeagent, nodeclient, nodeengines, nodemaint, nodemetrics  # noqa: E402
 from proxy import nodesource, nodetrust  # noqa: E402
 from proxy_util import Proxy, run  # noqa: E402
 from server import logbuf  # noqa: E402
@@ -157,7 +163,7 @@ class Clock:
 
 
 def agent_on(root=None, *, engines=None, clock=None, h=None, addrs=None, state=None, buf=None,
-             secret=None, address="192.0.2.40", nvml=True):
+             secret=None, address="192.0.2.40", nvml=True, virtual=None):
     root = root or machine()
     state = state or tempfile.mkdtemp(prefix="node-state-")
     if secret is not None:
@@ -177,7 +183,8 @@ def agent_on(root=None, *, engines=None, clock=None, h=None, addrs=None, state=N
     a = nodeagent.Agent(state, root=root, collector=col, local=local, engines=eng, clock=clock,
                         sample_wait=getattr(clock, "wait", None),
                         addrs=addrs or (lambda: {}), ping=lambda argv: True, logbuf=buf,
-                        log=lambda m: (buf.append(m) if buf is not None else None))
+                        log=lambda m: (buf.append(m) if buf is not None else None),
+                        virtual=virtual)
     a.engine_logs = logs
     return a
 
@@ -364,7 +371,7 @@ def test_identity_inventory():
                                              "mode": "secret"}]
         st, inv = r.client.json("GET", "/node/inventory")
         assert st == 200
-        assert inv["fleet"]["cx7"] == "2 ConnectX ports · 1 up", inv["fleet"]
+        assert inv["fleet"]["cx7"] == "2 ConnectX ports · 1 up · FW 28.45.1020", inv["fleet"]
         assert inv["lan"] == {"iface": "lan0", "speed": "10 GbE", "mtu": 1500, "state": "up"}
         assert [d["name"] for d in inv["disks"]] == ["nvme0n1"]           # loop devices left out
         assert inv["disks"][0] == {"name": "nvme0n1", "nvme": True, "model": "TEST NVME 4TB",
@@ -932,7 +939,8 @@ def test_agent_node_in_fleet():
         assert nid == agent.local.identity()["id"] and f.here() is an
         assert any("read through its TandemNode agent" in m for m in px.logs), px.logs
         n = nodes[0]
-        assert n["status"] == "up" and n["inventory"]["cx7"] == "2 ConnectX ports · 1 up", n
+        assert n["status"] == "up" and n["inventory"]["cx7"] == \
+            "2 ConnectX ports · 1 up · FW 28.45.1020", n
         # the engine's samples through the agent's relay, the hardware from its stream
         for i in range(1, 6):
             eng.step(tf.T0 + i, 40)
@@ -1008,6 +1016,143 @@ def test_agent_node_in_fleet():
             if hasattr(src, "close"):
                 src.close()
     eng.close()
+
+
+def _job(c, path="/node/maintenance"):
+    for _ in range(400):
+        st, doc = c.json("GET", path)
+        job = doc.get("job")
+        if job and job["state"] != "running":
+            return doc
+        time.sleep(0.02)
+    raise AssertionError(doc)
+
+
+def test_machine_actions():
+    nodemaint.SIMULATED_S = 0.05
+    # nothing set up: both refused with the words to set them up
+    with Running(agent_on()) as r:
+        st, doc = r.client.json("GET", "/node/maintenance")
+        assert st == 200 and doc["virtual"] is False and doc["job"] is None, doc
+        for a in ("reboot", "update"):
+            assert doc[a]["managed"] is False and doc[a]["simulated"] is False
+            assert doc[a]["why"].startswith(f"{a} is not set up on this node: add a"), doc[a]
+            st, err = r.client.json("POST", f"/node/maintenance/{a}")
+            assert st == 409 and err["error"]["type"] == "not_managed", err
+        assert r.client.json("POST", "/node/maintenance/explode")[0] == 404
+    # node.json's commands: a job, done or failed; one at a time
+    state = tempfile.mkdtemp(prefix="node-state-")
+    marker = os.path.join(state, "updated")
+    with open(os.path.join(state, "node.json"), "w") as f:
+        json.dump({"update": [sys.executable, "-c", f"import time; time.sleep(0.4); "
+                                                    f"open({marker!r}, 'w').close()"],
+                   "reboot": [sys.executable, "-c", "raise SystemExit(4)"]}, f)
+    buf = []
+    with Running(agent_on(state=state, buf=buf)) as r:
+        st, job = r.client.json("POST", "/node/maintenance/update")
+        assert st == 202 and job["state"] == "running" and job["who"] == "secret", job
+        assert job["simulated"] is False
+        st, err = r.client.json("POST", "/node/maintenance/reboot")
+        assert st == 409 and err["error"]["type"] == "busy", err
+        doc = _job(r.client)
+        assert (doc["job"]["state"], doc["job"]["rc"]) == ("done", 0) and os.path.exists(marker)
+        assert r.client.json("POST", "/node/maintenance/reboot")[0] == 202
+        doc = _job(r.client)
+        assert doc["job"]["state"] == "failed" and "exited 4" in doc["job"]["message"], doc
+        assert any("update by secret" in m for m in buf), buf
+    # a virtual node: simulated, whatever node.json says; and no engine of the machine's
+    vstate = tempfile.mkdtemp(prefix="node-vstate-")
+    touched = os.path.join(vstate, "rebooted")
+    with open(os.path.join(vstate, "node.json"), "w") as f:
+        json.dump({"reboot": ["touch", touched]}, f)
+    with Running(agent_on(state=vstate, virtual="v1")) as r:
+        st, doc = r.client.json("GET", "/node/maintenance")
+        assert doc["virtual"] is True and doc["reboot"] == {"managed": True, "simulated": True,
+                                                            "why": None}, doc
+        assert doc["update"]["managed"] is True                # simulated, not set up
+        st, job = r.client.json("POST", "/node/maintenance/reboot")
+        assert st == 202 and job["simulated"] is True
+        doc = _job(r.client)
+        assert doc["job"]["state"] == "done" and doc["job"]["message"] == \
+            "simulated: a virtual node; the host was not rebooted", doc
+        assert not os.path.exists(touched)
+    tandem = tempfile.mkdtemp(prefix="tandem-dir-")
+    os.makedirs(os.path.join(tandem, "run", "ops"))
+    with open(os.path.join(tandem, "run", "ops", "serve.env"), "w") as f:
+        f.write("PORT=18123\n")
+    assert [e.managed for e in nodeengines.Engines.load(tempfile.mkdtemp(), tandem).list] == \
+        [True]
+    assert nodeengines.Engines.load(tempfile.mkdtemp(), tandem, virtual="v1").list == []
+
+
+def test_actions_through_the_agent():
+    nodemaint.SIMULATED_S = 0.05
+    me = os.path.abspath(__file__)
+    fg, un = free_port(), free_port()
+    assert 8000 not in (fg, un)
+    agent = agent_on(engines=[engine_doc("fg", fg, start=[sys.executable, me, "--fake-engine",
+                                                            str(fg)], start_timeout_s=20),
+                              engine_doc("theirs", un)])
+    virt = agent_on(machine("VIRT-SERIAL-1"), virtual="v1", address="127.0.0.1")
+    with Running(agent) as ra, Running(virt) as rv, Proxy() as px:
+        f = tf.fleet_on(px, tf.local_node(tf.fake_root()))
+        cfg = px.svc.cfg
+        cfg.add_node({"id": "n-remote", "alias": "R-1", "endpoint": ra.url,
+                      "address": "192.0.2.99", "trust": {"kind": "loopback-secret",
+                                                         "file": agent.secret_path}})
+        cfg.add_node({"id": "n-virt", "alias": "V-1", "endpoint": rv.url,
+                      "address": "127.0.0.1", "trust": {"kind": "loopback-secret",
+                                                        "file": virt.secret_path}})
+        p = tf.ok(tf.get(px, "/v1/fleet/nodes/n-remote/actions/restart-engine")[1],
+                  "action-plan")
+        assert p["allowed"] and p["confirm"] and [e["id"] for e in p["engines"]] == \
+            ["fg", "theirs"], p
+        assert p["engines"][0]["managed"] and not p["engines"][1]["managed"]
+        assert "R-1 serves nothing through this gateway now" in p["impact"], p
+        st, res = tf.send(px, "POST", "/v1/fleet/nodes/n-remote/actions/restart-engine",
+                          {"confirm": p["confirm"]})
+        assert st == 200 and tf.ok(res, "action-result")["state"] == "running", res
+        assert res["job"]["action"] == "restart", res
+        assert res["text"] == "on R-1, the engine fg restarts", res
+        for _ in range(400):
+            e = ra.client.json("GET", "/node/engines/fg")[1]
+            if e["job"]["state"] != "running":
+                break
+            time.sleep(0.05)
+        assert (e["job"]["state"], e["state"]) == ("done", "up"), e
+        # the engine someone else runs: said so, never touched
+        p = tf.get(px, "/v1/fleet/nodes/n-remote/actions/restart-engine?engine=theirs")[1]
+        assert not p["allowed"] and p["confirm"] is None
+        assert "is not managed by TandemNode" in p["blocked"], p
+        st, err = tf.send(px, "POST", "/v1/fleet/nodes/n-remote/actions/restart-engine",
+                          {"engine": "theirs"})
+        assert st == 409 and tf.ok(err, "error")["error"]["type"] == "not_managed", err
+        # a reboot the node's owner did not set up; a virtual node's, simulated
+        p = tf.ok(tf.get(px, "/v1/fleet/nodes/n-remote/actions/reboot")[1], "action-plan")
+        assert not p["allowed"] and p["blocked"].startswith("reboot is not set up"), p
+        p = tf.ok(tf.get(px, "/v1/fleet/nodes/n-virt/actions/reboot")[1], "action-plan")
+        assert p["allowed"] and "V-1 is a virtual node: the reboot is simulated, the machine " \
+                                "under it is not rebooted" in p["impact"], p
+        st, res = tf.send(px, "POST", "/v1/fleet/nodes/n-virt/actions/reboot",
+                          {"confirm": p["confirm"]})
+        assert st == 200 and res["job"]["simulated"] is True, res
+        texts = [e["text"] for e in tf.get(px, "/v1/fleet/events?node=n-virt")[1]["events"]]
+        assert "V-1: reboots (simulated)" in texts, texts
+        _job(rv.client)
+        p = tf.get(px, "/v1/fleet/nodes/n-virt/actions/reboot")[1]
+        assert p["job"]["state"] == "done", p
+        # a LAN link's test from the controller: kept on the link
+        st, res = tf.send(px, "POST", "/v1/fleet/links/lan-n-remote/test", None)
+        assert st == 200, res
+        tf.ok(res, "link-test")
+        t = res["link"]["test"]
+        assert t["gbps"] > 0 and t["rtt_ms"] is not None and "a floor" in t["note"], t
+        links = tf.ok(tf.get(px, "/v1/fleet/links")[1], "links")["links"]
+        assert next(x for x in links if x["id"] == "lan-n-remote")["test"] == t
+        st, res = tf.send(px, "POST", "/v1/fleet/links/lan-n-virt/test", None)
+        assert st == 200 and "a virtual node" in res["link"]["test"]["note"], res
+        for src in [a for _, a in f.agents.values()]:
+            src.close()
 
 
 # ---------------------------------------------------------------------------- the fake engine's

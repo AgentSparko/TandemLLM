@@ -545,13 +545,29 @@ class LocalNode:
                "driver": (drv or drv2).group(1) if (drv or drv2) else None,
                "cuda": cuda.group(1) if cuda else None,
                "cx7": f"{len(ports)} ConnectX port{'s' if len(ports) != 1 else ''} · "
-                      f"{sum(ports.values())} up" if ports else None,
+                      f"{sum(ports.values())} up" + "".join(
+                          f" · FW {v}" for v in self._firmware(ports)) if ports else None,
                "disk": f"{'NVMe ' if nvme else ''}{_size(root_fs['total_bytes'])} · "
                        f"{_size(root_fs['free_bytes'])} free" if root_fs else None,
                "nics": self._nics()}
         with self._lock:
             self._inv, self._inv_at = inv, now
         return inv
+
+    def _firmware(self, ports: dict) -> list[str]:
+        """The ConnectX firmware versions behind the ports (their RDMA device's fw_ver)."""
+        out = set()
+        for n in ports:
+            base = self._p("sys", "class", "net", n, "device", "infiniband")
+            try:
+                devs = os.listdir(base)
+            except OSError:
+                continue
+            for d in devs:
+                v = self._read("sys", "class", "infiniband", d, "fw_ver")
+                if v:
+                    out.add(v)
+        return sorted(out)
 
     def _nics(self) -> str | None:
         """The physical interfaces (those with a device behind them), speed and state."""
@@ -801,6 +817,26 @@ class AgentNode:
             except Exception:                                        # noqa: BLE001
                 pass
         return self._eng or []
+
+    def maintenance(self) -> dict | None:
+        """The agent's machine actions (GET /node/maintenance): reboot and update set up or not,
+        simulated on a virtual node, the last job; None without an answer (an older agent)."""
+        try:
+            st, doc = self.client.json("GET", "/node/maintenance", timeout=TIMEOUT_S)
+        except Exception:                                            # noqa: BLE001
+            return None
+        return doc if st == 200 and isinstance(doc, dict) else None
+
+    def post(self, path: str, body=None, timeout: float = TIMEOUT_S * 5) -> tuple[int, dict]:
+        """A write to the agent (an engine's restart, a reboot): (status, JSON body); 502 and the
+        reason when it does not answer."""
+        try:
+            st, doc = self.client.json("POST", path, body, timeout=timeout)
+        except Exception as exc:                                     # noqa: BLE001
+            return 502, {"error": {"type": "unreachable", "message": f"its agent does not "
+                                   f"answer: {type(exc).__name__}: {exc}"[:200]}}
+        self._eng_at = -ENGINES_EVERY_S                  # its jobs show at the next read
+        return st, doc if isinstance(doc, dict) else {}
 
     def sync(self, backends: list[dict]) -> None:
         by_port = {e.get("port"): e.get("id") for e in self.agent_engines()}

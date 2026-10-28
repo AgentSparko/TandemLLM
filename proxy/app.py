@@ -420,10 +420,11 @@ class Handler(BaseHTTPRequestHandler):
         return self._write("DELETE")
 
     def _fleet(self, method: str, path: str, raw: bytes | None) -> None:
-        """`/v1/fleet/*` (proxy/fleet.py): reads and a page's window layout under the
-        dashboard's rule, writes (a node's alias or colour, an acknowledgement) under the
-        configuration's, pairing and release under `fleet_trust` (server/auth.py), and the
-        controller's own sign-in at /v1/fleet/session."""
+        """`/v1/fleet/*` (proxy/fleet.py): reads (an action's plan too) and a page's window
+        layout under the dashboard's rule, writes (a node's alias or colour, an acknowledgement,
+        a drain, a restart, a link test) under the configuration's, pairing, release, forget and
+        a lease's release under `fleet_trust` (server/auth.py), and the controller's own sign-in
+        at /v1/fleet/session."""
         body = None
         if raw:
             try:
@@ -437,7 +438,9 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" or (method == "PUT" and parts[:1] == ["layouts"]):
             route = "dashboard"
         elif (method == "POST" and parts[:1] == ["pair"]) or (method == "DELETE"
-                                                              and parts[:1] == ["nodes"]):
+                                                              and parts[:1] == ["nodes"]) or \
+                (method == "POST" and len(parts) == 4 and parts[2] == "actions"
+                 and parts[3] in ("forget", "release-lease")):
             route = "fleet_trust"
         else:
             route = "conductor_write"

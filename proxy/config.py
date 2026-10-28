@@ -14,7 +14,8 @@ ledger. Its tables:
     audit            who changed what and when, field names only, never a value of a key
     nodes            TandemApp's fleet (SRV-723): one row per node, its id, alias, identity colour,
                      icon, tags, class, how the controller reaches it (transport, endpoint,
-                     address, trust) and what it is (hw, dmi, serial); proxy/fleet.py
+                     address, trust), what it is (hw, dmi, serial) and its maintenance drain;
+                     proxy/fleet.py
     layouts          a page's window layout per device class, the JSON the dashboard saved
     meta             schema_version, created_at
 
@@ -115,7 +116,7 @@ FEATURE_GROUPS = ("mode", "class", "effort", "packages", "side", "loops", "e1", 
 KEY_PREFIX = "tdm-"
 NODE_COLS = ("id", "alias", "colour", "icon", "tags", "class", "hw", "dmi", "serial", "transport",
              "endpoint", "address", "trust", "owner", "lease_end_ms", "cost_per_hour", "added_at",
-             "updated_at")
+             "updated_at", "drain")
 
 DDL = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -179,7 +180,9 @@ ADDED = (("models", "price_offpeak", "TEXT"),
          # overwrites it
          ("models", "max_output_set", "INTEGER"),
          # SEC-4: what a node's pairing, take-over or release did (JSON, never a secret)
-         ("audit", "detail", "TEXT"))
+         ("audit", "detail", "TEXT"),
+         # VIS-250: a node in maintenance (drained): {since, by} as JSON, NULL when it serves
+         ("nodes", "drain", "TEXT"))
 
 
 def _inflight_col(v) -> int:
@@ -1132,6 +1135,7 @@ class ConfigDB:
             d = dict(zip(NODE_COLS, r))
             d["tags"] = json.loads(d["tags"] or "[]")
             d["trust"] = json.loads(d["trust"] or "{}")
+            d["drain"] = json.loads(d["drain"]) if d["drain"] else None
             out.append(d)
         return out
 
@@ -1159,7 +1163,8 @@ class ConfigDB:
 
     def update_node(self, nid: str, fields: dict, who: str = "gui") -> dict:
         """Change a node's columns (the caller checked the values); 404 for an unknown id."""
-        vals = {k: json.dumps(v) if k in ("tags", "trust") else v for k, v in fields.items()
+        vals = {k: json.dumps(v) if k in ("tags", "trust") or (k == "drain" and v is not None)
+                else v for k, v in fields.items()
                 if k in NODE_COLS and k not in ("id", "added_at")}
         with self._lock:
             n = self._conn.execute(

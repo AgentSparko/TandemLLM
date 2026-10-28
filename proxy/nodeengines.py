@@ -17,7 +17,9 @@ ENGINES.JSON (`<state dir>/engines.json`), a list under `engines`:
 An engine without a `start` command is listed, its health and routes relayed, but never started,
 stopped or restarted here (409 `not_managed`): an engine someone else runs stays theirs. Without
 the file: the install's engine when `--tandem-dir` names one (`run/ops/serve.env`'s PORT, its
-`bin/tandem` start, stop and restart), else one TandemLLM engine on :8000, not managed.
+`bin/tandem` start, stop and restart), else one TandemLLM engine on :8000, not managed. A virtual
+node (`--virtual`, a second agent on one machine) has no engine without the file: the machine's
+own engine is the machine's node's, never restarted or relayed through a virtual one.
 
 LIFECYCLE. One job per engine at a time (409 `busy`). `start` runs the start command in its own
 session (its output in `<state dir>/logs/<id>.log`) and waits for `/health` to answer; a command
@@ -106,7 +108,8 @@ class Engines:
         self.log, self.clock, self.poll_s = log, clock, poll_s
 
     @classmethod
-    def load(cls, state_dir: str, tandem_dir: str | None = None, **kw) -> "Engines":
+    def load(cls, state_dir: str, tandem_dir: str | None = None, virtual: str | None = None,
+             **kw) -> "Engines":
         logs = os.path.join(state_dir, "logs")
         path = os.path.join(state_dir, "engines.json")
         if os.path.exists(path):
@@ -118,6 +121,8 @@ class Engines:
             engines = [Engine(d, logs) for d in items]
             if len({e.id for e in engines}) != len(engines):
                 raise ValueError(f"{path}: two engines with one id")
+        elif virtual:
+            engines = []
         else:
             engines = [Engine(default_engine(tandem_dir), logs)]
         return cls(engines, **kw)
