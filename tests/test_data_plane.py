@@ -24,7 +24,8 @@ what a client of the engine gets today; the same request through the controller 
      engine that dropped it ends with the timeout                    test_long_thinking_is_not_cut
   5  Gherkin "Counted once" / AC4: 10 requests through the controller are 10 rows of its ledger,
      each with its node and deployment and the engine's own row id (`upstream_request`); Usage of
-     the controller's ledger counts 10                                     test_counted_once
+     the controller's ledger counts 10, and its backend `engine` is "this engine" there once
+                                                                            test_counted_once
   6  AC5 + Gherkin "Rollback" / AC6: docs/proxy.md's locations send exactly the five route families
      to the controller and every engine-only route to the engine (nginx's `=` and `^~` matching);
      the rollback is written down                                  test_locations_and_rollback
@@ -348,6 +349,12 @@ def test_counted_once():
         # Usage of the controller's ledger (the page's default when the data plane runs here)
         st, out = tf.get(fx.px, "/v1/fleet/ledger/usage?bucket=day")
         assert st == 200 and out["totals"]["requests"] == 10, out["totals"]
+        # the controller's backend is the box's engine under the id `engine`: the dashboard's value
+        # for an engine's own rows names it (the Usage table "this engine"), listed once
+        dims = out["dimensions"]["backends"]
+        assert [b["id"] for b in dims].count("engine") == 1, dims
+        st, own = tf.get(fx.px, "/v1/fleet/ledger/usage?bucket=day&backend=engine")
+        assert st == 200 and own["totals"]["requests"] == 10, own["totals"]
         st, out = tf.get(fx.px, "/v1/fleet/ledger/requests?limit=50")
         assert st == 200 and len(out["requests"]) == 10 and \
             all(r["upstream_request"] for r in out["requests"]), out["requests"][:1]

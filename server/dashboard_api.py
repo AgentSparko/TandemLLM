@@ -250,6 +250,10 @@ class Range:
 
 
 ENGINE = "engine"     # the `backend=` filter's value for the engine's own rows (backend IS NULL)
+# SRV-733: a backend configured under that id (a TandemApp controller whose backend is the box's
+# engine) takes the value: `backend=engine` then counts that backend's rows, and the dimensions list
+# it once. `_filters` reads a value with this prefix as the backend id itself.
+NAMED = "="
 
 
 def _filters(model: str | None, client: str | None, backend: str | None = None,
@@ -270,7 +274,7 @@ def _filters(model: str | None, client: str | None, backend: str | None = None,
         sql += " AND backend IS NULL"
     elif backend:
         sql += " AND backend = ?"
-        args.append(backend)
+        args.append(backend[len(NAMED):] if backend.startswith(NAMED) else backend)
     if user:
         sql += " AND user = ?"
         args.append(user)
@@ -368,6 +372,17 @@ class DashboardAPI:
     # ----------------------------------------------------------------- plumbing
     def _db(self):
         return self.ledger.reader() if self.ledger is not None else None
+
+    def _backend(self, value: str | None) -> str | None:
+        """The `backend=` filter's value, `engine` read as a configured backend of that id when
+        there is one (NAMED)."""
+        if value != ENGINE or self.backends_fn is None:
+            return value
+        try:
+            named = any(b["id"] == ENGINE for b in self.backends_fn())
+        except Exception:                                          # noqa: BLE001
+            named = False
+        return NAMED + ENGINE if named else value
 
     def _cached(self, key, fn):
         now = self.clock()
@@ -488,7 +503,7 @@ class DashboardAPI:
         if (last - first).days > 3660:
             raise _bad("a range may span at most ten years")
         model, client = q.get("model") or None, q.get("client") or None
-        backend, user = q.get("backend") or None, q.get("user") or None
+        backend, user = self._backend(q.get("backend") or None), q.get("user") or None
         node, deployment = q.get("node") or None, q.get("deployment") or None
         internal = _flag(q.get("internal"))
         key = ("usage", tz_name, bucket, first, last, model, client, backend, user, internal,
@@ -613,7 +628,7 @@ class DashboardAPI:
         if not seen and not conf:
             return None
         backends = []
-        if None in rows:
+        if None in rows and ENGINE not in conf:
             backends.append({"id": ENGINE, "kind": "engine", "label": "this engine"})
         for bid in sorted(set(seen) | set(conf)):
             b = conf.get(bid) or {}
@@ -680,9 +695,9 @@ class DashboardAPI:
             if before is not None:
                 sql += " AND id < ?"
                 args.append(before)
-            fsql, fargs = _filters(q.get("model"), q.get("client"), q.get("backend"),
-                                   q.get("user"), _flag(q.get("internal")), q.get("node"),
-                                   q.get("deployment"))
+            fsql, fargs = _filters(q.get("model"), q.get("client"),
+                                   self._backend(q.get("backend")), q.get("user"),
+                                   _flag(q.get("internal")), q.get("node"), q.get("deployment"))
             sql += fsql
             args += fargs
             if q.get("finish"):
