@@ -1,7 +1,7 @@
 // The fleet API of TandemApp's controller (docs/contract/fleet-v1, SRV-723, SRV-725, SRV-727,
-// SRV-729, SRV-731, VIS-248, VIS-250): the Sparks, the links between them, the deployments, per-node
-// metric series, each node's newest sample, the controller's host, memory, events, alerts, rules, the
-// node actions, the saved window layouts and discovery (the Add Spark wizard's Find step). Times are Unix seconds. The controller sends every metric per node; the page
+// SRV-729, SRV-731, VIS-246, VIS-248, VIS-250): the Sparks, the links between them, the deployments,
+// per-node metric series, each node's newest sample, the controller's host, memory, events, alerts,
+// rules, the node actions, the saved window layouts, discovery and the Add Spark wizard's session. Times are Unix seconds. The controller sends every metric per node; the page
 // computes Total, Stacked, Lines, Split and Table itself (charts/modes.ts), so one answer serves
 // every chart mode.
 
@@ -144,6 +144,12 @@ export interface PairBySsh {
   port?: number;
   password?: string;
   key?: string;
+  /** a private key file on the controller's machine (the ssh line's -i) */
+  key_file?: string;
+  /** the jump hosts in order (the ssh line's -J) */
+  jumps?: { user: string | null; host: string; port: number }[];
+  /** a rented or remote node: reached through an SSH tunnel to its loopback */
+  tunnel?: boolean;
   /** the host key fingerprint the user confirmed */
   host_key?: string;
   takeover?: boolean;
@@ -622,6 +628,108 @@ export interface SshTarget {
   warnings: string[];
 }
 
+/** The Add Spark wizard (VIS-246): its steps, in order. */
+export const ADD_STEPS = ['find', 'connect', 'check', 'install', 'link', 'name', 'done'] as const;
+export type AddStep = (typeof ADD_STEPS)[number];
+
+/** One preflight check: its value and, for anything but ok, the fix in words. */
+export interface PreflightRow {
+  id: string;
+  label: string;
+  state: 'ok' | 'warn' | 'fail';
+  value: string;
+  fix: string | null;
+}
+
+export interface InstallStep {
+  id: 'check' | 'upload' | 'agent' | 'engine' | 'unit' | 'pair';
+  label: string;
+  state: 'todo' | 'running' | 'done' | 'failed' | 'skip';
+  detail: string | null;
+  started_at: number | null;
+  ended_at: number | null;
+}
+
+/** A target's install: skipped (TandemLLM at the fleet's version runs there), or its job. */
+export interface InstallView {
+  state: 'skip' | 'queued' | 'running' | 'done' | 'failed';
+  why?: string;
+  version?: string;
+  node?: string | null;
+  error?: { type: string; message: string } | null;
+  started_at?: number | null;
+  ended_at?: number | null;
+  options?: { prefix: string; port: number; unit: string; engine: boolean };
+  steps?: InstallStep[];
+  log?: { t: number; step: string; level: 'info' | 'warn'; text: string }[];
+}
+
+/** A device picked in Find, as the controller keeps it for the rest of the wizard. */
+export interface AddTarget {
+  id: string;
+  /** the discovery row it came from (null: an ssh line) */
+  row: string | null;
+  label: string;
+  kind: DiscoveryKind | 'rented' | 'remote';
+  title: string;
+  detail: string;
+  address: string;
+  connect: ('code' | 'ssh' | 'takeover')[];
+  hw: string | null;
+  version: string | null;
+  /** the pairing window's port while the node shows a code */
+  window: number | null;
+  ssh: { host: string; port: number; user: string | null; jumps: { user: string | null; host: string; port: number }[]; key_file: string | null; auth: 'password' | 'key' | 'key_file' | 'agent' | null };
+  rented: { lease_end: number; cost_per_hour: number | null } | null;
+  transport: Transport;
+  /** paired; bare: reached over SSH, nothing installed (Install installs it) */
+  state: 'todo' | 'paired' | 'bare';
+  via: 'code' | 'ssh' | 'takeover' | null;
+  host_key: { type: string; fingerprint: string; known: 'new' | 'same' | 'changed'; stored: string | null; confirmed: boolean } | null;
+  error: { type: string; message: string } | null;
+  node: string | null;
+  preflight: { at: number; via: 'agent' | 'ssh' | null; rows: PreflightRow[]; verdict: { fails: number; warns: number; install: 'needed' | 'skip' | 'refused'; why: string } | null; error: { type: string; message: string } | null } | null;
+  install: InstallView | null;
+  name: { alias?: string; colour?: number; icon?: FleetNode['icon']; tags?: string[] } | null;
+  /** whether this controller's memory holds the password or key (never the secret itself) */
+  secret: { held: boolean; until: number | null };
+}
+
+/** An Add Spark session: kept on the controller, so it resumes after a reload or on another device. */
+export interface AddSession {
+  contract_version: string;
+  id: string;
+  state: 'active' | 'done' | 'abandoned';
+  step: AddStep;
+  created_at: number;
+  updated_at: number;
+  by: string;
+  fleet_version: string;
+  targets: AddTarget[];
+  link: { state: 'todo' | 'not_needed' | 'skipped' | 'testing' | 'done'; why: string | null; results: { node: string; link: string; test: FleetLink['test'] | null; error: { type: string; message: string } | null }[] };
+  done_at: number | null;
+  seq: number;
+  /** when the lease rule reminds of each rented node's lease */
+  reminders: { node: string; target: string; lease_end: number; at: number; hours: number; rule: 'lease'; enabled: boolean }[];
+}
+
+export interface AddConnect {
+  method: 'code' | 'ssh' | 'takeover';
+  code?: string;
+  user?: string;
+  password?: string;
+  key?: string;
+  key_file?: string;
+  agent?: boolean;
+  host_key?: string;
+}
+
+export interface AddRun {
+  secrets?: Record<string, { password?: string; key?: string }>;
+  targets?: string[];
+  options?: Record<string, { prefix?: string; state_dir?: string; port?: number; unit?: string; virtual?: string; engine?: boolean }>;
+}
+
 /** A poll answer applied to the list the page holds: a full answer replaces it, a partial one
  *  updates its changed rows and drops the gone ones. */
 export function mergeDiscovery(prev: Discovery | null, next: Discovery): Discovery {
@@ -702,6 +810,20 @@ export const fleet = {
   discoverAddress: (address: string, port?: number) =>
     request<{ contract_version: string; row: DiscoveryRow }>('/v1/fleet/discovery/address', post(port == null ? { address } : { address, port })),
   sshTarget: (line: string) => request<{ contract_version: string; target: SshTarget }>('/v1/fleet/discovery/target', post({ line })),
+  // the Add Spark wizard (VIS-246): the session on the controller, resumable from any device
+  addSession: () => request<{ contract_version: string; fleet_version: string; session: AddSession | null }>('/v1/fleet/add'),
+  startAdd: (replace = false) => request<AddSession>('/v1/fleet/add', post(replace ? { replace: true } : {})),
+  patchAdd: (id: string, p: { step?: AddStep; names?: Record<string, NonNullable<AddTarget['name']>> }) =>
+    request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }),
+  endAdd: (id: string) => request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  addTarget: (id: string, body: { row: string } | { ssh: SshTarget | string; rented?: { lease_end: number; cost_per_hour?: number | null }; key?: string }) =>
+    request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}/targets`, post(body)),
+  dropTarget: (id: string, tid: string) => request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}/targets/${encodeURIComponent(tid)}`, { method: 'DELETE' }),
+  targetHostKey: (id: string, tid: string) => request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}/targets/${encodeURIComponent(tid)}/hostkey`, post({})),
+  connectTarget: (id: string, tid: string, body: AddConnect) => request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}/targets/${encodeURIComponent(tid)}/connect`, post(body)),
+  checkAdd: (id: string, body: AddRun = {}) => request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}/check`, post(body)),
+  installAdd: (id: string, body: AddRun = {}) => request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}/install`, post(body)),
+  linkAdd: (id: string, action: 'test' | 'skip' | 'configure') => request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}/link`, post({ action })),
   session: () => request<FleetSession>('/v1/fleet/session'),
   signIn: (password: string) => request<void>('/v1/fleet/session', post({ token: password }), 'none'),
   signOut: () => request<void>('/v1/fleet/session', { method: 'DELETE' }, 'none'),

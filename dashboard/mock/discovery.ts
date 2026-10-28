@@ -86,7 +86,8 @@ export class MockDiscovery {
     return this.scanStop != null && at > this.scanStop ? null : at;
   }
 
-  /** each device's phases [(when, content)], the newest one that has happened wins */
+  /** each device's phases [(when, content)] in the order each merges the ones before it (mDNS, the
+   *  scan, a login): the last one that has happened wins, whichever came first on the clock */
   private phases(): [number, Row][][] {
     const t = this.runAt;
     const mdns = !this.denied && this.run > 0;
@@ -176,7 +177,7 @@ export class MockDiscovery {
   private rows(nowMs: number): DiscoveryRow[] {
     const out: DiscoveryRow[] = [];
     for (const ph of this.phases()) {
-      const seen = ph.filter(([at]) => at <= nowMs).sort((a, b) => a[0] - b[0]);
+      const seen = ph.filter(([at]) => at <= nowMs);
       if (!seen.length) continue;
       const [at, r] = seen[seen.length - 1];
       out.push({ ...r, seen_at: Math.round(at) / 1000, seq: Math.floor(at / 100) });

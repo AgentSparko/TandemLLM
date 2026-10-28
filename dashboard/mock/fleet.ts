@@ -21,11 +21,14 @@
 // one; the other scenarios' nodes have both. Each destructive action needs its plan's confirm.
 //
 // Discovery (SRV-727) is mock/discovery.ts: its devices line up with MOCK_PAIR, and what a pairing
-// learns (a bare GX10's DMI, a node that joined) shows in its rows.
+// learns (a bare GX10's DMI, a node that joined) shows in its rows. The Add Spark wizard's session
+// (VIS-246, /v1/fleet/add) is mock/addspark.ts: it pairs through the routes below and adds a node
+// that joins with `admit` (a LAN link to it, or the rental gateway's tunnel).
 //
 // The rules, alerts and events are the controller's (proxy/fleetwatch.py: its seeded rules, an
 // alert's id `<rule>:<subject>`, its title, rule text and action route, "Acknowledged: …" events),
-// plus three rules the controller does not have yet (fabric, lease, power) with mock-only scopes.
+// plus two rules the controller does not have yet (fabric, power) with mock-only scopes. The lease
+// rule is the controller's (24 h before a lease ends); fleet4's operator raised it to 72 h.
 // Each node's newest sample (`/nodes/{id}/sample`) and the controller's host follow the same
 // clock; a field a GB10 does not expose (the power cap, Desk's fan) is absent, as on the board.
 
@@ -64,7 +67,8 @@ import type {
   TrustAudit,
 } from '../src/api/fleet.ts';
 import { EVENT_TYPES, FLEET_CONTRACT, METRICS, NODE_ACTIONS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
-import { MockDiscovery } from './discovery.ts';
+import { MockWizard } from './addspark.ts';
+import { MockDiscovery, MOCK_LAN } from './discovery.ts';
 
 export const FLEET_SCENARIOS = ['fleet1', 'fleet4', 'fleet2-split', 'node-down', 'alert-thermal'] as const;
 export type FleetScenario = (typeof FLEET_SCENARIOS)[number];
@@ -173,6 +177,9 @@ interface Fleet {
  *  shows the code of the Gherkin; one other TandemApp owns; one SSH host takes the password; one
  *  has nothing installed. */
 export const MOCK_PAIR = { address: '192.0.2.60', code: '482913', owned: '192.0.2.62', ssh: '192.0.2.61', password: 'spark-pass', bare: '192.0.2.63' } as const;
+/** the hosts an SSH login reaches: the ssh-config Spark, the bare GX10, the owned one (take-over)
+ *  and the rental (a key only) */
+const SSH_HOSTS: string[] = [MOCK_PAIR.ssh, MOCK_PAIR.bare, MOCK_PAIR.owned, MOCK_LAN.rented];
 const MOCK_HOST_KEY = 'SHA256:qQ6Rk0mOcKhOsTkEyFoRtHeMoCkNoDe0192o2o61x';
 const paired = (via: 'code' | 'ssh', at: number, fp: string): NodePairing => ({ state: 'paired', via, fingerprint: fp.repeat(64 / fp.length), paired_at: at, host_key: via === 'ssh' ? MOCK_HOST_KEY : null });
 const LOCAL: NodePairing = { state: 'local', via: null, fingerprint: null, paired_at: null, host_key: null };
@@ -211,12 +218,18 @@ export function ruleCondition(r: Pick<FleetRule, 'metric' | 'threshold' | 'unit'
       return 'sleep allowed';
     case 'fabric':
       return `< ${t} or one logical interface${hold}`;
-    case 'lease_end':
-      return `< ${t}`;
+    case 'lease_left':
+      return `lease ends in < ${t}`;
     default:
       return `> ${t}${hold}`;
   }
 }
+
+/** the lease rule as the controller seeds it: 24 h before the end */
+const leaseDefault = (r: FleetRule): FleetRule => {
+  const x = { ...r, threshold: 24 };
+  return { ...x, condition: ruleCondition(x) };
+};
 
 function build(scenario: FleetScenario, t0: number): Fleet {
   const rentStart = t0 - 5 * D + 3 * H;
@@ -289,7 +302,7 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     rule('engine-down', 'Engine answers', 'engine', null, null, 60, 'err', ['app', 'system']),
     rule('host-sleep', 'Controller host may sleep', 'host_sleep', null, null, 0, 'warn', ['app'], 'host'),
     rule('fabric', 'Fabric link', 'fabric', 150, 'Gb/s', 0, 'warn', ['app'], 'fabric'),
-    rule('lease', 'Lease ends', 'lease_end', 3, 'days', 0, 'warn', ['app', 'system'], 'rented'),
+    rule('lease', 'Lease ends', 'lease_left', 72, 'h', 0, 'warn', ['app', 'system']),
     rule('power', 'Power draw', 'power', 170, 'W', 300, 'warn', ['app'], 'node:r3', false),
   ];
 
@@ -307,7 +320,7 @@ function build(scenario: FleetScenario, t0: number): Fleet {
         { at: t0 - 4.2 * D, item: { id: 'e-wren', type: 'deploy', severity: null, node: 'desk', deployment: 'wren', text: 'Wren (Role) started on Desk', detail: 'Qwen3.5-2B EXL3 6.0 beside the main model.' } },
       ],
       alerts: [],
-      rules: rules.filter((r) => !['fabric', 'lease', 'power'].includes(r.id)),
+      rules: rules.filter((r) => !['fabric', 'power'].includes(r.id)).map((r) => (r.id === 'lease' ? leaseDefault(r) : r)),
     };
   }
 
@@ -329,7 +342,7 @@ function build(scenario: FleetScenario, t0: number): Fleet {
         { at: t0 - 3.5 * H, item: { id: 'e-link', type: 'link', severity: null, node: 's2', deployment: null, text: 'Link test Spark 1 ↔ Spark 2: 197 Gb/s, RTT 0.009 ms, MTU 9000', detail: 'RoCE on, both logical interfaces up.' } },
       ],
       alerts: [],
-      rules: rules.filter((r) => !['lease', 'power'].includes(r.id)),
+      rules: rules.filter((r) => r.id !== 'power').map((r) => (r.id === 'lease' ? leaseDefault(r) : r)),
     };
   }
 
@@ -445,6 +458,8 @@ export class MockFleet {
   private seq = 0;
   /** the Add Spark wizard's Find step (mock/discovery.ts) */
   readonly discovery: MockDiscovery;
+  /** the Add Spark wizard's session (mock/addspark.ts) */
+  readonly wizard: MockWizard;
 
   /** `now` in Unix seconds: the scenario's start */
   constructor(o: { seed?: number; scenario?: FleetScenario; now?: number } = {}) {
@@ -452,6 +467,7 @@ export class MockFleet {
     this.t0 = Math.floor(o.now ?? Date.now() / 1000);
     this.f = build(this.scenario, this.t0);
     this.discovery = new MockDiscovery({ onMac: this.f.host.may_sleep, host: this.f.host.address, nodes: () => this.f.nodes.map((n) => n.node) });
+    this.wizard = new MockWizard(this);
     const seed = o.seed ?? 42;
     this.ph = (key) => hash(`${seed}:${key}`);
     this.audit = this.f.nodes
@@ -773,7 +789,7 @@ export class MockFleet {
     if (ssh && rest[1] === 'hostkey') {
       const p = body as { host?: unknown; port?: unknown } | null;
       if (!p || typeof p.host !== 'string' || !p.host) return bad(400, 'bad_request', 'the body is {host, port?}');
-      if (p.host !== MOCK_PAIR.ssh && p.host !== MOCK_PAIR.bare) return bad(502, 'unreachable', `no SSH server answers at ${p.host}:${p.port ?? 22}`);
+      if (!SSH_HOSTS.includes(p.host)) return bad(502, 'unreachable', `no SSH server answers at ${p.host}:${p.port ?? 22}`);
       const known = this.f.nodes.some((n) => n.node.address.startsWith(`${p.host}:`)) ? 'same' : 'new';
       return { status: 200, body: { contract_version: v, host: p.host, port: (p.port as number) ?? 22, type: 'ssh-ed25519', fingerprint: MOCK_HOST_KEY, known, stored: known === 'same' ? MOCK_HOST_KEY : null } };
     }
@@ -782,12 +798,21 @@ export class MockFleet {
     if (why) return bad(400, 'bad_request', why);
     if (ssh) {
       const p = body as PairBySsh;
-      if (p.host !== MOCK_PAIR.ssh && p.host !== MOCK_PAIR.bare) return bad(502, 'unreachable', `no SSH server answers at ${p.host}:${p.port ?? 22}`);
+      if (!SSH_HOSTS.includes(p.host)) return bad(502, 'unreachable', `no SSH server answers at ${p.host}:${p.port ?? 22}`);
       if (p.host_key != null && p.host_key !== MOCK_HOST_KEY) return bad(409, 'host_key_changed', `the host key of ${p.host} is ${MOCK_HOST_KEY}, not the confirmed ${p.host_key}; refused`);
-      if (p.key == null && p.password !== MOCK_PAIR.password) return bad(502, 'ssh_failed', `ssh to ${p.host} failed: ${p.user}@${p.host}: Permission denied (publickey,password).`);
+      if (p.tunnel && p.password != null) return bad(400, 'bad_request', 'a node behind a tunnel is reached with a key or the agent for as long as it is in the fleet: give its key file, not a password');
+      if (p.host === MOCK_LAN.rented) {
+        if (p.key == null && p.key_file == null) return bad(502, 'ssh_failed', `ssh to ${p.host} failed: ${p.user}@${p.host}: Permission denied (publickey).`);
+        return bad(409, 'not_installed', `TandemNode is not installed on ${p.host} (NVIDIA DGX Spark, a GB10): the Add Spark wizard's Install step installs it`);
+      }
+      if (p.key == null && p.key_file == null && p.password !== MOCK_PAIR.password) return bad(502, 'ssh_failed', `ssh to ${p.host} failed: ${p.user}@${p.host}: Permission denied (publickey,password).`);
       if (p.host === MOCK_PAIR.bare) {
         this.discovery.learn(p.host, 'gx10', now * 1000);
         return bad(409, 'not_installed', `TandemNode is not installed on ${p.host} (ASUS Ascent GX10, a GB10): the Add Spark wizard's Install step installs it`);
+      }
+      if (p.host === MOCK_PAIR.owned) {
+        if (!p.takeover) return bad(409, 'owned', `${p.host} is paired with another TandemApp: send takeover: true to move it here (SSH access proves it is yours)`);
+        return this.join(p.host, 'ssh', now, { version: '0.14.2', hw: 'ASUS Ascent GX10' });
       }
       return this.join(p.host, 'ssh', now);
     }
@@ -806,20 +831,44 @@ export class MockFleet {
   }
 
   /** a paired device joins the fleet: an idle Spark with the next free colour */
-  private join(address: string, via: 'code' | 'ssh', now: number): Reply {
+  private join(address: string, via: 'code' | 'ssh', now: number, o: Partial<Pick<FleetNode, 'version' | 'hw'>> = {}): Reply {
+    return { status: 200, body: this.admit(address, via, now, o) };
+  }
+
+  /** A node that joins (a pairing, or the wizard's install ending): idle, the next free colour, a LAN
+   *  link from the LAN, or for a tunnelled one the rental gateway's tunnel and its lease. */
+  admit(address: string, via: 'code' | 'ssh', now: number, o: Partial<Pick<FleetNode, 'version' | 'hw' | 'transport' | 'lease_end' | 'cost_per_hour'>> = {}): FleetNode {
     const used = new Set(this.f.nodes.map((n) => n.node.colour));
     const colour = [1, 2, 3, 4, 5, 6, 7, 8].find((c) => !used.has(c)) ?? 1;
     const k = this.f.nodes.length + 1;
     const id = `n${k}-${address.split('.').pop()}`;
     const tmpl = this.f.nodes[0];
+    const tunnel = o.transport === 'tunnel';
     const sim: NodeSim = {
       ...tmpl,
-      node: { ...tmpl.node, id, alias: `Spark ${k}`, colour, icon: 'desk', tags: [], owned: true, transport: 'lan', address: `${address}:7700`, since: now, lease_end: null, cost_per_hour: null, inventory: { ...tmpl.node.inventory, serial: `MOCK-${address}` }, pairing: paired(via, now, (k * 29).toString(16).padStart(2, '0')) },
+      node: {
+        ...tmpl.node, id, alias: `Spark ${k}`, colour, icon: tunnel ? 'cloud' : 'desk', tags: tunnel ? ['rented'] : [], owned: o.lease_end == null, transport: tunnel ? 'tunnel' : 'lan',
+        address: tunnel ? `${address}:2201` : `${address}:7700`, version: o.version ?? tmpl.node.version, hw: o.hw ?? tmpl.node.hw, since: now, lease_end: o.lease_end ?? null, cost_per_hour: o.cost_per_hour ?? null,
+        inventory: { ...tmpl.node.inventory, serial: `MOCK-${address}` }, pairing: paired(via, now, (k * 29).toString(16).padStart(2, '0')),
+      },
       curve: id, busyFrom: Number.POSITIVE_INFINITY, heatFrom: null, throttleFrom: null, offFrom: null, fabric: false,
     };
     this.f.nodes.push(sim);
+    const gw = this.f.infra.some((i) => i.id === 'gw') ? 'gw' : this.f.infra.some((i) => i.id === 'inet') ? 'inet' : 'lan';
+    this.f.links.push(
+      tunnel
+        ? { id: `${gw}-${id}`, a: gw, b: id, kind: 'wan', speed: 'SSH tunnel', rtt_ms: 38.4, mtu: 1500, state: 'up', note: 'mTLS inside the SSH tunnel' }
+        : { id: `lan-${id}`, a: 'lan', b: id, kind: 'lan', speed: '10 GbE', rtt_ms: 0.4, mtu: 1500, state: 'up', note: 'mTLS to the node agent :7700' },
+    );
     this.audit.unshift({ t: now, action: 'pair', node: id, who: 'dashboard session', via, fingerprint: sim.node.pairing.fingerprint, detail: `paired by ${via} at ${address}` });
-    return { status: 200, body: this.nodes(now).find((x) => x.id === id) };
+    this.f.events.push({ at: now, item: { id: `e-pair-${id}`, type: 'node', severity: null, node: id, deployment: null, text: `Spark ${k} paired by ${via}`, detail: tunnel ? 'through an SSH tunnel; certificate pinned' : 'certificate pinned' } });
+    return this.nodes(now).find((x) => x.id === id)!;
+  }
+
+  /** the lease rule's hours as the scenario has it */
+  leaseHours(): number {
+    const r = this.f.rules.find((x) => x.id === 'lease');
+    return r ? (this.rule(r).threshold ?? 24) : 24;
   }
 
   /** a released node leaves the fleet, its deployments' members and its links */
@@ -1052,6 +1101,7 @@ export class MockFleet {
     const parts = path.split('/').slice(3); // /v1/fleet/<parts>
     const v = FLEET_CONTRACT;
     if (parts[0] === 'discovery') return this.discovery.handle(method, parts, q, body, nowMs);
+    if (parts[0] === 'add') return this.wizard.handle(method, parts, body, nowMs);
     if (method === 'GET' && parts.length === 1) {
       switch (parts[0]) {
         case 'nodes':
@@ -1188,13 +1238,13 @@ export class MockFleet {
 export function pairError(b: unknown, ssh: boolean): string | null {
   const p = b as Record<string, unknown> | null;
   if (!p || typeof p !== 'object' || Array.isArray(p)) return ssh ? 'the body is {host, user, port?, password? | key?, host_key?, takeover?}' : 'the body is {address, code, port?}';
-  const allowed = ssh ? ['host', 'user', 'port', 'password', 'key', 'host_key', 'takeover'] : ['address', 'code', 'port'];
-  if (Object.keys(p).some((k) => !allowed.includes(k))) return ssh ? 'the body is {host, user, port?, password? | key?, host_key?, takeover?}' : 'the body is {address, code, port?}';
+  const allowed = ssh ? ['host', 'user', 'port', 'password', 'key', 'key_file', 'jumps', 'tunnel', 'host_key', 'takeover'] : ['address', 'code', 'port'];
+  if (Object.keys(p).some((k) => !allowed.includes(k))) return ssh ? 'the body is {host, user, port?, password? | key? | key_file?, jumps?, tunnel?, host_key?, takeover?}' : 'the body is {address, code, port?}';
   if ('port' in p && (typeof p.port !== 'number' || !Number.isInteger(p.port) || p.port < 1 || p.port > 65535)) return 'port is a whole number from 1 to 65535';
   if (ssh) {
     if (typeof p.host !== 'string' || !p.host || /[\s@/'"`$;|&<>]/.test(p.host) || p.host.startsWith('-')) return 'host is an address or a host name';
     if (typeof p.user !== 'string' || !/^[A-Za-z0-9._-]{1,64}$/.test(p.user) || p.user.startsWith('-')) return 'user is a login name';
-    if (p.password != null && p.key != null) return 'a password or a key, not both';
+    if ([p.password, p.key, p.key_file].filter((x) => x != null).length > 1) return 'a password, a key or a key file, not two';
     return null;
   }
   if (typeof p.address !== 'string' || !/^[0-9a-fA-F.:]+$/.test(p.address)) return `address is an IP address (the node's LAN or fabric address), not "${String(p.address)}"`;
