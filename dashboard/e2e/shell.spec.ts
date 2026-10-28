@@ -188,7 +188,7 @@ test.describe('TandemApp shell (VIS-242)', () => {
     await expect.poll(off).toBeLessThan(2);
   });
 
-  test('the sub-pages: Performance → Requests, Hardware → System, Models → Serve a model, API → Backends, a Spark', async ({ page }) => {
+  test('the sub-pages: Performance → Requests, Hardware → System, Models → Serve a model and the Setup Guide, API → Backends, a Spark', async ({ page }) => {
     await login(page, '#/performance');
     const sub = (label: string) => page.locator('.lpanel .nav-sub a', { hasText: label });
     await sub('Requests').click();
@@ -200,6 +200,9 @@ test.describe('TandemApp shell (VIS-242)', () => {
     await expect(page).toHaveURL(/#\/hardware\/system$/);
     await page.locator('.lpanel .nav-i[data-section="models"]').click();
     await sub('Serve a model').click();
+    await expect(page.locator('qse-serve')).toBeVisible();
+    await expect(page).toHaveURL(/#\/models\/place/);
+    await sub('Setup Guide').click();
     await expect(page.locator('qse-setup')).toBeVisible();
     await expect(page).toHaveURL(/#\/models\/serve$/);
     await page.locator('.lpanel .nav-i[data-section="api"]').click();

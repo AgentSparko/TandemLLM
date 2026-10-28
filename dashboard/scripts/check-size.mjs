@@ -60,6 +60,10 @@
 // 572 KB with the controller's host and the fleet update (OPS-234, 2026-10-28: 569.3 KB from 560.1): App
 // settings with the move and the take in a chunk of its own, Update fleet's plan dialog and progress in the
 // Sparks pages' chunk, their client and the planner, the mixed-version marker on the fleet pill.
+// 590 KB with the Models pages (VIS-252, 2026-10-28: 586.8 KB from 569.6): the deployment cards with their
+// plan dialog, Serve a model with its placement step, the weights matrix and its copies in the new pages'
+// chunk (14.1 KB js) with their stylesheet; a Spark's Setup Guide through the controller and its confirm
+// in the setup chunk (1.2 KB). The tile rules of the Monitor pages and the guide are scoped to each.
 import { BUDGET, distSizes } from './gzip-size.mjs';
 
 const dist = new URL('../dist/', import.meta.url).pathname;

@@ -58,10 +58,11 @@ describe('sub-pages', () => {
     expect(subs('#/sparks/r3')).toEqual(['List #/sparks', 'Topology #/sparks/topology', 'Desk #/sparks/desk', '*R-3 #/sparks/r3']);
     expect(subs('#/sparks', [])).toEqual(['*List #/sparks', 'Topology #/sparks/topology']);
   });
-  it('Models: Deployments, Serve a model (the setup guide, also from an old #/setup link) and Weights', () => {
-    expect(subs('#/models')).toEqual(['*Deployments #/models', 'Serve a model #/models/serve', 'Weights #/models/weights']);
-    expect(subs('#/setup/qwen3.8-27b/review')).toEqual(['Deployments #/models', '*Serve a model #/models/serve', 'Weights #/models/weights']);
-    expect(subs('#/models/weights')[2]).toBe('*Weights #/models/weights');
+  it('Models: Deployments, Serve a model (placement first, VIS-252), the Setup Guide (also from an old #/setup link) and Weights', () => {
+    expect(subs('#/models')).toEqual(['*Deployments #/models', 'Serve a model #/models/place', 'Setup Guide #/models/serve', 'Weights #/models/weights']);
+    expect(subs('#/setup/qwen3.8-27b/review')).toEqual(['Deployments #/models', 'Serve a model #/models/place', '*Setup Guide #/models/serve', 'Weights #/models/weights']);
+    expect(subs('#/models/place?step=placement')).toEqual(['Deployments #/models', '*Serve a model #/models/place', 'Setup Guide #/models/serve', 'Weights #/models/weights']);
+    expect(subs('#/models/weights')[3]).toBe('*Weights #/models/weights');
   });
   it('API: Endpoint and keys, and Backends', () => {
     expect(subs('#/api/backends?backend=x')).toEqual(['Endpoint and keys #/api', '*Backends #/api/backends']);
