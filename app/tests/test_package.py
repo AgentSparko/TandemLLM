@@ -39,7 +39,10 @@ def _toml() -> dict:
 def test_pyproject_matches_the_tree():
     t = _toml()
     p, st = t["project"], t["tool"]["setuptools"]
-    assert p["dependencies"] == ["cryptography>=42"], "the dash needs cryptography alone"
+    assert p["name"] == _version.DIST == "tandemapp"
+    assert p["dynamic"] == ["version"] and \
+        t["tool"]["setuptools"]["dynamic"]["version"] == {"attr": "proxy._version.PEP440"}
+    assert p["dependencies"] == ["cryptography>=42"], "the app needs cryptography alone"
     assert not any(d.split(">")[0].split("=")[0].strip().lower() in ("torch", "numpy",
                                                                     "transformers")
                    for d in p["dependencies"] + p["optional-dependencies"]["host"])
@@ -48,13 +51,17 @@ def test_pyproject_matches_the_tree():
     assert p["scripts"]["tandem-node"] == "proxy.nodeagent:main"          # TandemNode, SRV-725
     assert callable(cli_main.main) and callable(cli_main.main_old_name)
     dirs = st.get("package-dir", {})
+    assert not [x for x in st["packages"] if x.split(".")[0] in ("server", "engine")], \
+        "the wheel carries no engine code"
     for pkg in st["packages"]:
         d = dirs.get(pkg, pkg.replace(".", "/"))
         assert os.path.isdir(os.path.join(ROOT, d)), (pkg, d)
-        if pkg.startswith(("proxy", "server")) and not pkg.startswith(DATA_ONLY):
+        if not pkg.startswith(DATA_ONLY):
             assert any(f.endswith(".py") for f in os.listdir(os.path.join(ROOT, d))), pkg
-    # every Python package under proxy/ and server/ is listed, so nothing the code imports is lost
-    for top in ("proxy", "server"):
+    # every Python package under proxy/, chatd/ and tandemapp/ is listed, so nothing the code
+    # imports is lost; tandemapp is a regular package (no namespace merges with another one)
+    for top in ("proxy", "chatd", "tandemapp"):
+        assert os.path.isfile(os.path.join(ROOT, top, "__init__.py")), top
         for d, subs, files in os.walk(os.path.join(ROOT, top)):
             subs[:] = [s for s in subs if s != "__pycache__"]
             if any(f.endswith(".py") for f in files):
@@ -63,6 +70,35 @@ def test_pyproject_matches_the_tree():
     for f in p["license-files"] + [p["readme"]]:
         assert os.path.exists(os.path.join(ROOT, f)), f
     assert os.path.exists(os.path.join(ROOT, "dashboard", "dist", "index.html"))
+    # an sdist carries VERSION too: proxy/_version.py reads it beside pyproject.toml
+    with open(os.path.join(ROOT, "MANIFEST.in")) as f:
+        assert "include VERSION" in f.read().splitlines()
+
+
+def test_the_built_page_is_in_the_wheel():
+    """Every file of dashboard/dist is package data (sw.js was missing from every install until
+    SRV-747), in setuptools' globs and in the node wheel's own reading of them
+    (proxy/nodeinstall.py checkout_files)."""
+    import fnmatch
+    from proxy import nodeinstall
+    st = _toml()["tool"]["setuptools"]
+    pkg_of = {os.path.normpath(os.path.join(ROOT, d)): pkg
+              for pkg, d in st["package-dir"].items() if pkg in st["packages"]}
+    base = os.path.join(ROOT, "dashboard", "dist")
+    files = [os.path.join(d, f) for d, _, fs in os.walk(base) for f in fs]
+    assert os.path.join(base, "sw.js") in files and len(files) > 10, len(files)
+    missing = [os.path.relpath(f, base) for f in files
+               if not any(fnmatch.fnmatch(os.path.basename(f), g) for g in
+                          st["package-data"].get(pkg_of.get(os.path.dirname(f)), []))]
+    assert not missing, f"not in the wheel: {missing[:5]}"
+    _, got = nodeinstall.checkout_files(ROOT)
+    names = {w for w, _ in got}
+    want = {"proxy/dashboard/" + os.path.relpath(f, base).replace(os.sep, "/") for f in files}
+    assert want <= names, f"not in the node wheel: {sorted(want - names)[:5]}"
+    assert {"tandemapp/__init__.py", "tandemapp/METRICS.md", "tandemapp/laya_kit/laya-drive.js",
+            "tandemapp/conductor/monitor/policy.default.json", "chatd/__init__.py",
+            "proxy/config.schema.json"} <= names
+    assert not [n for n in names if n.split("/")[0] in ("server", "engine")]
 
 
 def test_the_dash_image_copies_every_package():
@@ -137,7 +173,7 @@ def test_version_mapping():
         raise AssertionError("a bad VERSION passed")
     except ValueError:
         pass
-    with open(os.path.join(ROOT, "VERSION")) as f:
+    with open(os.path.join(ROOT, "VERSION")) as f:          # app/VERSION, TandemApp's own number
         assert _version.release() == f.read().strip()
     assert _version.PEP440 == _version.pep440(_version.release())
 
@@ -145,11 +181,11 @@ def test_version_mapping():
 def test_the_page_in_an_installed_layout():
     d = tempfile.mkdtemp(prefix="pkg-")
     try:
-        os.makedirs(os.path.join(d, "server"))
+        os.makedirs(os.path.join(d, "tandemapp"))
         os.makedirs(os.path.join(d, "proxy", "dashboard"))
-        shutil.copy(os.path.join(ROOT, "server", "static.py"), os.path.join(d, "server"))
+        shutil.copy(os.path.join(ROOT, "tandemapp", "static.py"), os.path.join(d, "tandemapp"))
         spec = importlib.util.spec_from_file_location("static_installed",
-                                                      os.path.join(d, "server", "static.py"))
+                                                      os.path.join(d, "tandemapp", "static.py"))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         assert mod.default_dir() == os.path.join(d, "dashboard", "dist"), "no page: the old path"

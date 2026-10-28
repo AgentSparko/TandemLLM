@@ -1,8 +1,9 @@
 # TandemApp, the dashboard and the OpenAI-compatible proxy, as an image: no engine, no GPU, no torch.
+# The build context is app/ (packaging/Dockerfile.app.dockerignore says what goes in).
 #
-#   docker build -f ops/Dockerfile.app -t tandemllm-app .          (from the repository's root)
+#   docker build -f app/packaging/Dockerfile.app -t tandemllm-app app     (from the repository's root)
 #   docker run -d --name tandem-app -p 127.0.0.1:8080:8080 -v tandem-app:/data \
-#       --env-file ops/app.env tandemllm-app
+#       --env-file app.env tandemllm-app
 #
 # Everything the proxy keeps (the config database, the usage ledger, the key file when no
 # TANDEM_SECRETS_KEY is given) lives in the /data volume. The server binds 0.0.0.0 inside the
@@ -17,11 +18,11 @@
 FROM python:3.12-slim AS build
 WORKDIR /src
 RUN pip install --no-cache-dir build==1.3.0
-COPY pyproject.toml VERSION LICENSE COMMERCIAL-LICENSE.md NOTICE ./
+COPY pyproject.toml VERSION MANIFEST.in LICENSE COMMERCIAL-LICENSE.md NOTICE ./
 COPY docs/proxy.md docs/proxy.md
 COPY proxy proxy
-COPY server server
 COPY chatd chatd
+COPY tandemapp tandemapp
 COPY packages packages
 COPY dashboard/dist dashboard/dist
 RUN python -m build --wheel -o /wheel .

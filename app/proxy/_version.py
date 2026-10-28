@@ -1,9 +1,10 @@
-"""The release's version: the repository's VERSION file in a checkout, the installed
-distribution's metadata in a wheel.
+"""TandemApp's version: VERSION beside pyproject.toml (app/ in the repository) in a checkout or an
+sdist, the installed distribution's metadata in a wheel.
 
 VERSION holds the release name as the project writes it (`0.4.1-test`, `0.4.0`); `PEP440` is the
 same name as a Python package version (`0.3.29.dev0`, `0.4.0`), which `pyproject.toml` reads. A
-`-test` build is a development release; `-rcN` a release candidate.
+`-test` build is a development release; `-rcN` a release candidate. `DIST` is the distribution's
+name: the node wheel, the updater and the version lines use it.
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ import os
 import re
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#: the distribution (pyproject.toml's `name`)
+DIST = "tandemapp"
 
 
 def release() -> str:
@@ -25,7 +28,7 @@ def release() -> str:
     try:
         from importlib.metadata import PackageNotFoundError, version
         try:
-            return version("tandemllm")
+            return version(DIST)
         except PackageNotFoundError:
             return ""
     except ImportError:                                               # pragma: no cover

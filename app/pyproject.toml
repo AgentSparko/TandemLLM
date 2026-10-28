@@ -1,0 +1,83 @@
+# TandemApp: one dashboard, gateway and ledger in front of any OpenAI-compatible engine or cloud API
+# (docs/proxy.md). The controller (`tandem-app`: the gateway, the usage ledger, the fleet and the
+# page, proxy/), the conductor and the dashboard API (tandemapp/), Chat (chatd/) and TandemNode, the
+# agent on each machine of the fleet (`tandem-node`).
+#
+#   pip install .                  `tandem-app` and `tandem-node`; cryptography only
+#   pip install '.[host]'          plus psutil and NVML for the System view's hosts
+#   pip install '.[app]'           TandemApp alone on a Mac or a Linux PC (OPS-234): psutil for the
+#                                  host's figures, no GPU (`tandem-app service install` runs it in
+#                                  the background); the same as `brew install tandemapp`
+#
+# The wheel never pulls torch or numpy. It carries proxy/, chatd/ and tandemapp/, the built page
+# (dashboard/dist, as proxy/dashboard) and the shipped texts the conductor starts with (packages/,
+# as proxy/packages). The version is VERSION beside this file (proxy/_version.py reads it; an sdist
+# carries it through MANIFEST.in).
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tandemapp"
+dynamic = ["version"]
+description = "TandemApp: one dashboard, gateway and ledger in front of any OpenAI-compatible engine or cloud API, with the conductor, Chat and the TandemNode agent"
+readme = "docs/proxy.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE", "COMMERCIAL-LICENSE.md", "NOTICE"]
+authors = [{ name = "Khaled Bakeer" }]
+keywords = ["llm", "openai", "gateway", "proxy", "dashboard", "vllm", "sglang", "observability"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Environment :: Web Environment",
+  "Topic :: System :: Monitoring",
+]
+dependencies = ["cryptography>=42"]
+
+[project.optional-dependencies]
+host = ["nvidia-ml-py>=12", "psutil>=5.9"]
+app = ["psutil>=5.9"]
+
+[project.scripts]
+tandem-app = "proxy.__main__:main"
+tandem-dash = "proxy.__main__:main_old_name"
+tandem-node = "proxy.nodeagent:main"
+
+[tool.setuptools]
+include-package-data = false
+packages = [
+  "chatd",
+  "proxy",
+  "proxy.adapters",
+  "proxy.dashboard",
+  "proxy.dashboard.assets",
+  "proxy.packages",
+  "tandemapp",
+  "tandemapp.conductor",
+  "tandemapp.conductor.monitor",
+  "tandemapp.laya_kit",
+  "tandemapp.toolformats",
+]
+
+[tool.setuptools.package-dir]
+"proxy.dashboard" = "dashboard/dist"
+"proxy.dashboard.assets" = "dashboard/dist/assets"
+"proxy.packages" = "packages"
+
+[tool.setuptools.package-data]
+proxy = ["*.json"]
+"proxy.dashboard" = ["*.html", "*.js", "*.ico", "*.svg", "*.png", "*.webmanifest"]
+"proxy.dashboard.assets" = ["*"]
+"proxy.packages" = ["*.json", "inline/*", "skills/**/*", "library/*", "library/**/*", "system/**/*", "everyday/*", "everyday/**/*"]
+tandemapp = ["METRICS.md"]
+"tandemapp.conductor.monitor" = ["policy.default.json"]
+"tandemapp.laya_kit" = ["*.js"]
+
+[tool.setuptools.dynamic]
+version = { attr = "proxy._version.PEP440" }

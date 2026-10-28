@@ -1,0 +1,9 @@
+# the package's build output (pyproject.toml)
+/build/
+/dist/
+*.egg-info/
+__pycache__/
+# what the tools and the controller write on demand; never under version control
+results/
+logs/
+/run/

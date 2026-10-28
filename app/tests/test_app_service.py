@@ -272,7 +272,11 @@ def test_app_extra():
     assert p["scripts"]["tandem-app"] == "proxy.__main__:main"
     text = open(os.path.join(ROOT, "packaging", "homebrew", "tandemapp.rb")).read()
     assert 'depends_on "cryptography"' in text and "tandem-app service install" in text
-    assert "virtualenv_install_with_resources" in text and 'resource "torch' not in text
+    assert 'resource "torch' not in text
+    # the formula installs app/ of the repository's tarball (its root once TandemApp ships alone)
+    assert 'buildpath/"app/pyproject.toml"' in text and "venv.pip_install_and_link src" in text
+    desc = next(x for x in text.splitlines() if x.strip().startswith("desc "))
+    assert "DGX" not in desc and len(desc.split('"')[1]) <= 80, desc
 
 
 def test_local_label_wheel():

@@ -38,6 +38,8 @@ Addresses are 192.0.2.x and 198.51.100.x; every name is invented.
                                                                         test_tunnel_process
  12  the preflight script runs on this box and parses; install.sh --runtime-only --dry-run
      stops after the Python environment                     test_script_and_runtime_only
+ 13  the wheel this controller builds: TandemApp's packages and the built page, no engine
+     code, the console scripts, cryptography; cached by content          test_the_node_wheel
 
     python tests/test_add_spark.py
 """
@@ -956,20 +958,29 @@ def test_script_and_runtime_only():
     assert "[3/3]" in out and "[4/" not in out and "Weights" not in out, out[-2000:]
     assert "No weights, corpus or config yet" in out
     shutil.rmtree(d, ignore_errors=True)
-    # the wheel this controller builds: what pyproject.toml lists, the console scripts, metadata
+
+
+def test_the_node_wheel():
+    """The wheel this controller builds: what app/pyproject.toml lists (TandemApp's packages and
+    the built page, no engine code), the console scripts, the metadata."""
     out_dir = tempfile.mkdtemp(prefix="add-whl-")
-    p = nodeinstall.build_wheel(out_dir, VERSION)
-    assert nodeinstall.build_wheel(out_dir, VERSION) == p          # cached by content
-    with zipfile.ZipFile(p) as z:
-        names = z.namelist()
-        assert {"proxy/nodeagent.py", "proxy/preflight.py", "server/app.py",
-                "proxy/dashboard/index.html"} <= set(names)
-        di = next(n for n in names if n.endswith(".dist-info/entry_points.txt"))
-        assert "tandem-node = proxy.nodeagent:main" in z.read(di).decode()
-        meta = z.read(di.replace("entry_points.txt", "METADATA")).decode()
-        assert "Requires-Dist: cryptography" in meta
-        assert not any("__pycache__" in n or n.endswith(".pyc") for n in names)
-    shutil.rmtree(out_dir, ignore_errors=True)
+    try:
+        p = nodeinstall.build_wheel(out_dir, VERSION)
+        assert nodeinstall.build_wheel(out_dir, VERSION) == p      # cached by content
+        with zipfile.ZipFile(p) as z:
+            names = z.namelist()
+            assert {"proxy/nodeagent.py", "proxy/preflight.py", "chatd/__init__.py",
+                    "tandemapp/__init__.py", "tandemapp/static.py", "proxy/dashboard/index.html",
+                    "proxy/dashboard/sw.js"} <= set(names)
+            assert not [n for n in names if n.split("/")[0] in ("server", "engine")], \
+                "the node wheel carries no engine code"
+            di = next(n for n in names if n.endswith(".dist-info/entry_points.txt"))
+            assert "tandem-node = proxy.nodeagent:main" in z.read(di).decode()
+            meta = z.read(di.replace("entry_points.txt", "METADATA")).decode()
+            assert "Requires-Dist: cryptography" in meta
+            assert not any("__pycache__" in n or n.endswith(".pyc") for n in names)
+    finally:
+        shutil.rmtree(out_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
