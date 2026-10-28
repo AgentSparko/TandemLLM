@@ -3,7 +3,8 @@ to pin its certificate there; the password or key lives in this call's memory on
 
     s = Ssh(known_hosts="<controller dir>/known_hosts")
     s.host_key(host, port)                 {type, fingerprint, known: new|same|changed, stored}
-    rc, out, err = s.run(host, port, user, command, stdin, password=..., key=..., hk=...)
+    rc, out, err = s.run(host, port, user, command, stdin, password=..., key=..., hk=...,
+                         key_file=..., jumps=[{user, host, port}])
 
 THE TOOL. The system's OpenSSH (`ssh`, `ssh-keyscan`), no Python SSH library: the user's own ssh
 config, agent and jump hosts keep working, and nothing new parses the protocol. A password reaches
@@ -19,6 +20,13 @@ different one (`changed`). The wizard shows the fingerprint (SHA256, as ssh prin
 it back as `host_key` to insist on it. A login takes exactly the remembered key (`known_hosts`
 beside the config database, OpenSSH's format) or, the first time, the scanned one, with
 StrictHostKeyChecking: a changed key is refused, never replaced.
+
+THE ROUTE (SRV-727's ssh line, 5.2). `jumps` are the jump hosts in order (`-J user@host:port,...`)
+and `key_file` a private key file on the controller's machine (`-i`, the path the ssh line or
+~/.ssh/config named; the file is read by ssh, never copied). OpenSSH opens each jump with the
+controller user's own ssh config, agent and known_hosts (none of the options above reach it): a
+jump host is trusted as `ssh` on this machine trusts it, and logs in with the user's keys or agent,
+never with the password, which goes to the node only.
 """
 
 from __future__ import annotations
@@ -58,6 +66,13 @@ def entry(host: str, port: int) -> str:
     return host if port == 22 else f"[{host}]:{port}"
 
 
+def jump_spec(j: dict) -> str:
+    """`[user@]host[:port]` of one jump host (an IPv6 address in brackets)."""
+    h = f"[{j['host']}]" if ":" in j["host"] else j["host"]
+    return (f"{j['user']}@" if j.get("user") else "") + h + \
+        (f":{j['port']}" if j.get("port") not in (None, 22) else "")
+
+
 def scrub(text: str, secrets: list[str]) -> str:
     for s in secrets:
         if not s:
@@ -75,8 +90,12 @@ class Ssh:
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ host keys
-    def scan(self, host: str, port: int) -> dict[str, str]:
-        """{key type: base64 blob} the host offers."""
+    def scan(self, host: str, port: int, jumps: list[dict] | None = None) -> dict[str, str]:
+        """{key type: base64 blob} the host offers. Through jump hosts ssh-keyscan cannot reach
+        it: one ssh connection through them that offers no authentication at all learns the key
+        in the key exchange (accept-new into a file of its own) and stops there."""
+        if jumps:
+            return self._scan_via(host, port, jumps)
         try:
             r = subprocess.run([self.keyscan, "-T", "5", "-p", str(port), host],
                                capture_output=True, text=True, timeout=30)
@@ -91,6 +110,36 @@ class Ssh:
             raise SshError("unreachable", f"no SSH server answers at {host}:{port}")
         return keys
 
+    def _scan_via(self, host: str, port: int, jumps: list[dict]) -> dict[str, str]:
+        tmp = tempfile.mkdtemp(prefix="tandem-ssh-")
+        try:
+            kh = os.path.join(tmp, "known_hosts")
+            argv = [self.ssh, "-T", "-p", str(port), "-J", ",".join(jump_spec(j) for j in jumps),
+                    "-o", "StrictHostKeyChecking=accept-new", "-o", f"UserKnownHostsFile={kh}",
+                    "-o", "GlobalKnownHostsFile=/dev/null", "-o", "BatchMode=yes",
+                    "-o", "PreferredAuthentications=none", "-o", "ConnectTimeout=10",
+                    "-o", "ControlPath=none", "-o", "LogLevel=ERROR", host, "true"]
+            try:
+                subprocess.run(argv, capture_output=True, timeout=30, start_new_session=True)
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise SshError("unreachable", f"ssh {host}:{port} through "
+                                              f"{jump_spec(jumps[0])}: {type(exc).__name__}")
+            keys = {}
+            try:
+                with open(kh) as f:
+                    for line in f:
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            keys.setdefault(parts[1], parts[2])
+            except FileNotFoundError:
+                pass
+            if not keys:
+                raise SshError("unreachable", f"no SSH server answers at {host}:{port} through "
+                                              f"{', '.join(jump_spec(j) for j in jumps)}")
+            return keys
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def stored(self, host: str, port: int) -> tuple[str, str] | None:
         name = entry(host, port)
         try:
@@ -103,10 +152,11 @@ class Ssh:
             pass
         return None
 
-    def host_key(self, host: str, port: int) -> tuple[dict, str | None]:
+    def host_key(self, host: str, port: int,
+                 jumps: list[dict] | None = None) -> tuple[dict, str | None]:
         """What the host offers against what this controller remembers: ({type, fingerprint,
         known: new|same|changed, stored}, the blob a login may take, None when changed)."""
-        offered = self.scan(host, port)
+        offered = self.scan(host, port, jumps)
         pick = next(k for k in PREFER + tuple(offered) if k in offered)
         got = self.stored(host, port)
         if got is None:
@@ -132,7 +182,8 @@ class Ssh:
     # ------------------------------------------------------------------ one login
     def run(self, host: str, port: int, user: str, command: str, stdin: bytes, *,
             kind: str, b64: str, password: str | None = None,
-            key: str | None = None) -> tuple[int, str, str]:
+            key: str | None = None, key_file: str | None = None,
+            jumps: list[dict] | None = None) -> tuple[int, str, str]:
         """`command` on host as user, `stdin` fed to it: (exit status, stdout, stderr), both
         scrubbed of the password and the key. The host must present exactly `kind`/`b64`."""
         secrets = [password or "", key or ""]
@@ -148,6 +199,8 @@ class Ssh:
                     "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=10",
                     "-o", "NumberOfPasswordPrompts=1", "-o", "ControlPath=none",
                     "-o", "LogLevel=ERROR"]
+            if jumps:
+                argv += ["-J", ",".join(jump_spec(j) for j in jumps)]
             env = {k: v for k, v in os.environ.items()
                    if k not in ("SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "TANDEM_SSH_SECRET")}
             if password is not None:
@@ -159,11 +212,13 @@ class Ssh:
                          "-o", "PubkeyAuthentication=no"]
                 env.update(SSH_ASKPASS=ap, SSH_ASKPASS_REQUIRE="force",
                            DISPLAY=env.get("DISPLAY") or ":0", TANDEM_SSH_SECRET=password)
-            elif key is not None:
-                kp = os.path.join(tmp, "key")
-                fd = os.open(kp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                with os.fdopen(fd, "w") as f:
-                    f.write(key.strip() + "\n")
+            elif key is not None or key_file is not None:
+                kp = key_file
+                if kp is None:
+                    kp = os.path.join(tmp, "key")
+                    fd = os.open(kp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    with os.fdopen(fd, "w") as f:
+                        f.write(key.strip() + "\n")
                 argv += ["-i", kp, "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
                          "-o", "PreferredAuthentications=publickey"]
             else:

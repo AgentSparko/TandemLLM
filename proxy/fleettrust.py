@@ -5,7 +5,8 @@ once, release, and the audit of each.
     t.view()                                {controller: {id, name, fingerprint, since}, audit}
     t.pair_code({address, code, port?}, who)              -> the node's row
     t.host_key({host, port?})                             -> {type, fingerprint, known, stored}
-    t.pair_ssh({host, user, port?, password?, key?, host_key?, takeover?}, who) -> the node's row
+    t.pair_ssh({host, user, port?, password?, key?, key_file?, jumps?, tunnel?, host_key?,
+                takeover?}, who)                          -> the node's row
     t.release(node id, force, who)                        -> {id, node}
 
 THE CONTROLLER'S CERTIFICATE. `controller.crt` and `controller.key` (EC P-256, self-signed, 0600
@@ -20,10 +21,18 @@ port refuses this certificate is owned by another TandemApp: 409 `owned`.
 
 SSH ONCE (proxy/sshonce.py). The controller's certificate goes to `tandem-node adopt` on the node
 (found from its user unit, PATH, or an install.sh install); the node's certificate comes back on
-the same authenticated channel and is pinned. A node another TandemApp owns is taken over only
+the same authenticated channel and is pinned. The probe refuses before the adopt when the box's
+machine id is this controller's own (/etc/machine-id): the controller's machine is read through its
+loopback agent, and an SSH login to it must not pin anything in that agent's trust store. A node another TandemApp owns is taken over only
 with `takeover: true` (SSH access proves the node is the user's). The same login first prints the
 node's DMI (vendor, product name, version, family, all world-readable): discovery
-(proxy/discovery.py) learns from it what the box is, a GB10 with nothing installed included.
+(proxy/discovery.py) learns from it what the box is, a GB10 with nothing installed included. The
+route is the one `/discovery/target` read from an ssh line (5.2): `jumps` (the jump hosts in
+order) and `key_file` (a private key file on this machine, the line's `-i` or ~/.ssh/config's
+IdentityFile; ssh reads it, nothing copies it). `tunnel: true` is a rented or remote node: its
+agent listens on its own loopback only (in mTLS once pinned) and the controller reaches it through
+an SSH tunnel it keeps open (proxy/sshtunnel.py), never on a WAN address; the record's `transport`
+is `tunnel` and its trust carries the tunnel's route, which needs a key or the user's agent.
 
 RELEASE. `DELETE /v1/fleet/nodes/{id}` asks the node to forget this controller (its pin, its
 listen addresses), then forgets the node here. A node that does not answer is forgotten only with
@@ -71,6 +80,11 @@ if [ -z "$node" ]; then
   echo "TANDEMNODE-ERROR not_installed TandemNode is not installed" >&2
   exit 64
 fi
+mid=$(cat "${TANDEM_MACHINE_ID_FILE:-/etc/machine-id}" 2>/dev/null)
+if [ -n "${own:-}" ] && [ "$mid" = "$own" ]; then
+  echo "TANDEMNODE-ERROR own_machine this is the controller's own machine" >&2
+  exit 68
+fi
 exec $node adopt $args --address "$addr" """
 
 
@@ -107,6 +121,21 @@ def _dmi(err: str) -> dict | None:
     return got if any(got.values()) else None
 
 
+def _machine_id(path: str = "/etc/machine-id") -> str:
+    """This machine's systemd machine id ('' where there is none, a Mac): the SSH-once probe
+    refuses to adopt on the controller's own machine before it pins anything there."""
+    try:
+        with open(os.environ.get("TANDEM_MACHINE_ID_FILE") or path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _login(user) -> bool:
+    return isinstance(user, str) and 0 < len(user) <= 64 and not user.startswith("-") and \
+        all(c.isalnum() or c in "._-" for c in user)
+
+
 def _url(address: str, port: int) -> str:
     return f"https://{'[' + address + ']' if ':' in address else address}:{port}"
 
@@ -120,6 +149,7 @@ class Trust:
         self.name = f"TandemApp on {socket.gethostname().split('.')[0]}"
         self.clock = clock
         self.ssh = ssh or sshonce.Ssh(os.path.join(root, "known_hosts"))
+        self.machine_id = _machine_id()
         self._tries: collections.deque = collections.deque()
         self._lock = threading.Lock()
         if not (os.path.isfile(self.cert) and os.path.isfile(self.key)):
@@ -184,15 +214,21 @@ class Trust:
         return None
 
     def _record(self, *, node_pem: str, address: str, port: int, node_id: str | None,
-                via: str, who: str, took=None, host_key: str | None = None) -> dict:
+                via: str, who: str, took=None, host_key: str | None = None,
+                tunnel: dict | None = None) -> dict:
         """The node's row after a pairing: found by its id (kept: alias, colour, tags), else an
-        unpaired row at its address (a one-peer migration's), else a new one."""
+        unpaired row at its address (a one-peer migration's), else a new one. With `tunnel` (its
+        route, the agent's port on the node's loopback) the agent is reached through it."""
         fp = nodetrust.pem_fingerprint(node_pem)
-        endpoint = _url(address, port)
         trust = {"kind": "mtls", "cert": self.cert, "key": self.key, "pin": node_pem.strip()
                  + "\n", "fingerprint": fp, "via": via, "paired_at": round(self.clock(), 3)}
         if host_key:
             trust["host_key"] = host_key
+        if tunnel is not None:
+            trust["tunnel"] = dict(tunnel, remote_port=port)
+            endpoint = _url("127.0.0.1", self.fleet.tunnels.ensure(trust["tunnel"]))
+        else:
+            endpoint = _url(address, port)
         ident = self._identity(endpoint, trust) or {}
         nid = ident.get("id") or node_id
         if not nid:
@@ -203,7 +239,7 @@ class Trust:
             raise TrustError("conflict", "this is the controller's own machine: it is read "
                                          "through its loopback agent and needs no pairing", 409)
         fields = {"endpoint": endpoint, "address": address, "trust": trust,
-                  "transport": "lan"}
+                  "transport": "lan" if tunnel is None else "tunnel"}
         for k, v in (("hw", ident.get("hw")), ("dmi", ident.get("dmi")),
                      ("serial", ident.get("serial"))):
             if v:
@@ -291,35 +327,71 @@ class Trust:
             raise TrustError("bad_request", "host is an address or a host name", 400)
         return host, _port(body.get("port"), 22)
 
+    def _route(self, body) -> tuple[list[dict], str | None]:
+        """The jump hosts and the key file a pairing names (the ssh line's route)."""
+        jumps = body.get("jumps") or []
+        if not isinstance(jumps, list) or len(jumps) > 4:
+            raise TrustError("bad_request", "jumps is a list of up to 4 jump hosts", 400)
+        out = []
+        for j in jumps:
+            if not isinstance(j, dict) or set(j) - {"user", "host", "port"}:
+                raise TrustError("bad_request", "a jump host is {user?, host, port?}", 400)
+            h, p = self._host(j)
+            u = j.get("user")
+            if u is not None and not _login(u):
+                raise TrustError("bad_request", "a jump host's user is a login name", 400)
+            out.append({"user": u, "host": h, "port": p})
+        kf = body.get("key_file")
+        if kf is not None:
+            if not isinstance(kf, str) or not kf or len(kf) > 1024 or "\n" in kf or \
+                    kf.startswith("-"):
+                raise TrustError("bad_request", "key_file is the path of a private key file on "
+                                                "the controller's machine", 400)
+            kf = os.path.expanduser(kf)
+            if not os.path.isfile(kf):
+                raise TrustError("bad_request", f"key_file {kf}: no such file on the "
+                                                f"controller's machine", 400)
+        return out, kf
+
     def host_key(self, body) -> dict:
-        if not isinstance(body, dict) or set(body) - {"host", "port"}:
-            raise TrustError("bad_request", "the body is {host, port?}", 400)
+        if not isinstance(body, dict) or set(body) - {"host", "port", "jumps"}:
+            raise TrustError("bad_request", "the body is {host, port?, jumps?}", 400)
         host, port = self._host(body)
+        jumps, _ = self._route({"jumps": body.get("jumps")})
         try:
-            hk, _ = self.ssh.host_key(host, port)
+            hk, _ = self.ssh.host_key(host, port, jumps)
         except sshonce.SshError as exc:
             raise TrustError(exc.kind, exc.message, exc.status)
         return {"contract_version": "1.0", "host": host, "port": port, **hk}
 
-    def pair_ssh(self, body, who: str) -> dict:
-        keys = {"host", "port", "user", "password", "key", "host_key", "takeover"}
+    def pair_ssh(self, body, who: str, *, command: str | None = None) -> dict:
+        """SSH once. `command` (the Add Spark wizard's install, proxy/nodeinstall.py) replaces
+        the REMOTE probe with the adopt of a TandemNode it just installed."""
+        keys = {"host", "port", "user", "password", "key", "key_file", "jumps", "tunnel",
+                "host_key", "takeover"}
         if not isinstance(body, dict) or set(body) - keys:
-            raise TrustError("bad_request", "the body is {host, user, port?, password? | key?, "
-                                            "host_key?, takeover?}", 400)
+            raise TrustError("bad_request", "the body is {host, user, port?, password? | key? | "
+                                            "key_file?, jumps?, tunnel?, host_key?, takeover?}",
+                             400)
         host, port = self._host(body)
         user = body.get("user")
-        if not isinstance(user, str) or not user or len(user) > 64 or user.startswith("-") \
-                or not all(c.isalnum() or c in "._-" for c in user):
+        if not _login(user):
             raise TrustError("bad_request", "user is a login name", 400)
         password, key = body.get("password"), body.get("key")
-        if password is not None and key is not None:
-            raise TrustError("bad_request", "a password or a key, not both", 400)
+        jumps, key_file = self._route(body)
+        if sum(x is not None for x in (password, key, key_file)) > 1:
+            raise TrustError("bad_request", "a password, a key or a key file, not two", 400)
         for v, what in ((password, "password"), (key, "key")):
             if v is not None and (not isinstance(v, str) or not v or len(v) > 16384):
                 raise TrustError("bad_request", f"{what} is a non-empty text", 400)
+        tunnel = body.get("tunnel") is True
+        if tunnel and password is not None:
+            raise TrustError("bad_request", "a node behind a tunnel is reached with a key or "
+                                            "the agent for as long as it is in the fleet: give "
+                                            "its key file, not a password", 400)
         self._rate()
         try:
-            hk, b64 = self.ssh.host_key(host, port)
+            hk, b64 = self.ssh.host_key(host, port, jumps)
         except sshonce.SshError as exc:
             raise TrustError(exc.kind, exc.message, exc.status)
         want = body.get("host_key")
@@ -333,11 +405,17 @@ class Trust:
             raise TrustError("host_key_changed", f"the host key of {host} is "
                                                  f"{hk['fingerprint']}, not the confirmed "
                                                  f"{want}; refused", 409)
-        command = REMOTE + "--name " + shlex.quote(self.name) + (
-            " --takeover" if body.get("takeover") else "")
+        command = (command or (f"own={shlex.quote(self.machine_id)}\n" + REMOTE)) + \
+            "--name " + shlex.quote(self.name) + (" --takeover" if body.get("takeover") else "")
+        # a pasted key a tunnel logs in with for as long as the node is in the fleet
+        tunnel_key = key if tunnel and key_file is None else None
+        if tunnel:
+            # the agent listens on the node's loopback; SSH_CONNECTION's address is a WAN one
+            command = command.replace('--address "$addr"', "--address 127.0.0.1")
         try:
             rc, out, err = self.ssh.run(host, port, user, command, self.pem.encode(),
-                                        kind=hk["type"], b64=b64, password=password, key=key)
+                                        kind=hk["type"], b64=b64, password=password, key=key,
+                                        key_file=key_file, jumps=jumps)
         except sshonce.SshError as exc:
             raise TrustError(exc.kind, exc.message, exc.status)
         finally:
@@ -361,13 +439,35 @@ class Trust:
             raise TrustError("ssh_failed", f"tandem-node adopt on {host} answered something "
                                            f"else", 502)
         self.ssh.remember(host, port, hk["type"], b64)
-        row = self._record(node_pem=node_pem, address=_ip(ans.get("address"), "the address"),
+        route = None
+        if tunnel:
+            route = {"host": host, "port": port, "user": user, "jumps": jumps,
+                     "identity_file": key_file or self._kept_key(tunnel_key,
+                                                                 ans.get("node_id"))}
+            tunnel_key = None
+        row = self._record(node_pem=node_pem, address=host if tunnel else
+                           _ip(ans.get("address"), "the address"),
                            port=_port(ans.get("port"), nodesource_port()),
                            node_id=ans.get("node_id"), via="ssh", who=who,
-                           took=ans.get("took_over_from"), host_key=hk["fingerprint"])
+                           took=ans.get("took_over_from"), host_key=hk["fingerprint"],
+                           tunnel=route)
         self._learn(host, port, dmi=dmi, installed=True, host_key=hk["fingerprint"],
                     node=row["id"])
         return row
+
+    def _kept_key(self, key: str | None, node_id: str | None) -> str | None:
+        """A pasted key a tunnel needs for as long as the node is in the fleet: a 0600 file in
+        `keys/` beside the controller's certificate, removed with the node (release)."""
+        if key is None:
+            return None
+        d = os.path.join(self.root, "keys")
+        os.makedirs(d, mode=0o700, exist_ok=True)
+        path = os.path.join(d, (node_id or hashlib.sha256(key.encode()).hexdigest()[:12])
+                            + ".key")
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(key.strip() + "\n")
+        return path
 
     def _learn(self, host: str, port: int = 22, **facts) -> None:
         """What this pairing found out, for discovery's list; never in its way."""
@@ -391,6 +491,9 @@ class Trust:
             return TrustError("not_installed", f"TandemNode on {host} is not running and has no "
                                                f"user unit (tandemnode.service): set it up "
                                                f"first (tandem node unit)", 409)
+        if rc == 68 or kind == "own_machine":
+            return TrustError("conflict", f"{host} is the controller's own machine: it is read "
+                                          f"through its loopback agent and needs no pairing", 409)
         if rc == 65 or kind == "owned":
             return TrustError("owned", f"{host} is paired with another TandemApp: send "
                                        f"takeover: true to move it here (SSH access proves it "
@@ -419,6 +522,15 @@ class Trust:
                                                 f"reset` on the node)", 502)
         else:
             side = "not_paired"
+        tun = t.get("tunnel")
+        if tun:
+            self.fleet.tunnels.close(tun)
+            kept = tun.get("identity_file") or ""
+            if os.path.dirname(kept) == os.path.join(self.root, "keys"):
+                try:
+                    os.remove(kept)
+                except FileNotFoundError:
+                    pass
         self.fleet.forget(nid)
         action = "release" if side in ("unpinned", "not_paired") else "forget"
         self.cfg.log_audit(who, action, "node", nid, detail={

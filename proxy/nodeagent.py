@@ -49,6 +49,11 @@ ROUTES (every one behind the caller check below; JSON unless an event stream):
     DELETE /node/pair                  release: the owner forgotten (the owner, or this node)
     PUT    /node/peers/{id}            {certificate}: another node pinned for link tests (the owner)
     DELETE /node/peers/{id}
+    GET    /node/preflight             the Add Spark wizard's checks of this box (proxy/preflight.py
+                                       SCRIPT, run here): {facts}
+    PUT    /node/fleet                 {fingerprint, name}: the controller on this machine says this
+                                       node is its fleet's own (loopback secret only); mDNS then
+                                       says owned
 
 CALLERS. An address is listened on as proxy/nodetrust.py's bind rule says: loopback in plain HTTP
 behind the loopback secret (`<state dir>/secret`, 0600, made at the first start) until the trust
@@ -79,7 +84,12 @@ secret: `id` (the node id), `class` (spark for a GB10 by its DMI or GPU, else ot
 owning controller's certificate fingerprint: public, as any TLS client sees it), `listen`
 (loopback or lan), `window` (the pairing window's port while one is open), `hk` (the SSH host
 key's fingerprint, which ssh-keyscan reads anyway; not on a virtual node, which shares its
-machine's) and `virtual` (a virtual node's name). An unpaired node advertises too, although its
+machine's) and `virtual` (a virtual node's name). The node of the controller's own machine has no
+owner (the controller reads it over loopback with the secret), so the controller says so once
+(PUT /node/fleet, kept in `<state dir>/fleet.json`): it advertises `paired=1` and that
+controller's fingerprint as `owner`, and another TandemApp lists it as owned, never as a Spark to
+pair. Docker and VM bridges, VPN tunnels and Apple's peer links (discovery.VIRTUAL) are no LAN
+and get no answer. An unpaired node advertises too, although its
 agent listens on loopback only: the advertisement opens no port, and it is what lets the wizard say
 "Spark with TandemLLM x.y, not paired" and, while `tandem node pair` shows a code, "pairing code
 showing on the node" (the TXT says `listen=loopback`, the SRV the agent's port it will listen on
@@ -99,6 +109,7 @@ import json
 import os
 import http.client
 import queue
+import re
 import select
 import socket
 import ssl
@@ -333,7 +344,7 @@ class Agent:
         got = discovery.classify_dmi(**dmi)
         h = self.local._last_host or {}
         gb10 = any("GB10" in (g.get("name") or "") for g in h.get("gpus") or [])
-        owner = self.store.owner()
+        owner = self.store.owner() or self.fleet_claim()
         nid = self.node_id()
         txt = {"v": "1", "id": nid, "class": "spark" if (got and got[1]) or gb10 else "other",
                "ver": _version.release() or None, "hw": got[0] if got else None,
@@ -353,6 +364,43 @@ class Agent:
                     f"-{self.virtual}" if self.virtual else ""),
                 "port": self.port, "target": "tandemnode-" + nid.removeprefix("n-")[:12],
                 "txt": {k: v for k, v in txt.items() if v is not None}}
+
+    def fleet_claim(self) -> dict | None:
+        """{fingerprint, name} of the controller on this machine that reads this node as its
+        fleet's own (PUT /node/fleet), or None."""
+        try:
+            with open(os.path.join(self.state_dir, "fleet.json")) as f:
+                doc = json.load(f)
+            return doc if isinstance(doc, dict) and doc.get("fingerprint") else None
+        except (OSError, ValueError):
+            return None
+
+    def claim(self, body) -> dict:
+        if not isinstance(body, dict) or set(body) - {"fingerprint", "name"} or \
+                not isinstance(body.get("fingerprint"), str) or \
+                not re.fullmatch(r"[0-9a-f]{64}", body["fingerprint"]):
+            raise ValueError("the body is {fingerprint: sha256 hex, name?}")
+        doc = {"fingerprint": body["fingerprint"], "name": str(body.get("name") or "")[:80],
+               "at": round(self.clock(), 3)}
+        was = self.fleet_claim()
+        path = os.path.join(self.state_dir, "fleet.json")
+        fd = os.open(path + ".part", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(doc, f)
+        os.replace(path + ".part", path)
+        if (was or {}).get("fingerprint") != doc["fingerprint"]:
+            self.log(f"[node] the controller on this machine ({doc['name'] or 'TandemApp'}, "
+                     f"sha256 {doc['fingerprint'][:16]}) reads this node as its fleet's own")
+            self.advertise()
+        return doc
+
+    def preflight(self) -> dict:
+        """The wizard's checks of this box: proxy/preflight.py's script, run here."""
+        from proxy import _version, preflight
+        env = dict(os.environ, TANDEM_PF_SELF=_version.release() or "")
+        r = subprocess.run(["sh", "-c", preflight.SCRIPT], capture_output=True, text=True,
+                           env=env, timeout=30)
+        return {"facts": preflight.parse(r.stdout), "at": round(self.clock(), 3)}
 
     def ssh_host_key(self) -> str | None:
         """This machine's SSH host key fingerprint (the ed25519 one first), from its public file."""
@@ -705,6 +753,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._weights(method, parts[2:], q)
             if method == "GET" and parts == ["node", "logs"]:
                 return self._logs(q)
+            if method == "GET" and parts == ["node", "preflight"]:
+                return self._json(200, self.agent.preflight())
+            if method == "PUT" and parts == ["node", "fleet"]:
+                if self._role() != "secret":
+                    return self._err(403, "forbidden", "only the controller on this machine "
+                                                       "(the loopback secret) claims this node")
+                doc = self.agent.claim(json.loads(self._body() or b"null"))
+                self._audit("fleet claim", 200)
+                return self._json(200, doc)
             if head == "linktest":
                 return self._linktest(method, parts[2:], q)
             if head == "setup":
@@ -1273,6 +1330,13 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
+def lan_addrs(addrs: dict) -> list[str]:
+    """The interface addresses mDNS may answer on: none of a container or VM bridge, a VPN
+    tunnel or a peer link (the interfaces discovery never scans either)."""
+    from proxy import discovery
+    return [x for name, v in addrs.items() if not name.startswith(discovery.VIRTUAL) for x in v]
+
+
 def _hosts(a) -> list[str]:
     return a.host or [x.strip() for x in os.environ.get("TANDEM_NODE_HOST",
                                                         "127.0.0.1").split(",") if x.strip()]
@@ -1511,8 +1575,7 @@ def main(argv=None) -> None:
         for h, m in modes:
             print(f"{h}:{a.port} {m}" + (" (plain HTTP, the loopback secret)" if m == "secret"
                                          else " (mTLS, the trust store)"))
-        lans = [str(i) for i in mdns.allowed([x for v in linktest.ip_addrs().values()
-                                               for x in v])]
+        lans = [str(i) for i in mdns.allowed(lan_addrs(linktest.ip_addrs()))]
         print("mDNS: " + ("off" if a.mdns == "off" else
                           f"{mdns.SERVICE} on {', '.join(lans)}" if lans else
                           "no LAN address to advertise on"))
@@ -1537,8 +1600,8 @@ def main(argv=None) -> None:
                          daemon=True).start()
     if a.mdns == "on":
         try:
-            agent.mdns = mdns.Responder(agent.mdns_info, lambda: [
-                x for v in agent.addrs().values() for x in v], log=agent.log).start()
+            agent.mdns = mdns.Responder(agent.mdns_info, lambda: lan_addrs(agent.addrs()),
+                                        log=agent.log).start()
         except OSError as exc:
             agent.log(f"[node] mDNS: not advertising ({exc}); add this node by address")
     import signal
