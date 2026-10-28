@@ -235,6 +235,70 @@ An alert carries the page to open (`#/hardware?scope=node:<id>`, `#/sparks/<id>`
 
 Write cost on a fleet of one, a DGX Spark with one engine: 11 series (the hardware figures the GB10 gives and the engine's three), about 3,000 rows a day each in the two written tiers. Measured with the engine idle: the controller wrote 196,608 bytes in 21 minutes, about 13 MB a day for all its files (the config database and the usage ledger included), of which the fleet store's WAL took about 7 MB. At its full reach the file holds about 80,000 slots, a few MB (projected, not yet measured).
 
+## The data plane: clients through the controller
+
+On a box where clients call the engine at `/v1`, TandemApp's controller can take the OpenAI routes in its place (SRV-733): `POST /v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, `/v1/responses` and `GET /v1/models[/...]`. Then every client request is a row of the controller's ledger with its Spark and deployment, and a deployment on another Spark answers at the same address. Everything else under `/v1` stays the engine's: the conductor, the Setup Guide, the dashboard's reads, the caches, the memory, the library, Laya and the decision models, the tokenizer, the Chat tab's chatd routes, the configuration.
+
+A client sees what the engine gave it before, with no change on its side:
+
+| what | through the controller |
+|-|-|
+| status codes and bodies | the engine's answer, byte for byte for a stream; the controller's own answers (a 401, a 404 model, a body that is not JSON) are the ones the engine writes, from the same code |
+| `/v1/models` | the engine's cards as the engine lists them (profile, description, `tandem` with its capabilities, context and output limits) and its `decision_models`; `/v1/models/{id}` of an id no list names (the raw model's alias, a decision model) is the engine's own answer; the answer carries `X-Tandem-Gateway: tandem-app` |
+| a model id no backend lists | `TANDEM_DEFAULT_BACKEND=engine`: to the engine as asked; the engine answers any id with its own model, as it did (unset: OpenAI's 404) |
+| the client's headers | to the engine as sent: its agent and referer (the client kind), the conductor's, memory's and the session headers, `X-Real-IP` and `X-Forwarded-For` as the reverse proxy set them, its `Authorization` when the backend has no key of its own; never a cookie, `X-Tandem-User`, `X-Tandem-Relay-Id` or `X-Tandem-Pin` a client sent |
+| whose memory | the key's label, else `owner`, as for a request sent to the engine (`X-Tandem-User`, which the engine takes from a loopback peer only) |
+| the answer's headers | the engine's, but `X-Tandem-Backend`, `X-Tandem-Node` and `X-Tandem-Deployment` are the controller's |
+| the cost comment (`X-Tandem-Cost: 1`) | the engine's own, which prices what it relays; the controller adds none for a TandemLLM backend |
+| keys | `TANDEM_API_USERS_FROM=<the engine's config database>`: the keys the engine's users hold open the controller too, live (a user made or turned off on the engine counts at the next request). The controller reads the label, the key's sha256 and `enabled` from that file, read only, at each check; no key and no hash is copied, logged or stored here. While the engine has no user both are open; a wrong key is the same 401 on both. A file that cannot be read keeps the last answer, and before any answer the routes need a key |
+| long thinking | no idle cut while the engine still works on the request: when the first-byte (600 s) or idle (120 s) wait runs out, the relay asks the engine's board (`/v1/dashboard/parallel`) whether it still holds the request under the relay's lane id, and waits another span while it does. The engine's own request timeout ends a request; a client that leaves still closes the upstream within a quarter second. An engine whose board does not answer the controller (a remote engine with the dashboard login on) is cut at the timeouts as before |
+| counted once | a request is a row in the controller's ledger and one in the engine's, never added up. The controller's row holds the engine's answer id (`upstream_request`, ledger schema 12), which is the `request_id` of the engine's row: the two join on it. Usage reads one ledger at a time and says which; a page whose `/v1/models` answer carries `X-Tandem-Gateway` reads the controller's by default, one Spark too, with the engine's a click away (the Chat tab's requests go to the engine straight and are in its ledger) |
+
+The engine's relays stay its own: a DeepSeek model the engine relays is listed and answered through the controller as the engine lists and answers it, and both ledgers have the row. The relay may try the engine again on a 429 or 503 before any byte (twice at most, after its `Retry-After`), as it does for every backend.
+
+The controller's settings for a box (`app.env`):
+
+    TANDEM_BACKENDS=engine
+    TANDEM_BACKEND_ENGINE_KIND=tandemllm
+    TANDEM_BACKEND_ENGINE_URL=http://127.0.0.1:8000/v1
+    TANDEM_DEFAULT_BACKEND=engine
+    TANDEM_API_USERS_FROM=~/.qwen38-spark-engine/backends/config.sqlite3
+
+### Through a reverse proxy
+
+nginx in front of both sends the five route families to the controller and leaves every other path where it was. Exact (`=`) and `^~` locations win over a regular expression location, so an existing `location ~ ^/(v1|health|events|metrics)(/|$)` for the engine stays as it is:
+
+    location = /v1/chat/completions { include snippets/tandemapp-data-plane.conf; }
+    location = /v1/completions      { include snippets/tandemapp-data-plane.conf; }
+    location = /v1/embeddings       { include snippets/tandemapp-data-plane.conf; }
+    location = /v1/responses        { include snippets/tandemapp-data-plane.conf; }
+    location = /v1/models           { include snippets/tandemapp-data-plane.conf; }
+    location ^~ /v1/models/         { include snippets/tandemapp-data-plane.conf; }
+
+with `snippets/tandemapp-data-plane.conf` (`<controller>` is the Spark's address):
+
+    proxy_pass http://<controller>:8091;
+    proxy_http_version 1.1;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header Connection        "";
+    proxy_buffering off;               # a stream's frames go out as they come
+    proxy_request_buffering off;
+    proxy_cache off;
+    gzip off;
+    client_max_body_size 200M;
+    proxy_connect_timeout 10s;
+    proxy_send_timeout 3600s;
+    proxy_read_timeout 3600s;          # the engine's --request-timeout: a quiet hour is the most
+
+`proxy_read_timeout` is the time between two reads, so a stream that sends a byte now and then (the engine's prefill comments, reasoning) is never cut by it; a whole answer of an hour's thinking is. `/v1/chat/completions/` with a slash and other spellings stay on the engine. Before the switch, check the controller directly on its port with a small request of each kind (both paths answer in the meantime), then `nginx -t` and `systemctl reload nginx`, and check the same through the public address.
+
+### Rollback
+
+Restore the site file from the copy made before the change (or delete the six `location` lines), `nginx -t`, `systemctl reload nginx`: clients reach the engine directly again with that reload, without a change on the controller, the engine or a client. The controller keeps its ledger; requests after the rollback are in the engine's only.
+
 ## TandemNode: `tandem node`
 
 TandemNode is the agent on each Spark that TandemApp's controller talks to (code: `proxy/nodeagent.py`). It ships in the same package: `tandem-node`, or `tandem node` on an `install.sh` install, where the install's engine is its engine. It listens on port 7700.

@@ -23,6 +23,7 @@ Releases of TandemLLM. Speed numbers are the benchmark row `serve-single-i256-o2
 ### TandemApp
 
 - The standalone dashboard and proxy is TandemApp, and its command is `tandem-app` (OPS-238). `tandem-dash` still runs it with the same arguments and exit codes, after one line on stderr, and is removed in 0.17.0. The image is `tandemllm-app` from `ops/Dockerfile.app`, its volume `tandem-app` and its env file `ops/app.env.example`; [docs/proxy.md](docs/proxy.md#in-docker) says how to mount or copy a `tandem-dash` volume.
+- The OpenAI routes can run through TandemApp's controller in front of the engine (SRV-733): `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, `/v1/responses` and `/v1/models` answer as the engine does (its cards and decision models, any model id with `TANDEM_DEFAULT_BACKEND`, the client's headers on, the engine's keys with `TANDEM_API_USERS_FROM`), a request the engine still works on is never cut by the relay's timeouts, and each request is one row of the controller's ledger with its Spark, joined to the engine's row by the answer id (ledger schema 12). [docs/proxy.md](docs/proxy.md#the-data-plane-clients-through-the-controller) has the reverse proxy's locations and the rollback.
 
 ## 0.15.4, 2026-11-10
 
