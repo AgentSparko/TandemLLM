@@ -1,6 +1,7 @@
 // <qse-app-settings>: Settings → App (OPS-234, concept §8.13, the v3 prototype's App page): where
-// TandemApp's controller runs, its API URL, and moving it. A chunk of its own, loaded when the page
-// opens.
+// TandemApp's controller runs, its API URL, and moving it; how it runs and its release; the admin
+// password; the machine's permissions; the fleet's configuration as a file. A chunk of its own,
+// loaded when the page opens.
 //
 // Controller host: a card for the machine it runs on (This Mac, with the sleep warning while a Mac
 // runs it) and one per Spark it may move to (a rented or tunnelled one says why not); Move… reads the
@@ -9,11 +10,21 @@
 // as the controller does them; once it is done the API URL is the new one and this page follows to
 // it (five seconds, or now; Stay here keeps it). A controller with no fleet of its own can take one:
 // the URL of the controller that runs it and its admin password (This Mac takes the fleet back).
+//
+// 6.3b. This controller: the service it runs as and the release, with Update fleet (the Sparks page's
+// dialog). Admin password: set (the first one from the controller's own machine), change and remove,
+// each with the current password or the admin token; a change signs out every other browser. The
+// permissions (A14) as the controller reads them, `unknown` where it cannot, each with why, its
+// fallback and its button (Check now asks macOS once; notifications are this browser's). Fleet
+// configuration: Export downloads the file (secrets left out, the page lists which); Import reads a
+// file, shows the controller's plan item by item (merge or replace) and applies it with the plan's
+// confirm.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { describeError } from '../../api/client';
-import { fleet, type ControllerView, type MoveJob, type MovePlan } from '../../api/fleet';
+import { fleet, type AppView, type ControllerView, type ImportMode, type ImportPlan, type MoveJob, type MovePlan } from '../../api/fleet';
+import { applyLabel, browserNotify, exportName, importGroups, kindWord, passwordBlocked, passwordError, passwordStatus, permRows, planSummary, readConfig, resultWords, updateLine, type BrowserNotify, type PermRow } from '../../lib/app-settings';
 import { apiOf, followUrl, hostChoices, MIN_PASSWORD, moveFormError, moveWords, newPassword, planGroups, takeFormError } from '../../lib/controller-host';
 import { onFleet, refreshFleet, type FleetState } from '../../lib/fleet-state';
 import { poll, type Poller } from '../../lib/poll';
@@ -49,13 +60,27 @@ export class QseAppSettings extends LightElement {
   @state() private count: number | null = null;
   @state() private copied = false;
   @state() private showPw = false;
+  // 6.3b
+  @state() private app: AppView | null = null;
+  @state() private notify: BrowserNotify = browserNotify();
+  @state() private pw = { current: '', next: '', again: '' };
+  @state() private pwShow = false;
+  @state() private pwDrop = false;
+  @state() private msg: Record<string, string> = {};
+  @state() private file: { name: string; doc: Record<string, unknown> } | null = null;
+  @state() private mode: ImportMode = 'merge';
+  @state() private iplan: ImportPlan | null = null;
   private poller: Poller | null = null;
+  private appPoller: Poller | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private unsub: (() => void) | null = null;
   private followed = '';
 
   private get dialog(): HTMLDialogElement | null {
-    return this.querySelector('dialog');
+    return this.querySelector('dialog[data-dialog="move"]');
+  }
+  private get importDialog(): HTMLDialogElement | null {
+    return this.querySelector('dialog[data-dialog="import"]');
   }
 
   connectedCallback(): void {
@@ -63,19 +88,43 @@ export class QseAppSettings extends LightElement {
     this.unsub = onFleet((f) => (this.fleetState = f));
     this.poller = poll(() => this.load(), 2000);
     this.poller.start();
+    this.appPoller = poll(() => this.loadApp(), 15000);
+    this.appPoller.start();
     window.addEventListener('qse-signed-in', this.onSignedIn);
   }
   disconnectedCallback(): void {
     this.unsub?.();
     this.poller?.stop();
+    this.appPoller?.stop();
     this.stopCount();
     window.removeEventListener('qse-signed-in', this.onSignedIn);
     super.disconnectedCallback();
   }
   private onSignedIn = (): void => {
+    const was = this.signIn;
     this.signIn = '';
     if (this.plan) void this.readPlan(this.plan.to);
+    if (was === 'import' && this.file) void this.readImport();
+    void this.appPoller?.refresh();
   };
+
+  private async loadApp(): Promise<void> {
+    try {
+      this.app = await fleet.app();
+      this.notify = browserNotify();
+    } catch (e) {
+      // an older controller has no App settings: the sections that need it stay away
+      if (describeError(e).status !== 404) this.msg = { ...this.msg, app: describeError(e).message };
+    }
+  }
+
+  /** a write refused 401: the session check, then the sign-in card under `where` */
+  private async refused(e: unknown, where: string): Promise<boolean> {
+    if (describeError(e).status !== 401) return false;
+    await checkSession(true);
+    this.signIn = where;
+    return true;
+  }
 
   private async load(): Promise<void> {
     try {
@@ -292,15 +341,275 @@ export class QseAppSettings extends LightElement {
       ${this.err.move ? html`<p class="small err-ink" data-move-error>${this.err.move}</p>` : nothing}`;
   }
 
+  // ---- 6.3b: this controller, the password, the permissions, the configuration file -------------
+  private servicePanel(a: AppView): TemplateResult {
+    const nodes = this.fleetState?.nodes ?? [];
+    const up = updateLine(a.release, nodes);
+    const s = a.service;
+    return html`<section class="panel" data-panel="service">
+      <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">This controller</h2><p class="panel-sub">How it runs on its machine, and the release it gives the Sparks.</p></div></header>
+      <dl class="app-dl">
+        <dt>Service</dt><dd data-service=${s.manager}>${s.text}${s.manager === 'none' ? html` <code class="app-cmd">tandem-app service install</code>` : nothing}</dd>
+        <dt>Updates</dt><dd data-updates=${up.behind}><span class=${up.mixed ? 'warn-ink' : ''}>${up.text}</span></dd>
+      </dl>
+      ${nodes.length ? html`<div class="app-acts"><a class="btn" href="#/sparks?update=1" data-act="update-fleet">Update fleet…</a></div>` : nothing}
+    </section>`;
+  }
+
+  private async savePassword(): Promise<void> {
+    const p = this.app?.password;
+    if (!p || this.busy) return;
+    const bad = passwordError(p, this.pw);
+    if (bad) {
+      this.msg = { ...this.msg, pw: '', pwErr: bad };
+      return;
+    }
+    this.busy = 'pw';
+    this.msg = { ...this.msg, pw: '', pwErr: '' };
+    try {
+      const was = p.password;
+      await fleet.setPassword({ ...(p.set ? { current: this.pw.current } : {}), password: this.pw.next });
+      this.pw = { current: '', next: '', again: '' };
+      this.pwShow = false;
+      this.msg = { ...this.msg, pw: was ? 'Changed. Every other browser is signed out; this one stays signed in.' : 'Set. Changes from other devices need it from now on; this browser is signed in.' };
+      window.dispatchEvent(new Event('qse-signed-in'));
+    } catch (e) {
+      if (!(await this.refused(e, 'pw'))) this.msg = { ...this.msg, pwErr: describeError(e).message };
+    } finally {
+      this.busy = '';
+      void this.appPoller?.refresh();
+    }
+  }
+
+  private async dropPassword(): Promise<void> {
+    if (this.busy) return;
+    if (!this.pw.current) {
+      this.msg = { ...this.msg, pwErr: 'Your current password, or the admin token, first.' };
+      return;
+    }
+    this.busy = 'pw-drop';
+    this.msg = { ...this.msg, pw: '', pwErr: '' };
+    try {
+      const after = await fleet.removePassword(this.pw.current);
+      this.pw = { current: '', next: '', again: '' };
+      this.pwDrop = false;
+      this.msg = { ...this.msg, pw: after.set ? 'Removed. The admin token still protects the fleet; every other browser is signed out.' : 'Removed. Anyone who opens this page can change the fleet again.' };
+      window.dispatchEvent(new Event('qse-signed-in'));
+    } catch (e) {
+      if (!(await this.refused(e, 'pw'))) this.msg = { ...this.msg, pwErr: describeError(e).message };
+    } finally {
+      this.busy = '';
+      void this.appPoller?.refresh();
+    }
+  }
+
+  private pwInput(key: 'current' | 'next' | 'again', label: string, auto: string, extra: TemplateResult | typeof nothing = nothing): TemplateResult {
+    return html`<label class="field"><span>${label}</span><span class="app-pw"><input type=${this.pwShow && key !== 'current' ? 'text' : 'password'} data-in=${`pw-${key}`} autocomplete=${auto} spellcheck="false" .value=${this.pw[key]} @input=${(e: Event) => ((this.pw = { ...this.pw, [key]: (e.target as HTMLInputElement).value }), (this.msg = { ...this.msg, pwErr: '' }))} />${extra}</span></label>`;
+  }
+
+  private passwordPanel(a: AppView): TemplateResult {
+    const p = a.password;
+    const st = passwordStatus(p);
+    const blocked = passwordBlocked(p);
+    const gen = html`<button type="button" class="btn btn-sm" data-act="pw-gen" @click=${() => {
+      const v = newPassword();
+      this.pw = { ...this.pw, next: v, again: v };
+      this.pwShow = true;
+    }}>Generate</button>`;
+    return html`<section class="panel" data-panel="password">
+      <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">Admin password</h2><p class="panel-sub">Changes from another device need it: node actions, deployments, Setup Guide writes, weights, imports and these settings. Reading needs none.</p></div></header>
+      <div class="app-pw-state" data-password=${p.set ? (p.password ? 'set' : 'token') : 'none'}><span class="app-state is-${st.tone}">${p.set ? '● Protected' : '○ Open'}</span><b>${st.title}</b><span class="small muted">${st.sub}</span></div>
+      ${blocked
+        ? html`<p class="small warn-ink" data-password-blocked>${blocked}</p>`
+        : html`<form class="app-form app-pw-form" @submit=${(e: Event) => (e.preventDefault(), this.pwDrop ? void this.dropPassword() : void this.savePassword())}>
+            ${p.set ? this.pwInput('current', 'Current password or admin token', 'current-password') : nothing}
+            ${this.pwDrop ? nothing : this.pwInput('next', p.password ? 'New password' : 'Password', 'new-password', gen)}
+            ${this.pwDrop ? nothing : this.pwInput('again', 'Again', 'new-password', html`<button type="button" class="btn btn-sm btn-ghost" data-act="pw-show" aria-pressed=${this.pwShow} @click=${() => (this.pwShow = !this.pwShow)}>${this.pwShow ? 'Hide' : 'Show'}</button>`)}
+            ${this.pwDrop
+              ? html`<button type="submit" class="btn app-danger" data-act="pw-remove-go" ?disabled=${this.busy === 'pw-drop'}>${this.busy === 'pw-drop' ? 'Removing…' : 'Remove the password'}</button>`
+              : html`<button type="submit" class="btn btn-primary" data-act="pw-save" ?disabled=${this.busy === 'pw'}>${this.busy === 'pw' ? 'Saving…' : p.password ? 'Change password' : 'Set password'}</button>`}
+          </form>
+          ${this.pwDrop ? html`<p class="small warn-ink" data-remove-warning>${p.token ? 'The admin token in the env file keeps protecting the fleet.' : 'With no password, anyone who opens this page can change the fleet.'}</p>` : nothing}
+          <div class="app-acts">
+            ${p.password ? html`<button type="button" class="btn btn-ghost btn-sm" data-act="pw-remove" @click=${() => ((this.pwDrop = !this.pwDrop), (this.msg = { ...this.msg, pwErr: '' }))}>${this.pwDrop ? 'Keep the password' : 'Remove the password…'}</button>` : nothing}
+          </div>`}
+      <p class="xs faint">${p.min_length} to ${p.max_length} characters, kept as a salted hash on the controller (never the password). Setting or changing it signs out every other browser. Lost it? Run <code class="app-cmd">tandem-app password set</code> on the controller’s machine.</p>
+      ${this.signIn === 'pw' ? signInCard('Password changes') : nothing}
+      ${this.msg.pw ? html`<p class="small ok-ink" role="status" data-password-done>${this.msg.pw}</p>` : nothing}
+      ${this.msg.pwErr ? html`<p class="small err-ink" role="alert" data-password-error>${this.msg.pwErr}</p>` : nothing}
+    </section>`;
+  }
+
+  private async permAction(r: PermRow): Promise<void> {
+    if (r.action?.kind === 'browser') {
+      if (typeof Notification !== 'undefined') await Notification.requestPermission();
+      this.notify = browserNotify();
+      return;
+    }
+    this.busy = `perm-${r.id}`;
+    try {
+      this.app = await fleet.checkLan();
+    } catch (e) {
+      if (!(await this.refused(e, 'perm'))) this.msg = { ...this.msg, perm: describeError(e).message };
+    } finally {
+      this.busy = '';
+    }
+  }
+
+  private permPanel(a: AppView): TemplateResult {
+    const rows = permRows(a.permissions, this.notify);
+    return html`<section class="panel" data-panel="permissions">
+      <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">Permissions</h2><p class="panel-sub">${a.platform === 'mac' ? 'What this Mac lets the controller do. Each is asked when it is first needed; a denial has a way around it.' : 'The controller runs on Linux: most of these do not apply here.'}</p></div></header>
+      <ul class="app-perms">
+        ${rows.map(
+          (r) => html`<li class="app-perm ${r.applies ? '' : 'is-na'}" data-perm=${r.id} data-state=${r.badge}>
+            <div class="app-perm-head"><b>${r.title}</b><span class="app-state is-${r.tone}">${r.badge}</span></div>
+            <p class="small">${r.why}</p>
+            <p class="small muted">${r.detail}</p>
+            ${r.files.length ? html`<ul class="app-files">${r.files.map((f) => html`<li class="xs" data-file-state=${f.state}><span class=${f.state === 'ok' ? 'ok-ink' : 'err-ink'} aria-hidden="true">${f.state === 'ok' ? '✓' : '⚠'}</span> ${f.what} <code>${f.path}</code> ${f.mode ?? ''}</li>`)}</ul>` : nothing}
+            ${r.fallback ? html`<p class="small app-fallback" data-fallback>${r.fallback.startsWith('chmod ') ? html`Fix: <code class="app-cmd">${r.fallback}</code>` : html`Way around: ${r.fallback}`}</p>` : nothing}
+            ${r.settings && r.tone !== 'ok' ? html`<p class="xs muted">Turn it on in ${r.settings}.</p>` : nothing}
+            ${r.action ? html`<div><button type="button" class="btn btn-sm" data-act=${`perm-${r.id}`} ?disabled=${this.busy === `perm-${r.id}`} @click=${() => void this.permAction(r)}>${this.busy === `perm-${r.id}` ? 'Checking…' : r.action.label}</button></div>` : nothing}
+          </li>`,
+        )}
+      </ul>
+      ${this.signIn === 'perm' ? signInCard('Checking a permission') : nothing}
+      ${this.msg.perm ? html`<p class="small err-ink">${this.msg.perm}</p>` : nothing}
+    </section>`;
+  }
+
+  private async exportFile(): Promise<void> {
+    this.busy = 'export';
+    this.msg = { ...this.msg, cfg: '', cfgErr: '' };
+    try {
+      const doc = await fleet.exportConfig();
+      const url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = exportName(new Date());
+      this.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      this.msg = { ...this.msg, cfg: `Exported ${doc.nodes.length} Spark${doc.nodes.length === 1 ? '' : 's'}, ${doc.deployments.length} deployment${doc.deployments.length === 1 ? '' : 's'}, ${doc.rules.length} rules, ${doc.layouts.length} layout${doc.layouts.length === 1 ? '' : 's'}.` };
+    } catch (e) {
+      if (!(await this.refused(e, 'cfg'))) this.msg = { ...this.msg, cfgErr: describeError(e).message };
+    } finally {
+      this.busy = '';
+    }
+  }
+
+  private async pickFile(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = '';
+    if (!f) return;
+    this.msg = { ...this.msg, cfg: '', cfgErr: '' };
+    const got = readConfig(f.size > 4 * 1024 * 1024 ? '' : await f.text(), f.size);
+    if ('error' in got) {
+      this.msg = { ...this.msg, cfgErr: got.error };
+      return;
+    }
+    this.file = { name: f.name, doc: got.doc };
+    this.mode = 'merge';
+    this.iplan = null;
+    void this.updateComplete.then(() => this.importDialog?.showModal());
+    void this.readImport();
+  }
+
+  private async readImport(): Promise<void> {
+    if (!this.file) return;
+    this.busy = 'iplan';
+    this.msg = { ...this.msg, imp: '' };
+    try {
+      this.iplan = await fleet.importPlan(this.file.doc, this.mode);
+    } catch (e) {
+      if (!(await this.refused(e, 'import'))) this.msg = { ...this.msg, imp: describeError(e).message };
+    } finally {
+      this.busy = '';
+    }
+  }
+
+  private async applyImport(): Promise<void> {
+    const p = this.iplan;
+    if (!this.file || !p?.confirm || this.busy) return;
+    this.busy = 'iapply';
+    try {
+      const r = await fleet.importApply(this.file.doc, this.mode, p.confirm);
+      this.msg = { ...this.msg, cfg: resultWords(r), cfgErr: '' };
+      this.importDialog?.close();
+      refreshFleet();
+    } catch (e) {
+      if (!(await this.refused(e, 'import'))) this.msg = { ...this.msg, imp: describeError(e).message };
+      void this.readImport();
+    } finally {
+      this.busy = '';
+    }
+  }
+
+  private configPanel(a: AppView): TemplateResult {
+    return html`<section class="panel" data-panel="config">
+      <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">Fleet configuration</h2><p class="panel-sub">The registry as a file: the Sparks with their names and colours, the deployments, the alert rules, the layouts. Keep it, or bring it into this controller again.</p></div></header>
+      <details class="app-excluded"><summary class="small">Secrets stay out of the file</summary><ul class="small muted">${a.export.excluded.map((x) => html`<li>${x}</li>`)}</ul><p class="xs muted">To move the controller with its keys, use Move or Take the fleet above: that export is sealed to the other controller.</p></details>
+      <div class="app-acts">
+        <button type="button" class="btn" data-act="export" ?disabled=${this.busy === 'export'} @click=${() => void this.exportFile()}>${this.busy === 'export' ? 'Exporting…' : 'Export file'}</button>
+        <label class="btn" data-act="import">Import file…<input type="file" accept="application/json,.json" data-in="import-file" class="app-file" @change=${(e: Event) => void this.pickFile(e)} /></label>
+      </div>
+      <p class="xs faint">An import shows what it adds, changes and removes first. It never brings keys or trust: a Spark it adds waits to be paired, a deployment it adds waits stopped.</p>
+      ${this.signIn === 'cfg' ? signInCard('Exporting the fleet') : nothing}
+      ${this.msg.cfg ? html`<p class="small ok-ink" role="status" data-config-done>${this.msg.cfg}</p>` : nothing}
+      ${this.msg.cfgErr ? html`<p class="small err-ink" role="alert" data-config-error>${this.msg.cfgErr}</p>` : nothing}
+    </section>`;
+  }
+
+  private importBody(): TemplateResult {
+    const p = this.iplan;
+    const from = p?.from;
+    const modes: [ImportMode, string, string][] = [
+      ['merge', 'Merge', 'adds and changes; removes nothing'],
+      ['replace', 'Replace', 'also removes what the file lacks, where that is safe'],
+    ];
+    return html`<fieldset class="app-modes" role="radiogroup" aria-label="How to import">
+        ${modes.map(([m, t, sub]) => html`<label class="app-mode ${this.mode === m ? 'is-on' : ''}"><input type="radio" name="imp-mode" data-mode=${m} .checked=${this.mode === m} @change=${() => ((this.mode = m), void this.readImport())} /><b>${t}</b><span class="xs muted">${sub}</span></label>`)}
+      </fieldset>
+      ${!p
+        ? this.msg.imp ? nothing : html`<div class="skeleton" style="height:120px"></div>`
+        : html`<p class="small" data-import-from>${from?.same_controller ? 'This controller’s own export' : `Exported from ${from?.name ?? 'another controller'}`}${from?.exported_at ? ` on ${new Date(from.exported_at * 1000).toLocaleString()}` : ''}${from?.release ? ` (TandemLLM ${from.release})` : ''}.</p>
+          <p class="small"><b data-import-summary>${planSummary(p.counts)}</b></p>
+          <p class="xs muted" data-import-identity>Stays: ${p.identity}.</p>
+          ${p.blocked ? html`<p class="act-blocked warn-ink" data-import-blocked>⚠ ${p.blocked}</p>` : nothing}
+          ${importGroups(p).map((g) => {
+            const list = html`<ul class="app-imp">${g.items.map((i) => html`<li data-import=${`${i.kind}:${i.id}`} data-op=${i.op}><span class="xs muted">${kindWord(i.kind)}</span> <b>${i.label}</b>${i.fields.length ? html` <span class="xs muted">(${i.fields.join(', ')})</span>` : nothing}${i.detail ? html`<span class="xs ${i.op === 'conflict' ? 'warn-ink' : 'muted'}"> · ${i.detail}</span>` : nothing}</li>`)}</ul>`;
+            return g.op === 'keep'
+              ? html`<details class="act-sec"><summary class="eyebrow">${g.title} (${g.items.length})</summary>${list}</details>`
+              : html`<section class="act-sec" data-group=${g.op}><h3 class="eyebrow">${g.title} (${g.items.length})</h3>${list}</section>`;
+          })}`}
+      ${this.signIn === 'import' ? signInCard('Importing') : nothing}
+      ${this.msg.imp ? html`<p class="small err-ink" role="alert" data-import-error>${this.msg.imp}</p>` : nothing}`;
+  }
+
   render() {
     const v = this.view;
-    const head = html`<header class="page-head" data-page="app"><div class="eyebrow">Settings</div><h1>App</h1><p class="page-sub">Where TandemApp’s controller runs, and its API.</p></header>`;
+    const head = html`<header class="page-head" data-page="app"><div class="eyebrow">Settings</div><h1>App</h1><p class="page-sub">Where TandemApp’s controller runs, its API, who may change the fleet, and its configuration.</p></header>`;
     if (!v) return html`${head}${this.loadErr ? html`<p class="page-soon">${this.loadErr}</p>` : html`<div class="skeleton" style="height:240px"></div>`}`;
     const p = this.plan;
+    const a = this.app;
+    const ip = this.iplan;
     return html`${head}
       ${v.moved_to ? this.moved(v.moved_to) : nothing}
       ${this.hostPanel(v)}
       ${this.takePanel(v)}
+      ${a ? html`${this.servicePanel(a)}${this.passwordPanel(a)}${this.permPanel(a)}${this.configPanel(a)}` : this.msg.app ? html`<p class="small err-ink">${this.msg.app}</p>` : nothing}
+      <dialog class="act-dialog" aria-labelledby="import-title" data-dialog="import" @close=${() => ((this.iplan = null), (this.file = null), (this.msg = { ...this.msg, imp: '' }))}>
+        <form method="dialog" class="act-body" @submit=${(e: Event) => (e.preventDefault(), void this.applyImport())}>
+          <header class="act-head"><h2 id="import-title">Import ${this.file?.name ?? 'a file'}</h2></header>
+          ${this.importBody()}
+          <footer class="act-foot">
+            <button type="button" class="btn btn-ghost" data-act="import-cancel" @click=${() => this.importDialog?.close()}>${ip && !ip.allowed ? 'Close' : 'Cancel'}</button>
+            ${ip?.allowed ? html`<button type="submit" class="btn btn-primary" data-act="import-go" ?disabled=${this.busy === 'iapply' || this.busy === 'iplan'}>${this.busy === 'iapply' ? 'Importing…' : applyLabel(ip.counts)}</button>` : nothing}
+          </footer>
+        </form>
+      </dialog>
       <dialog class="act-dialog" aria-labelledby="move-title" data-dialog="move" @close=${() => (this.plan = null)}>
         <form method="dialog" class="act-body" @submit=${(e: Event) => (e.preventDefault(), void this.move())}>
           <header class="act-head"><h2 id="move-title">${p?.title ?? 'Move the controller'}</h2></header>

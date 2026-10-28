@@ -1101,6 +1101,104 @@ export interface MovePlan {
   expires_at: number | null;
 }
 
+// ---- App settings (6.3b, /v1/fleet/app*: proxy/appsettings.py, proxy/adminpw.py) -------------------
+
+/** A permission the controller can read for its machine (concept A14), `unknown` where it cannot. */
+export interface AppPermission {
+  id: 'local_network' | 'keys' | 'notifications' | 'node_sudo';
+  title: string;
+  /** false: it does not apply on this platform (Linux has no Local Network prompt, no Keychain here) */
+  applies: boolean;
+  state: 'granted' | 'lan_denied' | 'not_asked' | 'not_applicable' | 'unknown' | 'file' | 'too_open' | 'keychain' | 'in_browser' | 'per_action';
+  why: string;
+  detail: string;
+  fallback: string | null;
+  action: { kind: 'check' | 'browser'; label: string } | null;
+  /** where the user turns it on (macOS) */
+  settings?: string;
+  files?: { what: string; path: string; mode: string | null; state: 'ok' | 'too_open' | 'missing' | 'unknown' }[];
+}
+
+/** How the controller process runs: a systemd user unit, a launchd agent, or from a terminal. */
+export interface AppService {
+  manager: 'systemd' | 'launchd' | 'none' | 'unknown';
+  unit: string | null;
+  starts_at_boot: boolean | null;
+  restarts: boolean | null;
+  linger: boolean | null;
+  text: string;
+}
+
+/** The admin password's state (never the password): one set here, the env file's token, or both. */
+export interface PasswordState {
+  set: boolean;
+  password: boolean;
+  token: boolean;
+  set_at: number | null;
+  min_length: number;
+  max_length: number;
+  /** the request comes from the controller's own machine (the first password is set from there) */
+  this_machine: boolean;
+}
+
+export interface AppView {
+  contract_version: string;
+  platform: 'mac' | 'linux';
+  release: string | null;
+  permissions: AppPermission[];
+  service: AppService;
+  export: { kind: 'tandemapp-fleet-config'; version: 1; secrets: 'excluded'; excluded: string[] };
+  password: PasswordState;
+}
+
+/** GET /v1/fleet/app/export: the fleet's configuration as a file, secrets left out. */
+export interface FleetConfigFile {
+  kind: 'tandemapp-fleet-config';
+  version: 1;
+  release: string | null;
+  exported_at: number;
+  from: { name: string | null; fingerprint: string | null; node: string | null };
+  secrets: 'excluded';
+  excluded: string[];
+  nodes: {
+    id: string; alias: string; colour: number; icon: FleetNode['icon']; tags: string[]; class: string; hw: string | null; address: string | null; transport: string;
+    lease_end_ms: number | null; cost_per_hour: number | null; controller_host: boolean; paired: boolean; pin_sha256: string | null;
+  }[];
+  deployments: { id: string; state: 'serving' | 'stopped'; name: string; model: string; pack: string; type: DeploymentType; members: { node: string | null; engine?: string | null; backend?: string | null; model?: string | null }[]; stages: unknown[]; options: Record<string, unknown> }[];
+  rules: { id: string; enabled: boolean; notify: ('app' | 'system')[]; threshold: number | null; for_s: number; scope: string }[];
+  layouts: { page: string; device: LayoutDevice; doc: Record<string, unknown> }[];
+  settings: Record<string, unknown>;
+}
+
+export type ImportMode = 'merge' | 'replace';
+export interface ImportItem {
+  kind: 'node' | 'deployment' | 'rule' | 'layout' | 'setting';
+  id: string;
+  label: string;
+  op: 'add' | 'change' | 'remove' | 'keep' | 'conflict';
+  detail: string | null;
+  fields: string[];
+}
+export interface ImportPlan {
+  contract_version: string;
+  mode: ImportMode;
+  from: { name: string | null; fingerprint: string | null; exported_at: number | null; release: string | null; same_controller: boolean };
+  identity: string;
+  items: ImportItem[];
+  counts: Record<'add' | 'change' | 'remove' | 'keep' | 'conflict', number>;
+  allowed: boolean;
+  blocked: string | null;
+  confirm: string | null;
+  expires_at: number | null;
+}
+export interface ImportResult {
+  contract_version: string;
+  mode: ImportMode;
+  applied: { add: number; change: number; remove: number };
+  skipped: number;
+  items: ImportItem[];
+}
+
 export const fleet = {
   nodes: () => request<{ contract_version: string; nodes: FleetNode[] }>('/v1/fleet/nodes'),
   node: (id: string) => request<FleetNode>(`/v1/fleet/nodes/${encodeURIComponent(id)}`),
@@ -1225,6 +1323,14 @@ export const fleet = {
   movePlan: (to: string, port?: number) => request<MovePlan>(`/v1/fleet/controller/move?to=${encodeURIComponent(to)}${port ? `&port=${port}` : ''}`),
   move: (body: { to: string; confirm: string; port?: number; password?: string }) => request<MoveJob>('/v1/fleet/controller/move', post(body)),
   take: (body: { url: string; password?: string }) => request<MoveJob>('/v1/fleet/controller/take', post(body)),
+  // 6.3b: App settings
+  app: () => request<AppView>('/v1/fleet/app'),
+  checkLan: () => request<AppView>('/v1/fleet/app/permissions/local-network', post({})),
+  setPassword: (body: { current?: string; password: string }) => request<PasswordState & { contract_version: string }>('/v1/fleet/app/password', { ...post(body), method: 'PUT' }),
+  removePassword: (current: string) => request<PasswordState & { contract_version: string }>('/v1/fleet/app/password', { ...post({ current }), method: 'DELETE' }),
+  exportConfig: () => request<FleetConfigFile>('/v1/fleet/app/export'),
+  importPlan: (config: unknown, mode: ImportMode) => request<ImportPlan>('/v1/fleet/app/import', post({ config, mode })),
+  importApply: (config: unknown, mode: ImportMode, confirm: string) => request<ImportResult>('/v1/fleet/app/import/apply', post({ config, mode, confirm })),
   session: () => request<FleetSession>('/v1/fleet/session'),
   signIn: (password: string) => request<void>('/v1/fleet/session', post({ token: password }), 'none'),
   signOut: () => request<void>('/v1/fleet/session', { method: 'DELETE' }, 'none'),

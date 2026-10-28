@@ -70,6 +70,17 @@ export class MockDiscovery {
     this.lan = o.onMac ? 'not_asked' : 'not_needed';
   }
 
+  /** the Local Network state (App settings, 6.3b) */
+  get lanState(): LocalNetwork {
+    return this.lan;
+  }
+
+  /** App settings' check: one browse, macOS answers as `lanMode` says */
+  checkLan(): LocalNetwork {
+    if (this.o.onMac) this.lan = this.lanMode === 'deny' ? 'denied' : 'granted';
+    return this.lan;
+  }
+
   private get iface() {
     return { name: this.o.onMac ? 'en0' : 'enP7s7', address: this.o.host, subnet: MOCK_LAN.subnet };
   }

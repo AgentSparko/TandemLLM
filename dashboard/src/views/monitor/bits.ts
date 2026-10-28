@@ -202,7 +202,7 @@ export function signInCard(what: string, open = true): TemplateResult {
   return html`<details class="mon-signin-box" ?open=${open}><summary class="small warn-ink">⚠ ${what} need TandemApp’s admin password: sign in</summary><qse-setup-signin
     class="mon-signin"
     .signIn=${(p: string) => fleet.signIn(p)}
-    .texts=${{ title: 'Sign in to TandemApp’s controller', body: `${what} need TandemApp’s admin password: the TANDEM_ADMIN_TOKEN its controller runs with. Reading needs none.`, kept: 'The session lasts 12 hours in this browser.' }}
+    .texts=${{ title: 'Sign in to TandemApp’s controller', body: `${what} need TandemApp’s admin password: the one set in App settings, or the TANDEM_ADMIN_TOKEN its controller runs with. Reading needs none.`, kept: 'The session stays in this browser until you sign out or the password changes.' }}
   ></qse-setup-signin></details>`;
 }
 

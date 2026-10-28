@@ -894,6 +894,195 @@ qse-fleet-page .drain-ink,
   font-size: var(--fs-sm);
 }
 
+/* ---- App settings: this controller, the password, the permissions, the file (6.3b) ------------- */
+.app-dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.app-dl dt {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.app-dl dd {
+  margin: 0;
+}
+.app-cmd {
+  padding: 1px 6px;
+  border-radius: var(--radius);
+  background: var(--bg-inset);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+.app-state {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--bg-inset);
+  color: var(--ink-3);
+}
+.app-state.is-ok {
+  background: var(--ok-wash);
+  color: var(--ok);
+}
+.app-state.is-warn {
+  background: var(--warn-wash);
+  color: var(--warn-ink);
+}
+.app-state.is-err {
+  background: color-mix(in srgb, var(--err) 14%, transparent);
+  color: var(--err);
+}
+.app-pw-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin-bottom: 12px;
+}
+.app-pw-state .muted {
+  flex-basis: 100%;
+}
+.app-pw-form {
+  margin-bottom: 8px;
+}
+.app-danger {
+  border-color: var(--err);
+  color: var(--err);
+  background: transparent;
+}
+.app-danger:hover:not(:disabled) {
+  background: var(--err);
+  color: #fff;
+}
+.app-perms {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.app-perm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-3);
+  min-width: 0;
+}
+.app-perm p {
+  margin: 0;
+}
+.app-perm.is-na {
+  background: transparent;
+  border-style: dashed;
+}
+.app-perm-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.app-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+.app-fallback {
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid var(--cobalt);
+}
+.app-excluded summary {
+  cursor: pointer;
+}
+.app-excluded ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+label.btn {
+  position: relative;
+  cursor: pointer;
+}
+.app-file {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+label.btn:focus-within {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+}
+.app-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.app-mode {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.app-mode.is-on {
+  border-color: var(--cobalt);
+  box-shadow: 0 0 0 1px var(--cobalt);
+}
+.app-mode input {
+  grid-row: span 2;
+  margin-top: 3px;
+}
+.app-imp {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+@container mon (max-width: 640px) {
+  .app-perms {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .app-dl dd {
+    margin-bottom: 8px;
+  }
+  .app-pw-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-pw-form > .btn {
+    justify-content: center;
+  }
+}
+
 /* a modal sits over the whole window: the window's width decides, not the page column's */
 @media (max-width: 640px) {
   .sp-head-acts,

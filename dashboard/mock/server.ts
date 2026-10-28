@@ -72,6 +72,12 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
   /** AU1: an admin password is set on this mock server (the login on with it) */
   let password = false;
   let fleetPassword = false;
+  /** 6.3b: the admin password set in App settings (beside the token); `notHere`: the page is not on
+   *  the controller's machine (the first password is set from there only) */
+  let appPassword: string | null = null;
+  let appPasswordAt: number | null = null;
+  let notHere = false;
+  const ctlPassword = () => fleetPassword || appPassword !== null;
   let dropEveryMs = 30_000;
   const sessions = new Map<string, Session>();
   const startedAt = now0 - 6 * 3600 * 1000 - 1677 * 1000;
@@ -595,6 +601,9 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
           mode = String(b.mode ?? 'ok');
           password = b.password === true;
           fleetPassword = b.fleetPassword === true;
+          appPassword = typeof b.appPassword === 'string' ? b.appPassword : null;
+          appPasswordAt = appPassword === null ? null : Math.floor(Date.now() / 1000);
+          notHere = b.remote === true;
           if (mode.startsWith('drop:')) {
             dropEveryMs = Number(mode.slice(5)) * 1000;
             mode = 'drop';
@@ -603,7 +612,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
           if (typeof b.draining === 'boolean') draining = b.draining;
           if (typeof b.waiting === 'number') state.waiting = b.waiting;
         }
-        return json(res, 200, { mode, password, fleetPassword, draining, waiting: state.waiting, rows: full.rows.length, lastSeq: logs.lastSeq, logLines: logs.size });
+        return json(res, 200, { mode, password, fleetPassword, appPassword: appPassword !== null, remote: notHere, draining, waiting: state.waiting, rows: full.rows.length, lastSeq: logs.lastSeq, logLines: logs.size });
       }
       if (path === '/__mock/log' && req.method === 'POST') {
         // tests: inject N lines
@@ -758,14 +767,14 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         if (req.method === 'GET') {
           const c = cookies(req).qse_dash;
           const s = c ? sessions.get(c) : null;
-          const set = password || fleetPassword;
+          const set = password || ctlPassword();
           const signed = !set || authed(req);
           return json(res, 200, { contract_version: '1.0', password_set: set, authenticated: signed, expires_at: set && signed ? new Date(s?.expires ?? Date.now() + 43_200_000).toISOString().replace(/\.\d{3}Z$/, 'Z') : null });
         }
-        if (!password && !fleetPassword) return error(res, 404, 'not_found', 'no admin password is set');
+        if (!password && !ctlPassword()) return error(res, 404, 'not_found', 'no admin password is set');
         if (!password && req.method === 'POST') {
           const b = JSON.parse((await readBody(req)) || '{}');
-          if (typeof b.token !== 'string' || b.token !== TOKEN) return error(res, 401, 'unauthorized', 'token refused');
+          if (typeof b.token !== 'string' || (b.token !== TOKEN && b.token !== appPassword)) return error(res, 401, 'unauthorized', 'token refused');
           const sid = randomBytes(16).toString('hex');
           sessions.set(sid, { expires: Date.now() + 43_200_000 });
           res.writeHead(204, { 'Set-Cookie': `qse_dash=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200` });
@@ -783,7 +792,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         }
         if (req.method === 'POST') {
           const b = JSON.parse((await readBody(req)) || '{}');
-          if (typeof b.token !== 'string' || b.token !== TOKEN) {
+          if (typeof b.token !== 'string' || (b.token !== TOKEN && b.token !== appPassword)) {
             return error(res, 401, 'unauthorized', 'token refused');
           }
           const sid = randomBytes(16).toString('hex');
@@ -830,7 +839,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
       // node and deployment (mock/fleet.ts attribute); `node=` and `deployment=` filter it
       const fleetLedger = /^\/v1\/fleet\/ledger\/(summary|usage|requests)$/.exec(path);
       if (fleetLedger) {
-        if (fleetPassword && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
+        if (ctlPassword() && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
         const f = fleetFor(req);
         const from = f.ledgerStart() * 1000;
         const all = rowsFor().rows.filter((r) => r.ts_ms >= from).map((r) => ({ ...r, ...f.attribute(r.id, r.ts_ms) }));
@@ -874,12 +883,47 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
       // VIS-252: a Spark's Setup Guide through the controller, under the rule of the engine's own
       // /v1/setup (the admin password once one is set, reads too)
       const relay = /^\/v1\/fleet\/nodes\/([^/]+)\/(setup|setup-confirm)\/(.+)$/.exec(path);
-      if (relay && (fleetPassword || password) && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
+      if (relay && (ctlPassword() || password) && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
       if (relay && relay[2] === 'setup') {
         const raw = req.method === 'POST' ? await readBody(req) : '';
         const r = await fleetFor(req).setup.handle(req, res, fleetFor(req), decodeURIComponent(relay[1]), relay[3].split('/').map(decodeURIComponent), q, raw);
         if (r) json(res, r.status, r.body);
         return;
+      }
+      // ---- the admin password (6.3b, proxy/app.py _app_password): set from this machine first,
+      // then with the current one (or the token); a change ends every session, this browser gets a new one
+      if (path === '/v1/fleet/app/password') {
+        const set = () => password || ctlPassword();
+        const view = () => ({ contract_version: '1.0', set: set(), password: appPassword !== null, token: password || fleetPassword, set_at: appPasswordAt, min_length: 12, max_length: 1024, this_machine: !notHere });
+        if (req.method === 'GET') return json(res, 200, view());
+        if (req.method !== 'PUT' && req.method !== 'DELETE') return error(res, 405, 'method_not_allowed', 'the password takes GET, PUT and DELETE');
+        let b: { current?: unknown; password?: unknown } = {};
+        try {
+          b = JSON.parse((await readBody(req)) || '{}');
+        } catch {
+          return error(res, 400, 'bad_request', 'the body is not JSON');
+        }
+        if (!set() && notHere) return error(res, 401, 'unauthorized', 'no admin password is set yet: set the first one from this machine (its own browser), or run `tandem-app password set` on it');
+        if (set() && notHere && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
+        if (set() && b.current !== TOKEN && (appPassword === null || b.current !== appPassword)) return error(res, 403, 'wrong_password', 'the current password (or the admin token) is not right');
+        if (req.method === 'PUT') {
+          const pw = b.password;
+          if (typeof pw !== 'string' || pw.length < 12 || pw.length > 1024 || !pw.trim()) return error(res, 400, 'bad_request', 'the password is 12 to 1024 characters');
+          appPassword = pw;
+          appPasswordAt = Math.floor(Date.now() / 1000);
+        } else {
+          if (appPassword === null) return error(res, 409, 'conflict', password || fleetPassword ? 'no password is set here: the admin token stays, change it in the env file' : 'no admin password is set');
+          appPassword = null;
+          appPasswordAt = null;
+        }
+        sessions.clear();
+        let cookie = 'qse_dash=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0';
+        if (set()) {
+          const sid = randomBytes(16).toString('hex');
+          sessions.set(sid, { expires: Date.now() + 43_200_000 });
+          cookie = `qse_dash=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200`;
+        }
+        return json(res, 200, view(), { 'Set-Cookie': cookie });
       }
       if (path.startsWith('/v1/fleet/')) {
         const raw = req.method === 'PUT' || req.method === 'POST' || req.method === 'PATCH' ? await readBody(req) : '';
@@ -891,9 +935,13 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         }
         // SRV-731: the placement planner is a read in a POST
         const write = path.startsWith('/v1/fleet/discovery') || (req.method !== 'GET' && !(req.method === 'PUT' && path.startsWith('/v1/fleet/layouts/')) && !(req.method === 'POST' && path === '/v1/fleet/placement'));
-        if (fleetPassword && write && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
+        // 6.3b: the export (the whole registry) needs write rights; the App page's own view is a read
+        const appWrite = write || path === '/v1/fleet/app/export';
+        if (ctlPassword() && appWrite && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
         const r = fleetFor(req).handle(req.method ?? 'GET', path, q, body);
-        return json(res, r.status, r.body);
+        if (r.status === 200 && (path === '/v1/fleet/app' || path === '/v1/fleet/app/permissions/local-network'))
+          (r.body as Record<string, unknown>).password = { set: password || ctlPassword(), password: appPassword !== null, token: password || fleetPassword, set_at: appPasswordAt, min_length: 12, max_length: 1024, this_machine: !notHere };
+        return json(res, r.status, r.body, path === '/v1/fleet/app/export' && r.status === 200 ? { 'Content-Disposition': 'attachment; filename="tandemapp-fleet-config.json"' } : {});
       }
 
       const own = /^\/v1\/dashboard\/(summary|usage|requests)$/.exec(path);

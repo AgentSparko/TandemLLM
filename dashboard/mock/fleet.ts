@@ -91,6 +91,7 @@ import { MockWizard } from './addspark.ts';
 import { MockDeploy } from './deploy.ts';
 import { MockSetupRelay } from './setup-relay.ts';
 import { MockOps } from './fleetops.ts';
+import { MockApp } from './appsettings.ts';
 import { MockDiscovery, MOCK_LAN } from './discovery.ts';
 
 export const FLEET_SCENARIOS = ['fleet1', 'fleet4', 'fleet2-split', 'node-down', 'alert-thermal', 'mixed', 'empty', 'gold3', 'quad'] as const;
@@ -575,6 +576,8 @@ export class MockFleet {
   readonly deploy: MockDeploy;
   /** each Spark's Setup Guide through the controller (mock/setup-relay.ts, VIS-252) */
   readonly setup = new MockSetupRelay();
+  /** App settings: permissions, the service, the configuration file (mock/appsettings.ts, 6.3b) */
+  readonly app: MockApp;
 
   /** `now` in Unix seconds: the scenario's start */
   constructor(o: { seed?: number; scenario?: FleetScenario; now?: number } = {}) {
@@ -585,6 +588,7 @@ export class MockFleet {
     this.wizard = new MockWizard(this);
     this.ops = new MockOps(this);
     this.deploy = new MockDeploy(this);
+    this.app = new MockApp(this);
     if (this.scenario === 'mixed') this.ops.seed('r3', '0.15.1');
     const seed = o.seed ?? 42;
     this.ph = (key) => hash(`${seed}:${key}`);
@@ -1035,6 +1039,38 @@ export class MockFleet {
     return this.nodes(now).find((x) => x.id === id)!;
   }
 
+  /** App settings' import (6.3b): a node the file has and this fleet not, added unpaired at its
+   *  address (off until Add Spark pairs it); its colour when no node has it, else the next free. */
+  importNode(n: { id: string; alias: string; colour?: number; icon?: FleetNode['icon']; tags?: string[]; address: string }, now: number): void {
+    const used = new Set(this.f.nodes.map((x) => x.node.colour));
+    const colour = n.colour != null && !used.has(n.colour) ? n.colour : ([1, 2, 3, 4, 5, 6, 7, 8].find((c) => !used.has(c)) ?? 1);
+    const tmpl = this.f.nodes[0];
+    this.f.nodes.push({
+      ...tmpl,
+      node: {
+        ...tmpl.node, id: n.id, alias: n.alias, colour, icon: n.icon ?? 'desk', tags: n.tags ?? [], owned: true, transport: 'lan', address: `${n.address}:7700`, since: now, lease_end: null, cost_per_hour: null,
+        inventory: { ...tmpl.node.inventory, serial: `MOCK-${n.address}` }, pairing: { state: 'unpaired', via: null, fingerprint: null, paired_at: null, host_key: null },
+      },
+      curve: n.id, busyFrom: Number.POSITIVE_INFINITY, heatFrom: null, throttleFrom: null, offFrom: now, fabric: false,
+    });
+    this.f.links.push({ id: `lan-${n.id}`, a: 'lan', b: n.id, kind: 'lan', speed: '10 GbE', rtt_ms: null, mtu: 1500, state: 'down', note: 'not paired' });
+  }
+
+  /** every saved layout (the export) */
+  savedLayouts(): Layout[] {
+    return [...this.layouts.values()];
+  }
+
+  /** a saved layout dropped: the page's default again (an import that replaces) */
+  dropLayout(page: string, device: LayoutDevice): void {
+    this.layouts.delete(`${page}|${device}`);
+  }
+
+  /** a rule back to its seed (an import that replaces) */
+  resetRule(id: string): void {
+    this.ruleEdits.delete(id);
+  }
+
   /** the lease rule's hours as the scenario has it */
   leaseHours(): number {
     const r = this.f.rules.find((x) => x.id === 'lease');
@@ -1274,6 +1310,7 @@ export class MockFleet {
     if (parts[0] === 'add') return this.wizard.handle(method, parts, body, nowMs);
     if (parts[0] === 'update') return this.ops.handleUpdate(method, parts, q, body, now);
     if (parts[0] === 'controller') return this.ops.handleController(method, parts, q, body, now);
+    if (parts[0] === 'app') return this.app.handle(method, parts, body, now);
     if (parts[0] === 'placement' || parts[0] === 'weights' || (parts[0] === 'deployments' && (parts.length > 1 || method !== 'GET'))) return this.deploy.handle(method, parts, q, body, now);
     if (method === 'GET' && parts[0] === 'nodes' && parts[2] === 'setup-confirm' && parts.length >= 4) return this.setup.plan(this, decodeURIComponent(parts[1]), parts.slice(3).map(decodeURIComponent).join('/'), q, now);
     if (method === 'GET' && parts.length === 1) {
