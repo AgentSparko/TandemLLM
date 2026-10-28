@@ -218,6 +218,9 @@ class Trust:
             **({"from": took.get("fingerprint")} if took else {})})
         self.fleet.log(f"[fleet] {row['alias']} ({nid}) {text}; its certificate sha256 "
                        f"{fp[:16]} pinned")
+        what = "taken over" if took else "paired"
+        self.fleet.store.add_event("node", nid, f"{row['alias']} {what} by {via}",
+                                   f"{text}; certificate sha256 {fp[:16]} pinned")
         return row
 
     def _unpin_remote(self, endpoint: str, trust: dict) -> str:
@@ -381,6 +384,9 @@ class Trust:
             "via": t.get("via"), "fingerprint": t.get("fingerprint"),
             "text": f"{row['alias']} released (node side: {side})"})
         self.fleet.log(f"[fleet] {row['alias']} ({nid}) released; node side: {side}")
+        self.fleet.store.add_event("node", nid, f"{row['alias']} released" if action == "release"
+                                   else f"{row['alias']} forgotten here",
+                                   f"node side: {side}")
         return {"contract_version": "1.0", "id": nid, "node": side}
 
 

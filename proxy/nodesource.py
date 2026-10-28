@@ -10,6 +10,8 @@ agent (SRV-725).
     local.memory()                   the unified memory split in GiB, or None
     local.logs(level, q, limit)      this box's log lines (tandem-app's, its engines'), oldest first
     local.status()                   (status, status text)
+    local.checks()                   the alert rules' inputs: MemAvailable, the fullest mount,
+                                     the GPU's clock events (proxy/fleetwatch.py)
 
 `AgentNode` is a node read through its TandemNode agent (proxy/nodeagent.py) with the same
 methods: its one-second stream feeds the fleet's rings, sample by sample at each sample's time.
@@ -69,6 +71,25 @@ KV_PARTS = ("kv_pool", "drafter_kv", "gdn_state")
 CACHE_PARTS = ("resident_prefix",)
 LEVEL_IN = {"warning": "warn"}
 LEVEL_OUT = {"warn": "warning", None: "debug"}
+# a log's HTTP access lines (server/logbuf.py: source `http`) are tagged `access` in the fleet's
+# log, so a page can leave them out
+ACCESS = "access"
+
+
+def _source(e: dict, own: str) -> str:
+    return ACCESS if e.get("source") in ("http", ACCESS) else own
+
+
+def _checks(avail_gib, fs, throttle) -> dict:
+    """{mem_avail: GiB, disk: (free %, path) of the fullest mount, throttle: [clock events]};
+    None for what the machine does not say."""
+    disk = None
+    for path, total, free in fs:
+        if total and free is not None:
+            pct = 100.0 * free / total
+            if disk is None or pct < disk[0]:
+                disk = (round(pct, 2), path)
+    return {"mem_avail": avail_gib, "disk": disk, "throttle": throttle}
 
 
 def _num(v) -> float | None:
@@ -117,6 +138,7 @@ class EngineProbe:
         self._cards_at = -CARDS_EVERY_S
         self._system: dict | None = None
         self._system_at = -math.inf
+        self.restarts = 0                        # token counter resets seen (a restart)
 
     def _get(self, path: str):
         status, body = self.fetch(self.root + path, self.key, TIMEOUT_S)
@@ -157,6 +179,8 @@ class EngineProbe:
             b = engines.value(page, "generation_tokens_total")
             if a is not None and b is not None and b >= a:       # a restart resets the counter
                 out["tps"] = round((b - a) / (now - prev[0]), 3)
+            elif a is not None and b is not None:
+                self.restarts += 1
             h = engines.hist_delta(engines.histogram(prev[1], "ttft_seconds"),
                                    engines.histogram(page, "ttft_seconds"))
             if h and h["count"] > 0:
@@ -187,6 +211,8 @@ class EngineProbe:
                     continue
                 tps = round((n - last[1]) / (t - last[0]), 3) if last is not None and \
                     n >= last[1] else None                       # a restart counts from 0 again
+                if last is not None and n < last[1]:
+                    self.restarts += 1
                 out.append((t, {"tps": tps, "req": (_num(x.get("running")) or 0)
                                 + (_num(x.get("waiting")) or 0), "ttft": None}))
                 last = (t, n)
@@ -265,7 +291,7 @@ class EngineProbe:
         except Exception:                                            # noqa: BLE001
             lines = None
         return [{"t": _epoch(e.get("ts")), "level": LEVEL_IN.get(e.get("level"), e.get("level")),
-                 "source": "engine", "msg": str(e.get("msg") or "")}
+                 "source": _source(e, "engine"), "msg": str(e.get("msg") or "")}
                 for e in lines or [] if isinstance(e, dict)]
 
 
@@ -544,6 +570,14 @@ class LocalNode:
             out.append(f"{n} ({speed + ', ' if speed else ''}{state})")
         return " · ".join(out) or None
 
+    def checks(self) -> dict:
+        """The alert rules' inputs from the newest host reading (no clock events in-process)."""
+        h = self._last_host or self.host() or {}
+        avail = _num((h.get("memory") or {}).get("available_bytes"))
+        return _checks(None if avail is None else round(avail / GIB, 2),
+                       [(f.get("path"), _num(f.get("total_bytes")), _num(f.get("free_bytes")))
+                        for f in h.get("fs") or [] if isinstance(f, dict)], None)
+
     def usable(self) -> float | None:
         """The machine's memory, GiB (MemTotal: on a GB10 the unified pool)."""
         total = _num(((self._last_host or self.host() or {}).get("memory") or {})
@@ -591,7 +625,7 @@ class LocalNode:
                                        limit=limit):
                 out.append({"t": _epoch(e.get("ts")), "level": LEVEL_IN.get(e["level"],
                                                                             e["level"]),
-                            "source": "gateway", "msg": e["msg"]})
+                            "source": _source(e, "gateway"), "msg": e["msg"]})
         for p in self.engines():
             out += p.logs(level, q, limit)
         out = [x for x in out if x["t"] is not None and x["level"] in
@@ -832,6 +866,21 @@ class AgentNode:
             m = (self._latest or {}).get("memory") or {}
         return _num(m.get("total"))
 
+    def checks(self) -> dict:
+        """The alert rules' inputs from the newest sample of the stream (none while it is stale:
+        an off node's last figures are no reading)."""
+        with self._lock:
+            s = self._latest if self._seen is not None and \
+                self.clock() - self._seen <= STALE_S else None
+        if s is None:
+            return _checks(None, [], None)
+        gpus = [g for g in s.get("gpus") or [] if isinstance(g, dict)]
+        said = [g for g in gpus if "throttle" in g or "throttled" in g]
+        return _checks(_num((s.get("memory") or {}).get("available")),
+                       [(f.get("path"), _num(f.get("total_gb")), _num(f.get("free_gb")))
+                        for f in (s.get("disks") or {}).get("fs") or [] if isinstance(f, dict)],
+                       [x for g in said for x in g.get("throttle") or []] if said else None)
+
     def memory(self, now: float) -> dict | None:
         with self._lock:
             m = (self._latest or {}).get("memory") or {}
@@ -857,14 +906,14 @@ class AgentNode:
             for e in doc.get("lines") or []:
                 if isinstance(e, dict) and _num(e.get("t")) is not None:
                     out.append({"t": e["t"], "level": e.get("level"),
-                                "source": "agent" if e.get("source") == "agent" else "engine",
-                                "msg": str(e.get("msg") or "")})
+                                "source": e["source"] if e.get("source") in ("agent", ACCESS)
+                                else "engine", "msg": str(e.get("msg") or "")})
         if self.logbuf is not None:
             for e in self.logbuf.lines(level=LEVEL_OUT.get(level, level), grep=q or None,
                                        limit=limit):
                 out.append({"t": _epoch(e.get("ts")), "level": LEVEL_IN.get(e["level"],
                                                                             e["level"]),
-                            "source": "gateway", "msg": e["msg"]})
+                            "source": _source(e, "gateway"), "msg": e["msg"]})
         out = [x for x in out if x["t"] is not None and x["level"] in
                ("debug", "info", "warn", "error")]
         out.sort(key=lambda x: x["t"])
@@ -937,6 +986,9 @@ class Unreachable:
 
     def memory(self, now: float) -> None:
         return None
+
+    def checks(self) -> dict:
+        return _checks(None, [], None)
 
     def logs(self, level, q, limit) -> list[dict]:
         return []

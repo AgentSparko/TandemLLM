@@ -761,12 +761,27 @@ def build(args, env=None) -> Service:
         version=lambda: STATE.get("version", ""), logbuf=logbuf.BUFFER,
         key=lambda bid: svc.cfg.key_for(bid)),
         port=getattr(args, "port", None), bind=getattr(args, "host", "127.0.0.1"),
-        log=lambda m: print(m, flush=True), agent=node_agent(env))
+        log=lambda m: print(m, flush=True), agent=node_agent(env),
+        store=fleet_store(args, cfg))
     # the sampler: it sleeps while nothing is in flight (the live stream and the parallel view's
     # once-a-second sample; before 0.3.32 the standalone proxy never started it)
     live.start()
     STATE.pop("dashboard_api", None)
     return svc
+
+
+def fleet_store(args, cfg):
+    """The fleet's store (proxy/fleetstore.py): `--fleet-store` beside (fleet.sqlite3 next to the
+    config database), a path, or off (memory only)."""
+    from proxy import fleetstore
+    where = getattr(args, "fleet_store", "off") or "off"
+    if where == "beside":
+        where = os.path.join(os.path.dirname(cfg.path), "fleet.sqlite3")
+    days = getattr(args, "fleet_retention_days", fleetstore.RETENTION_DAYS)
+    if days < fleetstore.MIN_RETENTION_DAYS:
+        raise SystemExit(f"--fleet-retention-days is at least {fleetstore.MIN_RETENTION_DAYS}")
+    return fleetstore.Store(":memory:" if where == "off" else where, retention_days=days,
+                            log=lambda m: print(m, flush=True)).open()
 
 
 def node_agent(env):

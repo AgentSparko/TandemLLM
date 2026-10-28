@@ -456,7 +456,8 @@ class Agent:
             if source not in ("all", p.id):
                 continue
             for e in p.logs(level, q, limit):
-                out.append(dict(e, source=p.id))
+                out.append(dict(e, source=e["source"] if e["source"] == nodesource.ACCESS
+                                else p.id))
         out = [x for x in out if x.get("t") is not None]
         out.sort(key=lambda x: x["t"])
         return out[-limit:]
@@ -465,7 +466,7 @@ class Agent:
 def _line(e: dict, source: str) -> dict:
     return {"t": nodesource._epoch(e.get("ts")), "level": FROM_BUF.get(e.get("level"),
                                                                       e.get("level")),
-            "source": source, "msg": str(e.get("msg") or "")}
+            "source": nodesource._source(e, source), "msg": str(e.get("msg") or "")}
 
 
 # ====================================================================== the HTTP side

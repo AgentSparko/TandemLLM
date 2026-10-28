@@ -90,6 +90,14 @@ def parser() -> argparse.ArgumentParser:
                                                       "~/.tandemllm/ledger.sqlite3"),
                     help="the usage ledger (one row per request, no text); 'off' for none")
     ap.add_argument("--usage-retention-days", type=int, default=ledger_mod.MIN_RETENTION_DAYS)
+    ap.add_argument("--fleet-store", default=env.get("TANDEM_FLEET_STORE", "beside"),
+                    help="the fleet's metric history, event log and alerts (SQLite); 'beside' "
+                         "puts fleet.sqlite3 next to the config database, 'off' keeps them in "
+                         "memory only; TANDEM_FLEET_STORE")
+    ap.add_argument("--fleet-retention-days", type=int,
+                    default=int(env.get("TANDEM_FLEET_RETENTION_DAYS", "30")),
+                    help="days of 10-minute history, events and resolved alerts (at least 7); "
+                         "TANDEM_FLEET_RETENTION_DAYS")
     ap.add_argument("--dashboard-login",
                     default=env.get("TANDEM_DASHBOARD_LOGIN", env.get("QSE_DASHBOARD_LOGIN",
                                                                       "off")),

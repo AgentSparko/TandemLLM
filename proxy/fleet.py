@@ -16,8 +16,11 @@ dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_wri
     GET   /v1/fleet/metrics?source=&metric=&range=  per-node series from the sampler's rings
     GET   /v1/fleet/memory                          the unified memory split per node, GiB
     GET   /v1/fleet/logs?node=&level=&q=&limit=     the nodes' log lines, oldest first
-    GET   /v1/fleet/events, /alerts, /rules         empty lists until SRV-729
-    POST  /v1/fleet/alerts/{id}/ack                 404: no alert fires before SRV-729
+    GET   /v1/fleet/events?since=&before=&node=&type=&limit=   the event log, newest first
+    GET   /v1/fleet/alerts                          the alerts firing now, acknowledged or not
+    POST  /v1/fleet/alerts/{id}/ack                 acknowledged (404 for one that does not fire)
+    GET   /v1/fleet/rules                           the alert rules
+    PATCH /v1/fleet/rules/{id}                      {enabled?, notify?, threshold?, for_s?, scope?}
     GET   /v1/fleet/layouts/{page}?device=          a page's saved window layout, or its default
     PUT   /v1/fleet/layouts/{page}?device=          saved with `saved_at` now: the last write wins
     GET   /v1/fleet/trust                           this controller's certificate and the audit
@@ -54,11 +57,19 @@ THE DEPLOYMENTS. Each model an engine backend on a node serves itself is a Singl
 node; its id is the model's public id at this gateway, its status the backend's health.
 
 METRICS. The sampler keeps each hardware figure of each node, and decode tok/s, requests and TTFT
-per engine backend, in memory (`Ring`: 2 s slots for 10 minutes, 30 s slots for 7 days). A node's
-tok/s and requests are the sum of its engines', its TTFT their mean; a deployment's are its
-engine's. An answer's sample i is the mean of the samples in (t_i - step, t_i]; with none it is
-null. History starts with the process (a TandemLLM engine's own five minutes before it): earlier,
-and while a node gave nothing, the answer says null.
+per engine backend, in the fleet store (proxy/fleetstore.py: 2 s slots for 15 minutes, 30 s for
+26 hours, 10 minutes for the retention, in `fleet.sqlite3` beside the config database). A node's
+tok/s and requests are the sum of its engines'; a deployment's are its engine's. An answer's
+sample i is the mean of the samples in (t_i - step, t_i], TTFT their median (p50) over every
+request the node's engines ended then; with none it is null. Each sample is read from the
+coarsest tier whose whole slots make its window and that still holds it (a 7d sample beyond the
+30 s tier's 26 hours: the six 10-minute slots that end in its hour). History starts with the
+store; while the controller was stopped, and while a node gave nothing, the answer says null.
+
+EVENTS AND ALERTS (proxy/fleetwatch.py). Each sample runs the alert rules over every node's
+figures and logs what changed: a node up or off, an engine down, up or restarted, a deployment's
+status, and here the controller's start and stop and a new address; pairing, release and
+take-over in proxy/fleettrust.py.
 """
 
 from __future__ import annotations
@@ -70,10 +81,11 @@ import socket
 import sys
 import threading
 import time
-from array import array
 from urllib.parse import unquote, urlsplit
 
 from proxy import config as config_mod
+from proxy import fleetstore
+from proxy import fleetwatch
 from proxy import hostcollect
 from proxy import nodesource
 
@@ -96,6 +108,11 @@ DEVICES = ("desk", "tablet", "phone")
 ICONS = ("desk", "cloud", "rack")
 COLOURS = range(1, 9)
 LEVELS = ("debug", "info", "warn", "error")
+EVENT_TYPES = ("alert", "failover", "deploy", "link", "weights", "node", "update", "engine",
+               "controller")
+EVENTS_MAX = 1000
+LOG_DEEP = 5000                             # the most a node agent and an engine give at once
+DEPLOYMENTS_EVERY_S = 10.0
 WINDOW_KINDS = ("terminal", "files", "editor", "diff", "markdown", "plan", "preview", "image",
                 "pdf", "video", "audio", "binary", "logs", "chart", "inspector", "chat",
                 "playground", "context")
@@ -125,49 +142,7 @@ def window(rng: str, now: float) -> tuple[float, float, int]:
     return step, end - span, count
 
 
-class Ring:
-    """One series in memory: per slot the sum, count and max of its samples, in two tiers (2 s
-    slots for 10 minutes, 30 s slots for 7 days and two hours). Slot k of a tier holds the
-    samples in ((k-1)·res, k·res]."""
-
-    TIERS = ((2, 300), (30, 604800 // 30 + 240))
-
-    def __init__(self):
-        self.tiers = []
-        for res, n in self.TIERS:
-            self.tiers.append((res, n, array("d", bytes(8 * n)), array("d", bytes(8 * n)),
-                               array("d", bytes(8 * n)), array("q", [-1]) * n))
-
-    def add(self, t: float, v: float) -> None:
-        for res, n, s, c, mx, ks in self.tiers:
-            k = math.ceil(t / res)
-            i = k % n
-            if ks[i] != k:
-                ks[i], s[i], c[i], mx[i] = k, 0.0, 0.0, -math.inf
-            s[i] += v
-            c[i] += 1
-            mx[i] = max(mx[i], v)
-
-    def _tier(self, res: int):
-        return next(t for t in self.tiers if t[0] == res)
-
-    def mean(self, res: int, k_lo: int, k_hi: int) -> float | None:
-        _, n, s, c, _, ks = self._tier(res)
-        tot = cnt = 0.0
-        for k in range(max(k_lo, k_hi - n + 1), k_hi + 1):
-            i = k % n
-            if ks[i] == k:
-                tot += s[i]
-                cnt += c[i]
-        return tot / cnt if cnt else None
-
-    def peak(self, now: float, span: float) -> float | None:
-        """The largest sample of the last `span` seconds (30 s slots)."""
-        _, n, _, _, mx, ks = self._tier(30)
-        k_hi = math.ceil(now / 30)
-        got = [mx[k % n] for k in range(k_hi - min(n, int(span // 30)) + 1, k_hi + 1)
-               if ks[k % n] == k]
-        return max(got) if got else None
+Ring = fleetstore.Ring
 
 
 def default_layout(page: str, device: str) -> dict:
@@ -246,7 +221,8 @@ def check_layout(b, page: str, device: str) -> dict:
 
 class Fleet:
     def __init__(self, svc, local, *, port: int | None = None, bind: str = "127.0.0.1",
-                 clock=time.time, log=None, locality=None, agent=None, agent_for=None):
+                 clock=time.time, log=None, locality=None, agent=None, agent_for=None,
+                 store=None):
         self.svc, self.cfg = svc, svc.cfg
         self.local = local
         self.agent = agent                      # this machine's TandemNode agent, or None
@@ -257,8 +233,12 @@ class Fleet:
         self.clock = clock
         self.log = log or (lambda msg: print(msg, flush=True))
         self.locality = locality or hostcollect._Locality(clock=clock)
-        self.rings: dict[tuple, Ring] = {}
-        self._lock = threading.Lock()
+        self.store = store or fleetstore.Store(clock=clock, log=self.log).open()
+        self.rings = self.store.rings
+        self._lock = self.store.lock
+        self.watch = fleetwatch.Watch(self.store, clock=clock, log=self.log)
+        self._deps_at = -math.inf
+        self.may_sleep = sys.platform == "darwin"   # the controller's machine (a Mac) may sleep
         self._reg = threading.Lock()            # one registration, whichever thread asks first
         self._local_id: str | None = None
         self._read_at = -math.inf               # the last /v1/fleet request
@@ -285,20 +265,36 @@ class Fleet:
             got[1].close()
         self.cfg.delete_node(nid, who="controller")
         with self._lock:
-            for k in [k for k in self.rings if k[0] == "node" and k[1] == nid]:
-                del self.rings[k]
+            keys = [k for k in self.rings if k[0] == "node" and k[1] == nid]
+        self.store.drop(keys)
 
     # ------------------------------------------------------------------ the sampler
     def start(self) -> "Fleet":
+        st = self.store
+        if st.crashed:
+            detail = "the last run did not stop cleanly: its newest minutes of history are lost"
+        elif st.last_stop is not None:
+            detail = f"stopped for {self.clock() - st.last_stop:.0f} s before"
+        else:
+            detail = "the first start with this store"
+        self.store.add_event("controller", "host", f"TandemApp's controller started "
+                                                   f"({self.svc.engine_version or 'tandem-app'})",
+                             detail)
         self._thread = threading.Thread(target=self._run, name="fleet-sampler", daemon=True)
         self._thread.start()
         return self
 
     def stop(self) -> None:
         self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=10)
         for src in [a for _, a in self.agents.values()] + [self.agent]:
             if hasattr(src, "close"):
                 src.close()
+        if self._thread is not None:
+            self.store.add_event("controller", "host", "TandemApp's controller stopped",
+                                 "history written")
+        self.store.close()
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -338,12 +334,50 @@ class Fleet:
                         for k, v in vals.items():
                             if v is not None:
                                 self._ring(("backend", bid, k)).add(t, v)
+        try:
+            self.watch.observe(now, self.readings(now))
+        except Exception as exc:                                     # noqa: BLE001
+            self.log(f"[fleet] the alert rules did not run: {type(exc).__name__}: {exc}")
+        if self.store.due(now):
+            self.store.flush(now)
 
     def _ring(self, key: tuple) -> Ring:
-        r = self.rings.get(key)
-        if r is None:
-            r = self.rings[key] = Ring()
-        return r
+        return self.store.ring(key)
+
+    def readings(self, now: float) -> dict:
+        """What the alert rules and the event log look at, per node (fleetwatch.Watch.observe)."""
+        labels = {b["id"]: b["label"] or b["id"] for b in self.cfg.backends()}
+        nodes = []
+        for row, src in self.sources():
+            status, text = src.status()
+            checks = src.checks() if hasattr(src, "checks") else {}
+            with self._lock:
+                r = self.rings.get(("node", row["id"], "temp"))
+                temp = None
+                if r is not None and status != "off":
+                    k = math.ceil(now / 2)
+                    got = r.slot(2, k) or r.slot(2, k - 1) or r.slot(2, k - 2)
+                    temp = got[2] if got else None
+            jobs = {}
+            if isinstance(src, nodesource.AgentNode):
+                jobs = {e.get("id"): e.get("job") for e in src.agent_engines()}
+            engines = []
+            for p in src.engines() if hasattr(src, "engines") else []:
+                h = self.svc.health.view(p.id)
+                engines.append({"id": p.id, "label": labels.get(p.id, p.id),
+                                "state": h["state"], "error": h["last_error"],
+                                "restarts": getattr(p, "restarts", 0),
+                                "job": jobs.get(getattr(p, "via", None))})
+            nodes.append({"id": row["id"], "alias": row["alias"], "status": status,
+                          "status_text": text, "temp": temp, "engines": engines, **checks})
+        deps = None
+        if now - self._deps_at >= DEPLOYMENTS_EVERY_S:
+            self._deps_at = now
+            alias = {r["id"]: r["alias"] for r in self.cfg.nodes()}
+            deps = [dict(d, on=" on " + ", ".join(alias.get(m, m) for m in d["members"]))
+                    for d in self.deployments()]
+        return {"nodes": nodes, "host": {"may_sleep": self.may_sleep},
+                "deployments": deps}
 
     # ------------------------------------------------------------------ the registry
     def engine_backends(self, address: str | None = None) -> list[dict]:
@@ -427,6 +461,8 @@ class Fleet:
                 if "address" in fields and row["address"]:
                     self.log(f"[fleet] {row['alias']} moved from {row['address']} to "
                              f"{fields['address']}")
+                    self.store.add_event("node", row["id"], f"{row['alias']} has a new address",
+                                         f"{row['address']} → {fields['address']}")
                 self.cfg.update_node(row["id"], fields, who="controller")
         self._local_id = row["id"]
         return row["id"]
@@ -611,7 +647,7 @@ class Fleet:
         return {"contract_version": CONTRACT,
                 "host": {"name": self.host_name(), "address": addr,
                          "api_url": f"http://{addr}:{self.port}" if self.port else f"http://{addr}",
-                         "may_sleep": sys.platform == "darwin"},
+                         "may_sleep": self.may_sleep},
                 "infra": infra, "nodes": nodes, "links": links,
                 "groups": [{"deployment": d["id"], "type": d["type"], "members": d["members"]}
                            for d in self.deployments()]}
@@ -652,19 +688,22 @@ class Fleet:
         else:
             keys = [(i, of(i)) for i in ids]
         step, t0, count = window(rng, now)
-        res = 2 if step < 30 else 30
-        per = int(round(step / res))
+        slots = [self.slots(step, t0 + i * step, now) for i in range(count)]
         series = []
         with self._lock:
             for node, rkeys in keys:
                 rings = [self.rings[k] for k in rkeys if k in self.rings]
                 vals = []
-                for i in range(count):
-                    k_hi = int(round((t0 + i * step) / res))
-                    got = [v for v in (r.mean(res, k_hi - per + 1, k_hi) for r in rings)
-                           if v is not None]
-                    v = None if not got else (sum(got) / len(got) if metric == "ttft"
-                                              else sum(got))
+                for res, k_lo, k_hi in slots:
+                    if metric == "ttft":
+                        h: dict = {}
+                        for r in rings:
+                            r.hist(res, k_lo, k_hi, h)
+                        v = fleetstore.p50(h)
+                    else:
+                        got = [v for v in (r.mean(res, k_lo, k_hi) for r in rings)
+                               if v is not None]
+                        v = sum(got) if got else None
                     vals.append(None if v is None else round(v, 3))
                 series.append({"node": node, "values": vals})
         caps = [srcs[n].usable() for n, _ in keys] if metric == "mem" else []
@@ -674,6 +713,17 @@ class Fleet:
         return {"contract_version": CONTRACT, "source": source, "metric": metric, "unit": unit,
                 "agg": agg, "range": rng, "step_s": step, "t0": t0, "cap": cap,
                 "series": series}
+
+    def slots(self, step: float, t: float, now: float) -> tuple[int, int, int]:
+        """(tier, first slot, last slot) of the sample at `t`: the coarsest tier whose whole slots
+        make (t - step, t] and that still holds it; else the coarsest that divides the step, its
+        slots that end in the window."""
+        fit = [res for res in (2, 30, 600) if res <= step and step % res == 0]
+        whole = [res for res in fit if t % res == 0 and
+                 t - step >= now - fleetstore.TIER_KEEP.get(res, self.store.retention_s)]
+        res = max(whole) if whole else max(fit)
+        k_hi = math.floor(t / res + 1e-9)
+        return res, k_hi - int(round(step / res)) + 1, k_hi
 
     def memory(self, now: float) -> dict:
         self.ensure_local()
@@ -694,7 +744,8 @@ class Fleet:
 
     def logs(self, q: dict) -> dict:
         node = q.get("node") or "all"
-        level = q.get("level")
+        level = q.get("level") or "info"
+        access = q.get("access") in ("1", "true")
         try:
             limit = int(q.get("limit") or 200)
         except ValueError:
@@ -702,17 +753,47 @@ class Fleet:
         self.ensure_local()
         if node != "all" and self.cfg.node(node) is None:
             raise FleetError(404, f"no node {node}")
-        if level is not None and level not in LEVELS:
+        if level not in LEVELS:
             raise FleetError(400, f'level is debug, info, warn or error, not "{level}"')
         if not 1 <= limit <= 1000:
             raise FleetError(400, "limit is a whole number from 1 to 1000")
+        # at debug the access lines are most of a log: read deeper to leave `limit` without them
+        deep = LOG_DEEP if level == "debug" and not access else limit
         lines = []
         for row, src in self.sources():
             if node in ("all", row["id"]) and hasattr(src, "logs"):
-                lines += [dict(x, node=row["id"]) for x in src.logs(level, q.get("q") or None,
-                                                                   limit)]
+                got = [dict(x, node=row["id"]) for x in src.logs(level, q.get("q") or None, deep)
+                       if access or x["source"] != "access"]
+                lines += got[-limit:]
         lines.sort(key=lambda x: x["t"])
         return {"contract_version": CONTRACT, "node": node, "lines": lines[-limit:]}
+
+    def events(self, q: dict) -> list[dict]:
+        """The event log, newest first: after `since`, before `before`, of `node`, of the
+        comma-separated `type`s, at most `limit` (200, up to 1000)."""
+        t = {}
+        for k in ("since", "before"):
+            s = q.get(k)
+            if s is not None:
+                try:
+                    t[k] = float(s)
+                except ValueError:
+                    t[k] = math.nan
+                if not math.isfinite(t[k]):
+                    raise FleetError(400, f'{k} is a Unix time in seconds, not "{s}"')
+        types = [x for x in (q.get("type") or "").split(",") if x]
+        bad = [x for x in types if x not in EVENT_TYPES]
+        if bad:
+            raise FleetError(400, f'type is one or more of {", ".join(EVENT_TYPES)}, not '
+                                  f'"{bad[0]}"')
+        try:
+            limit = int(q.get("limit") or 200)
+        except ValueError:
+            limit = 0
+        if not 1 <= limit <= EVENTS_MAX:
+            raise FleetError(400, f"limit is a whole number from 1 to {EVENTS_MAX}")
+        return self.store.events(since=t.get("since"), before=t.get("before"),
+                                 node=q.get("node") or None, types=types, limit=limit)
 
     # ------------------------------------------------------------------ the routes
     def _trusting(self, fn):
@@ -753,17 +834,11 @@ class Fleet:
             if name == "logs":
                 return self.logs(q)
             if name == "events":
-                s = q.get("since")
-                try:
-                    if s is not None:
-                        float(s)
-                except ValueError:
-                    raise FleetError(400, f'since is a Unix time in seconds, not "{s}"')
-                return {"contract_version": v, "events": []}
+                return {"contract_version": v, "events": self.events(q)}
             if name == "alerts":
-                return {"contract_version": v, "alerts": []}
+                return {"contract_version": v, "alerts": self.watch.alerts()}
             if name == "rules":
-                return {"contract_version": v, "rules": []}
+                return {"contract_version": v, "rules": self.watch.rules()}
         if len(parts) == 2 and parts[0] == "nodes":
             if method == "GET":
                 return self.node_view(self._node_row(parts[1]), now)
@@ -782,7 +857,15 @@ class Fleet:
         if method == "POST" and parts == ["pair", "ssh"]:
             return self.node_view(self._trusting(lambda t: t.pair_ssh(body, who)), now)
         if method == "POST" and len(parts) == 3 and parts[0] == "alerts" and parts[2] == "ack":
-            raise FleetError(404, f"no active alert {parts[1]}")
+            got = self.watch.ack(parts[1], who)
+            if got is None:
+                raise FleetError(404, f"no active alert {parts[1]}")
+            return got
+        if method == "PATCH" and len(parts) == 2 and parts[0] == "rules":
+            try:
+                return self.watch.edit(parts[1], body, who, [n["id"] for n in self.cfg.nodes()])
+            except fleetwatch.RuleError as exc:
+                raise FleetError(exc.status, exc.message)
         if len(parts) == 2 and parts[0] == "layouts" and method in ("GET", "PUT"):
             page, device = parts[1], q.get("device") or "desk"
             if device not in DEVICES:
