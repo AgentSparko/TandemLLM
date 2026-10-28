@@ -122,7 +122,7 @@ describe('AU1: no password prompt in the source', () => {
       for (const f of readdirSync(d)) {
         const p = join(d, f);
         if (statSync(p).isDirectory()) walk(p);
-        else if (p.endsWith('.ts') && !p.endsWith(join('setup', 'signin.ts')) && readFileSync(p, 'utf8').includes('<qse-setup-signin>')) users.push(p.slice(root.length + 1));
+        else if (p.endsWith('.ts') && !p.endsWith(join('setup', 'signin.ts')) && /<qse-setup-signin[ >]/.test(readFileSync(p, 'utf8'))) users.push(p.slice(root.length + 1));
       }
     };
     walk(root);
@@ -130,7 +130,8 @@ describe('AU1: no password prompt in the source', () => {
     // and this device is not signed in (CONTRACT.md section 2 and 7.8)
     expect(users.sort()).toEqual([join('chat', 'view.ts'), join('setup', 'view.ts')]);
     const view = readFileSync(join(root, 'setup', 'view.ts'), 'utf8');
-    expect(view).toMatch(/this\.unauthorized \? html`<qse-setup-signin><\/qse-setup-signin>`/);
+    // VIS-252: another Spark's guide words the card for the controller's password
+    expect(view).toMatch(/this\.unauthorized \? html`<qse-setup-signin \.texts=\$\{this\.node \? NODE_SIGNIN : null\}><\/qse-setup-signin>`/);
     const chat = readFileSync(join(root, 'chat', 'view.ts'), 'utf8');
     expect(chat).toMatch(/this\.needSignIn = .*password_set && !this\.caps\.session\.signed_in/);
     expect(chat).toMatch(/if \(this\.needSignIn\) return this\.renderSignIn\(\)/);
