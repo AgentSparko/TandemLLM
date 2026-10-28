@@ -22,6 +22,28 @@ export interface ChartEvent {
   alert?: boolean;
 }
 
+export interface EventMark {
+  /** where the marker sits, px */
+  x: number;
+  texts: string[];
+  alert: boolean;
+}
+
+/** Events closer than `gap` pixels on the time axis drawn as one marker with their count (a burst of
+ *  restarts reads as one ◆ 7, not a dense column); the marker sits at the cluster's first event. */
+export function clusterEvents(evs: ChartEvent[], t0: number, span: number, x0: number, x1: number, gap = 10): EventMark[] {
+  const out: EventMark[] = [];
+  const xs = [...evs].sort((a, b) => a.at - b.at).map((e) => ({ e, x: x0 + ((e.at - t0) / Math.max(1e-9, span)) * (x1 - x0) }));
+  for (const { e, x } of xs) {
+    const c = out[out.length - 1];
+    if (c && x - c.x < gap) {
+      c.texts.push(e.text);
+      c.alert ||= !!e.alert;
+    } else out.push({ x, texts: [e.text], alert: !!e.alert });
+  }
+  return out;
+}
+
 interface Line {
   values: (number | null)[];
   colour: string;
@@ -138,9 +160,9 @@ export class QseFleetChart extends ChartElement {
       ${xl.map((i) => svg`<text class="axis" x=${x(i)} y=${c.gy + c.h - 7} text-anchor=${i === 0 ? 'start' : i === m.count - 1 ? 'end' : 'middle'}>${timeLabel(this.t0 + i * this.step, span)}</text>`)}
       ${capY != null ? svg`<line class="fc-cap" x1=${x0} x2=${x1} y1=${capY} y2=${capY} /><text class="axis" x=${x1 - 2} y=${capY - 4} text-anchor="end">capacity ${this.fmt(m.cap!.v)} ${this.unit}${m.cap!.perNode && this.series.length > 1 ? ' per Spark' : ''}</text>` : nothing}
       ${c.areas.map((a) => svg`<path class="fc-area" d=${bandPath(pts(a.hi), pts(a.lo))} fill=${a.colour} opacity=${a.opacity} />${a.edge ? svg`<path d=${monotonePath(pts(a.hi))} fill="none" stroke=${a.colour} stroke-width="1.3" />` : nothing}`)}
-      ${evs.map((e) => {
-        const ex = x0 + ((e.at - this.t0) / span) * (x1 - x0);
-        return svg`<line class="fc-ev" x1=${ex} x2=${ex} y1=${pt} y2=${pb} /><path class="fc-ev-mark ${e.alert ? 'is-alert' : ''}" d="M${ex} ${pt - 4}l4 4-4 4-4-4z"><title>${e.text}</title></path>`;
+      ${clusterEvents(evs, this.t0, span, x0, x1).map((c) => {
+        const title = c.texts.length > 6 ? `${c.texts.slice(0, 6).join('\n')}\nand ${c.texts.length - 6} more` : c.texts.join('\n');
+        return svg`<line class="fc-ev" x1=${c.x} x2=${c.x} y1=${pt} y2=${pb} /><path class="fc-ev-mark ${c.alert ? 'is-alert' : ''}" d="M${c.x} ${pt - 4}l4 4-4 4-4-4z"><title>${title}</title></path>${c.texts.length > 1 ? svg`<text class="fc-ev-n" x=${c.x + 6} y=${pt + 3}>${c.texts.length}</text>` : nothing}`;
       })}
       ${c.lines.map((l) => {
         const d = monotonePath(pts(l.values));

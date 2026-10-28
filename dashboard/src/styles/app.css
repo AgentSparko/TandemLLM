@@ -1092,6 +1092,10 @@ textarea {
 .chart .fc-ev-mark {
   fill: var(--ink-2);
 }
+.chart .fc-ev-n {
+  font: 600 9px var(--font-mono);
+  fill: var(--ink-2);
+}
 .chart .fc-ev-mark.is-alert {
   fill: var(--warn-ink);
 }
