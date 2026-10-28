@@ -279,7 +279,9 @@ describe('fleet contract', () => {
   const q = (s = '') => new URLSearchParams(s);
 
   it('has a schema per route, and they are strict', () => {
-    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'hostkey', 'layout', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'session', 'topology', 'trust']);
+    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'host', 'hostkey', 'layout', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'session', 'topology', 'trust']);
+    expect(fleet.sample({ contract_version: '1.0', node: 'x', via: 'agent', t: 1, age_s: 0, sample: { gpus: [{ fan: 1 }] }, note: null })).toBe(false);
+    expect(fleet.host({ contract_version: '1.0', name: 'x' })).toBe(false);
     expect(fleet['rule-patch']({})).toBe(false);
     expect(fleet['rule-patch']({ notify: ['mail'] })).toBe(false);
     expect(fleet['rule-patch']({ threshold: 80, metric: 'temp' })).toBe(false);
@@ -304,7 +306,11 @@ describe('fleet contract', () => {
           return r.body as Record<string, unknown>;
         };
         fcheck('nodes', get('/v1/fleet/nodes'));
-        for (const n of get('/v1/fleet/nodes').nodes as { id: string }[]) fcheck('node', get(`/v1/fleet/nodes/${n.id}`));
+        for (const n of get('/v1/fleet/nodes').nodes as { id: string }[]) {
+          fcheck('node', get(`/v1/fleet/nodes/${n.id}`));
+          fcheck('sample', get(`/v1/fleet/nodes/${n.id}/sample`));
+        }
+        fcheck('host', get('/v1/fleet/host'));
         fcheck('links', get('/v1/fleet/links'));
         fcheck('topology', get('/v1/fleet/topology'));
         const deps = get('/v1/fleet/deployments');
@@ -326,12 +332,14 @@ describe('fleet contract', () => {
 
   it('acknowledging an alert, and the errors', () => {
     const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
-    const ack = m.handle('POST', '/v1/fleet/alerts/a-therm/ack', q(), null, T0 + 5000);
+    const ack = m.handle('POST', '/v1/fleet/alerts/gpu-temp:r3/ack', q(), null, T0 + 5000);
     expect(ack.status).toBe(200);
     fcheck('alert', ack.body);
-    expect(ack.body).toMatchObject({ id: 'a-therm', acked: true, acked_at: T0 / 1000 + 5 });
-    // a second ack keeps the first time
-    expect(m.handle('POST', '/v1/fleet/alerts/a-therm/ack', q(), null, T0 + 9000).body).toMatchObject({ acked_at: T0 / 1000 + 5 });
+    expect(ack.body).toMatchObject({ id: 'gpu-temp:r3', acked: true, acked_at: T0 / 1000 + 5 });
+    // a second ack keeps the first time; the acknowledgement is an event, with who
+    expect(m.handle('POST', '/v1/fleet/alerts/gpu-temp:r3/ack', q(), null, T0 + 9000).body).toMatchObject({ acked_at: T0 / 1000 + 5 });
+    const evs = (m.handle('GET', '/v1/fleet/events', q('type=alert&limit=1'), null, T0 + 9000).body as { events: { text: string; detail: string; at: number }[] }).events;
+    expect(evs[0]).toMatchObject({ text: 'Acknowledged: R-3 GPU 86 °C', detail: 'by admin', at: T0 / 1000 + 5 });
     for (const [method, path, qs, status] of [
       ['POST', '/v1/fleet/alerts/nope/ack', '', 404],
       ['GET', '/v1/fleet/metrics', 'metric=watts', 400],
@@ -345,6 +353,7 @@ describe('fleet contract', () => {
       ['GET', '/v1/fleet/logs', 'node=all&level=loud', 400],
       ['GET', '/v1/fleet/logs', 'node=all&limit=0', 400],
       ['GET', '/v1/fleet/sparks', '', 404],
+      ['GET', '/v1/fleet/nodes/r9/sample', '', 404],
     ] as const) {
       const r = m.handle(method, path, q(qs), null, T0);
       expect(r.status, `${method} ${path}?${qs}`).toBe(status);
@@ -357,7 +366,7 @@ describe('fleet contract', () => {
     const r = m.handle('PATCH', '/v1/fleet/rules/gpu-temp', q(), { threshold: 80, for_s: 30, notify: ['app', 'app'] }, T0);
     expect(r.status).toBe(200);
     fcheck('rule', r.body);
-    expect(r.body).toMatchObject({ id: 'gpu-temp', threshold: 80, for_s: 30, notify: ['app'], condition: '> 80 °C for 30 s' });
+    expect(r.body).toMatchObject({ id: 'gpu-temp', threshold: 80, for_s: 30, notify: ['app'], condition: '≥ 80 °C for 30 s' });
     const listed = m.handle('GET', '/v1/fleet/rules', q(), null, T0).body as { rules: { id: string }[] };
     fcheck('rules', listed);
     expect(listed.rules.find((x) => x.id === 'gpu-temp')).toEqual(r.body);
@@ -369,7 +378,7 @@ describe('fleet contract', () => {
       ['gpu-temp', { threshold: '80' }, 400],
       ['gpu-temp', { for_s: -1 }, 400],
       ['gpu-temp', { scope: 'node:r9' }, 400],
-      ['reachable', { threshold: 10 }, 400],
+      ['node-down', { threshold: 10 }, 400],
       ['host-sleep', { scope: 'all' }, 400],
     ] as const) {
       const got = m.handle('PATCH', `/v1/fleet/rules/${id}`, q(), body, T0);

@@ -82,12 +82,13 @@ describe('mock fleet: seeded and live', () => {
 });
 
 describe('mock fleet: the scenarios', () => {
-  it('fleet1 is today: one Spark, the controller on it, the main model and Wren, no links, no alerts', () => {
+  it('fleet1 is today: one Spark, the controller on it, the main model and Wren, its LAN link, no alerts', () => {
     const m = new MockFleet({ scenario: 'fleet1', now: T0 });
     const nodes = get<{ nodes: FleetNode[] }>(m, '/v1/fleet/nodes').nodes;
     expect(nodes.map((n) => [n.alias, n.status, n.transport])).toEqual([['Desk', 'up', 'lan']]);
     expect(get<{ host: { name: string } }>(m, '/v1/fleet/topology').host.name).toBe('Desk');
-    expect(get<{ links: unknown[] }>(m, '/v1/fleet/links').links).toEqual([]);
+    expect(get<{ links: { a: string; b: string; kind: string }[] }>(m, '/v1/fleet/links').links.map((l) => `${l.a}-${l.b}:${l.kind}`)).toEqual(['lan-desk:lan']);
+    expect(get<{ node: string | null; may_sleep: boolean }>(m, '/v1/fleet/host')).toMatchObject({ node: 'desk', may_sleep: false });
     expect(get<{ alerts: unknown[] }>(m, '/v1/fleet/alerts').alerts).toEqual([]);
     expect(get<{ deployments: FleetDeployment[] }>(m, '/v1/fleet/deployments').deployments.map((d) => d.type)).toEqual(['single', 'role']);
   });
@@ -104,7 +105,10 @@ describe('mock fleet: the scenarios', () => {
     const links = get<{ links: { kind: string; a: string; b: string }[] }>(m, '/v1/fleet/links').links;
     expect(links.filter((l) => l.kind === 'fabric').map((l) => `${l.a}-${l.b}`)).toEqual(['r1-sw', 'r2-sw', 'r3-sw']);
     const alerts = get<{ alerts: FleetAlert[] }>(m, '/v1/fleet/alerts').alerts;
-    expect(alerts.map((a) => a.id)).toEqual(['a-therm', 'a-lease', 'a-sleep']);
+    // the controller's ids (<rule>:<subject>), rule texts and action routes
+    expect(alerts.map((a) => a.id)).toEqual(['gpu-temp:r3', 'lease:all', 'host-sleep:host']);
+    expect(alerts[0]).toMatchObject({ title: 'R-3 GPU 86 °C', rule: 'GPU temperature ≥ 85 °C for 60 s', action: { route: '#/hardware?scope=node:r3' } });
+    expect(get<{ node: string | null; may_sleep: boolean; name: string }>(m, '/v1/fleet/host')).toMatchObject({ name: 'Mac', node: null, may_sleep: true });
     expect(series(m, 'temp', '5m', 'node:r3').series[0].values.at(-1)).toBeGreaterThan(84);
   });
 
@@ -139,20 +143,23 @@ describe('mock fleet: the scenarios', () => {
     expect(r3(T0 + 31)).toMatchObject({ status: 'off', status_text: 'not reachable' });
     expect(series(m, 'tps', '5m', 'node:r3', T0 + 40).series[0].values.at(-1)).toBeNull();
     expect(get<{ deployments: FleetDeployment[] }>(m, '/v1/fleet/deployments', '', T0 + 40).deployments[0]).toMatchObject({ status: 'degraded', status_text: 'degraded · 1 of 2 members' });
-    expect(get<{ alerts: FleetAlert[] }>(m, '/v1/fleet/alerts', '', T0 + 45).alerts.map((a) => a.id)).toEqual(['a-lease', 'a-sleep']);
-    expect(get<{ alerts: FleetAlert[] }>(m, '/v1/fleet/alerts', '', T0 + 61).alerts.map((a) => a.id)).toEqual(['a-down', 'a-lease', 'a-sleep']);
+    // the thermal alert holds while R-3 gives no temperature, as the controller's rules do
+    expect(get<{ alerts: FleetAlert[] }>(m, '/v1/fleet/alerts', '', T0 + 45).alerts.map((a) => a.id)).toEqual(['gpu-temp:r3', 'lease:all', 'host-sleep:host']);
+    expect(get<{ alerts: FleetAlert[] }>(m, '/v1/fleet/alerts', '', T0 + 61).alerts.map((a) => a.id)).toEqual(['node-down:r3', 'gpu-temp:r3', 'lease:all', 'host-sleep:host']);
+    expect(get<{ events: { id: string; type: string }[] }>(m, '/v1/fleet/events', `since=${T0}`, T0 + 61).events.map((e) => `${e.id}:${e.type}`)).toEqual(['e-down:alert', 'e-off:node', 'e-degraded:deploy']);
+    expect(get<{ sample: unknown; note: string }>(m, '/v1/fleet/nodes/r3/sample', '', T0 + 40)).toMatchObject({ sample: null, note: 'not reachable' });
     expect(get<{ nodes: unknown[] }>(m, '/v1/fleet/memory', '', T0 + 40).nodes).toHaveLength(3);
   });
 
-  it('alert-thermal: R-3 is fine at the start, heats past 84 °C, throttles, and the alert fires a minute in', () => {
+  it('alert-thermal: R-3 is fine at the start, heats to 85 °C, throttles, and the alert fires a minute in', () => {
     const m = new MockFleet({ scenario: 'alert-thermal', now: T0 });
     const ids = (at: number) => get<{ alerts: FleetAlert[] }>(m, '/v1/fleet/alerts', '', at).alerts.map((a) => a.id);
-    expect(ids(T0 - 60)).not.toContain('a-therm');
-    expect(ids(T0 + 59)).not.toContain('a-therm');
-    expect(ids(T0 + 61)).toContain('a-therm');
+    expect(ids(T0 - 60)).not.toContain('gpu-temp:r3');
+    expect(ids(T0 + 59)).not.toContain('gpu-temp:r3');
+    expect(ids(T0 + 61)).toContain('gpu-temp:r3');
     const temp = (at: number) => series(m, 'temp', '5m', 'node:r3', at).series[0].values.at(-1)!;
     expect(temp(T0 - 600)).toBeLessThan(84);
-    expect(temp(T0 + 60)).toBeGreaterThan(83);
+    expect(temp(T0 + 60)).toBeGreaterThan(84);
     expect(get<{ events: { id: string }[] }>(m, '/v1/fleet/events', `since=${T0}`, T0 + 61).events.map((e) => e.id)).toEqual(['e-therm']);
     const st = (at: number) => get<{ nodes: FleetNode[] }>(m, '/v1/fleet/nodes', '', at).nodes.find((n) => n.id === 'r3')!.status;
     expect([st(T0 - 1), st(T0 + 1)]).toEqual(['up', 'alert']);

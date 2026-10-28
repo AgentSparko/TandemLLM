@@ -13,6 +13,9 @@
 // 401 in either state.
 //
 // The fleet API (/v1/fleet/*, TandemApp's controller, mock/fleet.ts) answers under the same rule.
+// {"fleetPassword": true} instead is the controller as it runs beside an engine without the
+// dashboard login (VIS-248): its reads and layouts open, its other writes (ack, rule edits, node
+// changes, pairing) only with the token or a session from /v1/fleet/session.
 // Its scenario: `?fleet=<scenario>` on the page URL (a cookie), else POST /__mock/fleet {"scenario"},
 // else TANDEM_MOCK_FLEET, else fleet4.
 
@@ -66,6 +69,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
   let mode = 'ok';
   /** AU1: an admin password is set on this mock server (the login on with it) */
   let password = false;
+  let fleetPassword = false;
   let dropEveryMs = 30_000;
   const sessions = new Map<string, Session>();
   const startedAt = now0 - 6 * 3600 * 1000 - 1677 * 1000;
@@ -517,6 +521,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
           const b = JSON.parse((await readBody(req)) || '{}');
           mode = String(b.mode ?? 'ok');
           password = b.password === true;
+          fleetPassword = b.fleetPassword === true;
           if (mode.startsWith('drop:')) {
             dropEveryMs = Number(mode.slice(5)) * 1000;
             mode = 'drop';
@@ -525,7 +530,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
           if (typeof b.draining === 'boolean') draining = b.draining;
           if (typeof b.waiting === 'number') state.waiting = b.waiting;
         }
-        return json(res, 200, { mode, password, draining, waiting: state.waiting, rows: full.rows.length, lastSeq: logs.lastSeq, logLines: logs.size });
+        return json(res, 200, { mode, password, fleetPassword, draining, waiting: state.waiting, rows: full.rows.length, lastSeq: logs.lastSeq, logLines: logs.size });
       }
       if (path === '/__mock/log' && req.method === 'POST') {
         // tests: inject N lines
@@ -678,10 +683,19 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         if (req.method === 'GET') {
           const c = cookies(req).qse_dash;
           const s = c ? sessions.get(c) : null;
-          const signed = !password || authed(req);
-          return json(res, 200, { contract_version: '1.0', password_set: password, authenticated: signed, expires_at: password && signed ? new Date(s?.expires ?? Date.now() + 43_200_000).toISOString().replace(/\.\d{3}Z$/, 'Z') : null });
+          const set = password || fleetPassword;
+          const signed = !set || authed(req);
+          return json(res, 200, { contract_version: '1.0', password_set: set, authenticated: signed, expires_at: set && signed ? new Date(s?.expires ?? Date.now() + 43_200_000).toISOString().replace(/\.\d{3}Z$/, 'Z') : null });
         }
-        if (!password) return error(res, 404, 'not_found', 'no admin password is set');
+        if (!password && !fleetPassword) return error(res, 404, 'not_found', 'no admin password is set');
+        if (!password && req.method === 'POST') {
+          const b = JSON.parse((await readBody(req)) || '{}');
+          if (typeof b.token !== 'string' || b.token !== TOKEN) return error(res, 401, 'unauthorized', 'token refused');
+          const sid = randomBytes(16).toString('hex');
+          sessions.set(sid, { expires: Date.now() + 43_200_000 });
+          res.writeHead(204, { 'Set-Cookie': `qse_dash=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200` });
+          return res.end();
+        }
         req.url = '/v1/dashboard/session';
         path = '/v1/dashboard/session';
       }
@@ -745,6 +759,8 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         } catch {
           return error(res, 400, 'bad_request', 'the body is not JSON');
         }
+        const write = req.method !== 'GET' && !(req.method === 'PUT' && path.startsWith('/v1/fleet/layouts/'));
+        if (fleetPassword && write && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
         const r = fleetFor(req).handle(req.method ?? 'GET', path, q, body);
         return json(res, r.status, r.body);
       }

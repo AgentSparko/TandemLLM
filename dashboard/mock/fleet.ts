@@ -12,16 +12,24 @@
 //   fleet2-split  two Sparks on the LAN with one direct fabric cable, one model Split over both
 //   node-down     fleet4, and R-3 stops answering 30 s after the scenario starts
 //   alert-thermal fleet4 without the old alert: R-3 heats up and the alert fires a minute in
+//
+// The rules, alerts and events are the controller's (proxy/fleetwatch.py: its seeded rules, an
+// alert's id `<rule>:<subject>`, its title, rule text and action route, "Acknowledged: …" events),
+// plus three rules the controller does not have yet (fabric, lease, power) with mock-only scopes.
+// Each node's newest sample (`/nodes/{id}/sample`) and the controller's host follow the same
+// clock; a field a GB10 does not expose (the power cap, Desk's fan) is absent, as on the board.
 
 import type {
   DeploymentStatus,
   FleetAlert,
   FleetDeployment,
   FleetEvent,
+  FleetHost,
   FleetLogLine,
   FleetLink,
   FleetNode,
   FleetRule,
+  FleetSample,
   EventType,
   FleetTopology,
   InfraItem,
@@ -32,6 +40,7 @@ import type {
   MetricSeries,
   NodeMemory,
   NodePairing,
+  NodeSample,
   NodePatch,
   NodeStatus,
   PairBySsh,
@@ -162,6 +171,37 @@ const INVENTORY_RENTED = {
   nics: 'enP7s7 (10GbE) · enp1s0f0np0 / enP2p1s0f1np1 (CX7 200G)',
 };
 
+const fmtNum = (v: number) => String(Math.round(v * 1000) / 1000);
+const holdFor = (s: number) => (s >= 120 && s % 60 === 0 ? `${s / 60} min` : `${fmtNum(s)} s`);
+
+/** A rule's condition in words, as the controller writes it (proxy/fleetwatch.py Rule.condition). */
+export function ruleCondition(r: Pick<FleetRule, 'metric' | 'threshold' | 'unit' | 'for_s'>): string {
+  const t = r.threshold == null ? '' : `${fmtNum(r.threshold)} ${r.unit ?? ''}`.trim();
+  const hold = r.for_s ? ` for ${holdFor(r.for_s)}` : '';
+  switch (r.metric) {
+    case 'temp':
+      return `≥ ${t}${hold}`;
+    case 'throttle':
+      return `thermal or power-brake clock event${hold}`;
+    case 'mem_avail':
+      return `MemAvailable < ${t}${hold}`;
+    case 'disk_free':
+      return `free < ${t} on a mount${hold}`;
+    case 'reachable':
+      return `no answer${hold}`;
+    case 'engine':
+      return `health check fails${hold}`;
+    case 'host_sleep':
+      return 'sleep allowed';
+    case 'fabric':
+      return `< ${t} or one logical interface${hold}`;
+    case 'lease_end':
+      return `< ${t}`;
+    default:
+      return `> ${t}${hold}`;
+  }
+}
+
 function build(scenario: FleetScenario, t0: number): Fleet {
   const rentStart = t0 - 5 * D + 3 * H;
   const leaseEnd = t0 + 2 * D + 4 * H + 20 * MIN;
@@ -195,9 +235,9 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     ttft: [520, 380], gpuSpan: 94, fabric: true, rtt: [37.6, 2.6], heatFrom: t0 - 40 * MIN, throttleFrom: t0 - 15 * MIN, offFrom: null,
   };
   if (scenario === 'alert-thermal') {
-    // the ramp reaches 84 °C 1,125 s in: as the scenario starts; the clock throttles, and the rule
-    // (60 s above 84 °C) fires a minute later
-    r3.heatFrom = t0 - 1125;
+    // the ramp reaches 85 °C 1,313 s in: as the scenario starts; the clock throttles, and the rule
+    // (85 °C or more for 60 s) fires a minute later
+    r3.heatFrom = t0 - 1313;
     r3.throttleFrom = t0;
   }
   if (scenario === 'node-down') r3.offFrom = t0 + 30;
@@ -220,32 +260,38 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     },
     members: [a, b].map((node) => ({ node, from: dsvFrom, base: 80, span: 110, curve: 'dsv', share: 0.5 })),
   });
+  const rule = (id: string, name: string, metric: string, threshold: number | null, unit: string | null, for_s: number, severity: 'warn' | 'err', notify: FleetRule['notify'], scope = 'all', enabled = true): FleetRule => {
+    const r: FleetRule = { id, name, metric, condition: '', scope, notify, enabled, threshold, unit, for_s, severity };
+    return { ...r, condition: ruleCondition(r) };
+  };
   const rules: FleetRule[] = [
-    { id: 'gpu-temp', name: 'GPU temperature', metric: 'temp', condition: '> 84 °C for 60 s', scope: 'all', notify: ['app', 'system'], enabled: true, threshold: 84, unit: '°C', for_s: 60, severity: 'err' },
-    { id: 'mem-avail', name: 'Memory headroom', metric: 'mem_avail', condition: 'MemAvailable < 4 GiB for 30 s', scope: 'all', notify: ['app', 'system'], enabled: true, threshold: 4, unit: 'GiB', for_s: 30, severity: 'warn' },
-    { id: 'reachable', name: 'Node reachable', metric: 'reachable', condition: 'no answer for 30 s', scope: 'all', notify: ['app', 'system'], enabled: true, threshold: null, unit: null, for_s: 30, severity: 'err' },
-    { id: 'fabric', name: 'Fabric link', metric: 'fabric', condition: '< 150 Gb/s or one logical interface', scope: 'fabric', notify: ['app'], enabled: true, threshold: 150, unit: 'Gb/s', for_s: 0, severity: 'warn' },
-    { id: 'disk', name: 'Disk almost full', metric: 'disk_free', condition: '< 10 %', scope: 'all', notify: ['app'], enabled: true, threshold: 10, unit: '%', for_s: 300, severity: 'warn' },
-    { id: 'version', name: 'Version mismatch', metric: 'version', condition: 'members differ', scope: 'deployments', notify: ['app', 'system'], enabled: true, threshold: null, unit: null, for_s: 0, severity: 'warn' },
-    { id: 'lease', name: 'Lease ends', metric: 'lease_end', condition: '< 3 days', scope: 'rented', notify: ['app', 'system'], enabled: true, threshold: 3, unit: 'days', for_s: 0, severity: 'warn' },
-    { id: 'host-sleep', name: 'Controller host may sleep', metric: 'host_sleep', condition: 'sleep allowed', scope: 'host', notify: ['app'], enabled: true, threshold: null, unit: null, for_s: 0, severity: 'warn' },
-    { id: 'power', name: 'Power draw', metric: 'power', condition: '> 170 W for 5 min', scope: 'node:r3', notify: ['app'], enabled: false, threshold: 170, unit: 'W', for_s: 300, severity: 'warn' },
+    rule('gpu-temp', 'GPU temperature', 'temp', 85, '°C', 60, 'err', ['app', 'system']),
+    rule('throttle', 'GPU clock throttled', 'throttle', null, null, 30, 'warn', ['app']),
+    rule('mem-avail', 'Memory headroom', 'mem_avail', 10, 'GiB', 30, 'warn', ['app', 'system']),
+    rule('disk-free', 'Disk almost full', 'disk_free', 10, '%', 300, 'warn', ['app']),
+    rule('node-down', 'Node reachable', 'reachable', null, null, 30, 'err', ['app', 'system']),
+    rule('engine-down', 'Engine answers', 'engine', null, null, 60, 'err', ['app', 'system']),
+    rule('host-sleep', 'Controller host may sleep', 'host_sleep', null, null, 0, 'warn', ['app'], 'host'),
+    rule('fabric', 'Fabric link', 'fabric', 150, 'Gb/s', 0, 'warn', ['app'], 'fabric'),
+    rule('lease', 'Lease ends', 'lease_end', 3, 'days', 0, 'warn', ['app', 'system'], 'rented'),
+    rule('power', 'Power draw', 'power', 170, 'W', 300, 'warn', ['app'], 'node:r3', false),
   ];
 
   if (scenario === 'fleet1') {
     const one = { ...desk, node: { ...desk.node, pairing: LOCAL }, rtt: [0.05, 0.03] as [number, number] };
     return {
-      host: { name: 'Desk', address: '192.0.2.40', api_url: 'http://192.0.2.40:8000', may_sleep: false },
-      infra: [],
+      host: { name: 'Desk', address: '192.0.2.40', api_url: 'http://192.0.2.40:8091', may_sleep: false },
+      infra: [{ id: 'lan', kind: 'lan', label: 'LAN' }],
       nodes: [one],
       deps: [qwen([{ node: 'desk', from: t0 - 60 * D, base: 48, span: 150, curve: 'desk', share: 1 }], 'single'), wren],
-      links: [],
+      links: [{ id: 'lan-desk', a: 'lan', b: 'desk', kind: 'lan', speed: '10 GbE', rtt_ms: null, mtu: 1500, state: 'up', note: 'enP7s7; the controller runs on this node' }],
       events: [
+        { at: t0 - 2 * H, item: { id: 'e-ctl', type: 'controller', severity: null, node: 'host', deployment: null, text: "TandemApp's controller started (0.15.0)", detail: 'stopped for 4 s before' } },
         { at: t0 - 26 * H, item: { id: 'e-update', type: 'update', severity: null, node: 'desk', deployment: null, text: 'Desk updated to TandemLLM 0.15.0', detail: 'The engine restarted with the new build; 41 s without the API.' } },
         { at: t0 - 4.2 * D, item: { id: 'e-wren', type: 'deploy', severity: null, node: 'desk', deployment: 'wren', text: 'Wren (Role) started on Desk', detail: 'Qwen3.5-2B EXL3 6.0 beside the main model.' } },
       ],
       alerts: [],
-      rules: rules.filter((r) => !['fabric', 'lease', 'host-sleep', 'power'].includes(r.id)),
+      rules: rules.filter((r) => !['fabric', 'lease', 'power'].includes(r.id)),
     };
   }
 
@@ -267,43 +313,51 @@ function build(scenario: FleetScenario, t0: number): Fleet {
         { at: t0 - 3.5 * H, item: { id: 'e-link', type: 'link', severity: null, node: 's2', deployment: null, text: 'Link test Spark 1 ↔ Spark 2: 197 Gb/s, RTT 0.009 ms, MTU 9000', detail: 'RoCE on, both logical interfaces up.' } },
       ],
       alerts: [],
-      rules: rules.filter((r) => !['lease', 'host-sleep', 'power'].includes(r.id)),
+      rules: rules.filter((r) => !['lease', 'power'].includes(r.id)),
     };
   }
 
   // fleet4 and its variants
-  const r3Up = (t: number) => r3.offFrom == null || t < r3.offFrom;
   const events: Fleet['events'] = [
     { at: t0 - 42 * MIN, item: { id: 'e-scale', type: 'deploy', severity: null, node: 'r3', deployment: 'qwen27', text: 'Qwen3.8-27B scaled Single → Replicas: R-3 joined', detail: 'Identity check passed (same pack, same engine 0.15.0). Output canary matched.' } },
     { at: t0 - 58 * MIN, item: { id: 'e-link-r3', type: 'link', severity: null, node: 'r3', deployment: null, text: 'Link test R-3 ↔ switch: 194 Gb/s, RTT 0.011 ms, MTU 9000', detail: 'RoCE on, both logical interfaces up.' } },
     { at: t0 - 2.4 * H, item: { id: 'e-lease', type: 'alert', severity: 'warn', node: 'all', deployment: null, text: 'Leases end in 2 days: R-1, R-2, R-3', detail: 'Release wipes weights, caches, keys and the node agent.' } },
+    { at: t0 - 2.9 * H, item: { id: 'e-eng-r2', type: 'engine', severity: null, node: 'r2', deployment: 'dsv41', text: 'DeepSeek-V4.1-Flash on R-2 restarted', detail: 'back after 38 s; its token counter reset while it was up' } },
+    { at: t0 - 9 * H, item: { id: 'e-ctl', type: 'controller', severity: null, node: 'host', deployment: null, text: "TandemApp's controller started (0.15.0)", detail: 'stopped for 6 s before' } },
     { at: t0 - 3.2 * H, item: { id: 'e-dsv', type: 'deploy', severity: null, node: 'r1', deployment: 'dsv41', text: 'DeepSeek-V4.1-Flash started as Split on R-1 + R-2', detail: 'Stage 1: layers 0–30 on R-1. Stage 2: layers 31–60 + head on R-2.' } },
     { at: t0 - 3.7 * H, item: { id: 'e-weights', type: 'weights', severity: null, node: 'r2', deployment: null, text: 'Weights copied R-1 → R-2 over the fabric', detail: '76.5 GiB in 4 min 12 s (2.4 Gb/s average, disk-bound).' } },
     { at: t0 - 5.1 * H, item: { id: 'e-pair-r3', type: 'node', severity: null, node: 'r3', deployment: null, text: 'R-3 paired (rental, SSH tunnel)', detail: 'Host key confirmed. Certificate pinned.' } },
     { at: t0 - 6.4 * H, item: { id: 'e-half', type: 'alert', severity: 'resolved', node: 'r2', deployment: null, text: 'Resolved: R-2 fabric on one logical interface (half bandwidth)', detail: 'Cable re-seated by the provider. Link test 196 Gb/s.' } },
+    { at: t0 - 6.9 * H, item: { id: 'e-half-on', type: 'alert', severity: 'warn', node: 'r2', deployment: null, text: 'R-2 fabric on one logical interface (half bandwidth)', detail: 'enp1s0f1np1 carries no traffic; the port runs at 100 Gb/s.' } },
     { at: t0 - 26 * H, item: { id: 'e-update', type: 'update', severity: null, node: 'all', deployment: null, text: 'Fleet updated to TandemLLM 0.15.0 (rolling)', detail: 'Desk first, then R-1 + R-2 together (Split), 6 min of DeepSeek downtime.' } },
-    { at: t0 - 27.5 * H, item: { id: 'e-mem', type: 'alert', severity: 'resolved', node: 'desk', deployment: null, text: 'Resolved: Desk memory pressure (MemAvailable 3.1 GiB)', detail: 'KV pool shrunk from 52 to 48 GiB by the memory gate.' } },
+    { at: t0 - 27.5 * H, item: { id: 'e-mem', type: 'alert', severity: 'resolved', node: 'desk', deployment: null, text: 'Resolved: Desk memory low: 8.6 GiB available', detail: '12.4 GiB available' } },
+    { at: t0 - 27.9 * H, item: { id: 'e-mem-on', type: 'alert', severity: 'warn', node: 'desk', deployment: null, text: 'Desk memory low: 8.6 GiB available', detail: 'Unified memory: the GPU and the system share it. Below this the engine’s memory gate refuses work and the kernel may kill a process.' } },
     { at: t0 - 4.2 * D, item: { id: 'e-wren', type: 'deploy', severity: null, node: 'desk', deployment: 'wren', text: 'Wren (Role) started on Desk', detail: 'Qwen3.5-2B EXL3 6.0 beside the main model.' } },
     { at: rentStart + 600, item: { id: 'e-pair-r12', type: 'node', severity: null, node: 'r1', deployment: null, text: 'R-1 and R-2 paired (rental, SSH tunnel)', detail: 'Lease 7 days, 2.40 per hour per node.' } },
   ];
+  const ruleText = (id: string) => {
+    const r = rules.find((x) => x.id === id)!;
+    return `${r.name} ${r.condition}`;
+  };
   const alerts: Fleet['alerts'] = [
-    { at: t0 - 2.4 * H, item: { id: 'a-lease', severity: 'warn', node: 'all', title: 'Leases end in 2 days: R-1, R-2, R-3', rule: 'Lease ends in < 3 days', detail: 'DeepSeek-V4.1-Flash and the second Qwen replica stop when the leases end.', action: { label: 'Open Sparks', route: '#/sparks' } } },
-    { at: t0 - 60 * D, item: { id: 'a-sleep', severity: 'warn', node: 'host', title: 'The controller runs on a Mac that can sleep', rule: 'Controller host may sleep', detail: 'If the Mac sleeps, the API and all metrics stop. Keep it awake or move the controller to Desk.', action: { label: 'App settings', route: '#/app' } } },
+    { at: t0 - 2.4 * H, item: { id: 'lease:all', severity: 'warn', node: 'all', title: 'Leases end in 2 days: R-1, R-2, R-3', rule: ruleText('lease'), detail: 'DeepSeek-V4.1-Flash and the second Qwen replica stop when the leases end.', action: { label: 'Open Sparks', route: '#/sparks' } } },
+    { at: t0 - 60 * D, item: { id: 'host-sleep:host', severity: 'warn', node: 'host', title: 'The controller runs on a machine that can sleep', rule: ruleText('host-sleep'), detail: 'If it sleeps, the API and every metric stop. Keep it awake or move the controller to a Spark.', action: { label: 'App settings', route: '#/app' } } },
   ];
   const therm = r3.throttleFrom as number;
-  events.push({ at: therm + MIN, item: { id: 'e-therm', type: 'alert', severity: 'warn', node: 'r3', deployment: null, text: 'R-3 GPU above 84 °C, thermal throttle', detail: 'SM clock down to 1.74 GHz. Decode on R-3 is 26 % lower while it lasts.' } });
+  events.push({ at: therm + MIN, item: { id: 'e-therm', type: 'alert', severity: 'err', node: 'r3', deployment: null, text: 'R-3 GPU 86 °C', detail: 'At 85 °C or more for 60 s. A GB10 slows its clocks when it stays this hot.' } });
   if (scenario !== 'alert-thermal') {
     events.push({ at: therm - 4 * MIN, item: { id: 'e-failover', type: 'failover', severity: null, node: 'r3', deployment: 'qwen27', text: '1 conversation moved R-3 → Desk', detail: 'R-3 answered a health check after 4.8 s. The replica set moved the conversation; it keeps its context.' } });
   }
   alerts.unshift({
     at: therm + MIN,
-    when: r3Up,
-    item: { id: 'a-therm', severity: 'err', node: 'r3', title: 'R-3 GPU above 84 °C, thermal throttle', rule: 'GPU temperature > 84 °C for 60 s', detail: 'Decode on R-3 down 26 %. Conversations stay; new ones go to Desk first while this is active.', action: { label: 'Open R-3', route: '#/sparks/r3' } },
+    item: { id: 'gpu-temp:r3', severity: 'err', node: 'r3', title: 'R-3 GPU 86 °C', rule: ruleText('gpu-temp'), detail: 'At 85 °C or more for 60 s. A GB10 slows its clocks when it stays this hot.', action: { label: 'Open R-3 in Hardware', route: '#/hardware?scope=node:r3' } },
   });
   if (r3.offFrom != null) {
     const down = r3.offFrom + 30;
-    events.push({ at: down, item: { id: 'e-down', type: 'node', severity: 'err', node: 'r3', deployment: 'qwen27', text: 'R-3 not reachable for 30 s; its conversations moved to Desk', detail: 'The SSH tunnel is up, the node agent does not answer. Qwen3.8-27B serves on Desk alone.' } });
-    alerts.unshift({ at: down, item: { id: 'a-down', severity: 'err', node: 'r3', title: 'R-3 not reachable', rule: 'Node reachable: no answer for 30 s', detail: 'Qwen3.8-27B runs on 1 of 2 members until R-3 answers again.', action: { label: 'Open R-3', route: '#/sparks/r3' } } });
+    events.push({ at: r3.offFrom + 10, item: { id: 'e-off', type: 'node', severity: 'err', node: 'r3', deployment: null, text: 'R-3 is off', detail: 'not reachable' } });
+    events.push({ at: r3.offFrom + 10, item: { id: 'e-degraded', type: 'deploy', severity: null, node: 'r3', deployment: 'qwen27', text: 'Qwen3.8-27B degraded · 1 of 2 members', detail: 'Its conversations on R-3 moved to Desk.' } });
+    events.push({ at: down, item: { id: 'e-down', type: 'alert', severity: 'err', node: 'r3', deployment: null, text: 'R-3 not reachable', detail: 'The SSH tunnel is up, the node agent does not answer.' } });
+    alerts.unshift({ at: down, item: { id: 'node-down:r3', severity: 'err', node: 'r3', title: 'R-3 not reachable', rule: ruleText('node-down'), detail: 'The SSH tunnel is up, the node agent does not answer. Qwen3.8-27B runs on 1 of 2 members until R-3 answers again.', action: { label: 'Open R-3', route: '#/sparks/r3' } } });
   }
   return {
     host: { name: 'Mac', address: '192.0.2.10', api_url: 'http://192.0.2.10:8080', may_sleep: true },
@@ -534,16 +588,87 @@ export class MockFleet {
     const e = this.ruleEdits.get(r.id);
     if (!e) return r;
     const out = { ...r, ...e };
-    let condition = r.condition;
-    if (e.threshold != null && r.threshold != null) condition = condition.replace(String(r.threshold), String(e.threshold));
-    if (e.for_s != null) condition = condition.replace(/ for \d+ (s|min)$/, '') + (e.for_s ? ` for ${e.for_s} s` : '');
-    return { ...out, condition };
+    return { ...out, condition: ruleCondition(out) };
   }
 
   alerts(now: number): FleetAlert[] {
     return this.f.alerts
       .filter((a) => a.at <= now && (!a.when || a.when(now)))
       .map((a) => ({ ...a.item, since: a.at, acked: this.acked.has(a.item.id), acked_at: this.acked.get(a.item.id) ?? null }));
+  }
+
+  // ---- a node's newest sample and the controller's host ------------------------------------------
+  /** What the node's agent read in its newest second: every block a GB10 exposes. Desk (an ASUS
+   *  GX10) shows no fan, no GPU on the board exposes a power cap, Desk's ConnectX ports have no
+   *  cable; an off node has no sample. */
+  sample(id: string, now: number): FleetSample {
+    const v = FLEET_CONTRACT;
+    const n = this.f.nodes.find((x) => x.node.id === id)!;
+    if (!this.alive(n, now)) return { contract_version: v, node: id, via: 'agent', t: null, age_s: null, sample: null, note: 'not reachable' };
+    const t = now - 1;
+    const val = (k: MetricKey) => this.value(k, id, t);
+    const w = (k: string, speed = 1) => wave(this.ph(id + k), t * speed);
+    const r1 = (x: number, d = 1) => Math.round(x * 10 ** d) / 10 ** d;
+    const hot = this.throttled(n, t);
+    const mem = this.memory(now).find((m) => m.node === id)!;
+    const used = val('mem')!;
+    const cpu = val('cpu')!;
+    const rented = !n.node.owned;
+    const fab = val('fabric');
+    const disk = val('disk')!;
+    const lan = val('lan')!;
+    const cpuTemp = r1(46 + cpu * 0.6 + (id === 'r3' ? 12 : 0) + w('ct'));
+    const sample: NodeSample = {
+      node: Object.fromEntries((['gpu', 'power', 'temp', 'sm', 'memclk', 'mem', 'cpu', 'disk', 'lan', 'fabric'] as MetricKey[]).map((k) => [k, val(k)]).filter(([, x]) => x != null).map(([k, x]) => [k, r1(x as number, 3)])),
+      gpus: [{ index: 0, name: 'NVIDIA GB10', util: r1(val('gpu')!), sm_mhz: val('sm')!, mem_mhz: val('memclk')!, power_w: r1(val('power')!, 2), temp_c: Math.round(val('temp')!), throttled: hot, throttle: hot ? ['hw_slowdown', 'sw_thermal'] : [], enc: 0, dec: 0 }],
+      memory: { total: USABLE_GIB, available: r1(USABLE_GIB - used, 2), used: r1(used, 2), swap_total: 16, swap_used: 0.3, unified: true, weights: mem.weights, kv: mem.kv, cache: mem.cache, other: mem.other, ceiling: mem.ceiling, page: mem.page },
+      cpu: {
+        util: r1(cpu, 2),
+        load: [r1(cpu / 5), r1(cpu / 5.5), r1(cpu / 6)],
+        temp_c: cpuTemp,
+        cores: Array.from({ length: 20 }, (_, c) => {
+          const perf = c % 10 >= 5;
+          return { cpu: c, util: r1(clamp(cpu * (perf ? 1.4 : 0.6) + 9 * wave(this.ph(`${id}core${c}`), t * 2), 0, 100)), mhz: perf ? 3900 : 2808, kind: perf ? ('performance' as const) : ('efficiency' as const) };
+        }),
+      },
+      disks: {
+        devices: [{ name: 'nvme0n1', nvme: true, read_mbps: r1(disk * 0.7, 3), write_mbps: r1(disk * 0.3, 3), busy: r1(Math.min(1, disk / 400), 3) }],
+        fs: [{ path: '/', total_gb: 3936.4, free_gb: rented ? 3204.1 : 2710.3 }, { path: '/boot/efi', total_gb: 0.5, free_gb: 0.5 }],
+        nvme: [{ name: 'nvme0', temp_c: r1((id === 'r3' ? 61 : 44) + w('nv')) }],
+      },
+      net: {
+        lan: [{ iface: 'enP7s7', rx_mbps: r1(lan * 0.6, 3), tx_mbps: r1(lan * 0.4, 3), speed_mbps: 10000, state: 'up' }],
+        fabric: n.fabric
+          ? ['enp1s0f0np0', 'enP2p1s0f1np1'].map((iface, i) => ({ iface, state: 'up', speed_mbps: 200000, mtu: 9000, rx_gbps: r1((fab ?? 0) * (i ? 0.24 : 0.26), 4), tx_gbps: r1((fab ?? 0) * (i ? 0.26 : 0.24), 4), rdma: { device: `rocep${i + 1}s0f${i}`, port: '1', state: 'active', link_layer: 'Ethernet', rx_gbps: r1((fab ?? 0) * 0.23, 4), tx_gbps: r1((fab ?? 0) * 0.23, 4) } }))
+          : ['enp1s0f0np0', 'enP2p1s0f1np1'].map((iface) => ({ iface, state: 'down', mtu: 1500 })),
+      },
+      board: {
+        zones: Array.from({ length: 7 }, (_, z) => ({ zone: `thermal_zone${z}`, type: 'acpitz', temp_c: r1(cpuTemp - 2 + 2 * wave(this.ph(`${id}z${z}`), t)) })),
+        ...(rented ? { fans: [{ name: 'gb10_fan/fan1', rpm: Math.round(2400 + 3200 * this.nodeLoad(n, t) + (hot ? 900 : 0)) }] } : {}),
+        uptime_s: Math.round(now - Math.max(n.node.since, now - 11 * D - 3 * H)),
+      },
+    };
+    return { contract_version: v, node: id, via: 'agent', t, age_s: 1, sample, note: null };
+  }
+
+  /** The machine the controller runs on: the Mac in fleet4 (no node, may sleep), the node it
+   *  runs on in fleet1 and fleet2-split. */
+  host(now: number): FleetHost {
+    const h = this.f.host;
+    const node = this.f.nodes.find((n) => n.node.alias === h.name)?.node.id ?? null;
+    const w = (k: string) => wave(this.ph(`host:${k}`), now);
+    const r1 = (x: number) => Math.round(x * 10) / 10;
+    return {
+      contract_version: FLEET_CONTRACT,
+      name: h.name,
+      os: node ? 'DGX OS 7.2.1 (Ubuntu 24.04.3 LTS)' : 'macOS 15.6',
+      address: h.address,
+      node,
+      may_sleep: h.may_sleep,
+      cpu: node ? { util: r1(this.value('cpu', node, now) ?? 0), cores: 20 } : { util: r1(14 + 6 * w('cpu')), cores: 24 },
+      memory: node ? { used_gib: r1(this.value('mem', node, now) ?? 0), total_gib: USABLE_GIB } : { used_gib: r1(41 + 3 * w('mem')), total_gib: 96 },
+      controller: { rss_mib: r1(168 + 12 * this.f.nodes.length + 4 * w('rss')), cpu: r1(1.1 + 0.6 * Math.abs(w('ctl'))), threads: 14 + this.f.nodes.length * 3, uptime_s: now - this.t0 + 9 * H },
+    };
   }
 
   // ---- logs ----------------------------------------------------------------------------------
@@ -671,6 +796,8 @@ export class MockFleet {
           return { status: 200, body: { contract_version: v, deployments: this.deployments(now) } };
         case 'memory':
           return { status: 200, body: { contract_version: v, unit: 'GiB', nodes: this.memory(now) } };
+        case 'host':
+          return { status: 200, body: this.host(now) };
         case 'alerts':
           return { status: 200, body: { contract_version: v, alerts: this.alerts(now) } };
         case 'rules':
@@ -712,6 +839,11 @@ export class MockFleet {
         }
       }
     }
+    if (method === 'GET' && parts.length === 3 && parts[0] === 'nodes' && parts[2] === 'sample') {
+      const id = decodeURIComponent(parts[1]);
+      if (!this.f.nodes.some((x) => x.node.id === id && x.node.since <= now)) return bad(404, 'not_found', `no node ${id}`);
+      return { status: 200, body: this.sample(id, now) };
+    }
     if (method === 'GET' && parts.length === 1 && parts[0] === 'trust') {
       return { status: 200, body: { contract_version: v, controller: { id: 'c-3dmock0c0n7r', name: `TandemApp on ${this.f.host.name}`, fingerprint: '7c'.repeat(32), since: this.t0 - 60 * D }, audit: this.audit } };
     }
@@ -741,7 +873,11 @@ export class MockFleet {
     if (method === 'POST' && parts.length === 3 && parts[0] === 'alerts' && parts[2] === 'ack') {
       const id = decodeURIComponent(parts[1]);
       if (!this.alerts(now).some((a) => a.id === id)) return bad(404, 'not_found', `no active alert ${id}`);
-      if (!this.acked.has(id)) this.acked.set(id, now);
+      if (!this.acked.has(id)) {
+        this.acked.set(id, now);
+        const a = this.alerts(now).find((x) => x.id === id)!;
+        this.f.events.push({ at: now, item: { id: `e-ack-${id}`, type: 'alert', severity: null, node: a.node, deployment: null, text: `Acknowledged: ${a.title}`, detail: 'by admin' } });
+      }
       return { status: 200, body: this.alerts(now).find((a) => a.id === id) };
     }
     if (method === 'PATCH' && parts.length === 2 && parts[0] === 'rules') {
