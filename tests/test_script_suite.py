@@ -9,6 +9,9 @@ script-mode suite counted them as passed.
      none fails, a file that says `N passed` itself counts
   3  tests/scriptmode.py runs a pytest-style module: fixtures, skips, a failure exits 1, no test
      exits 1
+  4  SRV-748: a relative file argument is a path from the caller's directory, though each file's
+     process runs in the suite's root (`python app/tests/script_suite.py --all
+     app/tests/test_x.py` from the repository root)
 """
 
 from __future__ import annotations
@@ -69,6 +72,21 @@ def test_the_suite_fails_a_file_that_ran_no_test_and_counts_the_others():
         # a file that says it skipped on purpose is listed apart, neither passed nor failed
         assert "0 tests" in line["test_gpu.py"] and "SKIPPED (Triton on a GPU)" in line["test_gpu.py"], out
         assert out.rstrip().splitlines()[-1].startswith("files=5 ok=3 fail=1 skipped=1 tests=11"), out
+
+
+def test_a_relative_file_argument_is_read_from_the_callers_directory():
+    with tempfile.TemporaryDirectory() as d:
+        os.mkdir(os.path.join(d, "sub"))
+        _module(os.path.join(d, "sub"), "test_rel.py", "def test_a():\n    assert True\n\n\n"
+                "if __name__ == '__main__':\n    test_a()\n")
+        r = subprocess.run([sys.executable, SUITE, "--all", os.path.join("sub", "test_rel.py")], cwd=d,
+                           capture_output=True, text=True, timeout=120)
+        out = r.stdout
+        assert r.returncode == 0, out + r.stderr
+        row = [ln for ln in out.splitlines() if ln.split()[:1] and ln.split()[0].endswith("test_rel.py")]
+        assert len(row) == 1 and row[0].split()[0].endswith("/sub/test_rel.py"), out
+        assert "1 tests" in row[0] and row[0].endswith("ok"), out
+        assert out.rstrip().splitlines()[-1].startswith("files=1 ok=1 fail=0 skipped=0 tests=1"), out
 
 
 def test_scriptmode_runs_a_pytest_module_with_its_fixtures():

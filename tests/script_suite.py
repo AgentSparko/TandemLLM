@@ -110,7 +110,8 @@ def run_all(args: list) -> int:
             timeout = int(next(it))
         else:
             files.append(a)
-    files = files or sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
+    # SRV-748: a file argument is a path from the caller's directory; each file's process runs in ROOT
+    files = [os.path.abspath(f) for f in files] or sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
     if out:
         os.makedirs(out, exist_ok=True)
     env = {k: v for k, v in os.environ.items()
