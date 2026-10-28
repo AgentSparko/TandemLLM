@@ -1,0 +1,461 @@
+"""Install over SSH (VIS-246, the Add Spark wizard's Install step): TandemNode and the engine at the
+fleet's version on a box with nothing installed, then its pairing; progress per step and a log.
+
+    pkg = Package(state_dir)              the wheel this controller installs (built once per code)
+    job = Install(trust, target, secret, version=..., options=..., on_change=fn)
+    job.run()                             the steps in order, in the caller's thread (a job's own)
+    job.view()                            {state, version, steps: [{id, label, state, detail}], log}
+
+THE PACKAGE. Nothing is published yet, so a node gets what this controller runs: one wheel,
+`tandemllm-<version>-py3-none-any.whl`, built here from this controller's own copy (its checkout,
+read as pyproject.toml lists the packages and their data, or the installed distribution's own
+files) with the standard library's zipfile, no setuptools and no network. It carries TandemNode
+(`tandem-node`), the controller, and the engine's code (`server/`): the same packages a
+`pip install .` gives. Its only dependency, cryptography, comes from the node's own package index
+when pip installs the wheel there. TANDEM_NODE_WHEEL names a wheel file to send instead (a release
+once there is one). The wheel is cached in `<config dir>/packages/` by version and content hash.
+
+THE STEPS, each one SSH login with the credentials the wizard holds for this install (the password
+in memory only, proxy/addspark.py), each line it prints kept in the log:
+
+    check     the box again (proxy/preflight.py SCRIPT): another TandemLLM there refuses the install
+    upload    the wheel to <prefix>/pkg, its sha256 checked there
+    agent     python3 -m venv <prefix>/venv and pip install the wheel; the version it reports must
+              be the fleet's
+    engine    the engine's runtime: this controller's install.sh, run there with --runtime-only at
+              the fleet's tag (the engine's source and its Python environment with the CUDA 13.0
+              torch; no weights, no corpus, no config: Serve a model, step 6, brings those). Off
+              with `engine: false`
+    unit      `tandem-node unit` written to ~/.config/systemd/user/<unit>.service, enabled and
+              started; the agent must answer on its loopback within 30 s
+    pair      SSH once's adopt (proxy/fleettrust.py) with the installed tandem-node: the node is
+              paired and its certificate pinned
+
+The prefix is ~/.local/share/tandemllm, the agent's state ~/.tandemllm/node, its port 7700 and the
+unit `tandemnode`, unless `options` say otherwise (a virtual node, OPS-197: its own of each). The
+engine weights are never installed here. A step that fails stops the job with its last lines; a
+new Install starts again from `check`, and each step is safe to repeat.
+"""
+
+from __future__ import annotations
+
+import base64
+import csv
+import fnmatch
+import glob
+import hashlib
+import io
+import os
+import re
+import shlex
+import threading
+import time
+import zipfile
+
+from proxy import _version, preflight, sshonce
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULTS = {"prefix": "~/.local/share/tandemllm", "state_dir": "~/.tandemllm/node", "port": 7700,
+            "unit": "tandemnode", "virtual": None, "engine": True}
+STEPS = (("check", "Check the box"), ("upload", "Upload TandemLLM {v}"),
+         ("agent", "Install TandemNode {v}"), ("engine", "Install the engine's runtime {v}"),
+         ("unit", "Start the agent ({unit}.service)"), ("pair", "Pair and pin its certificate"))
+LOG_MAX = 400
+UNIT_WAIT_S = 30
+
+
+class InstallError(Exception):
+    def __init__(self, kind: str, message: str, status: int = 409):
+        super().__init__(message)
+        self.kind, self.message, self.status = kind, message, status
+
+
+def same_version(a: str | None, b: str | None) -> bool:
+    """One release (proxy/preflight.py same_release): -test and .dev0, a local label aside."""
+    return preflight.same_release(a, b)
+
+
+# ---------------------------------------------------------------------- the package
+
+def _toml(path: str) -> dict:
+    import tomllib
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def _record_hash(data: bytes) -> str:
+    return "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(data).digest()).decode().rstrip("=")
+
+
+def checkout_files(root: str) -> tuple[dict, list[tuple[str, str]]]:
+    """(project table, [(path in the wheel, file)]) of a checkout, as pyproject.toml says it."""
+    doc = _toml(os.path.join(root, "pyproject.toml"))
+    st = doc["tool"]["setuptools"]
+    dirs = st.get("package-dir") or {}
+    data = st.get("package-data") or {}
+    out = []
+    for pkg in st["packages"]:
+        src = os.path.join(root, dirs.get(pkg) or pkg.replace(".", os.sep))
+        dest = pkg.replace(".", "/")
+        pats = data.get(pkg, [])
+        for name in sorted(os.listdir(src)):
+            p = os.path.join(src, name)
+            if not os.path.isfile(p):
+                continue
+            if name.endswith(".py") or any(fnmatch.fnmatch(name, x) for x in pats
+                                           if "/" not in x):
+                out.append((f"{dest}/{name}", p))
+        for x in pats:
+            if "/" not in x:
+                continue
+            for p in sorted(glob.glob(os.path.join(src, x), recursive=True)):
+                if os.path.isfile(p) and "__pycache__" not in p:
+                    out.append((f"{dest}/{os.path.relpath(p, src).replace(os.sep, '/')}", p))
+    seen, uniq = set(), []
+    for w, p in out:
+        if w not in seen:
+            seen.add(w)
+            uniq.append((w, p))
+    return doc["project"], uniq
+
+
+def installed_files() -> tuple[dict, list[tuple[str, str]]]:
+    """The same of the installed distribution (no checkout): its own RECORD's files."""
+    from importlib import metadata
+    dist = metadata.distribution("tandemllm")
+    proj = {"name": "tandemllm", "dependencies": dist.requires or [],
+            "scripts": {e.name: e.value for e in dist.entry_points
+                        if e.group == "console_scripts"},
+            "description": dist.metadata.get("Summary") or ""}
+    out = []
+    for f in dist.files or []:
+        s = str(f)
+        if ".dist-info/" in s or s.startswith("..") or "__pycache__" in s:
+            continue
+        out.append((s, str(f.locate())))
+    return proj, out
+
+
+def build_wheel(out_dir: str, version: str, root: str = ROOT) -> str:
+    """The wheel of this controller's copy in `out_dir`; its path. Cached by content."""
+    if os.path.isfile(os.path.join(root, "pyproject.toml")):
+        proj, files = checkout_files(root)
+        scripts = proj.get("scripts") or {}
+    else:
+        proj, files = installed_files()
+        scripts = proj.get("scripts") or {}
+    v = _version.pep440(version)
+    h = hashlib.sha256()
+    for w, p in files:
+        h.update(w.encode())
+        with open(p, "rb") as f:
+            h.update(hashlib.sha256(f.read()).digest())
+    tag = h.hexdigest()[:12]
+    os.makedirs(out_dir, mode=0o700, exist_ok=True)
+    name = f"tandemllm-{v}-py3-none-any.whl"
+    path = os.path.join(out_dir, tag, name)
+    if os.path.isfile(path):
+        return path
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    di = f"tandemllm-{v}.dist-info"
+    meta = [f"Metadata-Version: 2.1", "Name: tandemllm", f"Version: {v}",
+            f"Summary: {proj.get('description') or 'TandemLLM'}", "Requires-Python: >=3.11"]
+    meta += [f"Requires-Dist: {d}" for d in proj.get("dependencies") or []]
+    extra = {
+        f"{di}/METADATA": ("\n".join(meta) + "\n").encode(),
+        f"{di}/WHEEL": b"Wheel-Version: 1.0\nGenerator: tandem-app (proxy/nodeinstall.py)\n"
+                       b"Root-Is-Purelib: true\nTag: py3-none-any\n",
+        f"{di}/entry_points.txt": ("[console_scripts]\n" + "".join(
+            f"{k} = {val}\n" for k, val in scripts.items())).encode(),
+    }
+    rec = io.StringIO()
+    wr = csv.writer(rec, lineterminator="\n")
+    tmp = path + ".part"
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
+        for w, p in files:
+            with open(p, "rb") as f:
+                data = f.read()
+            z.writestr(w, data)
+            wr.writerow([w, _record_hash(data), len(data)])
+        for w, data in extra.items():
+            z.writestr(w, data)
+            wr.writerow([w, _record_hash(data), len(data)])
+        wr.writerow([f"{di}/RECORD", "", ""])
+        z.writestr(f"{di}/RECORD", rec.getvalue())
+    os.replace(tmp, path)
+    return path
+
+
+class Package:
+    """The wheel this controller sends (TANDEM_NODE_WHEEL, else built from its own copy)."""
+
+    def __init__(self, cache_dir: str, *, version: str | None = None, root: str = ROOT,
+                 env=os.environ):
+        self.cache_dir, self.root = cache_dir, root
+        self.version = version or _version.release()
+        self.env = env
+        self._lock = threading.Lock()
+
+    def wheel(self) -> str:
+        given = self.env.get("TANDEM_NODE_WHEEL")
+        if given:
+            if not os.path.isfile(given):
+                raise InstallError("no_package", f"TANDEM_NODE_WHEEL {given}: no such file", 500)
+            return given
+        with self._lock:
+            try:
+                return build_wheel(self.cache_dir, self.version, self.root)
+            except (OSError, KeyError, ValueError, ImportError) as exc:
+                raise InstallError("no_package", f"this controller cannot build its wheel "
+                                                 f"({type(exc).__name__}: {exc}); set "
+                                                 f"TANDEM_NODE_WHEEL to a TandemLLM wheel", 500)
+
+    def install_sh(self) -> bytes | None:
+        p = os.path.join(self.root, "install.sh")
+        try:
+            with open(p, "rb") as f:
+                return f.read()
+        except OSError:
+            return None
+
+
+# ---------------------------------------------------------------------- one install
+
+def _q(s: str) -> str:
+    """A path for the remote shell: `~/` stays the remote home."""
+    if s.startswith("~/"):
+        return '"$HOME"/' + shlex.quote(s[2:])
+    return shlex.quote(s)
+
+
+class Install:
+    """One node's install. `target`: {host, port, user, jumps, key_file, tunnel, host_key};
+    `secret`: {"password": ...} or {"key": ...} or {} (key file or agent), dropped at the end."""
+
+    def __init__(self, trust, target: dict, secret: dict, *, package: Package, version: str,
+                 options: dict | None = None, on_change=None, who: str = "gui",
+                 clock=time.time):
+        self.trust, self.t = trust, dict(target)
+        self._secret = dict(secret or {})
+        self.pkg, self.version = package, version
+        self.o = dict(DEFAULTS, **{k: v for k, v in (options or {}).items() if v is not None})
+        self.on_change = on_change or (lambda view: None)
+        self.who, self.clock = who, clock
+        self.state = "queued"
+        self.error: dict | None = None
+        self.node: str | None = None
+        self.started_at = self.ended_at = None
+        self.steps = [{"id": sid, "label": label.format(v=version, unit=self.o["unit"]),
+                       "state": "skip" if sid == "engine" and not self.o["engine"] else "todo",
+                       "detail": None, "started_at": None, "ended_at": None}
+                      for sid, label in STEPS]
+        self.log: list[dict] = []
+        self._lock = threading.Lock()
+
+    # ------------------------------------------------------------------ what it shows
+    def view(self) -> dict:
+        with self._lock:
+            return {"state": self.state, "version": self.version, "node": self.node,
+                    "error": self.error, "started_at": self.started_at,
+                    "ended_at": self.ended_at, "options": {k: self.o[k] for k in
+                                                           ("prefix", "port", "unit", "engine")},
+                    "steps": [dict(s) for s in self.steps], "log": list(self.log[-LOG_MAX:])}
+
+    def _say(self, step: str, text: str, level: str = "info") -> None:
+        secrets = [v for v in self._secret.values() if v]
+        for line in (text or "").splitlines():
+            line = sshonce.scrub(line.rstrip(), secrets)
+            if line and not line.startswith(("TANDEM-PF ", "TANDEMNODE-ADOPTED ")):
+                with self._lock:
+                    self.log.append({"t": round(self.clock(), 3), "step": step,
+                                     "level": level, "text": line[:400]})
+
+    def _step(self, sid: str, state: str, detail: str | None = None) -> None:
+        with self._lock:
+            s = next(x for x in self.steps if x["id"] == sid)
+            s["state"] = state
+            if detail is not None:
+                s["detail"] = detail
+            if state == "running":
+                s["started_at"] = round(self.clock(), 3)
+            elif state in ("done", "failed"):
+                s["ended_at"] = round(self.clock(), 3)
+        self.on_change(self.view())
+
+    # ------------------------------------------------------------------ the logins
+    def _ssh(self, step: str, command: str, stdin: bytes = b"") -> tuple[int, str, str]:
+        t = self.t
+        hk, b64 = self.trust.ssh.host_key(t["host"], t["port"], t.get("jumps") or None)
+        if hk["known"] == "changed" or (t.get("host_key") and hk["fingerprint"] != t["host_key"]):
+            raise InstallError("host_key_changed", f"the host key of {t['host']} is "
+                                                   f"{hk['fingerprint']} now, not the confirmed "
+                                                   f"{t.get('host_key') or hk['stored']}; "
+                                                   f"refused")
+        rc, out, err = self.trust.ssh.run(
+            t["host"], t["port"], t["user"], command, stdin, kind=hk["type"], b64=b64,
+            password=self._secret.get("password"), key=self._secret.get("key"),
+            key_file=t.get("key_file"), jumps=t.get("jumps") or None)
+        self._say(step, out)
+        self._say(step, err, "warn" if rc else "info")
+        return rc, out, err
+
+    def _fail(self, sid: str, kind: str, message: str) -> None:
+        self._step(sid, "failed", message)
+        raise InstallError(kind, message)
+
+    # ------------------------------------------------------------------ the steps
+    def run(self) -> dict:
+        with self._lock:
+            self.state, self.started_at = "running", round(self.clock(), 3)
+        self.on_change(self.view())
+        try:
+            for sid, _ in STEPS:
+                if next(s for s in self.steps if s["id"] == sid)["state"] == "skip":
+                    continue
+                self._step(sid, "running")
+                detail = getattr(self, "_" + sid)()
+                self._step(sid, "done", detail)
+            with self._lock:
+                self.state = "done"
+        except InstallError as exc:
+            with self._lock:
+                self.state, self.error = "failed", {"type": exc.kind, "message": exc.message}
+                for s in self.steps:
+                    if s["state"] == "running":
+                        s["state"], s["detail"] = "failed", exc.message
+        except sshonce.SshError as exc:
+            with self._lock:
+                self.state, self.error = "failed", {"type": exc.kind, "message": exc.message}
+                for s in self.steps:
+                    if s["state"] == "running":
+                        s["state"], s["detail"] = "failed", exc.message
+        finally:
+            self._secret = {}                   # the password or key: forgotten here
+            with self._lock:
+                self.ended_at = round(self.clock(), 3)
+            self.on_change(self.view())
+        return self.view()
+
+    def _check(self) -> str:
+        env = f"TANDEM_PF_PREFIX={_q(self.o['prefix'])}; export TANDEM_PF_PREFIX\n"
+        rc, out, _ = self._ssh("check", env + preflight.SCRIPT)
+        f = preflight.parse(out)
+        if not f:
+            self._fail("check", "ssh_failed", "the box did not run the check")
+        have = (f.get("tandemllm") or "").strip()
+        if have and not same_version(have, self.version):
+            self._fail("check", "version_mismatch", f"{self.t['host']} has TandemLLM {have}; the "
+                                                    f"fleet runs {self.version}: update it there "
+                                                    f"first. Install refuses another version")
+        rows = preflight.checks(f, self.version, self.clock())
+        bad = [r for r in rows if r["state"] == "fail" and r["id"] != "tandemllm"]
+        if bad:
+            self._fail("check", "preflight_failed", "; ".join(f"{r['label']}: {r['value']}"
+                                                              for r in bad))
+        return f"{f.get('dgx') or f.get('os') or 'Linux'} · TandemLLM " + \
+            (have or "not installed")
+
+    def _upload(self) -> str:
+        path = self.pkg.wheel()
+        with open(path, "rb") as f:
+            data = f.read()
+        sha = hashlib.sha256(data).hexdigest()
+        name = os.path.basename(path)
+        pkg = f"{_q(self.o['prefix'])}/pkg"
+        cmd = (f"set -eu; mkdir -p {pkg}; cat > {pkg}/{shlex.quote(name)}.part; "
+               f"got=$(sha256sum {pkg}/{shlex.quote(name)}.part | cut -d' ' -f1); "
+               f"[ \"$got\" = {sha} ] || {{ echo \"sha256 $got, not {sha}\" >&2; exit 70; }}; "
+               f"mv {pkg}/{shlex.quote(name)}.part {pkg}/{shlex.quote(name)}; "
+               f"echo \"uploaded {name} ({len(data)} bytes, sha256 {sha[:16]})\"")
+        rc, _, err = self._ssh("upload", cmd, data)
+        if rc != 0:
+            self._fail("upload", "ssh_failed", _last(err) or f"exit status {rc}")
+        self._wheel = name
+        return f"{name} · {len(data) / 1e6:.1f} MB · sha256 {sha[:16]}"
+
+    def _agent(self) -> str:
+        p = _q(self.o["prefix"])
+        cmd = (f"set -eu; [ -x {p}/venv/bin/python ] || python3 -m venv {p}/venv; "
+               f"{p}/venv/bin/python -m pip install --disable-pip-version-check --no-input "
+               f"--upgrade {p}/pkg/{shlex.quote(self._wheel)} 2>&1 | tail -n 20; "
+               f"echo \"TANDEM-VERSION $({p}/venv/bin/python -c 'from proxy import _version; "
+               f"print(_version.release())')\"")
+        rc, out, err = self._ssh("agent", cmd)
+        m = re.search(r"^TANDEM-VERSION (\S+)", out, re.M)
+        if rc != 0 or not m:
+            self._fail("agent", "install_failed", _last(err) or _last(out) or
+                       f"exit status {rc}")
+        if not same_version(m.group(1), self.version):
+            self._fail("agent", "version_mismatch", f"the installed TandemNode says "
+                                                    f"{m.group(1)}, not {self.version}")
+        return f"TandemNode {m.group(1)} in {self.o['prefix']}/venv"
+
+    def _engine(self) -> str:
+        script = self.pkg.install_sh()
+        if script is None:
+            self._fail("engine", "no_package", "this controller has no install.sh to send")
+        p = _q(self.o["prefix"])
+        cmd = (f"set -eu; mkdir -p {p}; cat > {p}/install.sh; bash {p}/install.sh --dir "
+               f"{p}/engine --ref v{shlex.quote(self.version)} --runtime-only --yes 2>&1 | "
+               f"tail -n 60; exit ${{PIPESTATUS[0]:-0}}")
+        rc, out, err = self._ssh("engine", "bash -c " + shlex.quote(cmd), script)
+        if rc != 0:
+            self._fail("engine", "install_failed", _last(out) or _last(err) or
+                       f"exit status {rc}")
+        return f"engine {self.version} runtime in {self.o['prefix']}/engine"
+
+    def _agent_args(self) -> str:
+        o = self.o
+        a = f"--port {int(o['port'])} --state-dir {_q(o['state_dir'])}"
+        if o.get("virtual"):
+            a += f" --virtual {shlex.quote(o['virtual'])}"
+        return a
+
+    def _unit(self) -> str:
+        o = self.o
+        p = _q(o["prefix"])
+        unit = shlex.quote(o["unit"] + ".service")
+        tdir = f" --tandem-dir {_q(o['prefix'] + '/engine')}" if o["engine"] else ""
+        wait = (f"{p}/venv/bin/python -c \"import sys; from proxy import nodeagent; "
+                f"a = nodeagent.parser().parse_args(sys.argv[1:]); a.state_dir = "
+                f"__import__('os').path.expanduser(a.state_dir); "
+                f"sys.exit(0 if nodeagent.local_client(a, 2.0) else 1)\" {self._agent_args()}")
+        cmd = (f"set -eu; d=\"$HOME/.config/systemd/user\"; mkdir -p \"$d\"; "
+               f"{p}/venv/bin/tandem-node unit --host 127.0.0.1 {self._agent_args()}{tdir} > "
+               f"\"$d\"/{unit}; systemctl --user daemon-reload; "
+               f"systemctl --user enable --now {unit} 2>&1; i=0; "
+               f"until {wait}; do i=$((i+1)); [ $i -ge {UNIT_WAIT_S} ] && "
+               f"{{ systemctl --user status {unit} --no-pager 2>&1 | tail -n 15; exit 71; }}; "
+               f"sleep 1; done; echo \"{o['unit']}.service is up on 127.0.0.1:{int(o['port'])}\"")
+        rc, out, err = self._ssh("unit", cmd)
+        if rc != 0:
+            self._fail("unit", "install_failed", _last(out) or _last(err) or
+                       f"exit status {rc}")
+        return f"{o['unit']}.service enabled · agent on 127.0.0.1:{int(o['port'])}"
+
+    def _pair(self) -> str:
+        from proxy import fleettrust
+        p = _q(self.o["prefix"])
+        adopt = ("addr=$(printf '%s' \"${SSH_CONNECTION:-}\" | awk '{print $3}'); "
+                 f"exec {p}/venv/bin/tandem-node adopt {self._agent_args()} "
+                 "--address \"$addr\" ")
+        t = self.t
+        body = {"host": t["host"], "port": t["port"], "user": t["user"],
+                **({"jumps": t["jumps"]} if t.get("jumps") else {}),
+                **({"key_file": t["key_file"]} if t.get("key_file") else {}),
+                **({"tunnel": True} if t.get("tunnel") else {}),
+                **({"host_key": t["host_key"]} if t.get("host_key") else {}),
+                **self._secret}
+        try:
+            row = self.trust.pair_ssh(body, self.who, command=adopt)
+        except fleettrust.TrustError as exc:
+            self._fail("pair", exc.kind, exc.message)
+        with self._lock:
+            self.node = row["id"]
+        return f"paired as {row['alias']} ({row['id']}) · certificate pinned"
+
+
+def _last(text: str) -> str:
+    lines = [x for x in (text or "").strip().splitlines()
+             if x.strip() and not x.startswith(("TANDEM-PF ", "TANDEMNODE-DMI "))]
+    return lines[-1][:300] if lines else ""

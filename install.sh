@@ -22,6 +22,10 @@
 # Qwen's. The page picks the weights, the tools and the parallelism and installs them; until then a
 # start (and a reboot) comes back in setup mode. It binds 127.0.0.1 unless --host says otherwise.
 #
+# With --runtime-only it stops after step 3: the engine's source and its Python environment, no
+# weights, no corpus, no config, nothing started. TandemApp's Add Spark wizard installs a new
+# node's engine this way (proxy/nodeinstall.py); its Serve a model step brings the weights.
+#
 # The primary target is one NVIDIA DGX Spark (GB10, aarch64, sm_121). Other CUDA GPUs are best
 # effort: the engine's GPU adapter (tools/gpu) builds the skinny NVFP4 kernel for sm_121a only and
 # keeps it off elsewhere, and StairCut's cost tables were measured on the Spark. The check below runs
@@ -189,6 +193,7 @@ SYSTEMD=0
 UNINSTALL=0
 REPO_SET=0
 MODE_ARG=""
+RUNTIME_ONLY=0
 
 usage() {
     cat <<EOF
@@ -215,6 +220,8 @@ Usage: bash install.sh [options]
                     unless --host says otherwise
   --force-setup     with --setup, on a directory that already has a configured engine
   --systemd         also install a systemd user unit, tandemllm.service (off by default)
+  --runtime-only    the engine's source and Python environment only: no weights, no corpus, no
+                    config, no start (what TandemApp's Add Spark wizard installs on a new node)
   --yes, -y         non-interactive: answer yes to every question
   --dry-run         print every step and command, change nothing
   --uninstall       stop the engine, remove the unit and DIR (the weights stay in the HF cache)
@@ -248,6 +255,7 @@ while [ $# -gt 0 ]; do
         --setup) SETUP=1; shift ;;
         --force-setup) FORCE_SETUP=1; shift ;;
         --systemd) SYSTEMD=1; shift ;;
+        --runtime-only) RUNTIME_ONLY=1; START=0; CORPUS_MODE=none; shift ;;
         --yes|-y) YES=1; shift ;;
         --dry-run) DRY=1; shift ;;
         --uninstall) UNINSTALL=1; shift ;;
@@ -298,6 +306,7 @@ export HF_XET_NUM_CONCURRENT_RANGE_GETS="${HF_XET_NUM_CONCURRENT_RANGE_GETS:-64}
 
 STEP=0
 STEPS=7
+[ "$RUNTIME_ONLY" = 1 ] && STEPS=3
 if [ -t 1 ]; then B=$'\033[1m'; Y=$'\033[33m'; G=$'\033[32m'; N=$'\033[0m'; else B=""; Y=""; G=""; N=""; fi
 step() { STEP=$((STEP + 1)); printf '\n%s==> [%d/%d] %s%s\n' "$B" "$STEP" "$STEPS" "$*" "$N"; }
 info() { printf '    %s\n' "$*"; }
@@ -455,6 +464,7 @@ still_to_get() {
 TO_GET=$(( $(still_to_get "$(hf_repo_dir "$BASE_REPO")" "$BASE_GIB") + $(still_to_get "$(hf_repo_dir "$NVFP4_REPO")" "$NVFP4_GIB")
          + $(still_to_get "$(hf_repo_dir "$B8_REPO")" "$DRAFTER_GIB") + $(still_to_get "$(hf_repo_dir "$B16_REPO")" "$DRAFTER_GIB") ))
 [ "$SETUP" = 1 ] && TO_GET=5           # Wren's model (and the corpus' shards); the setup guide checks the weights' room
+[ "$RUNTIME_ONLY" = 1 ] && TO_GET=0    # no weights: Serve a model checks their room
 [ "$CORPUS_MODE" != none ] && [ ! -f "$CORPUS_DIR/meta.json" ] \
     && TO_GET=$((TO_GET + $(still_to_get "$HF_HUB_DIR/datasets--wikimedia--wikipedia" "$WIKI_GIB")))
 NEED_HF=$((TO_GET + 1))
@@ -481,6 +491,7 @@ fi
 MEM_AVAIL="$(meminfo_gib MemAvailable)"
 MIN_FREE=64; [ "$SPARK" = 1 ] || MIN_FREE=16      # host RAM on a discrete-GPU box
 [ "$SETUP" = 1 ] && MIN_FREE=8                     # setup mode holds Wren alone
+[ "$RUNTIME_ONLY" = 1 ] && MIN_FREE=4              # nothing is loaded: the engine starts later
 if [ "$MEM_AVAIL" -ge "$MIN_FREE" ]; then
     ok "memory: ${MEM_AVAIL} GiB available"
 elif [ "$START" = 1 ]; then
@@ -528,6 +539,7 @@ if [ "$SETUP" = 1 ]; then
 fi
 for r in "$BASE_REPO" "$NVFP4_REPO" "$B8_REPO" "$B16_REPO"; do
     [ "$SETUP" = 1 ] && break             # the setup guide checks the weights it is asked for
+    [ "$RUNTIME_ONLY" = 1 ] && break      # no weights here
     # the token goes to curl on stdin, never on its command line
     code="$( { [ -n "$HF_AUTH" ] && printf 'header = "Authorization: Bearer %s"\n' "$HF_AUTH"; true; } \
         | curl -s -K - -o /dev/null -w '%{http_code}' -m 20 "https://huggingface.co/api/models/$r" || true)"
@@ -537,7 +549,7 @@ for r in "$BASE_REPO" "$NVFP4_REPO" "$B8_REPO" "$B16_REPO"; do
         *) fail "cannot reach huggingface.co for $r (HTTP ${code:-none}); check the network" ;;
     esac
 done
-[ "$SETUP" = 1 ] || ok "Hugging Face: the four model repositories are readable"
+[ "$SETUP" = 1 ] || [ "$RUNTIME_ONLY" = 1 ] || ok "Hugging Face: the four model repositories are readable"
 unset HF_AUTH
 
 cat <<EOF
@@ -646,6 +658,12 @@ name = getattr(cls, "__name__", str(cls))
 assert not name.endswith("Pil"), f"the image processor resolved to {name} (PIL backend): torchvision is missing or too old"
 print(f"    ok pillow {PIL.__version__}, torchvision {torchvision.__version__}; image processor {name} (torchvision backend)")
 EOF
+fi
+
+if [ "$RUNTIME_ONLY" = 1 ]; then
+    printf '\n%sThe engine runtime is in %s%s (source at %s, Python in %s).\n' "$G" "$DIR" "$N" "$TANDEM_REF" "$VENV"
+    printf '    No weights, corpus or config yet: TandemApp'"'"'s Serve a model brings them.\n'
+    exit 0
 fi
 
 # ---------------------------------------------------------------------------------------------
