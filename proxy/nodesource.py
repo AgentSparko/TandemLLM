@@ -770,7 +770,15 @@ class AgentNode:
             return None
         return {"id": d["id"], "alias": d.get("hostname") or d["id"], "serial": d.get("serial"),
                 "hw": d.get("hw") or "unknown", "dmi": d.get("dmi") or "unknown",
-                "address": d.get("address") or self.client.host}
+                "address": d.get("address") or self.client.host,
+                "tandemllm": d.get("tandemllm"), "virtual": d.get("virtual")}
+
+    def agent_version(self, fresh: bool = False) -> str | None:
+        """The TandemNode release the agent runs (its identity's); `fresh` reads it again now (an
+        update just restarted it)."""
+        if fresh:
+            self._ident_at = -math.inf
+        return (self._identity() or {}).get("tandemllm")
 
     def alive(self) -> bool:
         """The agent answered its identity at the last try."""

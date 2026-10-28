@@ -54,6 +54,20 @@ ROUTES (every one behind the caller check below; JSON unless an event stream):
     PUT    /node/fleet                 {fingerprint, name}: the controller on this machine says this
                                        node is its fleet's own (loopback secret only); mDNS then
                                        says owned
+    GET    /node/update                whether this agent updates itself here, its version, the job
+                                       (proxy/nodeupdate.py, OPS-234)
+    PUT    /node/update/package?name=&sha256=     the wheel the controller updates it from
+    POST   /node/update {name, sha256, version, ref?, install_sh?}   202 and the job: the wheel
+                                       installed, the engine's runtime, the agent restarted on it
+    PUT    /node/owner {certificate, name, address?}   the controller moves (OPS-234): the owner
+                                       hands this node to the new controller's certificate; the
+                                       controller on this machine (the secret, no owner yet)
+                                       hands it on with the LAN address to listen on
+    GET    /node/controller            a controller this agent started on this machine, or none
+    POST   /node/controller {bundle, port, admin_token, name?, state_dir?}   the owner's: a
+                                       TandemApp controller started here as a systemd user unit
+                                       (proxy/appservice.py) with the fleet's export, which it
+                                       imports at its first start; its certificate in the answer
 
 CALLERS. An address is listened on as proxy/nodetrust.py's bind rule says: loopback in plain HTTP
 behind the loopback secret (`<state dir>/secret`, 0600, made at the first start) until the trust
@@ -124,7 +138,7 @@ if __package__ in (None, ""):                                    # pragma: no co
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from proxy import hostcollect, linktest, mdns, nodeclient, nodeengines, nodemaint  # noqa: E402
-from proxy import nodemetrics  # noqa: E402
+from proxy import nodemetrics, nodeupdate  # noqa: E402
 from proxy import nodesource, nodetrust, pairing  # noqa: E402
 
 DEFAULT_PORT = 7700
@@ -263,6 +277,16 @@ class Agent:
         self._inv: dict | None = None
         self._inv_at = -INVENTORY_EVERY_S
         self.mdns = None                         # the mDNS responder (main), or None
+        self.updater = nodeupdate.Updater(self.state_dir, virtual=virtual, tandem_dir=tandem_dir,
+                                          log=self.log, clock=clock,
+                                          release=lambda: self.code_release())
+        self.started_controller: dict | None = None
+        from proxy import appservice, _version
+        running = _version.release()
+        # the TandemLLM this agent's code is: read once, so an update installed beside it shows
+        # only once the agent runs it (nodeupdate's restart)
+        self.code_release = lambda: running
+        self.service = appservice.Service         # the controller's service (start_controller)
 
     def _sample(self, t: float) -> dict:
         with self._read_lock:
@@ -275,7 +299,6 @@ class Agent:
     def identity(self) -> dict:
         ident = self.local.identity()
         inv = self.local.inventory()
-        from proxy import _version
         owner = self.store.owner()
         return nodemetrics.prune({
             "id": self.node_id(),
@@ -284,7 +307,8 @@ class Agent:
             "hw": ident["hw"], "dmi": ident["dmi"], "address": ident["address"],
             "os": inv.get("os"), "kernel": inv.get("kernel"),
             "driver": inv.get("driver"), "cuda": inv.get("cuda"),
-            "tandemllm": _version.release() or None, "code_sha": self.code_sha,
+            "tandemllm": self.code_release() or None, "code_sha": self.code_sha,
+            "virtual": self.virtual,
             "agent": {"listen": [{"address": a, "port": m["port"], "mode": m["mode"]}
                                  for a, m in self.listening.items()],
                       "started_at": self.started, "pid": os.getpid()},
@@ -336,7 +360,7 @@ class Agent:
 
     def mdns_info(self) -> dict:
         """The `_tandemnode._tcp` service this node advertises (MDNS above)."""
-        from proxy import _version, discovery
+        from proxy import discovery
         r = self.reader
         dmi = {k: r._read("sys", "class", "dmi", "id", f) for k, f in (
             ("vendor", "sys_vendor"), ("product", "product_name"),
@@ -347,7 +371,7 @@ class Agent:
         owner = self.store.owner() or self.fleet_claim()
         nid = self.node_id()
         txt = {"v": "1", "id": nid, "class": "spark" if (got and got[1]) or gb10 else "other",
-               "ver": _version.release() or None, "hw": got[0] if got else None,
+               "ver": self.code_release() or None, "hw": got[0] if got else None,
                "paired": "1" if owner else "0"}
         if owner is not None:
             txt["owner"] = owner["fingerprint"][:16]
@@ -529,6 +553,110 @@ class Agent:
         threading.Timer(0.3, self.apply_trust).start()
         return was
 
+    def handover(self, body, role: str, who: str) -> dict:
+        """The controller moves (OPS-234): its successor's certificate pinned as the owner in
+        its place, the old owner's connections closed. The owner hands over; the controller on
+        this machine (the loopback secret) hands on a node no one owns, with the LAN `address`
+        the new controller reaches it at."""
+        if not isinstance(body, dict) or set(body) - {"certificate", "name", "address"}:
+            raise ValueError("the body is {certificate, name, address?}")
+        pem = str(body.get("certificate") or "")
+        name = str(body.get("name") or "")[:80]
+        with self._trust:
+            old = self.store.owner()
+            if role != "owner" and old is not None:
+                raise nodeengines.EngineError(403, "forbidden", "an owned node is handed over by "
+                                                                "its owner")
+            address = body.get("address")
+            if role != "owner":
+                ip = nodetrust.parse_ip(str(address or ""))
+                if ip.is_unspecified or ip.is_global or ip.is_loopback:
+                    raise nodetrust.BindRefused(f"{address}: the address the new controller "
+                                                f"reaches this node at, on the LAN or fabric")
+                address = str(ip)
+            fp = self.store.set_owner(pem, {"name": name, "via": "handover",
+                                            "paired_at": round(self.clock(), 3),
+                                            "address": address or (old or {}).get("address")})
+            if address:
+                self._remember_address(address)
+            self.store.audit("handover", by=who, controller=fp, name=name,
+                             **({"from": old["fingerprint"]} if old else {}))
+        self.log(f"[node] {who} handed this node to {name or 'a TandemApp'} (sha256 {fp[:16]})"
+                 + (f"; {old.get('name') or old['fingerprint'][:16]} is no longer pinned" if old
+                    else f"; listening on {address} in mTLS"))
+        threading.Timer(0.3, self.apply_trust).start()
+        return {"fingerprint": self.store.own_fingerprint(), "certificate": self.store.own_pem(),
+                "owner": fp, "port": self.port}
+
+    def start_controller(self, body, who: str) -> dict:
+        """A TandemApp controller on this machine (the controller moves here, OPS-234): its
+        state dir with the fleet's export and an env file, a systemd user unit, the controller
+        answering /health. Its certificate (made at its first start) comes back, for the owner
+        to hand the nodes to. A state dir that holds a controller's database already is
+        refused: an import never lands on another fleet."""
+        from proxy import appservice
+        if not isinstance(body, dict) or set(body) - {"bundle", "port", "admin_token", "name",
+                                                      "state_dir"}:
+            raise ValueError("the body is {bundle, port, admin_token, name?, state_dir?}")
+        port = body.get("port")
+        if not isinstance(port, int) or isinstance(port, bool) or not 1024 <= port < 65536 or \
+                port in (self.port, self.port + 1):
+            raise ValueError("port is a free port from 1024 to 65535, not the agent's")
+        from server.auth import MIN_TOKEN
+        token = body.get("admin_token")
+        if not isinstance(token, str) or len(token) < MIN_TOKEN or any(c.isspace() for c in token):
+            raise ValueError(f"admin_token is the controller's admin password ({MIN_TOKEN} or "
+                             f"more characters, no spaces): it listens on the LAN")
+        bundle = body.get("bundle")
+        if not isinstance(bundle, dict) or bundle.get("kind") != "tandemapp-export":
+            raise ValueError("bundle is the fleet's export (proxy/ctlmove.py)")
+        name = str(body.get("name") or appservice.UNIT)
+        d = os.path.expanduser(str(body.get("state_dir") or "~/.tandemllm/app"))
+        if os.path.exists(os.path.join(d, "config.sqlite3")):
+            raise nodeengines.EngineError(409, "not_empty", f"{d} holds a controller's database "
+                                                            f"already: pick another state dir")
+        made = not os.path.exists(d)
+        os.makedirs(d, mode=0o700, exist_ok=True)
+        env = {"TANDEM_ADMIN_TOKEN": token}
+        if self.virtual:
+            # a virtual node's controller: the machine under it is not this fleet's node
+            env.update(TANDEM_NODE_AGENT="off", TANDEM_LOCAL_NODE="off")
+        else:
+            env.update(TANDEM_NODE_AGENT=f"http://127.0.0.1:{self.port}",
+                       TANDEM_NODE_SECRET=self.secret_path)
+        _write_private(os.path.join(d, "app.env"),
+                       "".join(f"{k}={v}\n" for k, v in env.items()))
+        _write_private(os.path.join(d, "import.json"), json.dumps(bundle))
+        svc = self.service(name)
+        try:
+            st = svc.install(appservice.Spec(host="0.0.0.0", port=port, state_dir=d,
+                                             env_file=os.path.join(d, "app.env")))
+        except appservice.ServiceError as exc:
+            # nothing of a controller that did not come up stays: the move can run again
+            if exc.kind != "port_in_use":
+                tail = _journal(name)
+                svc.uninstall()
+                _clear(d, made)
+                self.log(f"[node] the controller {name} did not come up; removed")
+                raise nodeengines.EngineError(500, exc.kind, f"{exc.message}{tail}")
+            _clear(d, made)
+            raise nodeengines.EngineError(409, exc.kind, exc.message)
+        cert = os.path.join(d, "controller", "controller.crt")
+        end = time.monotonic() + 10
+        while not os.path.isfile(cert) and time.monotonic() < end:
+            time.sleep(0.2)
+        try:
+            pem = open(cert).read()
+        except OSError:
+            raise nodeengines.EngineError(500, "not_answering", f"{name} answers but has no "
+                                                                f"certificate at {cert} yet")
+        self.started_controller = {"name": name, "port": port, "state_dir": d,
+                                   "pid": st.get("pid"), "at": round(self.clock(), 3)}
+        self.log(f"[node] {who} started a TandemApp controller here: {name}.service on "
+                 f"0.0.0.0:{port}, state {d}")
+        return dict(self.started_controller, certificate=pem,
+                    fingerprint=nodetrust.pem_fingerprint(pem))
+
     def apply_trust(self) -> None:
         """Listen as the trust store now says: loopback in mTLS once it is filled (plain with the
         secret otherwise), the paired addresses in mTLS while it is, every TLS context renewed and
@@ -586,6 +714,41 @@ class Agent:
         out = [x for x in out if x.get("t") is not None]
         out.sort(key=lambda x: x["t"])
         return out[-limit:]
+
+
+def _journal(unit: str) -> str:
+    """The last line a failed controller unit printed, for the error."""
+    try:
+        r = subprocess.run(["journalctl", "--user", "-u", f"{unit}.service", "-n", "8",
+                            "--no-pager", "-o", "cat"], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    lines = [x for x in r.stdout.splitlines() if x.strip()]
+    return f"; it said: {lines[-1][:200]}" if lines else ""
+
+
+def _clear(d: str, made: bool) -> None:
+    """A state dir a controller start made (all of it), or the files it put in one given."""
+    import shutil
+    if made:
+        shutil.rmtree(d, ignore_errors=True)
+        return
+    for name in ("import.json", "app.env", "config.sqlite3", "config.sqlite3-wal",
+                 "config.sqlite3-shm", "ledger.sqlite3", "ledger.sqlite3-wal", "ledger.sqlite3-shm",
+                 "fleet.sqlite3", "fleet.sqlite3-wal", "fleet.sqlite3-shm", "secrets.key"):
+        try:
+            os.remove(os.path.join(d, name))
+        except FileNotFoundError:
+            pass
+    for sub in ("controller", "conductor", "logs", "packages"):
+        shutil.rmtree(os.path.join(d, sub), ignore_errors=True)
+
+
+def _write_private(path: str, text: str) -> None:
+    fd = os.open(path + ".part", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.replace(path + ".part", path)
 
 
 def _line(e: dict, source: str) -> dict:
@@ -762,6 +925,26 @@ class Handler(BaseHTTPRequestHandler):
                 doc = self.agent.claim(json.loads(self._body() or b"null"))
                 self._audit("fleet claim", 200)
                 return self._json(200, doc)
+            if head == "update":
+                return self._update(method, parts[2:], q)
+            if method == "PUT" and parts == ["node", "owner"]:
+                role = self._role()
+                if role not in ("owner",) + LOCAL_ROLES:
+                    return self._err(403, "forbidden", "the owner hands this node over")
+                doc = self.agent.handover(json.loads(self._body() or b"null"), role,
+                                          self._who())
+                self._audit("handover", 200)
+                return self._json(200, doc)
+            if head == "controller":
+                if self._role() != "owner":
+                    return self._err(403, "forbidden", "the owner starts a controller here")
+                if method == "GET" and len(parts) == 2:
+                    return self._json(200, {"controller": self.agent.started_controller})
+                if method == "POST" and len(parts) == 2:
+                    doc = self.agent.start_controller(json.loads(self._body() or b"null"),
+                                                      self._who())
+                    self._audit(f"start controller {doc['name']}", 200)
+                    return self._json(200, doc)
             if head == "linktest":
                 return self._linktest(method, parts[2:], q)
             if head == "setup":
@@ -771,6 +954,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._err(400, "bad_request", str(exc))
         except nodeengines.EngineError as exc:
             return self._json(exc.status, exc.body())
+        except nodeupdate.UpdateError as exc:
+            return self._json(exc.status, exc.body())
+        except (nodetrust.TrustError, nodetrust.BindRefused) as exc:
+            return self._err(400, "bad_request", str(exc))
 
     # ------------------------------------------------------------------ trust (SEC-4)
     def _pair(self, method: str, rest: list[str]) -> None:
@@ -778,6 +965,7 @@ class Handler(BaseHTTPRequestHandler):
         local = role in LOCAL_ROLES
         if method == "GET" and not rest and (local or role == "owner"):
             return self._json(200, {"fingerprint": a.store.own_fingerprint(),
+                                    "certificate": a.store.own_pem(),
                                     "owner": a.store.owner(),
                                     "window": a.window_view(with_code=local),
                                     "listen": a.store.listen_addrs(),
@@ -882,6 +1070,23 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(202, job)
         return self._err(404, "not_found", f"no route {method} /node/maintenance/"
                                            f"{'/'.join(rest)}")
+
+    def _update(self, method: str, rest: list[str], q: dict) -> None:
+        up = self.agent.updater
+        if self._role() not in ("owner",) + LOCAL_ROLES:
+            return self._err(403, "forbidden", "the owner updates this node")
+        if method == "GET" and not rest:
+            return self._json(200, up.view())
+        if method == "PUT" and rest == ["package"]:
+            doc = up.receive(q.get("name") or "", q.get("sha256") or "",
+                             self._body(nodeupdate.PKG_MAX))
+            self._audit(f"update package {doc['name']}", 200)
+            return self._json(200, doc)
+        if method == "POST" and not rest:
+            job = up.start(json.loads(self._body() or b"null"), self._who())
+            self._audit(f"update to {job['version']}", 202)
+            return self._json(202, job)
+        return self._err(404, "not_found", f"no route {method} /node/update/{'/'.join(rest)}")
 
     def _relay_get(self, e, path: str, query: str) -> None:
         try:
