@@ -85,6 +85,13 @@ OpenAI-compatible backend's ("maximum context length is n tokens", a relay's bac
 /v1/tokenize` (server/tokenize_api.py) with the prompt's tokens, or this number when it is an int;
 None: 404, a server without the route (`fake.counted` counts the calls). `--key` makes
 every route need `Authorization: Bearer <key>`.
+
+Our engine's side of a relay (SRV-733): `board = True` answers `GET /v1/dashboard/parallel` with a
+lane per request in flight that carries `X-Tandem-Relay-Id` (None: 404, a server without the
+board); `top` holds what /v1/models carries beside `data` (the engine's `decision_models`);
+`GET /v1/models/{id}` is the card of a listed id, of an id in `aliases`, else the engine's 404. A
+script's `quiet` is seconds of silence before any byte (a request the engine thinks over without
+a stream, or before its head), its `headers` the answer's own headers.
 """
 
 from __future__ import annotations
@@ -188,6 +195,11 @@ class Fake:
         self.live = None
         # SRV-707: what /health adds (our engine's: max_len, parallel); None: {"status": "ok"} alone
         self.health: dict | None = None
+        # SRV-733 (see the module doc): the board of the requests in flight, the list's extras
+        self.board = False
+        self.inflight: set = set()
+        self.top: dict = {}
+        self.aliases: dict[str, str] = {}
 
     def prompt_tokens(self, body: dict) -> tuple[int, int]:
         """(prompt tokens, cached) with the prefix cache: the longest earlier message prefix."""
@@ -274,15 +286,44 @@ def make_handler(fake: Fake):
                 self.end_headers()
                 self.wfile.write(raw)
                 return
+            if p == "/v1/dashboard/parallel" and fake.board:
+                with fake.lock:
+                    lanes = [{"relay_id": r, "state": "thinking"} for r in sorted(fake.inflight)]
+                return self._json(200, {"lanes": lanes})
             if p in ("/v1/models", "/models"):
                 if not self._authed():
                     return
                 return self._json(200, {"object": "list", "data": [
-                    {"id": m, "object": "model", "created": 1, "owned_by": fake.name,
-                     "max_model_len": 32768, **fake.cards.get(m, {})} for m in fake.models]})
+                    self._card(m) for m in fake.models], **fake.top})
+            if p.startswith("/v1/models/"):
+                if not self._authed():
+                    return
+                from urllib.parse import unquote
+                name = unquote(p[len("/v1/models/"):])
+                if name in fake.models or name in fake.aliases:
+                    return self._json(200, self._card(fake.aliases.get(name, name)))
+                return self._json(404, {"error": {"message": f"no model {name!r}",
+                                                  "type": "invalid_request_error",
+                                                  "param": "model", "code": "model_not_found"}})
             return self._json(404, {"error": {"message": "no route", "type": "not_found"}})
 
+        def _card(self, m):
+            return {"id": m, "object": "model", "created": 1, "owned_by": fake.name,
+                    "max_model_len": 32768, **fake.cards.get(m, {})}
+
         def do_POST(self):
+            rid = self.headers.get("X-Tandem-Relay-Id")
+            if rid:
+                with fake.lock:
+                    fake.inflight.add(rid)
+            try:
+                return self._post()
+            finally:
+                if rid:
+                    with fake.lock:
+                        fake.inflight.discard(rid)
+
+        def _post(self):
             p = self.path.split("?")[0]
             n = int(self.headers.get("Content-Length") or 0)
             raw = self.rfile.read(n)
@@ -403,6 +444,8 @@ def make_handler(fake: Fake):
 
         def _scripted(self, body, got: dict):
             """A completion the test's script wrote (`fake.script`)."""
+            if got.get("quiet"):
+                time.sleep(float(got["quiet"]))
             if got.get("status"):
                 return self._json(int(got["status"]), {"error": {
                     "message": got.get("message") or f"fake {got['status']}",
@@ -418,17 +461,20 @@ def make_handler(fake: Fake):
             words = ("FAKE_DROP " if got.get("drop") else "") + \
                 ("FAKE_FINISH_ERROR " if got.get("finish") == "error" else "") + \
                 (f"FAKE_TPS {got['tps']} " if got.get("tps") else "")
+            extra = list((got.get("headers") or {}).items())
             if not body.get("stream"):
                 msg = {"role": "assistant", "content": content}
                 return self._json(200, {"id": "chatcmpl-s", "object": "chat.completion",
                                         "created": 1, "model": body.get("model"), "choices": [
                                             {"index": 0, "message": msg, "finish_reason": "stop"}],
-                                        "usage": usage})
+                                        "usage": usage}, extra)
             opts = body.get("stream_options") or {}
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Transfer-Encoding", "chunked")
+            for k, v in extra:
+                self.send_header(k, v)
             self.end_headers()
             try:
                 self._stream(True, "chatcmpl-s" + ulid_ish(), body.get("model"), reasoning, answer,
