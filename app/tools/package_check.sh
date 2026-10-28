@@ -1,19 +1,23 @@
 #!/bin/bash
 # The installable package, checked as a stranger would use it: build the wheel, install it into a
-# clean venv with no torch, run `tandem-app check`, start `tandem-app serve` from an env file
-# with a fake backend, and read /v1/models, the page and the System body.
+# clean venv with no torch, import TandemApp from it with nothing else on the path (no server,
+# engine, torch or numpy may load), run `tandem-app version` and `check`, start `tandem-app serve`
+# from an env file with a fake backend and read /v1/models, the page and the System body, then
+# start `tandem-node` from the wheel and read its identity as a controller does.
 #
 #   bash tools/package_check.sh [--extras host] [--out DIR]
 #
 # Needs Python 3.11 or newer as $PY (default python3) and the network for pip (cryptography,
 # setuptools; psutil and nvidia-ml-py with --extras host). Writes nothing outside a temp dir and
-# DIR (default results/package-check-<time>). Exit 0 when every check passed.
+# DIR (default results/package-check-<time>). Ports: the fake backend 19100-19299, serve
+# 19300-19499, tandem-node 19500-19589. Exit 0 when every check passed.
 #
 # It never reaches this machine's own TandemNode (SRV-745). After the pip steps every command runs
-# with HOME in the temp dir and TANDEM_NODE_AGENT=off, and the conductor's documents live in the
-# temp dir. The real node's claim and trust store (~/.tandemllm/node/fleet.json and trust/*, under
-# the home in the password database, as tests/realnode.py reads it) are hashed before the pip steps
-# and again at the exit, compared here and never printed: a change fails the check.
+# with HOME in the temp dir and TANDEM_NODE_AGENT=off, and the conductor's documents and the
+# agent's state live in the temp dir. The real node's claim and trust store
+# (~/.tandemllm/node/fleet.json and trust/*, under the home in the password database, as
+# tests/realnode.py reads it) are hashed before the pip steps and again at the exit, compared here
+# and never printed: a change fails the check.
 set -u
 cd "$(dirname "$0")/.."
 REPO=$PWD
@@ -30,21 +34,20 @@ OUT=${OUT:-results/package-check-$(date +%Y%m%d-%H%M)}
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 T=$(mktemp -d "${TMPDIR:-/tmp}/tandem-pkg-XXXXXX") || { echo "FAIL no temp dir"; exit 1; }
-SRV=""; FAKE=""; REAL=""; REAL_DONE=""
+SRV=""; FAKE=""; NODE=""; REAL=""; REAL_DONE=""
 fail() { echo "FAIL $*" | tee -a "$OUT/summary.txt"; exit 1; }
 
-stop() {                          # what this check started: TERM, then KILL after 10 s
-  local p i up
-  for p in $SRV $FAKE; do kill "$p" 2>/dev/null; done
+halt() {                          # a process this check started: TERM, then KILL after 10 s
+  local i
+  [ -n "$1" ] || return 0
+  kill "$1" 2>/dev/null
   for i in $(seq 50); do
-    up=""
-    for p in $SRV $FAKE; do kill -0 "$p" 2>/dev/null && up=1; done
-    [ -n "$up" ] || break
+    kill -0 "$1" 2>/dev/null || return 0
     sleep 0.2
   done
-  for p in $SRV $FAKE; do kill -KILL "$p" 2>/dev/null; done
-  SRV=""; FAKE=""
+  kill -KILL "$1" 2>/dev/null
 }
+stop() { halt "$SRV"; halt "$FAKE"; halt "$NODE"; SRV=""; FAKE=""; NODE=""; }
 
 # {path: sha256} of the real node's fleet.json and trust/*; `same` compares it with the JSON on
 # stdin and prints the changed names and the count, never a hash
@@ -121,6 +124,20 @@ if grep -Eq "tests/|node_modules|\.safetensors|\.pt$|/src/.*\.ts$" "$OUT/wheel-f
   fail "the wheel holds tests, node_modules, weights or dashboard sources"
 fi
 grep -q "proxy/dashboard/index.html" "$OUT/wheel-files.txt" || fail "no built page in the wheel"
+# every file of the built page, as proxy/dashboard/<path> (sw.js was missing until SRV-747)
+"$PY" -I - "$WHL" "$T/src/dashboard/dist" >"$OUT/dist.log" 2>&1 <<'EOF' \
+  || fail "dashboard/dist files missing from the wheel (dist.log)"
+import os, sys, zipfile
+names = set(zipfile.ZipFile(sys.argv[1]).namelist())
+root = sys.argv[2]
+files = sorted(os.path.relpath(os.path.join(d, f), root).replace(os.sep, "/")
+               for d, _, fs in os.walk(root) for f in fs)
+missing = [f for f in files if "proxy/dashboard/" + f not in names]
+print(len(files), "files in dashboard/dist,", len(missing), "missing:", missing[:20])
+sys.exit(1 if missing or not files else 0)
+EOF
+echo "PASS the built page in the wheel ($(cut -d' ' -f1 "$OUT/dist.log") files)" \
+  | tee -a "$OUT/summary.txt"
 
 $PY -m venv "$T/venv" || fail "the clean venv"
 "$T/venv/bin/pip" -q install "$WHL$EXTRAS" >"$OUT/install.log" 2>&1 || fail "pip install (install.log)"
@@ -136,7 +153,7 @@ mkdir -p "$T/home"
 export HOME="$T/home" TANDEM_NODE_AGENT=off
 
 # a fake backend from the checkout's tests (not part of the wheel)
-FPORT=$((19100 + $$ % 400)); PORT=$((19600 + $$ % 300))
+FPORT=$((19100 + $$ % 200)); PORT=$((19300 + $$ % 200)); NPORT=$((19500 + $$ % 90))
 $PY "$REPO/tests/fake_backend.py" --port $FPORT --models fake-a >"$OUT/fake.log" 2>&1 &
 FAKE=$!
 cat > "$T/app.env" <<EOF
@@ -146,8 +163,28 @@ TANDEM_BACKEND_FAKE_URL=http://127.0.0.1:$FPORT/v1
 TANDEM_SECRETS_KEY=a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=
 EOF
 cd "$T"                                     # nowhere near the checkout: the wheel alone
+# TandemApp's entry points and heaviest modules, the venv alone on the path: no engine loads, and
+# there is no `server` to find
+"$T/venv/bin/python" -I - >"$OUT/imports.log" 2>&1 <<'EOF' \
+  || fail "the installed app reaches the engine (imports.log)"
+import importlib, importlib.util, sys
+for name in ("proxy.__main__", "proxy.app", "proxy.nodeagent", "chatd", "tandemapp.conductor.routes"):
+    importlib.import_module(name)
+bad = sorted(m for m in sys.modules if m.split(".")[0] in ("server", "engine", "torch", "numpy"))
+spec = importlib.util.find_spec("server")
+print(len(sys.modules), "modules; server, engine, torch or numpy:", bad, "; find_spec(server):", spec)
+sys.exit(1 if bad or spec is not None else 0)
+EOF
+echo "PASS imports: proxy.__main__, proxy.app, proxy.nodeagent, chatd, tandemapp.conductor.routes;" \
+  "no server, engine, torch or numpy" | tee -a "$OUT/summary.txt"
 APP="$T/venv/bin/tandem-app"
-"$APP" version | tee -a "$OUT/summary.txt"
+VER=$(basename "$WHL" | cut -d- -f2)      # the wheel's version: VERSION's, as PEP 440 writes it
+WANT=$("$T/venv/bin/python" -I -c 'import sys; from proxy import _version
+print(_version.pep440(open(sys.argv[1]).read()))' "$T/src/VERSION") || fail "reading VERSION"
+[ "$VER" = "$WANT" ] || fail "the wheel says $VER, VERSION $WANT"
+V=$("$APP" version) || fail "tandem-app version"
+echo "$V" | tee -a "$OUT/summary.txt"
+case "$V" in "tandemapp $VER "*) ;; *) fail "tandem-app version does not say tandemapp $VER" ;; esac
 OLD="$T/venv/bin/tandem-dash"               # the old name (OPS-238): one line on stderr, the same answer
 "$OLD" version 2>"$OUT/alias.err" | cmp -s - <("$APP" version) \
   || fail "the old name answered differently"
@@ -196,6 +233,33 @@ with urllib.request.urlopen(r, timeout=30) as resp:
 print("ok", file=log)
 EOF
 echo "PASS serve: /v1/models, /dashboard/, system with hosts, one request" | tee -a "$OUT/summary.txt"
+# TandemNode from the wheel: a virtual node with its own state dir and port, on loopback, no mDNS;
+# its identity read as a controller reads it (proxy/nodesource.py AgentNode, the loopback secret)
+"$T/venv/bin/tandem-node" serve --host 127.0.0.1 --port $NPORT --state-dir "$T/node" \
+  --virtual pkgcheck --mdns off >"$OUT/node.log" 2>&1 &
+NODE=$!
+"$T/venv/bin/python" -I - "$NPORT" "$T/node/secret" "$VER" >"$OUT/node-check.log" 2>&1 <<'EOF' \
+  || fail "tandem-node (node.log, node-check.log)"
+import sys, time
+from proxy import nodesource, nodetrust
+port, secret, want = sys.argv[1], sys.argv[2], sys.argv[3]
+node = nodesource.AgentNode(f"http://127.0.0.1:{port}",
+                            secret=lambda: nodetrust.load_secret(secret))
+ident = None
+for _ in range(150):
+    ident = node.identity()
+    if ident:
+        break
+    time.sleep(0.2)
+node.close()
+assert ident, "no identity within 30 s"
+print("version", ident.get("tandemllm"), "virtual", ident.get("virtual"))
+assert ident.get("tandemllm") == want, (ident.get("tandemllm"), want)
+assert ident.get("virtual") == "pkgcheck", ident.get("virtual")
+EOF
+halt "$NODE"; NODE=""
+echo "PASS tandem-node: its identity through AgentNode, version $VER; stopped" \
+  | tee -a "$OUT/summary.txt"
 "$T/venv/bin/pip" list --format=freeze | grep -Eiq "^torch==" && fail "torch appeared"
 real_check || exit 1
 echo "PASS all ($OUT)" | tee -a "$OUT/summary.txt"

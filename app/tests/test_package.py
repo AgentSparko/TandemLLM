@@ -238,7 +238,15 @@ def test_package_check_keeps_off_the_real_node():
         assert i > home, f"before HOME and TANDEM_NODE_AGENT=off: {s}"
         if re.search(r'"\$APP" (check|serve)\b', s):
             assert '--conductor-config "$T/conductor"' in s, f"no --conductor-config: {s}"
+    # TandemNode from the wheel: its own state dir and port, loopback, no mDNS
+    nodes = [(i, s) for i, s in code if re.search(r'/bin/tandem-node"? ', s)]
+    assert nodes, "package_check.sh starts no tandem-node"
+    for i, s in nodes:
+        assert i > home and re.search(r'^"\$T/venv/bin/tandem-node" serve ', s), s
+        for arg in ('--host 127.0.0.1 ', '--state-dir "$T/node" ', '--mdns off ', '--virtual '):
+            assert arg in s, f"tandem-node without {arg.strip()}: {s}"
     text = "\n".join(lines)
+    assert 'importlib.util.find_spec("server")' in text, "the installed app's imports are audited"
     assert "pwd.getpwuid(os.getuid()).pw_dir" in text, "the real home, not $HOME"
     assert "trap finish EXIT" in text and "real_check || rc=1" in text
     assert 'echo "FAIL the real TandemNode state changed"' in text
