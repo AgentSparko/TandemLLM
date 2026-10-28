@@ -48,7 +48,8 @@ def default_max_output(cls, m: dict) -> int | None:
 
 
 class Route:
-    __slots__ = ("backend", "model", "public", "fallbacks", "price", "rule")
+    __slots__ = ("backend", "model", "public", "fallbacks", "price", "rule", "deployment",
+                 "no_replay", "on_served")
 
     def __init__(self, backend: str, model: str, public: str, fallbacks=(), price=None,
                  rule=None):
@@ -58,6 +59,11 @@ class Route:
         self.fallbacks = list(fallbacks)    # [(backend id, upstream model id)]
         self.price = price
         self.rule = rule
+        # SRV-731 (proxy/deployments.py): the deployment a request goes to, whether a member that
+        # took its body may hand it on (a constrained request: never), the turn's callback
+        self.deployment = None
+        self.no_replay = False
+        self.on_served = None
 
     def candidates(self) -> list[tuple[str, str]]:
         return [(self.backend, self.model)] + self.fallbacks

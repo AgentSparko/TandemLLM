@@ -167,6 +167,12 @@ class Service:
         self.harness = None
         # the backend's drained node, or None (TandemApp's fleet sets it, proxy/fleetops.py)
         self.drain_of = lambda bid: None
+        # SRV-731 (proxy/deployments.py, set by TandemApp's fleet): the route of a deployment's
+        # model (None: the table routes it), the model list with each deployment once, and the
+        # node and deployment of a backend for the answer's headers and the ledger row
+        self.place = None
+        self.listing = None
+        self.locate = lambda bid, model: None
         # the monitor's policy: its stall watchdog's ntfy settings carry the push of a new model
         self.monitor_base = monitor_base
         self.notifier = None                   # notify.send; a test puts its own here
@@ -297,6 +303,17 @@ class Service:
             pass
         return False, None
 
+    def resolve(self, body: dict, headers=None):
+        """The route of a request at the standalone proxy: a fleet deployment's (its members),
+        else the table's. route.NotFound, or proxy.deployments.Refused for a deployment that
+        serves nothing now."""
+        model = body.get("model") or ""
+        if self.place is not None:
+            r = self.place(model, body, headers)
+            if r is not None:
+                return r
+        return self.table.resolve(model)
+
     def route(self, path: str, body: dict):
         """The route of a request, or None when no backend's model is asked for. NotFound for a
         model the table knows is ambiguous."""
@@ -350,6 +367,8 @@ class Service:
         handler._px_written = False
         try:
             self.relay.serve(handler, path, raw, body, route, rec)
+            if getattr(route, "on_served", None) is not None:
+                route.on_served(rec)                 # a Replicas member keeps the conversation
         except Exception as exc:                                   # noqa: BLE001
             rec.finish_reason = rec.finish_reason or "error"
             rec.error_type = rec.error_type or type(exc).__name__
@@ -438,7 +457,16 @@ class Service:
         self.account(rec)
 
     def models(self, created: int) -> list[dict]:
+        if self.listing is not None:
+            return self.listing(created)
         return self.table.listing(created)
+
+    def card(self, name: str, created: int) -> dict | None:
+        if self.listing is not None:
+            got = next((m for m in self.listing(created) if m["id"] == name), None)
+            if got is not None:
+                return got
+        return self.table.card(name, created)
 
     # ----------------------------------------------------------------- views
     def cost_today(self, tz=None) -> dict:

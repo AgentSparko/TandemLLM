@@ -35,6 +35,13 @@ touched.
 MAINTENANCE (VIS-250): a backend on a drained node (`svc.drain_of`, proxy/fleetops.py) takes no
 new request: the route's fallbacks are tried, and with none left the client gets a 503
 `node_draining` with `Retry-After: 30`. A request already relayed there runs to its end.
+
+THE FLEET (SRV-731, proxy/deployments.py): a backend on a fleet node (`svc.locate`) names the node
+and its deployment in the answer, `X-Tandem-Node` (the node's alias) and `X-Tandem-Deployment`,
+and in the ledger row (`node`, its id, and `deployment`). A deployment's members are its route's
+first fallbacks. A constrained request (`route.no_replay`) goes to the next one only when the
+member never took it (a connect failure): after its body went out, the member's answer is the
+client's, a 429 or 503 included.
 """
 
 from __future__ import annotations
@@ -164,6 +171,7 @@ class Relay:
         the ledger row."""
         stream = bool(body.get("stream")) and path != "/v1/embeddings"
         rec.public_model = route.public
+        rec.deployment = getattr(route, "deployment", None)
         cands = route.candidates()
         tries = 0
         last = None                         # (status, reason, headers, body bytes) to relay
@@ -191,6 +199,9 @@ class Relay:
                                                "node_draining")).encode())
                 i += 1
                 continue
+            loc = self.svc.locate(bid, upstream_model)
+            rec.node, rec.node_alias = (loc[0], loc[1]) if loc else (None, None)
+            rec.deployment = getattr(route, "deployment", None) or (loc[2] if loc else None)
             if not self.inflight.take(bid, backend.get("max_inflight")):
                 rec.upstream_status = None
                 last = (503, "Service Unavailable", [("Retry-After", "1")], json.dumps(
@@ -212,7 +223,8 @@ class Relay:
             # a failure before any byte reached the client
             last = outcome[1]
             retry_after = outcome[2]
-            if tries >= MAX_RETRIES:
+            if tries >= MAX_RETRIES or (getattr(route, "no_replay", False)
+                                        and outcome[3] != "connect"):
                 break
             tries += 1
             self.svc.count_retry(bid, outcome[3])
@@ -344,7 +356,8 @@ class Relay:
         return ("done",)
 
     # ----------------------------------------------------------------- answers
-    def _start(self, handler, status: int, uh, backend: dict, stream: bool, length=None) -> None:
+    def _start(self, handler, status: int, uh, backend: dict, stream: bool, length=None,
+               rec=None) -> None:
         handler._px_written = True
         handler.send_response(status)
         ctype = next((v for k, v in uh if k.lower() == "content-type"), "application/json")
@@ -353,6 +366,10 @@ class Relay:
             if _passed(k):
                 handler.send_header(k, v)
         handler.send_header("X-Tandem-Backend", backend["id"])
+        if rec is not None and getattr(rec, "node_alias", None):
+            handler.send_header("X-Tandem-Node", rec.node_alias)
+        if rec is not None and getattr(rec, "deployment", None):
+            handler.send_header("X-Tandem-Deployment", rec.deployment)
         if stream:
             handler.send_header("Cache-Control", "no-cache")
             handler.send_header("X-Accel-Buffering", "no")
@@ -367,7 +384,7 @@ class Relay:
         st = Stamps()
         to = backend["timeouts"]
         hx = getattr(rec, "hx", None)
-        self._start(handler, 200, uh, backend, True)
+        self._start(handler, 200, uh, backend, True, rec=rec)
         w = handler.wfile
         if (handler.headers.get("X-Tandem-Cost") or "").strip() == "1":
             w = CostTap(w, lambda: self._cost_line(st, adapter, path, backend, rec))
@@ -562,7 +579,7 @@ class Relay:
             for ev in data.replace(b"\r\n", b"\n").split(b"\n\n"):
                 adapter.read_frame(path, ev, st, False)
         try:
-            self._start(handler, status, uh, backend, False, len(data))
+            self._start(handler, status, uh, backend, False, len(data), rec=rec)
             handler.wfile.write(data)
             handler.wfile.flush()
         except (BrokenPipeError, ConnectionResetError, OSError):
@@ -613,6 +630,8 @@ class Relay:
             for k, v in headers:
                 if k.lower() != "content-type" and (_passed(k) or k.lower() == "retry-after"):
                     handler.send_header(k, v)
+            if getattr(rec, "deployment", None):
+                handler.send_header("X-Tandem-Deployment", rec.deployment)
             handler.send_header("Content-Length", str(len(data)))
             handler.end_headers()
             handler.wfile.write(data)

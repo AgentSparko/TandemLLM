@@ -7,7 +7,9 @@ serves on one port:
     POST /v1/chat/completions, /v1/completions, /v1/embeddings, /v1/responses
                                    relayed to the backend the model routes to (proxy/route.py)
     GET  /v1/models, /v1/models/{id}
-                                   every backend's real models, `owned_by` its id
+                                   each fleet deployment once under its API id (SRV-731,
+                                   proxy/deployments.py), then every backend's real models,
+                                   `owned_by` its id
     GET  /dashboard/               the dashboard (dashboard/dist, served from disk)
     GET  /v1/dashboard/*           summary, usage, requests, system, live, logs, metrics, session
     *    /v1/config/*              the Backends and Setup screens (proxy/config_api.py)
@@ -291,7 +293,7 @@ class Handler(BaseHTTPRequestHandler):
             if not ok:
                 return
             name = unquote(path[len("/v1/models/"):])
-            card = STATE["svc"].table.card(name, int(STATE["svc"].started))
+            card = STATE["svc"].card(name, int(STATE["svc"].started))
             if card is None:
                 return self._json(404, {"error": {"message": f"no model {name!r}",
                                                   "type": "invalid_request_error",
@@ -380,11 +382,16 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._json(400, {"error": {"message": "the body must be a JSON object",
                                               "type": "invalid_request_error"}})
+        from proxy import deployments
         try:
-            route = svc.table.resolve(body.get("model") or "")
+            route = svc.resolve(body, self.headers)
         except route_mod.NotFound as exc:
             svc.account_refusal(self, path, body, 404, user=user, error_type="model_not_found")
             return self._json(404, exc.body())
+        except deployments.Refused as exc:         # SRV-731: a stopped deployment, a Split
+            svc.account_refusal(self, path, body, exc.status, user=user, finish="refused",
+                                error_type=exc.code)
+            return self._json(exc.status, exc.body())
         svc.serve(self, path, raw, body, route, user, t_arrival=t_arrival)
 
     def _write(self, method: str):
@@ -445,7 +452,9 @@ class Handler(BaseHTTPRequestHandler):
             # SSH and installing log in to a machine and pair it: pairing's rights
             route = "fleet_trust" if method == "POST" and (
                 parts[-1:] in (["connect"], ["check"], ["install"])) else "conductor_write"
-        elif method == "GET" or (method == "PUT" and parts[:1] == ["layouts"]):
+        elif method == "GET" or (method == "PUT" and parts[:1] == ["layouts"]) or \
+                (method == "POST" and parts == ["placement"]):
+            # SRV-731: the placement planner is a read (each node's memory estimate) in a POST
             route = "dashboard"
         elif parts[:1] in (["update"], ["controller"]):
             # OPS-234: the fleet update installs software on every node, a move hands every node

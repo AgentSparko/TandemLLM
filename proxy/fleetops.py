@@ -21,8 +21,9 @@ of the gateway's own requests on the node's engines and the engines' own count o
 they run (a client that calls an engine's port directly is counted by the engine, never turned
 away). The node shows `draining` until nothing is in flight, then drained (`drain.state`); an off
 node stays off. The drain is kept in the node's record, so it outlives a restart of the
-controller; Undrain ends it. Until Replicas (one engine per deployment) "elsewhere" is a route's
-fallback; without one a new request waits for Retry-After.
+controller; Undrain ends it. "Elsewhere" is another member of a Replicas deployment (SRV-731: its
+conversations go there at their next turn, the gateway never places a new one on the drained
+member), else a route's fallback; without either a new request waits for Retry-After.
 
 RESTART, REBOOT, UPDATE go to the node's TandemNode agent: an engine's restart
 (`/node/engines/{id}/restart`, refused 409 `not_managed` for an engine TandemNode did not start),
@@ -159,8 +160,13 @@ class Ops:
         return [d for d in self.fleet.deployments() if nid in d["members"]]
 
     def _elsewhere(self, d: dict, nid: str) -> str | None:
-        """Where a deployment's new requests go while its node takes none: the label of the
-        first fallback of its route on another node that takes requests, else None."""
+        """Where a deployment's new requests go while its node takes none: another member that
+        serves (a Replicas record, SRV-731: `<alias>, another member`), else the label of the
+        first fallback of its route on another node that takes requests (`<label>, its route's
+        fallback`), else None."""
+        for m in d.get("member_states") or []:
+            if m["node"] != nid and m["routable"]:
+                return f"{m['alias']}, another member"
         f = self.fleet
         try:
             route = f.svc.table.resolve(d["api_id"])
@@ -172,7 +178,7 @@ class Ops:
                 continue
             b = f.svc.table.backend_for(bid)
             if b is not None:
-                return b.get("label") or bid
+                return f"{b.get('label') or bid}, its route's fallback"
         return None
 
     def _stops(self, p: dict, row: dict, src, what: str) -> None:
@@ -206,7 +212,7 @@ class Ops:
                            f"nothing is in flight on {a}: it is drained at once")
         for d in self._deployments(row["id"]):
             to = self._elsewhere(d, row["id"])
-            p["impact"].append(f"{d['name']}: new requests go to {to}, its route's fallback" if to
+            p["impact"].append(f"{d['name']}: new requests go to {to}" if to
                                else f"{d['name']}: new requests wait, the gateway answers 503 "
                                     f"with Retry-After {DRAIN_RETRY_S} s until {a} takes them "
                                     f"again")

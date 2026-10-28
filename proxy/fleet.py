@@ -16,7 +16,17 @@ dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_wri
                                                     controller's own process (VIS-248)
     PATCH /v1/fleet/nodes/{id}                      {alias?, colour?, icon?, tags?}
     GET   /v1/fleet/links, /v1/fleet/topology       the LAN and the internet as this host sees them
-    GET   /v1/fleet/deployments                     each model an engine on a node serves: Single
+    *     /v1/fleet/deployments[/{id}[/actions/{action}]]   the deployments: records (Single,
+                                                    Replicas, Split, Role) and the Singles derived
+                                                    from what no record covers; start, stop and
+                                                    move through the agents
+                                                    (proxy/deployments.py, SRV-731)
+    POST  /v1/fleet/placement                       {model, pack, ctx, ...}: each node's fit from
+                                                    its own Setup Guide estimate and the types
+                                                    allowed, or why not (proxy/placement.py)
+    *     /v1/fleet/weights[/...]                   the packs on every node, a copy node to node
+                                                    verified by content id, a removal with its
+                                                    confirm (proxy/fleetweights.py)
     GET   /v1/fleet/metrics?source=&metric=&range=  per-node series from the sampler's rings
     GET   /v1/fleet/memory                          the unified memory split per node, GiB
     GET   /v1/fleet/logs?node=&level=&q=&limit=     the nodes' log lines, oldest first
@@ -76,11 +86,11 @@ one-peer setup before TandemApp) is a node record at its address, unpaired until
 Pairing, release and take-over are routes of their own (the `fleet_trust` rule of server/auth.py:
 the admin password, or this machine; with no password set, this machine only).
 
-THE DEPLOYMENTS. Each model an engine backend on a node serves itself is a Single deployment on that
-node; its id is the model's public id at this gateway, its status the backend's health. One model
-id served by engines on two or more nodes is one Replicas deployment over them (OPS-234: the
-gateway reaches the others through the route's fallbacks; serving while one drains, degraded
-while one is down). Step 6 (SRV-731) gives deployments their own records.
+THE DEPLOYMENTS (proxy/deployments.py, SRV-731) are records: a type, members (node, engine,
+backend), a pack and options; the gateway routes a record's API id to its members, and /v1/models
+lists each deployment once. A model an engine on a node serves that no record covers is a Single
+derived from what that engine serves (the box's unmanaged engine on :8000 among them); 5.3's
+interim rule (one model id on two nodes = Replicas) is gone: Replicas are records.
 
 A CONTROLLER THAT MOVED (proxy/ctlmove.py) says where to (`moved_to`) and reads no node any more,
 this machine's included. TANDEM_LOCAL_NODE=off (a controller a virtual node started) never makes
@@ -297,6 +307,11 @@ class Fleet:
         self._proc_prev: tuple[float, float] | None = None
         self.ops = fleetops.Ops(self)
         svc.drain_of = self.ops.drain_of        # the gateway's question, per request
+        from proxy import deployments, fleetweights, placement
+        self.deps = deployments.Deployments(self)
+        svc.place, svc.listing, svc.locate = self._place, self._listing, self._locate
+        self.placement = placement.Planner(self)
+        self.weights = fleetweights.Weights(self)
         self._discovery = None
         self._wizard = None
         self._tunnels = None
@@ -393,6 +408,11 @@ class Fleet:
                              detail)
         self._thread = threading.Thread(target=self._run, name="fleet-sampler", daemon=True)
         self._thread.start()
+        try:
+            self.deps.interrupted()
+            self.weights.interrupted()
+        except Exception as exc:                                     # noqa: BLE001
+            self.log(f"[fleet] the deployment jobs were not read: {type(exc).__name__}: {exc}")
         if self.cfg.job("update") is not None:
             try:
                 self.updater().resume()
@@ -730,52 +750,23 @@ class Fleet:
 
     # ------------------------------------------------------------------ what runs where
     def deployments(self) -> list[dict]:
-        self.ensure_local()
-        now = self.clock()
-        snap = self.svc.table.snapshot()["by_backend"]
-        out = []
-        for node, p in self._engines():
-            rows = snap.get(p.id) or {}
-            h = self.svc.health.view(p.id)
-            cards = p.cards(now) if p.kind == "tandemllm" else None
-            if cards is not None:
-                items = [(c, rows.get(c["id"])) for c in cards]
-            else:
-                items = [({"id": m, "name": m, "model": m, "pack": "", "ctx": r["context_length"],
-                           "loaded": True}, r) for m, r in sorted(rows.items())]
-            for card, row in items:
-                if row is None:                  # not served at this gateway (off, or gone)
-                    continue
-                if h["state"] == "up":
-                    st, txt = ("serving", "serving") if card["loaded"] else \
-                        ("starting", "loading the model")
-                elif h["state"] == "down":
-                    st, txt = "down", f"down · {h['last_error'] or 'no answer'}"
-                else:
-                    st, txt = "starting", "waiting for the first health check"
-                pub = row["public_id"] or row["model"]
-                out.append({"id": pub, "name": card["name"], "model": card["model"],
-                            "pack": card["pack"], "type": "single", "members": [node],
-                            "api_id": pub, "ctx": int(card["ctx"] or row["context_length"] or 0),
-                            "status": st, "status_text": txt})
-        return _replicas(out)
+        """Every deployment as /v1/fleet/deployments has it (proxy/deployments.py)."""
+        return self.deps.all()
 
-    def _engines(self) -> list[tuple[str, object]]:
-        """(node id, engine probe) of every node with a source."""
-        return [(row["id"], p) for row, src in self.sources() if hasattr(src, "engines")
-                for p in src.engines()]
+    # the gateway's questions (proxy/service.py), asked only of a fleet with records or nodes:
+    # a plain proxy's requests never read a machine
+    def _place(self, model, body, headers):
+        return self.deps.place(model, body, headers)
 
-    def _deployment_backends(self) -> dict:
-        """{deployment id: (backend id, member node)}."""
-        out = {}
-        snap = self.svc.table.snapshot()["by_backend"]
-        engines = self._engines()
-        for d in self.deployments():
-            for node, p in engines:
-                if any((r["public_id"] or r["model"]) == d["id"]
-                       for r in (snap.get(p.id) or {}).values()):
-                    out[d["id"]] = (p.id, node)
-        return out
+    def _listing(self, created: int) -> list[dict]:
+        if not self.cfg.deployments():
+            return self.svc.table.listing(created)
+        return self.deps.listing(created)
+
+    def _locate(self, bid: str, model: str | None):
+        if not self.cfg.nodes():
+            return None
+        return self.deps.locate(bid, model)
 
     def links_infra(self) -> tuple[list[dict], list[dict]]:
         """(infra, links): the LAN (the default route's interface) and, with a cloud backend, the
@@ -870,11 +861,13 @@ class Fleet:
                 raise FleetError(404, f"no node {sid}")
             keys = [(sid, of(sid))]
         elif kind == "deployment":
-            deps = self._deployment_backends()
-            if sid not in deps:
-                raise FleetError(404, f"no deployment {sid}")
-            bid, member = deps[sid]
-            keys = [(member, [("backend", bid, metric)] if engine else of(member))]
+            from proxy import deployments
+            try:
+                members = self.deps.backends_of(sid)
+            except deployments.DeployError as exc:
+                raise FleetError(exc.status, exc.message, exc.kind)
+            keys = [(member, [("backend", bid, metric)] if engine else of(member))
+                    for member, bid in members if member in ids]
         else:
             keys = [(i, of(i)) for i in ids]
         step, t0, count = window(rng, now)
@@ -1129,6 +1122,24 @@ class Fleet:
                 return self.mover().handle(method, parts, q, body, who, now)
             except ctlmove.MoveError as exc:
                 raise FleetError(exc.status, exc.message, exc.kind)
+        if parts[:1] == ["deployments"]:
+            from proxy import deployments
+            try:
+                return self.deps.handle(method, parts, q, body, who, now)
+            except deployments.DeployError as exc:
+                raise FleetError(exc.status, exc.message, exc.kind)
+        if parts == ["placement"] and method == "POST":
+            from proxy import placement
+            try:
+                return self.placement.plan(body, now)
+            except placement.PlanError as exc:
+                raise FleetError(exc.status, exc.message, exc.kind)
+        if parts[:1] == ["weights"]:
+            from proxy import fleetweights
+            try:
+                return self.weights.handle(method, parts, q, body, who, now)
+            except fleetweights.WeightsError as exc:
+                raise FleetError(exc.status, exc.message, exc.kind)
         if method == "GET" and len(parts) == 1:
             name = parts[0]
             if name == "nodes":
@@ -1137,8 +1148,6 @@ class Fleet:
                 return {"contract_version": v, "links": self.links_infra()[1]}
             if name == "topology":
                 return self.topology(now)
-            if name == "deployments":
-                return {"contract_version": v, "deployments": self.deployments()}
             if name == "metrics":
                 return self.metrics(q, now)
             if name == "memory":
@@ -1202,35 +1211,6 @@ class Fleet:
             self.cfg.set_layout(doc)
             return doc
         raise FleetError(404, f"no route {method} /v1/fleet/{'/'.join(parts)}")
-
-
-def _replicas(deps: list[dict]) -> list[dict]:
-    """One model id on engines of two or more nodes: one Replicas deployment over them, serving
-    while any member serves (degraded with one down), in the order the first member came."""
-    out: list[dict] = []
-    by: dict[str, dict] = {}
-    for d in deps:
-        got = by.get(d["id"])
-        if got is None:
-            by[d["id"]] = d
-            out.append(d)
-            continue
-        if any(m in got["members"] for m in d["members"]):
-            continue                              # the same model twice on one node
-        got.setdefault("_each", [dict(got)])
-        got["_each"].append(d)
-        got["members"] = got["members"] + d["members"]
-        got["type"] = "replicas"
-    for d in out:
-        each = d.pop("_each", None)
-        if not each:
-            continue
-        up = [x for x in each if x["status"] == "serving"]
-        bad = [x for x in each if x["status"] == "down"]
-        d["status"] = "serving" if up and not bad else "degraded" if up else \
-            ("down" if bad and len(bad) == len(each) else "starting")
-        d["status_text"] = f"{len(up)} of {len(each)} members serving"
-    return out
 
 
 def pairing_view(row: dict) -> dict:
