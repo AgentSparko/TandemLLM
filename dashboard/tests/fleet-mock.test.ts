@@ -67,8 +67,13 @@ describe('mock fleet: seeded and live', () => {
           for (const range of ['7d', '5m']) {
             for (const s of series(m, metric, range, 'all', at).series) {
               const vals = s.values.filter((v): v is number => v != null);
-              // Desk has no fabric cable: no samples, never zeros
-              if (metric !== 'fabric' || s.node !== 'desk') expect(vals.length, `${scenario} ${metric} ${range} ${s.node}`).toBeGreaterThan(0);
+              // what a board does not give has no samples, never zeros: Desk (a GX10) has no fabric
+              // cable and no memory clock; a node the controller runs on has no RTT to time
+              const host = get<{ host: { name: string } }>(m, '/v1/fleet/topology', '', at).host.name;
+              const alias = get<{ nodes: FleetNode[] }>(m, '/v1/fleet/nodes', '', at).nodes.find((n) => n.id === s.node)?.alias;
+              const absent = ((metric === 'fabric' || metric === 'memclk') && s.node === 'desk') || (metric === 'rtt' && alias === host);
+              if (absent) expect(vals, `${scenario} ${metric} ${s.node}`).toEqual([]);
+              else expect(vals.length, `${scenario} ${metric} ${range} ${s.node}`).toBeGreaterThan(0);
               for (const v of vals) {
                 expect(v, `${scenario} ${metric} ${s.node}`).toBeGreaterThanOrEqual(PLAUSIBLE[metric][0]);
                 expect(v, `${scenario} ${metric} ${s.node}`).toBeLessThanOrEqual(PLAUSIBLE[metric][1]);

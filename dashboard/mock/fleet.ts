@@ -484,6 +484,8 @@ export class MockFleet {
       case 'sm':
         return Math.round((hot ? 1740 : 2418) * (0.86 + 0.14 * L));
       case 'memclk':
+        // an ASUS GX10's NVML reports no memory clock (as the real one does)
+        if (/GX10/.test(n.node.dmi)) return null;
         return L < 0.06 ? 3200 : 4266;
       case 'mem': {
         const p = n.plan;
@@ -499,6 +501,8 @@ export class MockFleet {
         if (!n.fabric) return null;
         return t >= n.busyFrom && n.curve === 'dsv' ? 2 + 9 * L + 0.6 * w('f', 3) : 0.04 + 0.08 * Math.abs(w('f'));
       case 'rtt':
+        // the controller on the node itself has no network to time
+        if (this.f.host.name === n.node.alias) return null;
         return n.rtt[0] + n.rtt[1] * Math.abs(w('r', 3));
     }
   }
@@ -620,7 +624,7 @@ export class MockFleet {
     const cpuTemp = r1(46 + cpu * 0.6 + (id === 'r3' ? 12 : 0) + w('ct'));
     const sample: NodeSample = {
       node: Object.fromEntries((['gpu', 'power', 'temp', 'sm', 'memclk', 'mem', 'cpu', 'disk', 'lan', 'fabric'] as MetricKey[]).map((k) => [k, val(k)]).filter(([, x]) => x != null).map(([k, x]) => [k, r1(x as number, 3)])),
-      gpus: [{ index: 0, name: 'NVIDIA GB10', util: r1(val('gpu')!), sm_mhz: val('sm')!, mem_mhz: val('memclk')!, power_w: r1(val('power')!, 2), temp_c: Math.round(val('temp')!), throttled: hot, throttle: hot ? ['hw_slowdown', 'sw_thermal'] : [], enc: 0, dec: 0 }],
+      gpus: [{ index: 0, name: 'NVIDIA GB10', util: r1(val('gpu')!), sm_mhz: val('sm')!, ...(val('memclk') != null ? { mem_mhz: val('memclk')! } : {}), power_w: r1(val('power')!, 2), temp_c: Math.round(val('temp')!), throttled: hot, throttle: hot ? ['hw_slowdown', 'sw_thermal'] : [], enc: 0, dec: 0 }],
       memory: { total: USABLE_GIB, available: r1(USABLE_GIB - used, 2), used: r1(used, 2), swap_total: 16, swap_used: 0.3, unified: true, weights: mem.weights, kv: mem.kv, cache: mem.cache, other: mem.other, ceiling: mem.ceiling, page: mem.page },
       cpu: {
         util: r1(cpu, 2),
