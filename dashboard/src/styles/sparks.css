@@ -562,6 +562,12 @@ qse-fleet-page .drain-ink,
   .sp-row:nth-child(odd) {
     border-right: 1px solid var(--rule);
   }
+  .sp-row.is-draining {
+    box-shadow: inset 3px 0 0 var(--cobalt-hi);
+  }
+  .sp-row.is-draining td:first-child {
+    box-shadow: none;
+  }
   .sp-sort-pick {
     display: flex;
   }
