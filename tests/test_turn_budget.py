@@ -55,11 +55,12 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
-from server.conductor.monitor import RequestEvent  # noqa: E402
-from server.conductor.monitor import policy as policy_mod, sessiontasks  # noqa: E402
-from server.conductor.monitor.policy import PROMPT_TAIL_NOTE  # noqa: E402
+from tandemapp.conductor.monitor import RequestEvent  # noqa: E402
+from tandemapp.conductor.monitor import policy as policy_mod, sessiontasks  # noqa: E402
+from tandemapp.conductor.monitor.policy import PROMPT_TAIL_NOTE  # noqa: E402
 from test_session_tasks import SPECIAL, events, monitor, policy  # noqa: E402
 
 T0 = 1_790_000_000.0

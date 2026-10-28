@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.conductor.monitor import policy  # noqa: E402
+from tandemapp.conductor.monitor import policy  # noqa: E402
 
 
 def main(argv: list[str]) -> int:

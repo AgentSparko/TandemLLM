@@ -34,12 +34,14 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
-from server import activity, app, ledger as ledger_mod, live, metrics  # noqa: E402
-from server.conductor import decisions, signals  # noqa: E402
-from server.conductor.monitor import Action, Journal, Monitor, RequestEvent  # noqa: E402
-from server.conductor.monitor.policy import CONTINUE_HIDDEN  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import activity, ledger as ledger_mod, live, metrics  # noqa: E402
+from tandemapp.conductor import decisions, signals  # noqa: E402
+from tandemapp.conductor.monitor import Action, Journal, Monitor, RequestEvent  # noqa: E402
+from tandemapp.conductor.monitor.policy import CONTINUE_HIDDEN  # noqa: E402
 from test_toolcheck import (TOOLS, Req, ask, policy, quiet, serve,  # noqa: E402
                             call_json)
 
@@ -407,7 +409,7 @@ def test_the_routers_old_file_is_imported_once():
 
 
 def test_the_speed_views_leave_acted_requests_out():
-    from server import dashboard_api
+    from tandemapp import dashboard_api
     assert "COALESCE(conductor_acted, 0) = 0" in dashboard_api.DECODED
     path = os.path.join(tempfile.mkdtemp(prefix="qse-speed-"), "ledger.sqlite3")
     led = ledger_mod.Ledger(path).open()

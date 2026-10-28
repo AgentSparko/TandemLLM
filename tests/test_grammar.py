@@ -37,6 +37,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from engine import grammar as G  # noqa: E402
@@ -450,10 +451,10 @@ def test_the_tool_call_language():
 def test_the_tool_call_language_in_the_argkey_form():
     """SRV-689: tool_choice's calls in Flint's arg-key form, the values exactly as written; the
     form's tags may be the model's own ids, and the calls parse back to the arguments."""
-    from server.toolcall import ToolCallBuffer
-    from server.toolformats import argkey
-    from server.toolformats.argkey import argkey_calls
-    pat, typed = argkey.forced_regex(TOOLS, ["read_file", "set", "now"])
+    from tandemapp.toolcall import ToolCallBuffer
+    from tandemapp.toolformats import argkey
+    from tandemapp.toolformats.argkey import argkey_calls
+    pat, typed = argkey.forced_regex(TOOLS, ["read_file", "set", "now"], grammar=G)
     assert typed == {"set": {"n", "tags"}}
     d = G.compile_regex(pat)
     ok = ["<tool_call>read_file<arg_key>path</arg_key><arg_value> /etc/hosts\n</arg_value></tool_call>",
@@ -513,7 +514,7 @@ def test_the_tool_constraint_is_exact_under_speculation():
 
 
 def test_the_handler_forces_the_call():
-    from server.toolcall import parse_tool_calls  # noqa: F401 -- the path under test
+    from tandemapp.toolcall import parse_tool_calls  # noqa: F401 -- the path under test
     seen = {}
     for label, extra, allowed in (("required", {"tool_choice": "required"}, {"pick", "stop"}),
                                   ("named", {"tool_choice": {"type": "function",

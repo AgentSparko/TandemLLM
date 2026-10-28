@@ -51,12 +51,13 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_router import COMPOSITE, TOOLS, setup, turn  # noqa: E402
 
-from server.conductor import schema  # noqa: E402
-from server.conductor.classify import Answer  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
+from tandemapp.conductor.classify import Answer  # noqa: E402
 
 PAGODA = "Create a new folder and create there a pagoda garden"
 # the first turn's class answer, as journaled on the box (request ...8d3b155b)
@@ -332,7 +333,7 @@ def test_shipped_router_audit():
         {"a 3D three.js scene", "a flat web page", "a 2D drawing"}
     for c in by.values():
         assert set(c["policy"].get("core", [])) <= set(c["policy"]["packages"]), c["id"]
-    for kind, name, doc in __import__("server.conductor.shipped", fromlist=["x"]).documents():
+    for kind, name, doc in __import__("tandemapp.conductor.shipped", fromlist=["x"]).documents():
         if kind == "router":
             assert schema.check(kind, doc, packages=schema.SHIPPED_PACKAGES) == []
 
@@ -360,7 +361,7 @@ def test_the_library_skips_a_core_skill():
 # ------------------------------------------------------------------ 9
 def test_core_and_reading_are_not_injected_again():
     from test_conductor_router import text_of
-    from server.conductor import router as router_mod
+    from tandemapp.conductor import router as router_mod
     for mode in ("parts", "block"):
         old = router_mod.NOTE_DEDUP
         router_mod.NOTE_DEDUP = mode

@@ -18,11 +18,13 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_setup_apply import Box, FakeWren, _api  # noqa: E402
 
-from server import app, auth  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import auth  # noqa: E402
 from server import setup_api  # noqa: E402
 from server.setup import apply, reset  # noqa: E402
 

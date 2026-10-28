@@ -52,13 +52,14 @@ import tempfile
 import threading
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 import yaml  # noqa: E402
 
 os.environ.setdefault("QSE_COMMUNITY_DIR", tempfile.mkdtemp(prefix="parcard-community-"))
 os.environ.setdefault("QSE_COMMUNITY_URL", "off")
 
-from server.conductor.schema import validate  # noqa: E402
+from tandemapp.conductor.schema import validate  # noqa: E402
 from server.setup import registry  # noqa: E402
 from tools import parallel_card as pc  # noqa: E402
 

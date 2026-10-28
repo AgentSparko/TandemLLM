@@ -134,7 +134,7 @@ def test_plan_mode_on_our_engine_keeps_the_effort_word():
     stays and plan mode asks for high's reasoning cap as a number, which the template never
     renders; every request of the chat starts with the one before it, the fields the template
     reads included."""
-    from server import thinking
+    from tandemapp import thinking
     for effort in ("low", "medium", "auto"):
         c = Chat()
         try:

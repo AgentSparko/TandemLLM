@@ -39,7 +39,7 @@ from chatd import mcp as mcp_mod                                    # noqa: E402
 from chatd import sandbox as sb_mod                                 # noqa: E402
 from chatd import tools as T                                        # noqa: E402
 from chatd.workspace import Workspace                               # noqa: E402
-from server.conductor import routes                                 # noqa: E402
+from tandemapp.conductor import routes                                 # noqa: E402
 
 
 # --------------------------------------------------------------- 1  read past EOF

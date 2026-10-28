@@ -47,10 +47,11 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from server import app  # noqa: E402
-from server.conductor import schema, signals, states  # noqa: E402
+from tandemapp.conductor import schema, signals, states  # noqa: E402
 from test_conductor_router import TOOLS, setup, text_of  # noqa: E402
 
 FIX = os.path.join(HERE, "fixtures", "side")
@@ -247,9 +248,9 @@ def test_the_journal_lists_side_rows_with_the_routers():
     assert ids("router") == {plan.row["id"], turn.row["id"]}, "the feed lists both"
     assert ids("side") == {plan.row["id"]} and ids("route") == {turn.row["id"]}, \
         "the Overview's and the sessions' figures read the turns alone"
-    from server.conductor import decisions
+    from tandemapp.conductor import decisions
     assert decisions.sessions(cond.journal.rows(kind="route"))[0]["class_id"] == "code_edit"
-    from server.conductor.decisions import route_fields
+    from tandemapp.conductor.decisions import route_fields
     f = route_fields(plan.row)
     assert f["kind"] == "side" and f["decision"] == "opencode_title" and f["cap"] == 64
     assert f["action"] == "SIDE_REQUEST"

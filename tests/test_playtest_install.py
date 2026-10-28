@@ -18,12 +18,13 @@ import threading
 from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_auth import ADMIN, _setup  # noqa: E402  (first: the CPU environment)
 
 from server import app  # noqa: E402
-from server.conductor.hook import Conductor  # noqa: E402
+from tandemapp.conductor.hook import Conductor  # noqa: E402
 from tools import playtest_install as PI  # noqa: E402
 
 PLAYTEST = ("---\nname: laya-playtest\ndescription: Laya plays the software you built.\n---\n"

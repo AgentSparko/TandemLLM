@@ -38,9 +38,11 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
-from server import app, argloop  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import argloop  # noqa: E402
 from test_toolcheck import SYSTEM, ask, ctx_text, policy, rows, serve  # noqa: E402
 
 # opencode's system prompt is longer than the monitor's lineage window: one session

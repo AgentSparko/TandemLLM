@@ -44,6 +44,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "ops"))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 import engine_status as ES  # noqa: E402
 
@@ -363,7 +364,7 @@ def test_the_server_answers_the_same_shape():
 
 def test_the_page_may_ask_the_responder():
     """The dashboard's CSP lets the page ask the status responder's port (VIS-209), only with one."""
-    from server import static
+    from tandemapp import static
     old = os.environ.pop("QSE_STATUS_PORT", None)
     try:
         assert "connect-src 'self';" in static.csp_for(b"<html></html>")

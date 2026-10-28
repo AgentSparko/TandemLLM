@@ -22,6 +22,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 DIRS = ("proxy", "server/conductor", "server/conductor/monitor")
 
@@ -32,7 +33,7 @@ def _files():
 
 def test_the_defaults_are_the_registry():
     from engine.settings import KNOBS
-    from server import knobs
+    from tandemapp import knobs
     assert knobs.DEFAULTS == {k: KNOBS[k][0] for k in knobs.DEFAULTS}, \
         {k: (v, KNOBS[k][0]) for k, v in knobs.DEFAULTS.items() if KNOBS[k][0] != v}
     read = set()
@@ -61,7 +62,7 @@ for pkg, name in mods:
         importlib.import_module(f"{pkg}.{name}")
     except Exception as e:
         bad.append(f"{pkg}.{name}: {type(e).__name__}: {e}")
-from server import knobs
+from tandemapp import knobs
 assert type(knobs.SETTINGS).__name__ == "StandaloneSettings", knobs.SETTINGS
 os.environ["QWEN38_TOOL_FIT"] = "off"
 assert knobs.SETTINGS.get("TOOL_FIT") == "off" and knobs.SETTINGS.get("NOTE_DEDUP") == "parts"

@@ -16,11 +16,13 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_app_loop import Req, serve  # noqa: E402  (first: the CPU environment)
 
-from server import app, auth, static  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import auth, static  # noqa: E402
 
 PROXY = {"X-Forwarded-For": "203.0.113.44", "X-Real-IP": "203.0.113.44"}
 

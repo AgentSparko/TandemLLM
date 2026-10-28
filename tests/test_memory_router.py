@@ -58,6 +58,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_ui_states import M, OPENCODE_UA, TOOLS, _go, lines, serve  # noqa: E402
@@ -275,7 +276,7 @@ def test_hidden_span():
     ask("Please keep it short. FAKE_MEMORY", sid="ses_mem3")
     tok = app.STATE["tok"]
     ctx = app.STATE.get("last_ctx") or []
-    from server import memblock
+    from tandemapp import memblock
     n_prompt = len(seen[-1])
     gen = list(ctx[n_prompt:])
     _, found = memblock.strip_blocks(tok.decode(gen, skip_special_tokens=True))
@@ -300,7 +301,7 @@ def test_shadow():
 
 def test_fresh_session_recall():
     from test_side_requests import opencode_title
-    from server.conductor import memory as memory_mod
+    from tandemapp.conductor import memory as memory_mod
     cond, seen = setup()
     proj = "/tmp/demo/project"
     sysm = f"You are opencode.\nWorking directory: {proj}\nPlatform: linux"
@@ -404,7 +405,7 @@ CHAT_APP = {"X-QSE-Client": "chat-app", "User-Agent": "tandemllm-chatd/0.9"}
 def _chat_app(memory=...):
     """The engine with the shipped chat-app profile (memory as given; `...`: as shipped)."""
     import copy
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     cond, seen = setup(memory=None)
     doc = copy.deepcopy(schema.SHIPPED_PROFILES["chat-app"])
     if memory is None:
@@ -502,7 +503,7 @@ def test_chat_tab_tool_turn_rule_user_turn_unchanged():
 
 
 def test_chat_tab_memory_off_says_so_once_and_absent_adds_nothing():
-    from server.conductor import memory as memory_mod
+    from tandemapp.conductor import memory as memory_mod
     cond, seen = _chat_app(memory="off")
     out = chat_ask("Do you remember my name?", "chat-c1")
     text = app.STATE["tok"].decode(seen[-1], skip_special_tokens=False)

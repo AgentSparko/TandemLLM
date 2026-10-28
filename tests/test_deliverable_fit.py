@@ -31,13 +31,14 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_conductor_router as T  # noqa: E402
-from server import metrics  # noqa: E402
-from server.conductor import migrations, schema, shipped, signals  # noqa: E402
-from server.conductor import packages as packages_mod  # noqa: E402
-from server.conductor import router as router_mod  # noqa: E402
+from tandemapp import metrics  # noqa: E402
+from tandemapp.conductor import migrations, schema, shipped, signals  # noqa: E402
+from tandemapp.conductor import packages as packages_mod  # noqa: E402
+from tandemapp.conductor import router as router_mod  # noqa: E402
 
 
 def _fn(name, desc, props, required=()):
@@ -311,7 +312,7 @@ def test_10_the_counter_and_the_migration():
                'why="tool_delivers"' in ln and 'mode="act"' in ln for ln in text.splitlines()), \
         [ln for ln in text.splitlines() if "kept_out" in ln]
     # a packages document stored before SRV-615 gets the field once; a removed one stays removed
-    from server.conductor.store import Store
+    from tandemapp.conductor.store import Store
     st = Store(tempfile.mkdtemp(prefix="dl-mig-"))
     d = json.loads(json.dumps(schema.SHIPPED_PACKAGES))
     for p in d["packages"].values():

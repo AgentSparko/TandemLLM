@@ -33,9 +33,10 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
-from server.conductor import loopescape as le, schema  # noqa: E402
+from tandemapp.conductor import loopescape as le, schema  # noqa: E402
 
 READ_A = {"filePath": "src/a.py"}
 USER = {"role": "user", "content": "make the parser handle quoted From lines"}

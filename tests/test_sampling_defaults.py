@@ -5,7 +5,7 @@ import os
 import tempfile
 
 from server import sampling_defaults as sd
-from server.conductor import loopescape as le
+from tandemapp.conductor import loopescape as le
 
 CARD = {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "source": "generation_config.json"}
 

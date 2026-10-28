@@ -32,6 +32,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from tools import contract_check, tandem_eval as te  # noqa: E402
 
@@ -461,7 +462,7 @@ def test_the_report_validates_and_the_example_is_current():
         ex = json.load(f)
     assert te.validate(ex) == []
     assert {r["arm"] for r in ex["rows"]} == {"raw", "tandem"}
-    from server.conductor import routes
+    from tandemapp.conductor import routes
     assert routes.eval_errors(ex) == [] and routes.eval_errors({"kind": "x"})
 
 

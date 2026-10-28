@@ -27,11 +27,13 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
-from server import activity, app, dashboard_api, ledger as ledger_mod  # noqa: E402
-from server.conductor.monitor import Action, Journal, Monitor, RequestEvent  # noqa: E402
-from server.conductor.monitor.policy import CLOSE_REASONING, PASS  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import activity, dashboard_api, ledger as ledger_mod  # noqa: E402
+from tandemapp.conductor.monitor import Action, Journal, Monitor, RequestEvent  # noqa: E402
+from tandemapp.conductor.monitor.policy import CLOSE_REASONING, PASS  # noqa: E402
 from test_toolcheck import TOOLS, policy  # noqa: E402
 from tools import contract_check  # noqa: E402
 
@@ -126,7 +128,7 @@ def _req(led, rid, **cols):
 
 
 def _event(path, rid, mode, decision, n=1):
-    from server.conductor import decisions
+    from tandemapp.conductor import decisions
     jr = decisions.Journal(path)
     for i in range(n):
         jr.monitor_sink({"request_id": rid, "session": "s1", "sp": "SP2", "task": "D1",

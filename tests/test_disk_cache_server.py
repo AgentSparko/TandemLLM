@@ -31,11 +31,13 @@ for _k in ("NORM", "GDN", "HEAD", "ATTN", "GDNBLOCK", "GDNTREE", "GDNPRE"):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 from engine import cache, disk_cache as dc  # noqa: E402
-from server import diskcache, memlimits, metrics as M  # noqa: E402
-from server.conductor import schema  # noqa: E402
+from server import diskcache, memlimits  # noqa: E402
+from tandemapp import metrics as M  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
 from tools import contract_check  # noqa: E402
 from test_cache import fresh, tokens  # noqa: E402
 from disk_tier_util import waiting  # noqa: E402
@@ -197,7 +199,7 @@ def test_the_disk_route_answers_the_contract_running_or_not():
         assert rows["prefix"]["preview"] is None and rows["prefix"]["hits"] == 1
         # three prefills the disk could have shortened, the third one a hit
         assert v["running"] and (v["lookups"], v["hits"], v["hit_rate"]) == (3, 1, 0.3333)
-        from server.conductor import routes
+        from tandemapp.conductor import routes
         st, got, _ = routes._memory(state["conductor"], "POST", ["disk", "clear"], {}, {})
         # the session's head (lines 64 and 80, under its user message, and its longest line 96
         # admitted after one prefill) and the other prompt's line 96
@@ -212,7 +214,7 @@ def test_the_disk_route_answers_the_contract_running_or_not():
 
 
 def test_clear_without_a_tier_is_a_conflict():
-    from server.conductor import routes
+    from tandemapp.conductor import routes
     state = {"args": {}}
     try:
         routes._memory(Cond(state), "POST", ["disk", "clear"], {}, {})

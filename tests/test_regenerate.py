@@ -25,6 +25,7 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 from server import regenerate as rg  # noqa: E402
@@ -264,7 +265,7 @@ def test_regenerate_over_http():
         assert seeds[0] != seeds[1]
         # the speed sample leaves the regenerate rows out
         c = sqlite3.connect(ledger)
-        from server import dashboard_api
+        from tandemapp import dashboard_api
         n_all = c.execute("SELECT COUNT(*) FROM requests WHERE status = 200 AND "
                           "client_kind != 'internal'").fetchone()[0]
         n_speed = c.execute(f"SELECT COUNT(*) FROM requests WHERE client_kind != 'internal' AND "

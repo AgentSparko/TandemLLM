@@ -23,8 +23,9 @@ import tempfile
 from contextlib import redirect_stdout
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from server.conductor import schema  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
 from tools import conductor_eval  # noqa: E402
 
 
@@ -67,7 +68,7 @@ class Fixed:
         self.table = table
 
     def choice(self, state, question, options, max_chars=None):
-        from server.conductor.classify import Answer
+        from tandemapp.conductor.classify import Answer
         label, conf = self.table[state.split("\n")[0]]
         return Answer("decider", label, conf, {label: conf}, 1.0, model="fixed")
 

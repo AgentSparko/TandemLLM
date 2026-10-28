@@ -32,6 +32,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 import test_supervisor_frame as frame  # noqa: E402  (sets the CPU kernel switches first)
@@ -40,7 +41,8 @@ from test_conductor_router import CODE, SYSTEM, QTok, by_label, setup, turn  # n
 from test_conductor_router import body as rbody  # noqa: E402
 
 from engine.spec import ThinkBudget  # noqa: E402
-from server import app, compat, logbuf, thinking  # noqa: E402
+from server import app, compat  # noqa: E402
+from tandemapp import logbuf, thinking  # noqa: E402
 
 PHRASE = "Considering the limited time by the user"
 P = len(frame.MonTok().encode(ThinkBudget.PHRASE))     # the closing phrase, in test tokens

@@ -17,12 +17,14 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_app_loop import Req, serve  # noqa: E402  (first: the CPU environment)
 from test_usage import UTok, _ids, _script  # noqa: E402
 
-from server import app, auth, live  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import auth, live  # noqa: E402
 from tools import contract_check  # noqa: E402
 
 ADMIN = "adm-" + "7" * 40

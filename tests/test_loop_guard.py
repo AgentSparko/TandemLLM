@@ -27,16 +27,17 @@ import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 import test_toolcheck as tc  # noqa: E402
 
-from server.conductor import migrations, schema  # noqa: E402
-from server.conductor.monitor import toolcheck  # noqa: E402
-from server.conductor.monitor.observe import ToolCallEvent  # noqa: E402
-from server.conductor.monitor.policy import REGENERATE_CALL  # noqa: E402
-from server.conductor.monitor.session import SessionState  # noqa: E402
-from server.conductor.store import Store  # noqa: E402
+from tandemapp.conductor import migrations, schema  # noqa: E402
+from tandemapp.conductor.monitor import toolcheck  # noqa: E402
+from tandemapp.conductor.monitor.observe import ToolCallEvent  # noqa: E402
+from tandemapp.conductor.monitor.policy import REGENERATE_CALL  # noqa: E402
+from tandemapp.conductor.monitor.session import SessionState  # noqa: E402
+from tandemapp.conductor.store import Store  # noqa: E402
 
 PYTEST = {"command": "pytest -q"}
 FAIL = "1 failed, 4 passed in 0.31s"
@@ -286,7 +287,7 @@ def test_8_general_keeps_the_releases_request():
     g = schema.SHIPPED_PROFILES["general"]
     assert g["toolgate"]["same_call"] is False and g["tasks"]["C3"]["mode"] == "off"
     # the hook turns a task whose pack is off to off, whatever its mode says
-    from server.conductor.hook import Conductor
+    from tandemapp.conductor.hook import Conductor
     assert Conductor.PACKS["C3"] == "same_call"
 
 

@@ -20,6 +20,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 # kind, facts, extra: one of every kind the conductor says most
 EVENTS = [
@@ -39,7 +40,7 @@ EVENTS = [
 
 
 def entries():
-    from server.conductor.states import TEXTS
+    from tandemapp.conductor.states import TEXTS
     for kind, facts, extra in EVENTS:
         yield {"kind": kind, "text": TEXTS[kind].format(**facts), "facts": {**facts, **extra}}
 
@@ -53,7 +54,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     import torch
     from engine.generative.model import LlamaModel
-    from server.conductor import narrator, schema
+    from tandemapp.conductor import narrator, schema
 
     d = os.path.expanduser(a.dir)
     m = LlamaModel("minicpm5-2b", d)

@@ -38,10 +38,11 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from server.conductor import schema, signals  # noqa: E402
-from server.conductor.classify import Qwen  # noqa: E402
-from server.conductor.router import NONE_OPTION, Router, _about, _code_guard, _qwen_prompt  # noqa: E402
+from tandemapp.conductor import schema, signals  # noqa: E402
+from tandemapp.conductor.classify import Qwen  # noqa: E402
+from tandemapp.conductor.router import NONE_OPTION, Router, _about, _code_guard, _qwen_prompt  # noqa: E402
 
 # the router document v15 FX6 puts on the box: the defining skill as core where a class has one
 # that is not already general, the reading phrases of the three deliverable kinds

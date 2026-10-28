@@ -39,14 +39,15 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_router import QTok  # noqa: E402
 from test_snapshots import S, TOOLS, body, fresh, mario_sessions, plan, png, served  # noqa: E402
 
 from server import app  # noqa: E402
-from server.conductor import outcomes, schema, signals  # noqa: E402
-from server.conductor.monitor.session import SessionState  # noqa: E402
+from tandemapp.conductor import outcomes, schema, signals  # noqa: E402
+from tandemapp.conductor.monitor.session import SessionState  # noqa: E402
 
 
 def observe(msgs, ev=None, cfg=None, now=100.0, system=None):
@@ -293,8 +294,8 @@ def test_act_note_replay_and_caps():
     p5, _ = served(cond, s.step(E, bash("node run.js", "score 10")))
     assert p5.row["extra"]["outcome"]["label"] == "no_visible_change"
     assert p5.row["extra"]["outcome"]["note"]["skipped"] == "noted" and p5.acts == []
-    from server.conductor.monitor import Monitor, load
-    from server.conductor.monitor.observe import RequestEvent
+    from tandemapp.conductor.monitor import Monitor, load
+    from tandemapp.conductor.monitor.observe import RequestEvent
     mon = Monitor("on", load(), QTok())
     sup = mon.begin("on", RequestEvent("r3", messages=s.msgs, tools=TOOLS), [1, 2, 3], None,
                     session_key="c:ses-snap")

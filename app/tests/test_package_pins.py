@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.conductor.packages import body_packages  # noqa: E402
+from tandemapp.conductor.packages import body_packages  # noqa: E402
 
 KNOWN = {"coding": {}, "web-design": {}, "fact-check": {}}
 

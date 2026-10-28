@@ -51,7 +51,7 @@ import test_fleet as tf  # noqa: E402
 from proxy import adminpw, appsettings, ctlmove  # noqa: E402
 from proxy import app as proxy_app  # noqa: E402
 from proxy_util import Proxy, run  # noqa: E402
-from server import auth as auth_mod  # noqa: E402
+from tandemapp import auth as auth_mod  # noqa: E402
 
 TOKEN = "app-admin-token-0123456789abcdef01234"
 PW = "correct horse battery"

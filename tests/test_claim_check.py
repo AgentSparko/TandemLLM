@@ -36,6 +36,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 for _k in ("NORM", "GDN", "HEAD", "ATTN", "GDNBLOCK", "GDNTREE", "GDNPRE"):
@@ -47,12 +48,12 @@ import yaml  # noqa: E402
 
 from engine.spec import ThinkBudget  # noqa: E402
 from server import app  # noqa: E402
-from server.conductor import incontext  # noqa: E402
-from server.conductor.monitor import (  # noqa: E402
+from tandemapp.conductor import incontext  # noqa: E402
+from tandemapp.conductor.monitor import (  # noqa: E402
     FinishEvent, Journal, Monitor, Policy, RequestEvent, claimcheck,
 )
-from server.conductor.monitor import policy as policy_mod  # noqa: E402
-from server.conductor.monitor.policy import CONTINUE_HIDDEN, PASS  # noqa: E402
+from tandemapp.conductor.monitor import policy as policy_mod  # noqa: E402
+from tandemapp.conductor.monitor.policy import CONTINUE_HIDDEN, PASS  # noqa: E402
 from test_app_loop import Req, serve  # noqa: E402
 from test_serve_identity import Oracle  # noqa: E402
 from test_supervisor_frame import MonTok, _fields, quiet  # noqa: E402

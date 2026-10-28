@@ -48,10 +48,12 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 import test_compaction_continue as C  # noqa: E402  (sets the CPU environment first)
 
-from server import app, compaction  # noqa: E402
-from server.conductor.hook import Conductor  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import compaction  # noqa: E402
+from tandemapp.conductor.hook import Conductor  # noqa: E402
 from test_cache import tokens  # noqa: E402
 from test_end_anchor import _state  # noqa: E402
 
@@ -163,7 +165,7 @@ class _Decider:
         self.label = label
 
     def choice(self, text, question, options, max_chars=None):
-        from server.conductor.classify import Answer
+        from tandemapp.conductor.classify import Answer
         return Answer("decider", self.label, 0.95, {})
 
     def state_chars(self):
@@ -298,7 +300,7 @@ def test_the_tool_form_is_a_block():
 def test_a_foreign_tool_call_is_none():
     import contextlib
     import io
-    from server.conductor import memwriter as mw
+    from tandemapp.conductor import memwriter as mw
     bash = ("<tool_call>\n<function=bash>\n<parameter=command>\nls\n</parameter>\n</function>\n"
             "</tool_call>")
     assert mw.foreign_call(bash) == "bash"
@@ -376,7 +378,7 @@ def _spy():
 
 
 def test_the_tool_call_token_is_banned():
-    from server.conductor import memwriter as mw
+    from tandemapp.conductor import memwriter as mw
     assert mw.ban_ids(C._Tok()) == {} and mw.ban_ids(_BanTok()) == {}
     t = _BanTok()
     t.ban = 7

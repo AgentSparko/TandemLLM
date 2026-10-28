@@ -22,11 +22,12 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from engine import grammar as G  # noqa: E402
 from engine.models import REGISTRY  # noqa: E402
-from server import toolformats  # noqa: E402
-from server.toolcall import ToolCallBuffer, diagnose, parse_tool_calls  # noqa: E402
+from tandemapp import toolformats  # noqa: E402
+from tandemapp.toolcall import ToolCallBuffer, diagnose, parse_tool_calls  # noqa: E402
 
 TOOLS = [{"type": "function", "function": {"name": "write_file", "parameters": {
     "type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"},
@@ -83,7 +84,7 @@ def test_a_rendered_call_reads_back_in_every_form():
 def test_the_forced_constraint_takes_the_forms_own_rendering():
     fmts = _formats()
     for name, fmt in fmts.items():
-        pat, typed = fmt.forced_regex(TOOLS, ["write_file"], many=False)
+        pat, typed = fmt.forced_regex(TOOLS, ["write_file"], many=False, grammar=G)
         assert typed == {"write_file": {"n"}}, (name, typed)
         d = G.compile_regex(pat)
         own = fmt.forced_render("write_file", ARGS)

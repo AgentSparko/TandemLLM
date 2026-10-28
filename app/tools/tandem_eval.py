@@ -101,7 +101,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server.conductor import signals  # noqa: E402
+from tandemapp.conductor import signals  # noqa: E402
 
 SUITES = os.path.join(ROOT, "bench", "tandem-eval", "suites.json")
 SCHEMA = os.path.join(ROOT, "docs", "contract", "dashboard-v1", "tandem-eval.schema.json")

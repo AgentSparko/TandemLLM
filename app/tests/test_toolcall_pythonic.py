@@ -9,8 +9,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.toolcall import ToolCallBuffer, parse_tool_calls  # noqa: E402
-from server.toolformats.pythonic import (PY_CLOSE, PY_OPEN, PythonicCalls, pythonic_calls,  # noqa: E402
+from tandemapp.toolcall import ToolCallBuffer, parse_tool_calls  # noqa: E402
+from tandemapp.toolformats.pythonic import (PY_CLOSE, PY_OPEN, PythonicCalls, pythonic_calls,  # noqa: E402
                                          rewrite_pythonic)
 
 

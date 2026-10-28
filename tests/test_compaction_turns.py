@@ -27,10 +27,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from test_conductor_router import SYSTEM, body, setup, text_of, turn  # noqa: E402
 
-from server.conductor import signals  # noqa: E402
+from tandemapp.conductor import signals  # noqa: E402
 
 # opencode 1.18.34's compaction agent prompt, as the binary ships it (the `compaction` agent)
 OC_COMPACTION = (

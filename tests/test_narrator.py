@@ -52,12 +52,14 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from engine.generative.fake import FakeGenerative  # noqa: E402
 from engine.generative.slot import Slot  # noqa: E402
-from server.conductor import narrator as narr_mod  # noqa: E402
-from server.conductor import residency, schema, states  # noqa: E402
+from tandemapp.conductor import narrator as narr_mod  # noqa: E402
+from server.conductor import residency  # noqa: E402
+from tandemapp.conductor import schema, states  # noqa: E402
 
 M = states.MARKER
 TEMPLATE = ("{{- bos_token }}{%- for m in messages %}{{- '<|im_start|>' + m.role + '\\n' + "
@@ -628,7 +630,7 @@ def test_the_ceiling_leaves_the_narrator_out():
 def test_the_routes():
     import io
     from server import app
-    from server.conductor import routes
+    from tandemapp.conductor import routes
     import test_ui_states as ui
     cond, _ = ui.serve("on")
     app.STATE.pop("narrator", None)

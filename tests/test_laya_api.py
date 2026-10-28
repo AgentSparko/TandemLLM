@@ -45,11 +45,12 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_e2e import ADMIN, LAUNCH, PROXY, _call, _port, _wait  # noqa: E402
 from tools import contract_check  # noqa: E402
-from server import laya_api  # noqa: E402
+from tandemapp import laya_api  # noqa: E402
 
 CONTRACT = os.path.join(ROOT, "docs", "contract", "conductor-v1")
 LOCK_DIR = tempfile.mkdtemp(prefix="laya-api-lock-")

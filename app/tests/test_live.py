@@ -16,7 +16,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server import live, usage  # noqa: E402
+from tandemapp import live, usage  # noqa: E402
 from tools import contract_check  # noqa: E402
 
 

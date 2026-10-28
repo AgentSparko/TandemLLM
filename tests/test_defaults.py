@@ -42,13 +42,14 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_conductor_e2e import ADMIN, LAUNCH, _call, _port, _wait  # noqa: E402
 
 import subprocess  # noqa: E402
 
-from server.conductor import schema  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
 
 FIX = os.path.join(ROOT, "tests", "fixtures", "defaults")
 # what the store fills in a stored document that lacks it, keyed by the document
@@ -269,7 +270,7 @@ def test_the_voice_and_the_shadow_share_two_and_a_half_percent():
     """The voice and the shadow's in-turn reading draw on one share of Qwen's time
     (narrator.Share). At 3 % with both on, Qwen's decode lost 3.34 % (night pass 2026-10-04,
     63.33 -> 61.22 tok/s, same text); at 2.5 % it lost 2.79 %. A profile with both on ships 2.5 %."""
-    from server.conductor import schema, voice
+    from tandemapp.conductor import schema, voice
     for name, doc in schema.SHIPPED_PROFILES.items():
         ui = doc.get("ui") or {}
         both = ui.get("narrator") == "live" and (doc.get("shadow") or {}).get("mode") == "on"
@@ -281,7 +282,7 @@ def test_the_voice_and_the_shadow_share_two_and_a_half_percent():
 
 
 def test_the_shipped_documents_validate():
-    from server.conductor import schema, shipped
+    from tandemapp.conductor import schema, shipped
     pk, router = schema.SHIPPED_PACKAGES, schema.SHIPPED_ROUTER
     for kind, name, doc in shipped.documents():
         errs = schema.check(kind, doc, name=name, router=router, packages=pk,
@@ -301,8 +302,8 @@ def test_the_shipped_documents_validate():
 def test_a_box_with_its_own_documents_keeps_them():
     """A box with documents of its own: a router and a coding profile of its own stay as they are; what it never had
     (the hermes and general profiles) is stored; a second start stores nothing."""
-    from server.conductor import schema, shipped
-    from server.conductor.store import Store
+    from tandemapp.conductor import schema, shipped
+    from tandemapp.conductor.store import Store
     d = tempfile.mkdtemp(prefix="qse-cond-")
     st = Store(d)
     st.put("router", None, schema.seed("router"), note="own", author="t")

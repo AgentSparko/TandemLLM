@@ -106,7 +106,7 @@ def test_the_shipped_texts_are_in_the_wheel():
 
 def test_the_shipped_texts_in_an_installed_layout():
     """A wheel puts packages/ at proxy/packages; a checkout keeps it at the root and wins."""
-    from server.conductor import packages
+    from tandemapp.conductor import packages
     d = tempfile.mkdtemp(prefix="pkg-texts-")
     try:
         assert packages.shipped_root(d) == d, "nothing anywhere: the root, as before"

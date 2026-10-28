@@ -54,7 +54,7 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 from chatd_util import run_all  # noqa: E402
 
-from server import chat_forward  # noqa: E402
+from tandemapp import chat_forward  # noqa: E402
 
 # an interpreter that says who it is, then runs this Python
 STUB = """#!/bin/bash

@@ -69,11 +69,12 @@ import time
 import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from server import memblock  # noqa: E402
-from server.conductor import memory as memory_mod  # noqa: E402
-from server.conductor import notes as notes_mod  # noqa: E402
-from server.conductor.notes import NoteStore, Refused  # noqa: E402
+from tandemapp import memblock  # noqa: E402
+from tandemapp.conductor import memory as memory_mod  # noqa: E402
+from tandemapp.conductor import notes as notes_mod  # noqa: E402
+from tandemapp.conductor.notes import NoteStore, Refused  # noqa: E402
 
 PROJ = "/home/user/pagoda"
 
@@ -409,14 +410,14 @@ SYSTEM = f"You are opencode.\nWorking directory: {PROJ}\nPlatform: linux"
 
 
 def conductor(mode="on", intent="off", decider=None):
-    from server.conductor.hook import Conductor
+    from tandemapp.conductor.hook import Conductor
 
     class Fake:
         def __init__(self, fn):
             self.fn = fn
 
         def choice(self, text, question, options, max_chars=None):
-            from server.conductor.classify import Answer
+            from tandemapp.conductor.classify import Answer
             got = self.fn(text, options)
             if isinstance(got, str):
                 return Answer("decider", error=got)
@@ -632,7 +633,7 @@ def test_model_routes():
 
 
 def admin(cond, method, path, body=None):
-    from server.conductor import routes
+    from tandemapp.conductor import routes
     h = Handler(path)
     routes.handle(h, cond, method, body or {}, auth=None)
     return h

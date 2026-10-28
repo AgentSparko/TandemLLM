@@ -20,7 +20,7 @@ import time
 from chatd_util import ROOT, run_all
 
 from chatd.__main__ import load_key
-from server import chat_forward
+from tandemapp import chat_forward
 
 
 def test_make_secrets_writes_the_forward_key_and_adds_it_to_an_old_file():

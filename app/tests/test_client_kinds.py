@@ -25,9 +25,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server import ledger  # noqa: E402
-from server.conductor import router as router_mod, schema  # noqa: E402
-from server.conductor.store import Store  # noqa: E402
+from tandemapp import ledger  # noqa: E402
+from tandemapp.conductor import router as router_mod, schema  # noqa: E402
+from tandemapp.conductor.store import Store  # noqa: E402
 
 OPENCODE_UA = "opencode/1.18.34 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
 HERMES_UA = "OpenAI/Python 2.24.0"
@@ -91,7 +91,7 @@ def test_everyone_else_keeps_their_kind():
 def test_the_profile_each_kind_gets():
     import tempfile
     store = Store(tempfile.mkdtemp(prefix="qse-kinds-"))
-    from server.conductor import shipped
+    from tandemapp.conductor import shipped
     shipped.install(store)               # a new box's documents (ops/start.sh: shipped)
     want = {"opencode": "coding", "hermes": "hermes", "openai-sdk": "general", "curl": "general",
             "other": "general", "open-webui": "chat", "dashboard": "chat", "chat-app": "chat-app"}

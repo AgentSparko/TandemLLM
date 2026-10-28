@@ -32,13 +32,14 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 import yaml  # noqa: E402
 
-from server.conductor import signals  # noqa: E402
-from server.conductor.monitor import Journal, Monitor, Policy, RequestEvent  # noqa: E402
-from server.conductor.monitor import notify, policy as policy_mod, sessiontasks  # noqa: E402
-from server.conductor.monitor.policy import PASS, PROMPT_TAIL_NOTE  # noqa: E402
+from tandemapp.conductor import signals  # noqa: E402
+from tandemapp.conductor.monitor import Journal, Monitor, Policy, RequestEvent  # noqa: E402
+from tandemapp.conductor.monitor import notify, policy as policy_mod, sessiontasks  # noqa: E402
+from tandemapp.conductor.monitor.policy import PASS, PROMPT_TAIL_NOTE  # noqa: E402
 
 SPECIAL = {"<|im_start|>": 1_000_001, "<|im_end|>": 1_000_002, "<think>": 1_000_003,
            "</think>": 1_000_004}
@@ -650,9 +651,9 @@ def test_the_watch_lists_what_the_session_tasks_hold():
 
 
 def test_the_profile_context_sets_the_session_tasks():
-    from server.conductor import schema
-    from server.conductor.hook import Conductor
-    from server.conductor.router import Plan
+    from tandemapp.conductor import schema
+    from tandemapp.conductor.hook import Conductor
+    from tandemapp.conductor.router import Plan
     with tempfile.TemporaryDirectory() as d:
         cond = Conductor(d, journal=False)
         base = policy_mod.load()

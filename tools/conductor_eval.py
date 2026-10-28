@@ -57,10 +57,11 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from server.conductor import schema, signals  # noqa: E402
-from server.conductor.classify import Qwen, decider_for  # noqa: E402
-from server.conductor.store import Store  # noqa: E402
+from tandemapp.conductor import schema, signals  # noqa: E402
+from tandemapp.conductor.classify import Qwen, decider_for  # noqa: E402
+from tandemapp.conductor.store import Store  # noqa: E402
 
 NONE = "—"
 VARIANTS = ("today", "sized", "line", "router")
@@ -218,7 +219,7 @@ def local_deciders(names: str, directory: str, device: str, min_free_gib: float)
     from engine.decision import catalogue, routers
     from engine.decision.device import Device
     from engine.decision.registry import Registry
-    from server.conductor import classify
+    from tandemapp.conductor import classify
     from server import memsplit
     free = memsplit.mem_available()
     free_gib = free / 2**30 if free else None

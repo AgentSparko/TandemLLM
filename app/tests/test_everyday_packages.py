@@ -33,7 +33,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server.conductor import packages as packages_mod, schema  # noqa: E402
+from tandemapp.conductor import packages as packages_mod, schema  # noqa: E402
 
 EVERYDAY = os.path.join(ROOT, "packages", "everyday")
 CORE = "everyday-core"

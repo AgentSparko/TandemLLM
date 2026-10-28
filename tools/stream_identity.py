@@ -33,7 +33,7 @@ RUNNER = r'''
 import contextlib, io, json, os, re, sys
 sys.path.insert(0, os.getcwd()); sys.path.insert(0, os.path.join(os.getcwd(), "tests"))
 from server import app
-from server.conductor import schema
+from tandemapp.conductor import schema
 import test_ui_states as tu
 MODE = sys.argv[1]
 TITLE = open(sys.argv[2]).read()

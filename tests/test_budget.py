@@ -24,6 +24,7 @@ import tempfile
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from engine import cache  # noqa: E402
@@ -910,7 +911,7 @@ def test_the_store_sheds_and_takes_new_limits():
 # ------------------------------------------------------------------ 8: the planner counts the peak
 
 def _residency_doc():
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     return schema.seed("residency")
 
 
@@ -1047,7 +1048,7 @@ def test_overrides_at_start_never_stop_the_engine():
 
 
 def test_the_schema_takes_the_engine_section_and_checks_peak_over_ceiling():
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     doc = schema.seed("residency")
     assert schema.check("residency", dict(doc, engine={"RESIDENT_PARK_GB": 4})) == []
     errs = schema.check("residency", dict(doc, engine={"MEM_CEILING_GIB": 70, "MEM_PEAK_GIB": 60}))
@@ -1058,7 +1059,7 @@ def test_the_schema_takes_the_engine_section_and_checks_peak_over_ceiling():
 # ------------------------------------------------------------------ Prometheus
 
 def test_the_memory_metrics_render_from_the_cache_stats():
-    from server import metrics as M
+    from tandemapp import metrics as M
     rep = budget(FakeAlloc(60, 1)).report()
     rep["shed"]["park"] = 2
     rep["refused"] = 1

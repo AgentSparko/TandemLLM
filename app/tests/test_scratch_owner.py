@@ -34,7 +34,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from server.conductor import packages as P  # noqa: E402
+from tandemapp.conductor import packages as P  # noqa: E402
 from tools import packages_migrate as M  # noqa: E402
 
 URL = "http://127.0.0.1:8000/s/Ab3xYz9_kLmn"

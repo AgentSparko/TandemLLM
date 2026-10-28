@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.conductor import routes  # noqa: E402
+from tandemapp.conductor import routes  # noqa: E402
 
 
 class FakeJournal:

@@ -62,12 +62,13 @@ for _k in ("NORM", "GDN", "HEAD", "ATTN", "GDNBLOCK", "GDNTREE", "GDNPRE"):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from engine.generative.fake import FakeGenerative  # noqa: E402
 from engine.generative.slot import Slot  # noqa: E402
-from server.conductor import narrator as narr_mod  # noqa: E402
-from server.conductor import schema, states  # noqa: E402
+from tandemapp.conductor import narrator as narr_mod  # noqa: E402
+from tandemapp.conductor import schema, states  # noqa: E402
 
 M = states.MARKER
 SENT = narr_mod.SENTINEL

@@ -51,6 +51,7 @@ for _k in ("NORM", "GDN", "HEAD", "ATTN", "GDNBLOCK", "GDNTREE", "GDNPRE"):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 import torch  # noqa: E402
@@ -451,7 +452,7 @@ def test_ask():
 
 
 def test_the_narrator_reads_the_shadow():
-    from server.conductor import narrator as narr_mod
+    from tandemapp.conductor import narrator as narr_mod
     svc = service()
     svc.model.eos = set()                                # a random model: no end token
     prompt, _ = turns(9)[-1]
@@ -572,7 +573,7 @@ def test_the_handler():
 
 
 def test_the_profile_block():
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     from server.conductor.shadow import settings_of
     assert settings_of(None) == {"mode": "off", "narrator": "off", "router": "off",
                                  "router_min_tokens": 8192}

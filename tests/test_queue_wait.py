@@ -34,6 +34,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from server import queue_wait as qw  # noqa: E402
@@ -137,7 +138,7 @@ def test_7_the_w18_shape_is_not_read_as_twenty_seconds():
 
 def test_7_the_handler_reads_the_holder_s_record():
     from server import app
-    from server.usage import RequestRecord as Record
+    from tandemapp.usage import RequestRecord as Record
     r = Record("chatcmpl-x", "chat", True)
     r.thinking, r.max_tokens = True, 4000
     assert app._live_of(r) is None                     # before its first prefill chunk
@@ -211,7 +212,7 @@ def test_2_a_streamed_turn_waits_past_the_queue_timeout_and_is_served():
 def test_3_the_waiting_line_carries_the_estimate():
     app, sr, order = _serve({"states": "on", "states_channel": "content"})
     import test_ui_states as tu
-    from server.conductor import states
+    from tandemapp.conductor import states
     for x in (2.0, 2.5, 3.0, 4.0, 20.0, 30.0, 40.0):
         app.CLOCK.done(app.RANK_TURN, x)
     old = _patched(open_after=30.0)              # no comment before the line
@@ -249,7 +250,7 @@ def test_5_the_waiting_line_names_tandemllm_s_own_work():
     to Qwen. The line names what holds the engine when it is TandemLLM's own work."""
     app, sr, order = _serve({"states": "on", "states_channel": "content"})
     import test_ui_states as tu
-    from server.conductor import classify, states, voice
+    from tandemapp.conductor import classify, states, voice
     old = _patched(open_after=30.0)
     try:
         with sr.threads_quiet():
@@ -300,7 +301,7 @@ def test_6_a_short_wait_shows_no_line_and_own_work_is_measured():
     work records how long (`wait_own_ms`, the ledger), and those waits are the estimate's basis."""
     app, sr, order = _serve({"states": "on", "states_channel": "content"})
     import test_ui_states as tu
-    from server.conductor import states
+    from tandemapp.conductor import states
     old = _patched(open_after=30.0)
     try:
         with sr.threads_quiet():
@@ -326,7 +327,7 @@ def test_6_a_short_wait_shows_no_line_and_own_work_is_measured():
             assert app._own_holder() == want, (who, want)
     finally:
         app.HOLDER["who"] = None
-    from server import ledger, usage
+    from tandemapp import ledger, usage
     assert "wait_own_ms" in ledger.COLUMNS and "wait_own_ms" in usage.RequestRecord(
         "x", "chat", False).row()
 

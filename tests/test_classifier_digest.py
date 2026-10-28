@@ -32,13 +32,14 @@ from contextlib import redirect_stdout
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_router import SYSTEM, QTok, body, turn  # noqa: E402
 
 from server import app  # noqa: E402
-from server.conductor import classify, schema, signals  # noqa: E402
-from server.conductor.hook import Conductor  # noqa: E402
+from tandemapp.conductor import classify, schema, signals  # noqa: E402
+from tandemapp.conductor.hook import Conductor  # noqa: E402
 from tools import conductor_eval  # noqa: E402
 
 FIX = os.path.join(HERE, "fixtures", "conductor")

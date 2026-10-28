@@ -10,7 +10,7 @@ import time
 
 
 def test_found_is_marked_after_every_module_and_once(monkeypatch):
-    from server import toolformats as tf
+    from tandemapp import toolformats as tf
     monkeypatch.setattr(tf, "_found", [])
     seen, calls = [], []
     real = tf.importlib.import_module

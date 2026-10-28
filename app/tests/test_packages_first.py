@@ -27,7 +27,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server.conductor import schema  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
 from tools import packages_first as P  # noqa: E402
 
 COUNTS = {"tandem-core": 8, "render-tools": 6, "eval-judge": 6, "creative-coding": 24, "charts": 20,

@@ -23,8 +23,8 @@ from proxy_util import Proxy, fake, run  # noqa: E402
 from proxy import app as proxy_app  # noqa: E402
 from proxy import harness  # noqa: E402
 from proxy.adapters import make  # noqa: E402
-from server.conductor import inject_messages as im  # noqa: E402
-from server.conductor.monitor import tier0_words  # noqa: E402
+from tandemapp.conductor import inject_messages as im  # noqa: E402
+from tandemapp.conductor.monitor import tier0_words  # noqa: E402
 
 UA = {"User-Agent": "opencode/1.18.34 ai-sdk/provider-utils/3"}
 TOOLS = [{"type": "function", "function": {"name": "read", "parameters": {

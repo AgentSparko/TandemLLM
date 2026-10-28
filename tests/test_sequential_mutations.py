@@ -34,13 +34,14 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 import yaml  # noqa: E402
 
-from server.conductor import signals  # noqa: E402
-from server.conductor.monitor import Policy, RequestEvent  # noqa: E402
-from server.conductor.monitor import policy as policy_mod  # noqa: E402
+from tandemapp.conductor import signals  # noqa: E402
+from tandemapp.conductor.monitor import Policy, RequestEvent  # noqa: E402
+from tandemapp.conductor.monitor import policy as policy_mod  # noqa: E402
 from test_toolcheck import ask, call_json, ctx_text, policy, rows, serve  # noqa: E402
 
 
@@ -296,9 +297,9 @@ def test_5_a_constrained_request_only_journals():
 # ------------------------------------------------------------------ 6: profiles
 
 def _mode_under(profile: str, doc: dict | None = None) -> str | None:
-    from server.conductor import schema
-    from server.conductor.hook import Conductor
-    from server.conductor.router import Plan
+    from tandemapp.conductor import schema
+    from tandemapp.conductor.hook import Conductor
+    from tandemapp.conductor.router import Plan
     with tempfile.TemporaryDirectory() as d:
         cond = Conductor(d, journal=False)
         try:
@@ -314,7 +315,7 @@ def _mode_under(profile: str, doc: dict | None = None) -> str | None:
 
 
 def test_6_tools_acts_the_agent_profiles_journal():
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     want = {"tools": "act", "coding": "shadow", "chat-app": "shadow", "hermes": "shadow",
             "chat": "shadow", "general": "off", "overnight": "off"}
     got = {n: _mode_under(n) for n in want}
@@ -343,8 +344,8 @@ def test_6_tools_acts_the_agent_profiles_journal():
 
 
 def test_6_a_profile_stored_before_c5_loads_and_is_migrated_once():
-    from server.conductor import migrations, schema, shipped
-    from server.conductor.store import Store
+    from tandemapp.conductor import migrations, schema, shipped
+    from tandemapp.conductor.store import Store
     old = json.loads(json.dumps(schema.SHIPPED_PROFILES["coding"]))
     del old["tasks"]["C5"]
     del old["toolgate"]["sequence"]

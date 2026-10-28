@@ -37,15 +37,16 @@ import tempfile
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from transformers.utils.chat_template_utils import render_jinja_template  # noqa: E402
 
 from server import app  # noqa: E402
-from server.conductor import inject, schema, signals  # noqa: E402
-from server.conductor.classify import Answer  # noqa: E402
-from server.conductor.hook import Conductor  # noqa: E402
-from server.conductor.router import COMPOSITE, resolve  # noqa: E402
-from server.conductor.store import ConfigError  # noqa: E402
+from tandemapp.conductor import inject, schema, signals  # noqa: E402
+from tandemapp.conductor.classify import Answer  # noqa: E402
+from tandemapp.conductor.hook import Conductor  # noqa: E402
+from tandemapp.conductor.router import COMPOSITE, resolve  # noqa: E402
+from tandemapp.conductor.store import ConfigError  # noqa: E402
 
 TEMPLATE = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures",
                              "qwen38_chat_template.jinja")).read()
@@ -662,7 +663,7 @@ def test_the_test_box_explains():
 def test_the_monitor_hand_over():
     """The frame's monitor runs under the profile: never above its mode (the raw name runs it
     raw), with its task modes, caps and the thresholds that map onto the policy file."""
-    from server.conductor.monitor import policy as mpol
+    from tandemapp.conductor.monitor import policy as mpol
     base = mpol.load()
     cond, _ = setup(decider=by_label("code_edit", 0.9))
     plan, _, _ = turn(cond, body([{"role": "user", "content": CODE}]),
@@ -694,7 +695,7 @@ def test_the_monitor_hand_over():
 def test_an_in_engine_decider_needs_no_conductor_change():
     """The decider is an interface: a backend the engine registers (`engine:<name>`) answers the
     same Jev questions as the :8010 sidecar, and switching is one role endpoint in the config."""
-    from server.conductor import classify
+    from tandemapp.conductor import classify
 
     class InEngine(classify.Decider):
         def __init__(self, model, timeout_ms):
@@ -740,7 +741,7 @@ def test_signals_shape():
 def test_stats_count_only_the_stages_that_were_asked():
     """A stage answered from the text cache and a stage whose role is off are not calls: with the
     decider off, the classifier figures are Qwen's (2026-10-01, the tile read 0 / 0 ms)."""
-    from server.conductor import decisions
+    from tandemapp.conductor import decisions
     now = 1_790_000_000_000
     row = lambda stages: {"ts_ms": now, "class_id": "code_edit", "source": "qwen", "stages": stages}
     rows = [row([{"stage": "decider", "error": "decider_role_off", "ms": 0.0},
@@ -808,7 +809,7 @@ def test_two_chats_that_open_the_same_way_are_two_sessions():
 
 def test_without_generations_the_second_chat_joins_the_first():
     """The A side of the A/B (`QWEN38_SESSION_GENERATIONS=off`): the bug."""
-    from server.conductor import router as R
+    from tandemapp.conductor import router as R
     was = R.SESSION_GENERATIONS
     R.SESSION_GENERATIONS = "off"
     try:

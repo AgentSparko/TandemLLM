@@ -27,12 +27,13 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_conductor_router as T  # noqa: E402
-from server.conductor import packages as packages_mod  # noqa: E402
-from server.conductor import router as router_mod  # noqa: E402
-from server.conductor import signals  # noqa: E402
+from tandemapp.conductor import packages as packages_mod  # noqa: E402
+from tandemapp.conductor import router as router_mod  # noqa: E402
+from tandemapp.conductor import signals  # noqa: E402
 
 
 def _fn(name, props, required=()):

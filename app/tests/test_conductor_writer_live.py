@@ -14,7 +14,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-from server.conductor import decisions  # noqa: E402
+from tandemapp.conductor import decisions  # noqa: E402
 
 
 def test_writer_survives_a_poisoned_batch():

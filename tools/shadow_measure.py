@@ -37,6 +37,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 LEDGER = os.path.expanduser("~/.qwen38-spark-engine/usage/ledger.sqlite3")
 KEEP_ENV = ("QWEN38_FUSED", "QWEN38_DECODE_ATTN", "QWEN38_GDN", "QWEN38_GQA_FROM",
@@ -246,7 +247,7 @@ def main() -> int:
 
             if "fork" in parts:
                 check()
-                from server.conductor import incontext, schema
+                from tandemapp.conductor import incontext, schema
                 router = schema.seed("router")
                 classes = {c["id"]: c["description"] for c in router["classes"]}
                 text, letters = incontext.listing(classes)
@@ -287,7 +288,8 @@ def main() -> int:
                 # the narrator's summary of each thought read from the shadow (SR1): one pass over
                 # the conversation, a fork at the end of every thought of at least 128 tokens
                 check()
-                from server.conductor import narrator as narr_mod, shadow as svc_mod
+                from server.conductor import shadow as svc_mod
+                from tandemapp.conductor import narrator as narr_mod
                 o_id = tok.convert_tokens_to_ids("<think>")
                 c_id = tok.convert_tokens_to_ids("</think>")
                 spans, open_at = [], None

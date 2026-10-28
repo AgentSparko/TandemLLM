@@ -8,7 +8,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.toolcall import ToolCallBuffer, parse_tool_calls  # noqa: E402
+from tandemapp.toolcall import ToolCallBuffer, parse_tool_calls  # noqa: E402
 
 BLOCK = ("<tool_call>\n<function=write_file>\n<parameter=path>\n/app/a.html\n</parameter>\n"
          "<parameter=content>\n<p>hi</p>\n</parameter>\n</function>\n</tool_call>")
@@ -574,7 +574,7 @@ def _xml(name, **params):
 
 
 def test_schema_types_name_only_the_parameters_a_string_does_not_fit():
-    from server.toolcall import schema_types
+    from tandemapp.toolcall import schema_types
     t = schema_types(_opencode_tools())
     assert t["read"] == {"offset": {"integer"}, "limit": {"integer"}}
     assert t["bash"] == {"timeout": {"integer"}} and t["edit"] == {"replaceAll": {"boolean"}}
@@ -594,7 +594,7 @@ def test_opencode_calls_come_back_as_the_schema_types_on_both_transports():
     # 2026-09-26: every one of these reached opencode as a string and was refused by its validator
     # ("expected number, received string"): read offset/limit, bash timeout, todowrite todos, the
     # chrome-devtools pageId and bringToFront
-    from server.toolcall import schema_types
+    from tandemapp.toolcall import schema_types
     types = schema_types(_opencode_tools())
     todos = '[{"content": "a", "status": "pending", "priority": "high"}]'
     cases = [
@@ -625,7 +625,7 @@ def test_opencode_calls_come_back_as_the_schema_types_on_both_transports():
 
 def test_a_value_that_is_not_its_type_keeps_its_text():
     # never guessed: `60s` for an integer stays "60s" (the client's validator says so, as before)
-    from server.toolcall import convert, schema_types
+    from tandemapp.toolcall import convert, schema_types
     types = schema_types(_opencode_tools())
     text = _xml("bash", command="sleep 1", timeout="60s")
     _, calls = parse_tool_calls(text, types=types)
@@ -645,7 +645,7 @@ def test_a_value_that_is_not_its_type_keeps_its_text():
 
 
 def test_a_json_form_call_with_string_numbers_is_typed_too():
-    from server.toolcall import schema_types
+    from tandemapp.toolcall import schema_types
     types = schema_types(_opencode_tools())
     text = ('<tool_call>\n{"name": "read", "arguments": {"filePath": "/a", "offset": "5"}}\n'
             '</tool_call>')
@@ -656,7 +656,7 @@ def test_a_json_form_call_with_string_numbers_is_typed_too():
 
 def test_a_string_parameter_is_never_converted():
     # `content` of write is a string even when it reads as JSON: the file is `42`, not a number
-    from server.toolcall import schema_types
+    from tandemapp.toolcall import schema_types
     types = schema_types(_opencode_tools())
     text = _xml("write", filePath="/n.json", content='{"a": 1}')
     _, calls = parse_tool_calls(text, types=types)

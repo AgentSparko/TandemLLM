@@ -53,15 +53,17 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_ui_states import TOOLS, _go, lines, opencode, serve  # noqa: E402  (first: the CPU environment)
 from test_memory_router import setup as mem_setup  # noqa: E402
 
-from server import app, dashboard_api as D, ledger, live as live_mod, usage  # noqa: E402
-from server.conductor import schema  # noqa: E402
-from server.conductor.classify import Answer, distribution  # noqa: E402
-from server.conductor.router import _code_guard  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import dashboard_api as D, ledger, live as live_mod, usage  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
+from tandemapp.conductor.classify import Answer, distribution  # noqa: E402
+from tandemapp.conductor.router import _code_guard  # noqa: E402
 from server.stream import StrayClose, drop_stray_close  # noqa: E402
 
 OWUI_UA = "Python/3.11 aiohttp/3.12.15"

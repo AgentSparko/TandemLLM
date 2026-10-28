@@ -37,10 +37,11 @@ import types
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 os.environ["TZ"] = "Europe/Berlin"
 time.tzset()
 
-from server.conductor import redact, schema, transcripts as T  # noqa: E402
+from tandemapp.conductor import redact, schema, transcripts as T  # noqa: E402
 
 FIX = os.path.join(ROOT, "tests", "fixtures", "transcripts")
 TS = 1790000000.0                                   # 2026-09-21 16:13:20 in Berlin
@@ -336,7 +337,7 @@ def test_6_a_root_inside_a_repository_is_refused():
 
 
 def test_the_memory_root_is_the_engine_home_or_inside_the_config():
-    from server.conductor.store import DEFAULT_ROOT
+    from tandemapp.conductor.store import DEFAULT_ROOT
     assert T.memory_root(DEFAULT_ROOT) == os.path.realpath(os.path.expanduser(
         "~/.qwen38-spark-engine/memory"))
     tmp = tempfile.mkdtemp(prefix="cond-")
@@ -353,8 +354,8 @@ def test_the_queue_writes_off_the_request_thread():
 
 
 def test_the_weekly_backup_holds_no_transcript_and_no_memory_row():
-    from server.conductor.decisions import Journal as CondJournal
-    from server.ledger import Ledger
+    from tandemapp.conductor.decisions import Journal as CondJournal
+    from tandemapp.ledger import Ledger
     home = tempfile.mkdtemp(prefix="home-")
     led = Ledger(os.path.join(home, "usage", "ledger.sqlite3"))
     led.open()

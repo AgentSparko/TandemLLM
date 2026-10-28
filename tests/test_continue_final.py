@@ -28,6 +28,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_router import SYSTEM, setup  # noqa: E402
@@ -63,7 +64,7 @@ def test_the_head_is_the_earlier_prompt_and_the_note_goes_at_the_user_turn():
     t2, _ = _text({"messages": first + [{"role": "assistant", "content": PARTIAL}]})
     user_end = t1.rindex("<|im_end|>")
     assert t2[:user_end + len("<|im_end|>")] == t1[:user_end + len("<|im_end|>")]
-    from server.conductor import inject
+    from tandemapp.conductor import inject
     tok = app.STATE["tok"]
     ids2 = app.build_prompt({"messages": first + [{"role": "assistant", "content": PARTIAL}]})[0]
     at = inject.insertion_point(ids2.tolist(), inject.special_id(tok, inject.IM_END))

@@ -38,6 +38,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 PHRASE = "Considering the limited time"
 MODEL = "qwen38-spark-engine"
@@ -154,7 +155,7 @@ def main() -> int:
     ap.add_argument("--policy", default=None, help="the policy file (default ops/supervisor.yaml)")
     ap.add_argument("--json", action="store_true", help="print the result as JSON")
     a = ap.parse_args()
-    from server.conductor.monitor import policy
+    from tandemapp.conductor.monitor import policy
     pol = policy.load(a.policy)
     arms = next(t["arms"] for t in pol.tasks.values() if t.rule == "reasoning_loop")
     if a.fixture:

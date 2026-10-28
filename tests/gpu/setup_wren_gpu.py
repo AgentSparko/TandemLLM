@@ -35,6 +35,7 @@ import types
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from server import app  # noqa: E402
 from server.setup import wren  # noqa: E402
@@ -120,7 +121,7 @@ def borrow() -> dict:
     from engine.decision.device import Device
     from engine.generative.qwen35 import Qwen35Model
     from engine.generative.slot import Slot
-    from server.conductor import narrator as narrator_mod
+    from tandemapp.conductor import narrator as narrator_mod
     app.STATE.clear()
     name, folder, _ = wren.choose()
     before = settle()

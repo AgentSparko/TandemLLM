@@ -9,9 +9,10 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 from server.stream import Reasoning, split_full  # noqa: E402
-from server.toolcall import ToolCallBuffer, call_format, diagnose, parse_tool_calls  # noqa: E402
-from server.toolformats.argkey import ArgKeyCalls, argkey_calls, rewrite_argkey  # noqa: E402
+from tandemapp.toolcall import ToolCallBuffer, call_format, diagnose, parse_tool_calls  # noqa: E402
+from tandemapp.toolformats.argkey import ArgKeyCalls, argkey_calls, rewrite_argkey  # noqa: E402
 
 TEXT = ("Sure.<tool_call>write_file<arg_key>path</arg_key><arg_value>/a b.txt</arg_value><arg_key>content</arg_key>"
         "<arg_value>x\n  y\n</arg_value><arg_key>n</arg_key><arg_value>3</arg_value></tool_call><tool_call>get_time"

@@ -272,7 +272,7 @@ def test_ledger_filter():
         fx.close()
     # a schema-10 ledger gains the two columns and their indexes in place, its rows kept (and
     # schema 12's upstream_request, SRV-733)
-    from server import ledger as ledger_mod
+    from tandemapp import ledger as ledger_mod
     path = os.path.join(tempfile.mkdtemp(prefix="led10-"), "ledger.sqlite3")
     c = sqlite3.connect(path)
     c.executescript(ledger_mod.DDL)

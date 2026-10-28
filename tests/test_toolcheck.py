@@ -33,15 +33,16 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 import yaml  # noqa: E402
 
 from server import app, fake_engine  # noqa: E402
 from engine.models.adapter import ServeSpec  # noqa: E402
-from server.conductor.monitor import Journal, Monitor, Policy, RequestEvent  # noqa: E402
-from server.conductor.monitor import policy as policy_mod  # noqa: E402
-from server.conductor.monitor.toolcheck import schema_problems, tool_history  # noqa: E402
-from server.toolcall import (ToolCallBuffer, answer_items, diagnose, parse_tool_calls,  # noqa: E402
+from tandemapp.conductor.monitor import Journal, Monitor, Policy, RequestEvent  # noqa: E402
+from tandemapp.conductor.monitor import policy as policy_mod  # noqa: E402
+from tandemapp.conductor.monitor.toolcheck import schema_problems, tool_history  # noqa: E402
+from tandemapp.toolcall import (ToolCallBuffer, answer_items, diagnose, parse_tool_calls,  # noqa: E402
                              repair, strip_blocks)
 
 READ = {"type": "function", "function": {"name": "read", "parameters": {
@@ -355,7 +356,7 @@ def test_7_the_c2_allowlist_exempts_opencode_scratch_and_is_configurable():
     ask(call_json("write", filePath="/tmp/a.txt", content="x"))
     assert rows(mon, task="C2"), "the glob covers only what it matches"
     # the schema the Monitor screen edits with: a list of texts, the default shown
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     sch = next(b for b in policy_mod.schema()["properties"]["tasks"]["additionalProperties"]
                ["oneOf"] if b["properties"]["rule"].get("const") == "project_rules")
     assert sch["properties"]["allow_paths"]["default"] == ["/tmp/opencode"]
@@ -640,7 +641,7 @@ def test_the_policy_file_has_the_four_checks_and_the_profiles_reach_them():
     assert [p.tasks[t].mode for t in ("C4", "C3", "C1", "C2")] == ["act", "act", "shadow",
                                                                     "shadow"]
     assert p.templates["regen_turn"].count("{text}") == 1 and p.journal["tool_passes"] is True
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     coding = schema.seed("profiles", "coding")
     assert coding["toolgate"] == {"risk": True, "project": True, "same_call": True,
                                   "malformed": True, "sequence": True, "tier1_timeout_ms": 500}

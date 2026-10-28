@@ -29,10 +29,12 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from server.conductor import residency, schema  # noqa: E402
-from server.conductor.hook import Conductor  # noqa: E402
-from server.conductor.store import ConfigError, Store  # noqa: E402
+from server.conductor import residency  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
+from tandemapp.conductor.hook import Conductor  # noqa: E402
+from tandemapp.conductor.store import ConfigError, Store  # noqa: E402
 
 FIXTURE = os.path.join(ROOT, "tests", "fixtures", "roles-v2-box.json")
 QWEN_SHA = "ab" * 32

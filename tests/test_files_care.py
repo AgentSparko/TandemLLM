@@ -29,6 +29,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_router import COMPOSITE, setup, turn  # noqa: E402
@@ -40,7 +41,7 @@ TOOLS = [{"type": "function", "function": {"name": n, "description": n, "paramet
     for n, args in (("run_command", ("command", "cwd")), ("write_file", ("path", "content")),
                     ("read_file", ("path",)))]
 
-from server.conductor import schema  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
 
 PAGODA = "Create a new folder and create there a pagoda garden"
 WRITERS = {"code_edit", "debug", "design_ui", "drawing", "three_d"}
@@ -56,7 +57,7 @@ def test_shipped_documents():
     for c in schema.SHIPPED_ROUTER["classes"]:
         has = "files-care" in c["policy"]["packages"]
         assert has == (c["id"] in WRITERS), c["id"]
-    for kind, name, doc in __import__("server.conductor.shipped", fromlist=["x"]).documents():
+    for kind, name, doc in __import__("tandemapp.conductor.shipped", fromlist=["x"]).documents():
         if kind == "router":
             assert schema.check(kind, doc, packages=schema.SHIPPED_PACKAGES) == []
 

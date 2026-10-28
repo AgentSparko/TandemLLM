@@ -33,10 +33,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from server import activity  # noqa: E402
-from server import live as live_mod  # noqa: E402
-from server import parallel as par  # noqa: E402
-from server.usage import RequestRecord, client_cached_of  # noqa: E402
+from tandemapp import activity  # noqa: E402
+from tandemapp import live as live_mod  # noqa: E402
+from tandemapp import parallel as par  # noqa: E402
+from tandemapp.usage import RequestRecord, client_cached_of  # noqa: E402
 
 
 class Clock:

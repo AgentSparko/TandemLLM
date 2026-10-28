@@ -36,7 +36,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 from packages_migrate import _call, _token  # noqa: E402
-from server.conductor.monitor import policy as policy_mod  # noqa: E402
+from tandemapp.conductor.monitor import policy as policy_mod  # noqa: E402
 
 NOTE = ("S5 turn budget (SRV-179, SRV-181): the same problem stated 3 times, a build turn's setup "
         "before its first file, a chat turn past its minutes")

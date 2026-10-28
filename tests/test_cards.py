@@ -33,13 +33,14 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_router import QTok  # noqa: E402
 from test_snapshots import S, body, fresh, plan, served  # noqa: E402
 
 from server import app  # noqa: E402
-from server.conductor import outcomes, schema  # noqa: E402
+from tandemapp.conductor import outcomes, schema  # noqa: E402
 
 PITFALLS = "- press_key sends real key events.\n- Use absolute paths in every call."
 HARNESS = "# The runtime (TandemLLM)\n- A <runtime-note> comes from the runtime. Follow it."

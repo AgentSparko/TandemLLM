@@ -30,6 +30,7 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 from server import slots  # noqa: E402
 
 GiB = slots.GiB
@@ -209,7 +210,7 @@ def test_describe_names_the_kv_pages():
 
 
 def test_parallel_lane_waiting_for_memory():
-    from server import parallel
+    from tandemapp import parallel
 
     class Rec:
         waiting_memory = True
@@ -255,7 +256,7 @@ def test_a_non_streamed_wait_ends_in_a_readable_503():
     import types
     import torch
     app = _app()
-    from server import usage
+    from tandemapp import usage
     app.STATE.clear()
     app.STATE["queue_timeout"] = 1.5
     app.STATE["request_timeout"] = 3600.0
@@ -290,7 +291,7 @@ def test_a_streamed_wait_outlasts_the_queue_timeout():
     import types
     import torch
     app = _app()
-    from server import usage
+    from tandemapp import usage
     app.STATE.clear()
     app.STATE["queue_timeout"] = 0.5
     app.STATE["request_timeout"] = 30.0
@@ -1469,7 +1470,7 @@ def test_the_release_route_answers_trusted_local_and_the_admin_only():
     import contextlib
     import io
     app = _app()
-    from server import auth
+    from tandemapp import auth
 
     class Req(app.Handler):
         def __init__(self, body, headers):

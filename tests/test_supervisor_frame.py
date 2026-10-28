@@ -38,20 +38,21 @@ import yaml  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from engine.spec import ThinkBudget  # noqa: E402
 from server import app  # noqa: E402
-from server.conductor.monitor import (  # noqa: E402
+from tandemapp.conductor.monitor import (  # noqa: E402
     Action, BlockEvent, FinishEvent, Journal, Monitor, Policy, PolicyError, RequestEvent,
     ToolCallEvent, lower, parse_mode, schema, tier0,
 )
-from server.conductor.monitor import policy as policy_mod  # noqa: E402
-from server.conductor.monitor.executor import tail_note, think_off  # noqa: E402
-from server.conductor.monitor.policy import (  # noqa: E402
+from tandemapp.conductor.monitor import policy as policy_mod  # noqa: E402
+from tandemapp.conductor.monitor.executor import tail_note, think_off  # noqa: E402
+from tandemapp.conductor.monitor.policy import (  # noqa: E402
     CONTINUE_HIDDEN, GIVE_UP, PASS, PROMPT_TAIL_NOTE, REGENERATE_CALL, SET_THINK_BUDGET,
 )
-from server.conductor.monitor.session import Sessions  # noqa: E402
+from tandemapp.conductor.monitor.session import Sessions  # noqa: E402
 from test_app_loop import Req, serve  # noqa: E402
 from test_serve_identity import Oracle  # noqa: E402
 from test_window_edge import FixedDrafter  # noqa: E402

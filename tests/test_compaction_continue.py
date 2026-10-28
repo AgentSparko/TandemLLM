@@ -31,13 +31,15 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 import test_forward_tree as T  # noqa: E402,F401  (sets the CPU environment before the engine imports)
 
 import torch  # noqa: E402
 
 from engine import cache  # noqa: E402
-from server import app, compaction  # noqa: E402
-from server import usage as usage_mod  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import compaction  # noqa: E402
+from tandemapp import usage as usage_mod  # noqa: E402
 from test_cache import tokens  # noqa: E402
 from test_end_anchor import _state  # noqa: E402
 

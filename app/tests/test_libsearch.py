@@ -37,8 +37,8 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.conductor import libsearch, schema  # noqa: E402
-from server.conductor.packages import Library, with_url  # noqa: E402
+from tandemapp.conductor import libsearch, schema  # noqa: E402
+from tandemapp.conductor.packages import Library, with_url  # noqa: E402
 
 SKILLS = {
     "browser-game": ("Building a 2D browser game (platformer, shooter, puzzle) - game loop with "

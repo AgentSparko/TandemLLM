@@ -44,12 +44,13 @@ import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_router import QTok, by_label, setup  # noqa: E402
 
 from server import app  # noqa: E402
-from server.conductor import outcomes, schema, signals, transcripts  # noqa: E402
+from tandemapp.conductor import outcomes, schema, signals, transcripts  # noqa: E402
 
 SYSTEM = "You are opencode.\n<env>\n  Working directory: /work/game\n</env>"
 TASK = "Build a small canvas game in game.html and test it in the browser."

@@ -26,12 +26,14 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_app_loop import Req, serve  # noqa: E402  (first: the CPU environment)
 from test_usage import UTok, _ids, _script  # noqa: E402
 
-from server import app, ledger, usage  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import ledger, usage  # noqa: E402
 
 SENTINEL = "zqx-SENTINEL-7f3a91"
 
@@ -272,7 +274,8 @@ import os, signal, sys, time, threading
 sys.path.insert(0, os.path.join({root!r}, "tests"))
 import test_app_loop as t
 from http.server import ThreadingHTTPServer
-from server import app, ledger, usage
+from server import app
+from tandemapp import ledger, usage
 
 t.serve()
 led = ledger.Ledger({path!r})

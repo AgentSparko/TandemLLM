@@ -28,7 +28,7 @@ from contextlib import redirect_stdout
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server import ledger  # noqa: E402
+from tandemapp import ledger  # noqa: E402
 from tools import idle_gaps  # noqa: E402
 
 T0 = 1_790_000_000_000          # ms, the planted night's first request

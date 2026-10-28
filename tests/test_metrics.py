@@ -21,8 +21,9 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from server import metrics as M  # noqa: E402
+from tandemapp import metrics as M  # noqa: E402
 
 NAME = r"[a-zA-Z_:][a-zA-Z0-9_:]*"
 SAMPLE = re.compile(rf"^(?P<name>{NAME})(?P<labels>\{{.*\}})?\s(?P<value>\S+)$")

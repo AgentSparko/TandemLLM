@@ -15,11 +15,12 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from server import app  # noqa: E402
 from engine.models.adapter import ServeSpec  # noqa: E402
-from server.toolcall import parse_tool_calls  # noqa: E402
+from tandemapp.toolcall import parse_tool_calls  # noqa: E402
 from test_toolcheck import Req, serve  # noqa: E402
 
 TEMPLATE = os.path.join(HERE, "fixtures", "nemotron_h", "lightning-chat_template.jinja")

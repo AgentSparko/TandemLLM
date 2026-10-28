@@ -63,7 +63,7 @@ from ports import free_port  # noqa: E402
 from proxy import nodeagent, nodeclient, nodeengines, nodemaint, nodemetrics  # noqa: E402
 from proxy import nodesource, nodetrust  # noqa: E402
 from proxy_util import Proxy, run  # noqa: E402
-from server import logbuf  # noqa: E402
+from tandemapp import logbuf  # noqa: E402
 
 GIB = 1024 ** 3
 

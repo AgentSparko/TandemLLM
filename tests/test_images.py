@@ -14,6 +14,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from server import images as I  # noqa: E402
 
@@ -461,7 +462,7 @@ def test_public_address():
 
 
 def test_live_label_while_encoding():
-    from server import activity
+    from tandemapp import activity
 
     class Rec:
         encoding = (1, 2)

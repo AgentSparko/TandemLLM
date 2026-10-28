@@ -25,7 +25,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.conductor import decisions, routes  # noqa: E402
+from tandemapp.conductor import decisions, routes  # noqa: E402
 
 NOW = int(time.time() * 1000)
 WEEK = int((time.time() - 7 * 86400) * 1000)

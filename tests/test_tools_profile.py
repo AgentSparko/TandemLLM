@@ -42,10 +42,11 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
-from server.conductor import router as router_mod, schema, shipped, signals  # noqa: E402
-from server.conductor.store import Store  # noqa: E402
+from tandemapp.conductor import router as router_mod, schema, shipped, signals  # noqa: E402
+from tandemapp.conductor.store import Store  # noqa: E402
 
 FN = [{"type": "function", "function": {"name": "get_weather", "description": "the weather",
                                          "parameters": {"type": "object", "properties": {
@@ -179,7 +180,7 @@ def test_resolve_the_settings_and_the_memory_guard():
 # ------------------------------------------------------------------ 3 raw is the floor
 def test_the_tools_prompt_is_the_raw_prompt():
     from test_conductor_router import setup, turn
-    from server.conductor.router import COMPOSITE
+    from tandemapp.conductor.router import COMPOSITE
     cond, _ = setup()
     shipped.install(cond.store)
     cwd_tool = {"type": "function", "function": {

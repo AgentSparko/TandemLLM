@@ -52,12 +52,13 @@ import torch  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from engine.spec import ThinkBudget  # noqa: E402
 from server import app  # noqa: E402
 from server import probe as probe_mod  # noqa: E402
-from server.conductor import inject  # noqa: E402
+from tandemapp.conductor import inject  # noqa: E402
 from test_app_loop import OPEN, FakeTok, serve  # noqa: E402
 from test_window_edge import FixedDrafter  # noqa: E402
 from tools import probe_train  # noqa: E402
@@ -400,7 +401,7 @@ def test_the_probe_row_is_the_last_messages_last_token():
     assert p2.injected and ids2[pos2 + 1:pos2 + 1 + len(p2.session.notes[1].ids)] == \
         p2.session.notes[1].ids, "this turn's note right after the row"
     # a plan that changed nothing: the prompt's own tail
-    from server.conductor.router import Plan
+    from tandemapp.conductor.router import Plan
 
     class Bare:
         _probe_at = None

@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 from chatd_util import run_all  # noqa: E402
 
-from server import chat_forward  # noqa: E402
+from tandemapp import chat_forward  # noqa: E402
 
 
 def _forward(method: str, path: str, env: dict, body: bytes | None = None) -> tuple[int, dict]:

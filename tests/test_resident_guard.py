@@ -31,6 +31,7 @@ for _k in ("NORM", "GDN", "HEAD", "ATTN", "GDNBLOCK", "GDNTREE", "GDNPRE"):
 import torch  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from engine import cache  # noqa: E402
@@ -293,7 +294,7 @@ def _turn(router_mod, sess, cwd, mode="on", compaction=False):
 
 
 def test_the_working_directory_leaves_the_tool_block_for_a_note():
-    from server.conductor import router as R
+    from tandemapp.conductor import router as R
     sess = R.Session("h:test")
     body, plan, row = _turn(R, sess, "/home/user")
     d = body["tools"][0]["function"]["description"]
@@ -321,7 +322,7 @@ def test_the_working_directory_leaves_the_tool_block_for_a_note():
 
 
 def test_the_working_directory_is_left_alone_unless_the_profile_is_on():
-    from server.conductor import router as R
+    from tandemapp.conductor import router as R
     for mode in ("shadow", "off"):
         body, plan, _ = _turn(R, R.Session("h:x"), "/home/user", mode=mode)
         assert body["tools"][0]["function"]["description"].endswith("is: /home/user")

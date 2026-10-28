@@ -58,10 +58,12 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
-from server import app, ledger, queue_wait as qwait  # noqa: E402
-from server.conductor import narrator, states  # noqa: E402
+from server import app, queue_wait as qwait  # noqa: E402
+from tandemapp import ledger  # noqa: E402
+from tandemapp.conductor import narrator, states  # noqa: E402
 import test_ui_states as tu  # noqa: E402
 
 M = states.MARKER

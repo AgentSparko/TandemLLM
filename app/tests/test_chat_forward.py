@@ -24,8 +24,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import fake_backend
 from chatd_util import KEY, Chat, run_all
 
-from server import auth as auth_mod
-from server import chat_forward
+from tandemapp import auth as auth_mod
+from tandemapp import chat_forward
 
 ADMIN = "a" * 40
 

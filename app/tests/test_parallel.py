@@ -22,9 +22,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from proxy.measure import RelayRecord  # noqa: E402
 from proxy_util import Proxy, fake, run  # noqa: E402
-from server import live as live_mod  # noqa: E402
-from server import parallel as par  # noqa: E402
-from server.usage import RequestRecord  # noqa: E402
+from tandemapp import live as live_mod  # noqa: E402
+from tandemapp import parallel as par  # noqa: E402
+from tandemapp.usage import RequestRecord  # noqa: E402
 from tools import contract_check  # noqa: E402
 
 EXAMPLE = os.path.join(ROOT, "docs", "contract", "dashboard-v1", "parallel.example.json")

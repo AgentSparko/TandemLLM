@@ -11,7 +11,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server.conductor.decisions import _detail  # noqa: E402
+from tandemapp.conductor.decisions import _detail  # noqa: E402
 
 
 def test_caller_findings_keep_their_fields():

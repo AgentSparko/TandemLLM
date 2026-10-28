@@ -141,7 +141,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server.conductor.packages import literal_api_hosts  # noqa: E402
+from tandemapp.conductor.packages import literal_api_hosts  # noqa: E402
 
 NOTE = ("TandemLLM's routes via {tandem_url}; Laya helper fails fast; scratch {tandem_scratch} excluded "
         "from git and deleted before done; state hooks removed; no downloads")

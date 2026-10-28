@@ -26,6 +26,7 @@ import threading
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 os.environ["BOX_LOCK"] = os.path.join(tempfile.mkdtemp(prefix="dec-lock-"), "no-box.flock")
 os.environ["FAKE_MEM_AVAILABLE_GIB"] = "64"
@@ -33,9 +34,9 @@ os.environ["FAKE_MEM_AVAILABLE_GIB"] = "64"
 from test_conductor_router import QTok, body, turn  # noqa: E402
 
 from server import app, decider_api  # noqa: E402
-from server.conductor import classify  # noqa: E402
-from server.conductor.classify import Answer  # noqa: E402
-from server.conductor.hook import Conductor  # noqa: E402
+from tandemapp.conductor import classify  # noqa: E402
+from tandemapp.conductor.classify import Answer  # noqa: E402
+from tandemapp.conductor.hook import Conductor  # noqa: E402
 
 DEBUG = "It crashes on start with a stack trace in the parser. debug it please."
 

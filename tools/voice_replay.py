@@ -36,11 +36,12 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 
 # ---------------------------------------------------------------------- export
 def export(db: str, session: str) -> dict:
-    from server.conductor import states
+    from tandemapp.conductor import states
     con = sqlite3.connect(os.path.expanduser(db))
     msgs = con.execute("select id, data from message where session_id=? order by time_created, id",
                        (session,)).fetchall()
@@ -128,7 +129,7 @@ def run(path: str, *, device: str, model: str, lang: str, gpu_ms: float, only: i
     from transformers import AutoTokenizer
     from engine import generative
     from engine.generative.slot import Slot
-    from server.conductor import narrator as narr_mod, states, voice as voice_mod
+    from tandemapp.conductor import narrator as narr_mod, states, voice as voice_mod
     from engine.settings import SETTINGS as _S
 
     data = json.load(open(path))

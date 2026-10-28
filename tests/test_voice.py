@@ -61,11 +61,12 @@ import threading
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from engine.generative.fake import FakeGenerative, HEAD, TAIL  # noqa: E402
 from engine.generative.slot import Slot  # noqa: E402
-from server.conductor import narrator as narr_mod, schema, states, voice  # noqa: E402
+from tandemapp.conductor import narrator as narr_mod, schema, states, voice  # noqa: E402
 
 M = states.MARKER
 SENT = narr_mod.SENTINEL

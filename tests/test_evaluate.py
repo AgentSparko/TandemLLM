@@ -36,13 +36,14 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_router import QTok  # noqa: E402
 from test_snapshots import S, fresh, plan  # noqa: E402
 
 from server import app  # noqa: E402
-from server.conductor import schema  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
 
 
 def bash(cmd, out):
@@ -213,7 +214,7 @@ def test_in_place_question():
         seen.append((ids, letters, at))
         return [math.log(0.8), math.log(0.15), math.log(0.05)], {"forwarded": 40, "reused": 900}
     tok = app.STATE["tok"]
-    from server.conductor import incontext
+    from tandemapp.conductor import incontext
     client = app.build_prompt({"model": "TandemLLM", "messages": s.msgs})[0].tolist()
     row = cond.router.ask_in_place(p, client, tok, runner)
     assert row["decision"] == "failure" and row["detail"]["agree"] is True

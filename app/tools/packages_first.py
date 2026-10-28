@@ -43,8 +43,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server.conductor import libsearch, schema, signals  # noqa: E402
-from server.conductor.packages import CHARS_PER_TOKEN, split_frontmatter, split_reference  # noqa: E402
+from tandemapp.conductor import libsearch, schema, signals  # noqa: E402
+from tandemapp.conductor.packages import CHARS_PER_TOKEN, split_frontmatter, split_reference  # noqa: E402
 
 PKG = os.path.join(ROOT, "packages")
 SYSTEM = ("tandem-core", "render-tools", "eval-judge")

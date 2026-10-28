@@ -28,11 +28,12 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_router import SYSTEM, TOOLS, setup  # noqa: E402
 
-from server.conductor import signals  # noqa: E402
+from tandemapp.conductor import signals  # noqa: E402
 
 # opencode 1.18.33's caption, as the journal holds it (the digest of the misrouted turns)
 CAPTION = "Attached media from tool result:"

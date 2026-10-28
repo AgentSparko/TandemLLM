@@ -32,8 +32,8 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.conductor import migrations, schema  # noqa: E402
-from server.conductor.store import Store  # noqa: E402
+from tandemapp.conductor import migrations, schema  # noqa: E402
+from tandemapp.conductor.store import Store  # noqa: E402
 
 MID = "2026-10-14-chat-app-memory"
 ONLY_CHAT_APP = [m for m in migrations.MIGRATIONS if m[0] == MID]

@@ -53,11 +53,12 @@ import torch  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from engine import cache  # noqa: E402
 from server import app  # noqa: E402
-from server.conductor import incontext, inject, schema  # noqa: E402
+from tandemapp.conductor import incontext, inject, schema  # noqa: E402
 from test_cache import DEV, fresh, tokens  # noqa: E402
 from test_conductor_router import SYSTEM, QTok, body, setup, text_of, turn  # noqa: E402
 from test_resident import Pos, decode, resident, same_state  # noqa: E402

@@ -29,8 +29,8 @@ import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.conductor import schema  # noqa: E402
-from server.conductor.router import Router  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
+from tandemapp.conductor.router import Router  # noqa: E402
 
 CLASSES = {c["id"]: c for c in copy.deepcopy(schema.SHIPPED_ROUTER["classes"])}
 PAGODA = {"three_d": 0.3784, "design_ui": 0.2561, "code_edit": 0.2321, "drawing": 0.1043,

@@ -40,6 +40,7 @@ os.environ.setdefault("QWEN38_PROMPT_END", "0")   # the grid and the end anchor 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 import test_forward_tree as T  # noqa: E402,F401  (the CPU environment before the engine imports)
 
 import torch  # noqa: E402
@@ -47,7 +48,7 @@ import torch  # noqa: E402
 from engine import cache  # noqa: E402
 from engine.models.adapter import CostModel  # noqa: E402
 from server import app, cache_peek  # noqa: E402
-from server.usage import RequestRecord  # noqa: E402
+from tandemapp.usage import RequestRecord  # noqa: E402
 from test_cache import tokens  # noqa: E402
 from test_end_anchor import BIG, CH, TOOL, ChatTok, Req, _state, turn  # noqa: E402
 from test_session_spill import _spill  # noqa: E402

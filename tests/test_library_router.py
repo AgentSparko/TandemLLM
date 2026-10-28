@@ -40,6 +40,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_router import QTok, setup  # noqa: E402
@@ -47,7 +48,7 @@ from test_libsearch import SKILLS, lib_packages, make_library  # noqa: E402
 from test_snapshots import S, served, text_session  # noqa: E402
 
 from server import app  # noqa: E402
-from server.conductor import libsearch, outcomes, schema  # noqa: E402
+from tandemapp.conductor import libsearch, outcomes, schema  # noqa: E402
 
 CARD = ("# The skill library (TandemLLM)\n- Search it: curl -s \"$TANDEM_URL/v1/library/search"
         "?q=...\"")

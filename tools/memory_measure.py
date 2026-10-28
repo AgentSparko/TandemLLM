@@ -34,8 +34,9 @@ import time
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from server import compaction  # noqa: E402
+from tandemapp import compaction  # noqa: E402
 
 PROJECT = "/home/user/demo-calc"
 SYSTEM = (f"You are opencode, an interactive CLI coding agent.\nWorking directory: {PROJECT}\n"
@@ -307,7 +308,7 @@ def main() -> None:
     # 4 a new session asks what is remembered; with no note written, two synthetic notes are seeded
     # (as a person's, through the store the engine reads) so the reads are measured all the same
     if not notes(a.base)["notes"] and a.seed_dir:
-        from server.conductor.notes import NoteStore
+        from tandemapp.conductor.notes import NoteStore
         st = NoteStore(os.path.expanduser(a.seed_dir))
         st.write("owner", {"op": "add", "scope": "project", "kind": "rule",
                            "title": "tests run with python -m pytest -q from the project root",

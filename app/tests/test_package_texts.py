@@ -51,8 +51,8 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server.conductor import packages as P  # noqa: E402
-from server.conductor import schema  # noqa: E402
+from tandemapp.conductor import packages as P  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
 from tools import packages_migrate as M  # noqa: E402
 
 HOST = "https://ai-api.example.lan"
@@ -181,7 +181,7 @@ def test_the_helper_fails_fast():
 
 
 def test_the_kit_and_the_log_tail():
-    from server.laya_kit import laya_drive
+    from tandemapp.laya_kit import laya_drive
     assert os.path.dirname(laya_drive.LOG) == os.path.dirname(os.path.abspath(laya_drive.__file__))
     rx = re.compile(schema.OUTCOMES["patterns"]["log_tail"])
     assert rx.search("tail -n 60 /tmp/tandem-Ab3xYz9_kLmn/run.log")
@@ -223,7 +223,7 @@ def test_the_page_check_edits():
     assert M.migrate_doc(new)[1] == {}, "a second run changes nothing"
     assert any(c.startswith(M.ROUND3) for ch in report.values() for c in ch) and len(M.NOTE_345) < 200
     # every page-check command in the texts parses with the kit's own command line
-    from server.laya_kit import laya_drive
+    from tandemapp.laya_kit import laya_drive
     import shlex
     cmds = re.findall(r"`(python3 \{tandem_scratch\}/laya_drive\.py page [^`]+)`", t)
     assert cmds, t
@@ -352,7 +352,7 @@ def test_the_monitor_notes_in_plain_words():
     """SRV-229: the S5 and E2 notes ask for the answer in plain words (tools/monitor_migrate.py),
     in ops/supervisor.yaml, its JSON copy, and a box's stored document with the old texts."""
     from tools import monitor_migrate as MM
-    from server.conductor.monitor import policy as mpolicy
+    from tandemapp.conductor.monitor import policy as mpolicy
     data = mpolicy.load().data
     with open(mpolicy.DEFAULT_JSON) as f:
         assert json.load(f) == data, "policy.default.json is stale: tools/conductor_policy.py --json"
@@ -386,7 +386,7 @@ def _laya_server():
     it passes, and a 503 under /down."""
     import http.server
     import threading
-    from server import laya_api
+    from tandemapp import laya_api
 
     class H(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):

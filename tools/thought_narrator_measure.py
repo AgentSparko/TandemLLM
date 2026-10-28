@@ -48,6 +48,7 @@ from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 DOC_SEP = 1 << 30
@@ -134,8 +135,8 @@ def summaries(a) -> dict:
     from engine.decision.device import Device
     from engine.generative.qwen35 import Qwen35Model
     from engine.generative.slot import Slot
-    from server.conductor import narrator as N
-    from server.conductor.states import NARRATED_MAX_CHARS
+    from tandemapp.conductor import narrator as N
+    from tandemapp.conductor.states import NARRATED_MAX_CHARS
     path = os.path.expanduser(a.dir or f"~/.qwen38-spark-engine/models/{a.model}")
     dev = Device(a.device)
     m = Qwen35Model(a.model, path, engine_dir=a.engine_dir, graph=not a.no_graph)
@@ -236,8 +237,8 @@ def summaries(a) -> dict:
 def _profiles(root: str, on_mode: str = "thoughts") -> None:
     """`on_mode`: the on arm's `ui.narrator` (`thoughts`, N2; `live`, v3 the voice, with its
     shipped timings)."""
-    from server.conductor import schema
-    from server.conductor.store import Store
+    from tandemapp.conductor import schema
+    from tandemapp.conductor.store import Store
     s = Store(root)
     base = schema.seed("profiles", "coding")
     for name, narr in (("n2-off", "off"), ("n2-on", on_mode)):
@@ -254,7 +255,7 @@ def _profiles(root: str, on_mode: str = "thoughts") -> None:
 
 
 def one(port: int, profile: str, run: int, max_tokens: int) -> dict:
-    from server.conductor.narrator import SENTINEL
+    from tandemapp.conductor.narrator import SENTINEL
     import re
     frame = re.compile(r"\n› ([^\n]*)\n\n")
     body = {"model": "TandemLLM", "stream": True, "stream_options": {"include_usage": True},

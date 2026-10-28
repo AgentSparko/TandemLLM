@@ -79,8 +79,10 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from server import app, auth  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import auth  # noqa: E402
 from server.setup import apply, device as device_mod, estimate, registry  # noqa: E402
 
 REPO = registry.ROOT

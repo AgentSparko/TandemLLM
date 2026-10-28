@@ -29,12 +29,14 @@ import sys
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from transformers.utils.chat_template_utils import render_jinja_template  # noqa: E402
 
 from engine.penalty import PenaltySpec  # noqa: E402
 from engine.spec import Relax  # noqa: E402
-from server import app, metrics  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import metrics  # noqa: E402
 
 TEMPLATE = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures",
                              "qwen38_chat_template.jinja")).read()

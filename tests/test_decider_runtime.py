@@ -32,6 +32,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 # the box lock of the machine this runs on is not this test's: a hold there must not read as one
 os.environ["BOX_LOCK"] = os.path.join(tempfile.mkdtemp(prefix="dec-lock-"), "no-box.flock")
 
@@ -41,7 +42,8 @@ from engine.decision.base import (DeadlineMissed, NotReadyError, OverloadedError
 from engine.decision.fake import FakeModel  # noqa: E402
 from engine.decision.registry import Registry, UnknownModel  # noqa: E402
 from server import decider_api  # noqa: E402
-from server.conductor import residency, schema  # noqa: E402
+from server.conductor import residency  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
 
 CHOICE = {"cls": {"type": "choice", "instructions": "Which kind of work is this?",
                   "criteria": {"debug": "fix a bug", "plan": "plan the work", "chat": "talk"}}}
@@ -106,7 +108,7 @@ def _planner_on(mem_gib, root, *, hold_file=None):
 
     class Cond:
         def __init__(self):
-            from server.conductor.store import Store
+            from tandemapp.conductor.store import Store
             self.root, self.store = root, Store(root)
 
     state["conductor"] = Cond()

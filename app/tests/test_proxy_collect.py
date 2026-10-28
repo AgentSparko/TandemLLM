@@ -28,7 +28,7 @@ from proxy_util import ROOT, Proxy, fake, run  # noqa: E402
 
 from proxy import collect_api as C  # noqa: E402
 from proxy import config as config_mod  # noqa: E402
-from server import ledger as ledger_mod  # noqa: E402
+from tandemapp import ledger as ledger_mod  # noqa: E402
 from tools import contract_check  # noqa: E402
 
 TOKEN = "collect-fixture-token-0123456789"

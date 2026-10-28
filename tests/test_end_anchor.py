@@ -53,6 +53,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 import test_forward_tree as T  # noqa: E402  (sets the CPU environment before the engine imports)
 os.environ.setdefault("QWEN38_PROMPT_END", "0")   # the grid and the end anchor alone (tests/test_prompt_end.py)
 
@@ -64,7 +65,7 @@ from engine.penalty import PenaltySpec  # noqa: E402
 from engine.spec import Relax  # noqa: E402
 from engine.tree import DraftTree  # noqa: E402
 from server import app  # noqa: E402
-from server.conductor.monitor.policy import CLOSE_REASONING, Action  # noqa: E402
+from tandemapp.conductor.monitor.policy import CLOSE_REASONING, Action  # noqa: E402
 from test_app_loop import FakeTok, Req  # noqa: E402
 from test_cache import DEV, fresh, tokens  # noqa: E402
 from test_resident import same_state  # noqa: E402

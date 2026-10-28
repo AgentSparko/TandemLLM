@@ -34,6 +34,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_conductor_e2e import ADMIN, LAUNCH, PROXY, _call, _port, _wait  # noqa: E402
@@ -132,7 +133,7 @@ def test_2_behind_the_engines_bearer_auth():
     assert st == 401 and "Bearer" in hdr.get("WWW-Authenticate", ""), (st, out)
     assert _ask(body, headers=PROXY)[0] == 200, "the admin token through the proxy"
     assert _ask(body, token=None)[0] == 200, "a tool on the box itself (trusted local)"
-    from server.auth import Auth
+    from tandemapp.auth import Auth
     assert Auth(None, login=False).decide("decider", "203.0.113.44", PROXY) == "ok", \
         "AU1: no admin password set, the route is open"
     assert Auth(None, login=False).decide("decider", "127.0.0.1", {}) == "ok"
@@ -319,7 +320,8 @@ def test_a_refused_load_is_a_409_with_the_planners_numbers():
     nothing loaded."""
     from engine.decision.fake import FakeModel
     from engine.decision.registry import Registry
-    from server.conductor import residency, routes, schema
+    from server.conductor import residency
+    from tandemapp.conductor import routes, schema
 
     def plan(name, *, loading, service_start, hold_restart):
         return residency.check("decider", 20.0, schema.seed("residency"), schema.seed("roles"),

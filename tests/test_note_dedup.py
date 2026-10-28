@@ -24,10 +24,11 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_conductor_router as T  # noqa: E402
-from server.conductor import router as router_mod  # noqa: E402
+from tandemapp.conductor import router as router_mod  # noqa: E402
 
 CORE = "# Coding core\n\n" + "Run after every step, and read the file before you change it.\n" * 40
 SKILLS = {"lib-skill": "library", "cli-skill": "command-line", "api-skill": "endpoint",

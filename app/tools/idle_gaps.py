@@ -50,7 +50,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server.conductor import signals  # noqa: E402
+from tandemapp.conductor import signals  # noqa: E402
 
 PRODUCTION = "~/.qwen38-spark-engine/usage/ledger.sqlite3"
 BUCKETS = ((0.0, 0.5), (0.5, 2.0), (2.0, 5.0), (5.0, 15.0), (15.0, 60.0), (60.0, math.inf))

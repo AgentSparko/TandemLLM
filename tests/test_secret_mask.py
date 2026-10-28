@@ -45,14 +45,15 @@ import types
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from test_ui_states import OPENCODE_UA, _go, quiet  # noqa: E402  (first: the CPU environment)
 
 from server import app, fake_engine  # noqa: E402
-from server.conductor import redact, schema, shipped  # noqa: E402
-from server.conductor.hook import Conductor  # noqa: E402
-from server.conductor.monitor import Journal, Monitor  # noqa: E402
+from tandemapp.conductor import redact, schema, shipped  # noqa: E402
+from tandemapp.conductor.hook import Conductor  # noqa: E402
+from tandemapp.conductor.monitor import Journal, Monitor  # noqa: E402
 
 SDK_UA = "OpenAI/Python 1.109.1"
 OWUI_UA = "Python/3.11 aiohttp/3.12.15"

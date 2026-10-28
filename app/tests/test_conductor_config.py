@@ -28,9 +28,9 @@ from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.conductor import fake_decider, schema  # noqa: E402
-from server.conductor.hook import Conductor  # noqa: E402
-from server.conductor.store import ConfigError, Store, diff  # noqa: E402
+from tandemapp.conductor import fake_decider, schema  # noqa: E402
+from tandemapp.conductor.hook import Conductor  # noqa: E402
+from tandemapp.conductor.store import ConfigError, Store, diff  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTRACT = os.path.join(ROOT, "docs", "contract", "conductor-v1")
@@ -247,7 +247,7 @@ def test_a_role_test_answers_or_says_why():
 def test_the_packaged_policy_copy_is_the_policy_file():
     """An installed proxy reads server/conductor/monitor/policy.default.json (no ops/, maybe no
     PyYAML); it must be ops/supervisor.yaml, as `tools/conductor_policy.py --json` writes it."""
-    from server.conductor.monitor import policy as mpolicy
+    from tandemapp.conductor.monitor import policy as mpolicy
     with open(mpolicy.DEFAULT_JSON) as f:
         copy_ = json.load(f)
     assert copy_ == json.loads(json.dumps(mpolicy.load().data)), \

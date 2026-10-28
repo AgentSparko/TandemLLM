@@ -27,10 +27,12 @@ import shutil
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_setup_apply as T  # noqa: E402
-from server import app, auth, setup_api  # noqa: E402
+from server import app, setup_api  # noqa: E402
+from tandemapp import auth  # noqa: E402
 from server.setup import apply  # noqa: E402
 
 FINAL = ("done", "failed", "rolled_back")

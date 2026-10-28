@@ -12,8 +12,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server import compaction  # noqa: E402
-from server.conductor import signals  # noqa: E402
+from tandemapp import compaction  # noqa: E402
+from tandemapp.conductor import signals  # noqa: E402
 
 OPENCODE = {"messages": [
     {"role": "system", "content": "You are a context summarization agent. You are given a "

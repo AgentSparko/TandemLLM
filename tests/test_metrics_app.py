@@ -17,6 +17,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_app_loop import FakeTok, Req, serve  # noqa: E402  (first: the CPU environment)
@@ -26,7 +27,8 @@ from test_metrics import parse  # noqa: E402
 import torch  # noqa: E402
 
 from engine import cache  # noqa: E402
-from server import app, auth, metrics  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import auth, metrics  # noqa: E402
 
 
 def test_a_session_hit_and_a_prefix_hit_are_told_apart():

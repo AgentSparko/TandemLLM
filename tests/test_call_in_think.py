@@ -22,6 +22,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from server import app, fake_engine  # noqa: E402
@@ -143,7 +144,7 @@ def test_5_the_scan():
 
 def test_6_the_state_line_says_what_happened():
     """The lift's line, under the `continue` switch: not "asking it to go on"."""
-    from server.conductor import states as S, voice as V
+    from tandemapp.conductor import states as S, voice as V
     ev = {"decision": "CONTINUE_HIDDEN", "task": "E1", "reason": "empty_turn(case=C)",
           "detail": {"case": "C", "calls": ["run_command"], "act": 1}}
     st = S.States()

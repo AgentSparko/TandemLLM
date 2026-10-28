@@ -35,6 +35,7 @@ import threading
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 import test_app_loop as L  # noqa: E402  (sets the CPU environment before the engine imports)
 
 from chatd.engine import Engine, EngineError  # noqa: E402

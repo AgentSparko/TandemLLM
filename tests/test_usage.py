@@ -26,6 +26,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # first: it sets the CPU reference paths' environment before the engine modules read it
@@ -34,7 +35,8 @@ from test_app_loop import Req, serve  # noqa: E402
 import torch  # noqa: E402
 
 from engine import cache  # noqa: E402
-from server import app, usage  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import usage  # noqa: E402
 
 FIELDS = ("usage", "timings", "metrics")
 

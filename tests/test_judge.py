@@ -37,6 +37,7 @@ import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
 
@@ -44,8 +45,8 @@ from test_conductor_router import QTok  # noqa: E402
 from test_snapshots import S, fresh, plan, served  # noqa: E402
 
 from server import app  # noqa: E402
-from server.conductor.classify import Answer  # noqa: E402
-from server.conductor.decisions import Journal  # noqa: E402
+from tandemapp.conductor.classify import Answer  # noqa: E402
+from tandemapp.conductor.decisions import Journal  # noqa: E402
 
 import judge_report  # noqa: E402
 
@@ -157,7 +158,7 @@ def test_asked_after_the_request():
 
 
 def test_the_judge_has_its_own_role():
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     # the box's roles document of 2026-10-01 (version 2): decider, classifier, ... and no tester
     v2 = {"decider": {"endpoint": "self", "model": "auto", "contract": "jev", "timeout_ms": 400,
                       "memory_gb": 5.1, "mode": "on"}}

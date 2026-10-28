@@ -17,13 +17,14 @@ import threading
 from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_auth import ADMIN, _setup  # noqa: E402  (first: the CPU environment)
 from test_libsearch import SKILLS, make_library, skill_md  # noqa: E402
 
 from server import app  # noqa: E402
-from server.conductor.hook import Conductor  # noqa: E402
+from tandemapp.conductor.hook import Conductor  # noqa: E402
 from tools import library_install as LI  # noqa: E402
 
 CARD = ("---\nname: tandem-library\ndescription: How to search the TandemLLM skill library.\n---\n"

@@ -32,11 +32,13 @@ import types
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
 from server import memsplit  # noqa: E402
-from server.conductor import residency, schema  # noqa: E402
-from server.conductor.store import ConfigError, Store  # noqa: E402
+from server.conductor import residency  # noqa: E402
+from tandemapp.conductor import schema  # noqa: E402
+from tandemapp.conductor.store import ConfigError, Store  # noqa: E402
 from test_ops_scripts import _box, _env, _proc, _engine_argv  # noqa: E402
 
 DOC = schema.seed("residency")
