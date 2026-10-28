@@ -223,7 +223,7 @@ describe('mock server: choosing the fleet', () => {
     expect(page.headers['set-cookie']).toEqual(['qse_fleet=fleet1; Path=/; SameSite=Strict', 'qse_mock=nologin; Path=/; SameSite=Strict']);
     expect(aliases(await call('GET', '/v1/fleet/nodes', 'qse_fleet=fleet1'))).toEqual(['Desk']);
     expect((await call('GET', '/dashboard/?fleet=nope')).headers['set-cookie']).toBeUndefined();
-    expect((await call('POST', '/__mock/fleet', '', { scenario: 'fleet2-split', reset: true })).body).toEqual({ scenario: 'fleet2-split', started: [] });
+    expect((await call('POST', '/__mock/fleet', '', { scenario: 'fleet2-split', reset: true })).body).toEqual({ scenario: 'fleet2-split', lan: 'allow', started: [] });
     expect(aliases(await call('GET', '/v1/fleet/nodes'))).toEqual(['Spark 1', 'Spark 2']);
     expect((await call('POST', '/__mock/fleet', '', { scenario: 'fleet9' })).status).toBe(400);
     const put = await call('PUT', '/v1/fleet/layouts/overview?device=desk', '', { page: 'overview' });

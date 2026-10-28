@@ -279,7 +279,12 @@ describe('fleet contract', () => {
   const q = (s = '') => new URLSearchParams(s);
 
   it('has a schema per route, and they are strict', () => {
-    expect(Object.keys(fleet).sort()).toEqual(['action', 'action-plan', 'action-result', 'alert', 'alerts', 'deployments', 'error', 'events', 'host', 'hostkey', 'layout', 'link-test', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'session', 'topology', 'trust']);
+    expect(Object.keys(fleet).sort()).toEqual(['action', 'action-plan', 'action-result', 'alert', 'alerts', 'deployments', 'discovered', 'discovery', 'discovery-address', 'discovery-start', 'error', 'events', 'host', 'hostkey', 'layout', 'link-test', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'scan-consent', 'session', 'ssh-line', 'ssh-target', 'topology', 'trust']);
+    expect(fleet['scan-consent']({ subnet: '192.0.2.0/24', all: true })).toBe(false);
+    expect(fleet['scan-consent']({})).toBe(false);
+    expect(fleet['discovery-start']({ interface: 'en0', scan: true })).toBe(false);
+    expect(fleet['ssh-line']({ line: '' })).toBe(false);
+    expect(fleet['discovery-address']({ address: '192.0.2.61', port: 0 })).toBe(false);
     expect(fleet.action({ confirm: 'x', force: true })).toBe(false);
     expect(fleet['action-plan']({ contract_version: '1.0', node: 'x', action: 'explode' })).toBe(false);
     expect(fleet.sample({ contract_version: '1.0', node: 'x', via: 'agent', t: 1, age_s: 0, sample: { gpus: [{ fan: 1 }] }, note: null })).toBe(false);
@@ -329,6 +334,30 @@ describe('fleet contract', () => {
         const nodes = (get('/v1/fleet/nodes').nodes as { id: string }[]).map((n) => `node:${n.id}`);
         const depIds = (deps.deployments as { id: string }[]).map((d) => `deployment:${d.id}`);
         for (const source of [...nodes, ...depIds]) for (const metric of ['tps', 'temp', 'fabric'] as const) fcheck('metrics', get('/v1/fleet/metrics', `source=${source}&metric=${metric}&range=1h`));
+      }
+      // discovery (SRV-727): before a run, a run, the scan, add by address, the ssh line
+      const call = (method: string, path: string, body: unknown, at: number, qs = '') => {
+        const r = m.handle(method, path, q(qs), body, at);
+        expect(r.status, `${method} ${path}`).toBe(200);
+        return r.body as Record<string, unknown>;
+      };
+      const t = T0 + 200_000;
+      fcheck('discovery', call('GET', '/v1/fleet/discovery', null, t));
+      fcheck('discovery-start', {});
+      const run = call('POST', '/v1/fleet/discovery', {}, t);
+      fcheck('discovery', run);
+      for (const dt of [500, 1700, 3500]) fcheck('discovery', call('GET', '/v1/fleet/discovery', null, t + dt, `since=${run.cursor}`));
+      fcheck('scan-consent', { subnet: '192.0.2.0/24' });
+      fcheck('discovery', call('POST', '/v1/fleet/discovery/scan', { subnet: '192.0.2.0/24' }, t + 4000));
+      for (const dt of [5300, 9500]) fcheck('discovery', call('GET', '/v1/fleet/discovery', null, t + dt));
+      fcheck('discovery-address', { address: '192.0.2.61' });
+      fcheck('discovered', call('POST', '/v1/fleet/discovery/address', { address: '192.0.2.61' }, t + 9600));
+      fcheck('discovered', call('POST', '/v1/fleet/discovery/address', { address: '192.0.2.99', port: 2222 }, t + 9600));
+      fcheck('ssh-line', { line: 'ssh -p 2201 spark@198.51.100.7' });
+      fcheck('ssh-target', call('POST', '/v1/fleet/discovery/target', { line: 'ssh -p 2201 -i ~/.ssh/k -J hop@198.51.100.1 spark@198.51.100.7' }, t + 9700));
+      fcheck('discovery', call('DELETE', '/v1/fleet/discovery/scan', null, t + 9800));
+      for (const [method, path, body] of [['POST', '/v1/fleet/discovery/scan', { subnet: '10.0.0.0/24' }], ['POST', '/v1/fleet/discovery/target', { line: 'ssh -o ProxyCommand=x h' }], ['GET', '/v1/fleet/discovery/x', null]] as const) {
+        fcheck('error', m.handle(method, path, q(), body, t + 9900).body);
       }
     });
   }
