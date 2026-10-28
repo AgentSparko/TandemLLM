@@ -86,6 +86,7 @@ Inside a container the host collector sees the container, not the machine. Run i
 \midrule
 config database & backends, encrypted keys, models, prices, routing rules, users, the fleet's nodes and saved window layouts, an audit table & \code{~/.tandemllm/config.sqlite3} (\code{--config-db}, \code{TANDEM_CONFIG_DB}) \\
 usage ledger & one row per request: tokens, times, cost; no text & \code{~/.tandemllm/ledger.sqlite3} (\code{--usage-ledger}; \code{off} for none) \\
+fleet store & the fleet's metric history, event log, alerts and rule edits & \code{fleet.sqlite3} beside the config database (\code{--fleet-store}; \code{off} for memory only) \\
 master key file & the key the backends' keys are encrypted with, when no other source answers & \code{~/.tandemllm/secrets.key}, mode 0600 \\
 conductor documents & the harness's profiles, router, packages and journal & \code{~/.tandemllm/conductor} (\code{--conductor-config}; \code{off} for none) \\
 \bottomrule
@@ -112,16 +113,43 @@ On one box the fleet has one node: the machine \code{tandem-app} runs on, when i
 \code{nodes}, \code{nodes/<id>} & the node: status, version and inventory (OS, kernel, driver, CUDA, ConnectX ports, disk, interfaces); \code{PATCH} sets the alias, the colour (1 to 8, one node each), the icon and the tags \\
 \code{deployments} & each model an engine on the node serves itself, as a Single deployment, its status from the backend's health check \\
 \code{links}, \code{topology} & the LAN of the default route, and the internet when a cloud backend exists \\
-\code{metrics} & decode tok/s, requests and TTFT from each engine (a TandemLLM engine's live snapshot, a vLLM's or SGLang's \code{/metrics}); GPU, power, temperature, clocks, memory, CPU, disk, LAN and fabric from the host collector. Kept in memory, 10 minutes at 2\,s and 7 days at 30\,s. The hardware is sampled every 2\,s; a TandemLLM engine's own one-second samples are read every 2\,s while a dashboard reads the fleet and every 30\,s otherwise, the first read with the engine's last five minutes. History starts there; a point without a sample is null \\
+\code{metrics} & decode tok/s, requests and TTFT p50 from each engine (a TandemLLM engine's live snapshot, a vLLM's or SGLang's \code{/metrics}); GPU, power, temperature, clocks, memory, CPU, disk, LAN and fabric from the host collector, kept in the fleet store (Section~\ref{sec:fleet-store}). The hardware is sampled every 2\,s; a TandemLLM engine's own one-second samples are read every 2\,s while a dashboard reads the fleet and every 30\,s otherwise, the first read with the engine's last five minutes. A point without a sample is null \\
 \code{memory} & the engine's split (weights, KV, caches) beside the rest of the machine's use and the page cache, GiB \\
-\code{logs} & \code{tandem-app}'s own log and its TandemLLM engines', merged by time \\
+\code{logs} & \code{tandem-app}'s own log and its TandemLLM engines', merged by time; info and up by default, the HTTP access lines only with \code{access=1} \\
 \code{layouts/<page>} & a page's window layout per device class, in the config database; the last write wins \\
-\code{events}, \code{alerts}, \code{rules} & empty lists until the fleet's event log and alert rules exist \\
+\code{events} & the event log, newest first, by time, node and type \\
+\code{alerts}, \code{rules} & the alerts firing now and their acknowledgement; the alert rules and their edits \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 Reads follow the dashboard rule and writes the admin rule (Section~\ref{sec:access}), as for \code{/v1/config}. The engine's own server, which serves the dashboard on a box without \code{tandem-app}, has no fleet API; the dashboard then shows the box alone.
+
+\subsection{History, events and alert rules}\label{sec:fleet-store}
+
+The fleet store is one SQLite file beside the config database, \code{fleet.sqlite3} (\code{--fleet-store}, \code{TANDEM_FLEET_STORE}; \code{off} keeps memory only). Each metric is kept in slots of 2\,s for 15 minutes (in memory, written at a clean stop), 30\,s for 26 hours, and 10 minutes for the retention, 30 days by default and at least 7 (\code{--fleet-retention-days}). The 5-minute range reads the 2\,s slots, 1 hour to 24 hours the 30\,s slots, and 7 days the 30\,s slots for its newest day and the 10-minute slots before. Changed slots are written every 5 minutes in one transaction; a crash loses at most those minutes, a clean stop nothing. TTFT is the median of the requests in each window, not a mean.
+
+The event log records nodes going off, draining and up again, pairing, take-over and release, a new address, an engine down, up, started or restarted, a deployment's status, each alert firing, resolving and acknowledged, and the controller's start and stop.
+
+\begin{table}[htbp]
+\centering\small
+\caption{The alert rules a fleet starts with, set for a GB10 (unified memory, no fan or power cap exposed).}\label{tab:fleet-rules}
+\begin{tabularx}{\linewidth}{@{}L{.18\linewidth}YL{.1\linewidth}L{.24\linewidth}@{}}
+\toprule
+\hd{rule} & \hd{fires} & \hd{severity} & \hd{resolves} \\
+\midrule
+\code{gpu-temp} & GPU at 85\,\textdegree{}C or more for 60\,s & err & below 80\,\textdegree{}C for 60\,s \\
+\code{throttle} & a thermal or power-brake clock event for 30\,s & warn & none for 60\,s \\
+\code{mem-avail} & MemAvailable under 10\,GiB for 30\,s & warn & above 12\,GiB for 30\,s \\
+\code{disk-free} & a mount under 10\,\% free for 5 minutes & warn & above 12\,\% for 5 minutes \\
+\code{node-down} & no answer for 30\,s & err & up for 10\,s \\
+\code{engine-down} & an engine's health check fails for 60\,s & err & one check that passes \\
+\code{host-sleep} & the controller's machine may sleep (a Mac) & warn & \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\code{PATCH /v1/fleet/rules/<id>} turns a rule on or off and sets its notify targets, threshold, hold and scope (all nodes or one). An alert names the page to open and stays listed, acknowledged or not, until it resolves. Notify \code{app} is the alerts list and \code{system} is for the page to show; the controller makes no outbound call.
 
 \section{TandemNode}\label{sec:tandemnode}\index{TandemNode}
 

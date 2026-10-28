@@ -143,7 +143,7 @@ In docker the collector sees the container, not the machine. Run the container w
 
 ## The fleet: `/v1/fleet/*`
 
-TandemApp keeps the registry of the Sparks it manages and answers the fleet API (contract: [`docs/contract/fleet-v1`](contract/fleet-v1/README.md), code: `proxy/fleet.py`, `proxy/nodesource.py`). The dashboard reads it for the shell's fleet readout, the scope bar, the charts and the windows; the browser talks to `tandem-app` only.
+TandemApp keeps the registry of the Sparks it manages and answers the fleet API (contract: [`docs/contract/fleet-v1`](contract/fleet-v1/README.md), code: `proxy/fleet.py`, `proxy/nodesource.py`, `proxy/fleetstore.py`, `proxy/fleetwatch.py`). The dashboard reads it for the shell's fleet readout, the scope bar, the charts and the windows; the browser talks to `tandem-app` only.
 
 On one box the fleet has one node: the machine `tandem-app` runs on, when it has an NVIDIA GPU or an engine of its own. The first start registers it with its hostname as the alias, the first identity colour and an id from the machine (the DMI serial, else `/etc/machine-id`), never its address. A new address keeps the node and is noted in the log. A machine in front of cloud APIs only is the controller's host and no node. When TandemNode runs on the same machine (below), the controller reads the machine through it, the same path as any other node's; while it does not answer, in-process as before. A node on another machine is read through its TandemNode agent once pairing has given the controller its trust, and is listed `off` until then.
 
@@ -153,15 +153,47 @@ On one box the fleet has one node: the machine `tandem-app` runs on, when it has
 | `PATCH nodes/{id}` | `{alias?, colour?, icon?, tags?}`; an alias or colour another node has is refused |
 | `GET deployments` | each model an engine on the node serves itself, `single`, status from the backend's health |
 | `GET links`, `GET topology` | the LAN of the default route; the internet when a cloud backend exists |
-| `GET metrics?source=&metric=&range=` | decode tok/s, requests and TTFT from each engine (a TandemLLM engine's live snapshot, a vLLM's or SGLang's `/metrics`), the hardware from the host collector. Kept in memory (10 min at 2 s, 7 days at 30 s); the hardware sampled every 2 s, a TandemLLM engine's own one-second samples read every 2 s while a dashboard reads the fleet and every 30 s otherwise (the first read brings its last five minutes); null where no sample exists |
+| `GET metrics?source=&metric=&range=` | decode tok/s, requests and TTFT p50 from each engine (a TandemLLM engine's live snapshot, a vLLM's or SGLang's `/metrics`), the hardware from the host collector, from the fleet store (below); the hardware sampled every 2 s, a TandemLLM engine's own one-second samples read every 2 s while a dashboard reads the fleet and every 30 s otherwise (the first read brings its last five minutes); null where no sample exists |
 | `GET memory` | the engine's split (weights, KV, caches), the rest of the machine's use, the page cache, GiB |
-| `GET logs?node=&level=&q=&limit=` | `tandem-app`'s own log (`gateway`) and its TandemLLM engines' (`engine`), merged by time |
+| `GET logs?node=&level=&q=&limit=&access=` | `tandem-app`'s own log (`gateway`) and its TandemLLM engines' (`engine`), merged by time; `info` and up unless `level` says otherwise; HTTP access lines are tagged `access` and left out unless `access=1` |
 | `GET`/`PUT layouts/{page}?device=` | a page's window layout per device class in the config database; `saved_at` is the controller's clock, the last write wins |
-| `GET events`, `alerts`, `rules` | empty lists until the fleet's event log and alert rules exist |
+| `GET events?since=&before=&node=&type=&limit=` | the event log, newest first (below) |
+| `GET alerts`, `POST alerts/{id}/ack` | the alerts firing now; an acknowledgement is kept |
+| `GET rules`, `PATCH rules/{id}` | the alert rules; `{enabled?, notify?, threshold?, for_s?, scope?}` |
 | `POST pair`, `pair/ssh`, `pair/ssh/hostkey`, `DELETE nodes/{id}`, `GET trust` | node trust, below |
 | `GET`/`POST`/`DELETE session` | the controller's own sign-in for its writes |
 
 Reads and a page's window layout follow the dashboard rule, the other writes the admin rule, as `/v1/config` does; pairing and release need the admin password or a caller on the controller's machine, and with no password set only the latter. The engine's own server has no fleet API; a dashboard it serves shows the box alone.
+
+### History, events and alert rules
+
+The fleet store is one SQLite file beside the config database, `fleet.sqlite3` (WAL, mode 0600; `--fleet-store PATH|off`, `TANDEM_FLEET_STORE`). Each metric of each node and engine is kept in three tiers of slots, each slot the sum, count and largest of its samples:
+
+| tier | kept | answers |
+|-|-|-|
+| 2 s | 15 minutes, in memory; written at a clean stop and read at the start | `5m` |
+| 30 s | 26 hours | `1h`, `6h`, `24h`, the newest day of `7d` |
+| 10 min | 30 days (`--fleet-retention-days`, at least 7; `TANDEM_FLEET_RETENTION_DAYS`) | `7d` beyond 26 hours: the six slots that end in each hour |
+
+A slot that changed is written at the next flush, every 5 minutes in one transaction, so a crash loses at most those minutes and a clean stop nothing; the slots and events past their reach are deleted once an hour. TTFT keeps every value per slot (up to 64 distinct ones, then buckets 2^(1/16) apart, within 2.2 %), and a sample's TTFT is the median of the requests in its window, merged over the node's engines. History survives a restart; the time the controller was stopped stays null.
+
+The event log records a node going off, draining or up again (held 10 s), a node paired, taken over or released, this machine's new address, an engine backend down, up, started, restarted (back within 2 minutes, or its token counter reset while up) or stopped by a job on its node, a deployment's status, each alert firing, resolving and acknowledged, and the controller's start and stop. Each event names a node id, `all` or `host`.
+
+The alert rules run on every sample. Each has a debounce (the condition holds for `for_s` before it fires) and hysteresis (it resolves once the value is back past the threshold by its margin for its own time). The defaults suit a GB10, with unified memory and no fan or power cap exposed:
+
+| rule | fires | severity | resolves |
+|-|-|-|-|
+| `gpu-temp` | GPU ≥ 85 °C for 60 s | err | below 80 °C for 60 s |
+| `throttle` | a thermal or power-brake clock event (NVML: HW slowdown, SW or HW thermal, power brake) for 30 s | warn | none for 60 s |
+| `mem-avail` | MemAvailable < 10 GiB for 30 s | warn | above 12 GiB for 30 s |
+| `disk-free` | a mount under 10 % free for 5 min | warn | above 12 % for 5 min |
+| `node-down` | the node does not answer for 30 s | err | up for 10 s |
+| `engine-down` | an engine backend's health check fails for 60 s | err | one check that passes |
+| `host-sleep` | the controller runs on a machine that may sleep (a Mac) | warn | |
+
+An alert carries the page to open (`#/hardware?scope=node:<id>`, `#/sparks/<id>`, `#/models`, `#/app`) and stays listed, acknowledged or not, until it resolves; one that fires again is a new alert. A rule turned off resolves its alerts; a figure a node does not give (an off node's temperature) holds them. `notify`: `app` is the alerts list, `system` is for the page to show as a system notification; the controller makes no outbound call, and another target plugs in as a notifier in `proxy/fleetwatch.py`. Rule edits and acknowledgements follow the admin rule.
+
+Write cost on a fleet of one, a DGX Spark with one engine: 11 series (the hardware figures the GB10 gives and the engine's three), about 3,000 rows a day each in the two written tiers. Measured with the engine idle: the controller wrote 196,608 bytes in 21 minutes, about 13 MB a day for all its files (the config database and the usage ledger included), of which the fleet store's WAL took about 7 MB. At its full reach the file holds about 80,000 slots, a few MB (projected, not yet measured).
 
 ## TandemNode: `tandem node`
 
