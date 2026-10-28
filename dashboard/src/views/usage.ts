@@ -255,8 +255,9 @@ export class QseUsage extends LightElement {
   /** VIS-254: which ledger the numbers above and below come from; a fleet may switch */
   private renderLedger(): TemplateResult | typeof nothing {
     const f = this.fleet;
-    if (!f?.nodes.length) return nothing;
     const ledger = this.ledger;
+    // one Spark reads this server's ledger, as before the fleet: nothing to say unless asked for the other
+    if (!isFleet(f) && ledger === 'here') return nothing;
     const forced = this.node || this.deployment;
     const words =
       ledger === 'fleet'

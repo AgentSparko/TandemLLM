@@ -248,7 +248,7 @@ test.describe('the fleet in every page (VIS-254)', () => {
     await expect(page.locator('[data-fleet-live], [data-here]')).toHaveCount(0);
     await page.goto('./#/usage');
     await expect(page.locator('.hero')).toBeVisible();
-    await expect(page.locator('[data-usage-fleet], [data-ledger] [role="radio"], [data-filter="node"]')).toHaveCount(0);
+    await expect(page.locator('[data-usage-fleet], [data-ledger], [data-filter="node"]')).toHaveCount(0);
     await page.goto('./#/dev');
     await expect(page.locator('#console')).toBeVisible();
     await expect(page.locator('[data-dev-source], #requests th:has-text("Spark")')).toHaveCount(0);
