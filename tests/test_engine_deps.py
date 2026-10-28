@@ -62,8 +62,9 @@ def lock() -> dict:
 
 
 def pyproject_deps() -> set:
-    """The wheel's own dependencies (the engine venv installs the repo with `pip install -e .`)."""
-    src = open(os.path.join(ROOT, "pyproject.toml")).read()
+    """TandemApp's own dependencies (app/pyproject.toml): the engine imports app modules
+    in-process until ENG-413, so what they need counts as the engine's too."""
+    src = open(os.path.join(ROOT, "app", "pyproject.toml")).read()
     m = re.search(r"^dependencies = \[(.*?)\]", src, re.S | re.M)
     return {norm(re.split(r"[<>=!~\[; ]", d.strip().strip('"'))[0])
             for d in (m.group(1).split(",") if m else []) if d.strip()}
@@ -214,7 +215,7 @@ def test_what_the_image_path_loads_is_locked():
     got = _probe("torchvision")
     assert got["cls"] == "Qwen2VLImageProcessor", got["cls"]
     assert got["grid"] == [1, 62, 20], got["grid"]
-    allowed = set(lock()) | pyproject_deps()
+    allowed = set(lock()) | pyproject_deps()      # the lock, and app/pyproject.toml's (ENG-413)
     hard = set()
     for f in got["files"]:
         hard |= _hard_imports(f)
