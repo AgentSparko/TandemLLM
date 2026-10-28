@@ -92,10 +92,11 @@ describe('AU1: no password prompt in the source', () => {
     for (const f of files) {
       const text = readFileSync(f, 'utf8');
       const rel = f.slice(root.length + 1);
-      // the Backends form's upstream API key (a provider's sk-..., not the dashboard's password) and
-      // the setup guide's sign-in (shown only on a 401 from a /v1/setup route, a box with a password
-      // set) are the password-type inputs
-      if (/type="password"/.test(text) && rel !== join('views', 'backends.ts') && rel !== join('setup', 'signin.ts')) bad.push(`${rel}: a password input`);
+      // the Backends form's upstream API key (a provider's sk-..., not the dashboard's password), the
+      // setup guide's sign-in (shown only on a 401 from a /v1/setup route, a box with a password
+      // set) and the Add Spark wizard's SSH login to the box being added (VIS-246: the box's own
+      // password, used once, never the dashboard's) are the password-type inputs
+      if (/type="password"/.test(text) && ![join('views', 'backends.ts'), join('setup', 'signin.ts'), join('views', 'fleet', 'wizard.ts')].includes(rel)) bad.push(`${rel}: a password input`);
       for (const [re, what] of [
         [/Unlock editing|>Unlock<|'Unlock'/, 'an unlock step'],
         [/Admin token needed|Enter admin token|Enter the admin token/, 'a token prompt'],

@@ -279,7 +279,7 @@ describe('fleet contract', () => {
   const q = (s = '') => new URLSearchParams(s);
 
   it('has a schema per route, and they are strict', () => {
-    expect(Object.keys(fleet).sort()).toEqual(['action', 'action-plan', 'action-result', 'alert', 'alerts', 'deployments', 'discovered', 'discovery', 'discovery-address', 'discovery-start', 'error', 'events', 'host', 'hostkey', 'layout', 'link-test', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'scan-consent', 'session', 'ssh-line', 'ssh-target', 'topology', 'trust']);
+    expect(Object.keys(fleet).sort()).toEqual(['action', 'action-plan', 'action-result', 'add', 'add-connect', 'add-link', 'add-patch', 'add-run', 'add-session', 'add-start', 'add-target', 'alert', 'alerts', 'deployments', 'discovered', 'discovery', 'discovery-address', 'discovery-start', 'error', 'events', 'host', 'hostkey', 'layout', 'link-test', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'scan-consent', 'session', 'ssh-line', 'ssh-target', 'topology', 'trust']);
     expect(fleet['scan-consent']({ subnet: '192.0.2.0/24', all: true })).toBe(false);
     expect(fleet['scan-consent']({})).toBe(false);
     expect(fleet['discovery-start']({ interface: 'en0', scan: true })).toBe(false);
