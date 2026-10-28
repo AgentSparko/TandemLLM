@@ -177,7 +177,9 @@ ADDED = (("models", "price_offpeak", "TEXT"),
          ("models", "input_modalities", "TEXT"), ("models", "effort", "TEXT"),
          # VIS-227: the operator's output limit, apart from the provider's so a discovery never
          # overwrites it
-         ("models", "max_output_set", "INTEGER"))
+         ("models", "max_output_set", "INTEGER"),
+         # SEC-4: what a node's pairing, take-over or release did (JSON, never a secret)
+         ("audit", "detail", "TEXT"))
 
 
 def _inflight_col(v) -> int:
@@ -503,11 +505,19 @@ class ConfigDB:
         self.generation += 1
 
     def _audit(self, who: str | None, action: str, obj: str, oid: str | None,
-               fields=None) -> None:
-        self._conn.execute("INSERT INTO audit(ts_ms, who, action, object, object_id, fields) "
-                           "VALUES (?, ?, ?, ?, ?, ?)",
+               fields=None, detail: dict | None = None) -> None:
+        self._conn.execute("INSERT INTO audit(ts_ms, who, action, object, object_id, fields, "
+                           "detail) VALUES (?, ?, ?, ?, ?, ?, ?)",
                            (_now_ms(), who, action, obj, oid,
-                            json.dumps(sorted(fields)) if fields else None))
+                            json.dumps(sorted(fields)) if fields else None,
+                            json.dumps(detail, sort_keys=True) if detail else None))
+
+    def log_audit(self, who: str | None, action: str, obj: str, oid: str | None,
+                  detail: dict | None = None) -> None:
+        """An audit row of its own (a node's pairing, take-over or release, SEC-4)."""
+        with self._lock:
+            self._audit(who, action, obj, oid, detail=detail)
+            self._conn.commit()
 
     # ----------------------------------------------------------------- the env overlay
     def apply_env(self) -> dict:
@@ -1162,6 +1172,14 @@ class ConfigDB:
             self._bump()
         return self.node(nid)
 
+    def delete_node(self, nid: str, who: str = "gui") -> None:
+        with self._lock:
+            if not self._conn.execute("DELETE FROM nodes WHERE id = ?", (nid,)).rowcount:
+                raise ConfigError(f"no node {nid}", status=404)
+            self._audit(who, "delete", "node", nid)
+            self._conn.commit()
+            self._bump()
+
     def layout(self, page: str, device: str) -> dict | None:
         with self._lock:
             r = self._conn.execute("SELECT doc FROM layouts WHERE page = ? AND device = ?",
@@ -1179,10 +1197,12 @@ class ConfigDB:
 
     def audit(self, limit: int = 50) -> list[dict]:
         with self._lock:
-            rows = self._conn.execute("SELECT ts_ms, who, action, object, object_id, fields FROM "
-                                      "audit ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+            rows = self._conn.execute("SELECT ts_ms, who, action, object, object_id, fields, "
+                                      "detail FROM audit ORDER BY id DESC LIMIT ?",
+                                      (limit,)).fetchall()
         return [{"ts_ms": t, "who": w, "action": a, "object": o, "object_id": i,
-                 "fields": json.loads(f) if f else None} for t, w, a, o, i, f in rows]
+                 "fields": json.loads(f) if f else None, "detail": json.loads(d) if d else None}
+                for t, w, a, o, i, f, d in rows]
 
     def empty(self) -> bool:
         """No backend at all: the dashboard opens on the Setup screen."""

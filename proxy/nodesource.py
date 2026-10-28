@@ -740,7 +740,7 @@ class AgentNode:
             return "draining", "draining: no new requests"
         if self.healthy():
             return "up", "up"
-        return "off", f"the node agent does not answer: {self._error or self._ident_err}"
+        return "off", refusal(self._error or self._ident_err)
 
     def version(self) -> str:
         for p in self.engines():
@@ -892,6 +892,19 @@ def agent_for(row: dict, clock=time.time):
     except (nodetrust.BindRefused, nodetrust.TrustError, OSError, ValueError) as exc:
         return Unreachable(f"not reachable: its trust does not load ({exc})")
     return Unreachable("not paired: no trust for its agent yet (SEC-4)")
+
+
+def refusal(err: str | None) -> str:
+    """Why an agent does not answer, in words: a TLS refusal names its side (SEC-4)."""
+    e = (err or "").upper()
+    if any(x in e for x in ("ALERT_UNKNOWN_CA", "ALERT_BAD_CERTIFICATE", "CERTIFICATE_REQUIRED",
+                            "ALERT_CERTIFICATE_UNKNOWN")):
+        return ("the node refuses this controller's certificate: it was released or taken over "
+                "on the node")
+    if "CERTIFICATE_VERIFY_FAILED" in e:
+        return ("the node presents a certificate other than the pinned one (reset on the node?): "
+                "pair it again")
+    return f"the node agent does not answer: {err}"
 
 
 class Unreachable:

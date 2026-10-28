@@ -20,6 +20,13 @@ dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_wri
     POST  /v1/fleet/alerts/{id}/ack                 404: no alert fires before SRV-729
     GET   /v1/fleet/layouts/{page}?device=          a page's saved window layout, or its default
     PUT   /v1/fleet/layouts/{page}?device=          saved with `saved_at` now: the last write wins
+    GET   /v1/fleet/trust                           this controller's certificate and the audit
+    POST  /v1/fleet/pair                            {address, code, port?}: pairing by code (SEC-4)
+    POST  /v1/fleet/pair/ssh/hostkey                {host, port?}: the host key, new/same/changed
+    POST  /v1/fleet/pair/ssh                        {host, user, port?, password?|key?, host_key?,
+                                                    takeover?}: SSH once
+    DELETE /v1/fleet/nodes/{id}[?force=1]           release: the node forgets this controller,
+                                                    then the controller forgets the node
 
 A FLEET OF ONE. The machine tandem-app runs on is a node when it is Spark-class (an NVIDIA GPU or an
 engine of its own, proxy/nodesource.py): at the first start it is registered with its hostname as
@@ -34,6 +41,14 @@ THIS MACHINE THROUGH ITS AGENT. When a TandemNode agent runs on this machine (it
 and secret file, `agent`), the machine is read through it: the same stream, relay and code as a
 remote node's, so one path feeds every node's figures. While it does not answer, the machine is read
 in-process (LocalNode) as before, and the log says each switch.
+
+PAIRED NODES (SEC-4, proxy/fleettrust.py). Pairing by code or by SSH once gives a node record its
+`trust` (the controller's certificate and the node's pinned one) and its `https://` endpoint; a
+node's `pairing` says how (local, paired by code or ssh, or unpaired) and the pinned certificate's
+fingerprint. An engine backend of kind tandemllm on another machine with a host collector (the
+one-peer setup before TandemApp) is a node record at its address, unpaired until pairing finds it.
+Pairing, release and take-over are routes of their own (the `fleet_trust` rule of server/auth.py:
+the admin password, or this machine; with no password set, this machine only).
 
 THE DEPLOYMENTS. Each model an engine backend on a node serves itself is a Single deployment on that
 node; its id is the model's public id at this gateway, its status the backend's health.
@@ -50,6 +65,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import socket
 import sys
 import threading
@@ -88,15 +104,15 @@ ALIAS_MAX, TAGS_MAX, TAG_MAX, WINDOWS_MAX, PAGE_MAX = 40, 16, 32, 64, 80
 
 
 class FleetError(Exception):
-    """A 400 or 404 in the contract's error shape."""
+    """An error in the contract's shape: 400 bad_request, 404 not_found, or `kind`."""
 
-    def __init__(self, status: int, message: str):
+    def __init__(self, status: int, message: str, kind: str | None = None):
         super().__init__(message)
         self.status, self.message = status, message
+        self.kind = kind or ("not_found" if status == 404 else "bad_request")
 
     def body(self) -> dict:
-        return {"error": {"type": "not_found" if self.status == 404 else "bad_request",
-                          "message": self.message}}
+        return {"error": {"type": self.kind, "message": self.message}}
 
 
 def window(rng: str, now: float) -> tuple[float, float, int]:
@@ -248,6 +264,29 @@ class Fleet:
         self._read_at = -math.inf               # the last /v1/fleet request
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._trust = None
+        self._migrated = False
+
+    def trust(self):
+        """The controller's side of node trust (proxy/fleettrust.py), its certificate made at
+        the first call, beside the config database."""
+        if self._trust is None:
+            from proxy import fleettrust
+            with self._reg:
+                if self._trust is None:
+                    self._trust = fleettrust.Trust(self, os.path.join(
+                        os.path.dirname(self.cfg.path), "controller"), clock=self.clock)
+        return self._trust
+
+    def forget(self, nid: str) -> None:
+        """A node gone from the registry: its source closed, its rings dropped."""
+        got = self.agents.pop(nid, None)
+        if got is not None and hasattr(got[1], "close"):
+            got[1].close()
+        self.cfg.delete_node(nid, who="controller")
+        with self._lock:
+            for k in [k for k in self.rings if k[0] == "node" and k[1] == nid]:
+                del self.rings[k]
 
     # ------------------------------------------------------------------ the sampler
     def start(self) -> "Fleet":
@@ -327,6 +366,10 @@ class Fleet:
         self.local.sync(backends)
         with self._reg:
             lid = self._ensure_local()
+            if not self._migrated:
+                self._migrated = True
+                from proxy import fleettrust
+                fleettrust.migrate_peers(self)
         if lid is not None:
             src = self.here()
             if src is not self.local:
@@ -393,7 +436,9 @@ class Fleet:
             return self.here() if row["id"] == self._local_id else nodesource.Unreachable()
         ep = row["endpoint"] or ""
         if not ep.startswith(("http://", "https://")):
-            return nodesource.Unreachable()
+            return nodesource.Unreachable("not paired: run `tandem node pair` on it and enter "
+                                          "the code in Add Spark" if not row["trust"] else
+                                          "not reachable: no node agent yet")
         key = (ep, json.dumps(row["trust"], sort_keys=True))
         got = self.agents.get(row["id"])
         if got is None or got[0] != key:
@@ -416,7 +461,8 @@ class Fleet:
                 "address": row["address"] or "", "version": src.version(),
                 "status": status, "status_text": text, "since": row["added_at"] / 1000,
                 "lease_end": None if lease is None else lease / 1000,
-                "cost_per_hour": row["cost_per_hour"], "inventory": inv}
+                "cost_per_hour": row["cost_per_hour"], "inventory": inv,
+                "pairing": pairing_view(row)}
 
     def nodes(self, now: float) -> list[dict]:
         self.ensure_local()
@@ -669,6 +715,13 @@ class Fleet:
         return {"contract_version": CONTRACT, "node": node, "lines": lines[-limit:]}
 
     # ------------------------------------------------------------------ the routes
+    def _trusting(self, fn):
+        from proxy import fleettrust
+        try:
+            return fn(self.trust())
+        except fleettrust.TrustError as exc:
+            raise FleetError(exc.status, exc.message, exc.kind)
+
     def handle(self, method: str, path: str, q: dict, body, who: str = "gui") -> tuple[int, dict]:
         """One /v1/fleet request, after the caller's guard: (status, body)."""
         parts = [unquote(p) for p in path[len("/v1/fleet"):].split("/") if p]
@@ -716,6 +769,18 @@ class Fleet:
                 return self.node_view(self._node_row(parts[1]), now)
             if method == "PATCH":
                 return self.patch_node(parts[1], body, who, now)
+            if method == "DELETE":
+                self._node_row(parts[1])
+                return self._trusting(lambda t: t.release(parts[1], q.get("force") in (
+                    "1", "true"), who))
+        if method == "GET" and parts == ["trust"]:
+            return self.trust().view()
+        if method == "POST" and parts == ["pair"]:
+            return self.node_view(self._trusting(lambda t: t.pair_code(body, who)), now)
+        if method == "POST" and parts == ["pair", "ssh", "hostkey"]:
+            return self._trusting(lambda t: t.host_key(body))
+        if method == "POST" and parts == ["pair", "ssh"]:
+            return self.node_view(self._trusting(lambda t: t.pair_ssh(body, who)), now)
         if method == "POST" and len(parts) == 3 and parts[0] == "alerts" and parts[2] == "ack":
             raise FleetError(404, f"no active alert {parts[1]}")
         if len(parts) == 2 and parts[0] == "layouts" and method in ("GET", "PUT"):
@@ -730,6 +795,19 @@ class Fleet:
             self.cfg.set_layout(doc)
             return doc
         raise FleetError(404, f"no route {method} /v1/fleet/{'/'.join(parts)}")
+
+
+def pairing_view(row: dict) -> dict:
+    """How the controller trusts a node: this machine (local), paired by code or SSH once (the
+    pinned certificate's fingerprint), or not paired."""
+    t = row["trust"] or {}
+    local = row["endpoint"] == "local" or t.get("kind") == "loopback-secret"
+    paired = not local and t.get("kind") == "mtls"
+    return {"state": "local" if local else "paired" if paired else "unpaired",
+            "via": t.get("via") if paired else None,
+            "fingerprint": t.get("fingerprint") if paired else None,
+            "paired_at": t.get("paired_at") if paired else None,
+            "host_key": t.get("host_key") if paired else None}
 
 
 def _host_of(url: str) -> str | None:
