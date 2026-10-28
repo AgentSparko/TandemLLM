@@ -57,6 +57,9 @@
 // 563 KB with the Add Spark wizard (VIS-246, 2026-10-28: 560.0 KB from 543.7): Find, Connect, Check, Install,
 // Link, Name and Done with the session's client, its logic and its stylesheet, in a chunk of its own (13.7 KB js
 // and 2.3 KB css gzipped) that loads when Settings → Add Spark opens.
+// 572 KB with the controller's host and the fleet update (OPS-234, 2026-10-28: 569.3 KB from 560.1): App
+// settings with the move and the take in a chunk of its own, Update fleet's plan dialog and progress in the
+// Sparks pages' chunk, their client and the planner, the mixed-version marker on the fleet pill.
 import { BUDGET, distSizes } from './gzip-size.mjs';
 
 const dist = new URL('../dist/', import.meta.url).pathname;
