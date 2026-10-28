@@ -420,10 +420,10 @@ class Handler(BaseHTTPRequestHandler):
         return self._write("DELETE")
 
     def _fleet(self, method: str, path: str, raw: bytes | None) -> None:
-        """`/v1/fleet/*` (proxy/fleet.py): reads under the dashboard's rule, writes (a layout,
-        a node's alias or colour, an acknowledgement) under the configuration's."""
-        if not self._allowed("dashboard" if method == "GET" else "conductor_write"):
-            return
+        """`/v1/fleet/*` (proxy/fleet.py): reads and a page's window layout under the
+        dashboard's rule, writes (a node's alias or colour, an acknowledgement) under the
+        configuration's, pairing and release under `fleet_trust` (server/auth.py), and the
+        controller's own sign-in at /v1/fleet/session."""
         body = None
         if raw:
             try:
@@ -431,6 +431,25 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 return self._json(400, {"error": {"type": "bad_request",
                                                   "message": f"bad json: {exc}"}})
+        if path.rstrip("/") == "/v1/fleet/session":
+            return self._session(method, body, fleet=True)
+        parts = path.rstrip("/").split("/")[3:]
+        if method == "GET" or (method == "PUT" and parts[:1] == ["layouts"]):
+            route = "dashboard"
+        elif (method == "POST" and parts[:1] == ["pair"]) or (method == "DELETE"
+                                                              and parts[:1] == ["nodes"]):
+            route = "fleet_trust"
+        else:
+            route = "conductor_write"
+        a = STATE["auth"]
+        if route == "fleet_trust" and not a.password_set and \
+                a.decide(route, self._peer(), self.headers) != "ok":
+            return self._json(401, {"error": {
+                "type": "unauthorized", "message": "pairing and release change who controls a "
+                "node: set an admin password (TANDEM_ADMIN_TOKEN) to do it from another "
+                "machine, or ask from this one"}})
+        if not self._allowed(route):
+            return
         q = {k: v[-1] for k, v in parse_qs(urlsplit(self.path).query).items()}
         code, out = STATE["fleet"].handle(method, path, q, body,
                                           who=config_api._who(self, STATE["svc"]))
@@ -480,8 +499,10 @@ class Handler(BaseHTTPRequestHandler):
         except dashboard_api.ApiError as exc:
             return self._json(exc.status, exc.body())
 
-    def _session(self, method: str, body=None) -> None:
+    def _session(self, method: str, body=None, fleet: bool = False) -> None:
         a = STATE["auth"]
+        if fleet:
+            return self._fleet_session(method, body)
         # AU1: no admin password set, or the login off -- nothing to sign in to. GET says so
         # (`login: false`, `password_set`), POST and DELETE do not exist.
         if not a.login or not a.password_set:
@@ -520,6 +541,48 @@ class Handler(BaseHTTPRequestHandler):
             a.login_failed(who)
             return self._json(401, {"error": {"type": "unauthorized", "message": "wrong token"}},
                               extra_headers=(("WWW-Authenticate", 'Bearer realm="TandemLLM"'),))
+        value, _ = a.make_cookie()
+        return self._send_empty(204, (("Set-Cookie", f"{auth_mod.COOKIE}={value}; HttpOnly; "
+                                                     f"SameSite=Strict; Path=/; "
+                                                     f"Max-Age={auth_mod.SESSION_S}{secure}"),))
+
+    def _fleet_session(self, method: str, body) -> None:
+        """`/v1/fleet/session`: the controller's sign-in for its writes (pairing, release, a
+        node's alias), whatever the dashboard login says: with an admin password set the writes
+        need it, and a page behind a reverse proxy that sends /v1/fleet/* here and the rest to an
+        engine signs in to the controller here. GET says whether a password is set and whether
+        this browser is signed in; POST {token} signs in (the same cookie and limits as
+        /v1/dashboard/session); DELETE signs out. No password set: GET only."""
+        a = STATE["auth"]
+        nostore = (("Cache-Control", "no-store"),)
+        if method == "GET":
+            exp = a.session(self.headers) if a.password_set else None
+            ok = not a.password_set or exp is not None or a.admin_bearer(self.headers)
+            return self._json(200, {"contract_version": fleet_mod.CONTRACT,
+                                    "password_set": a.password_set, "authenticated": ok,
+                                    "expires_at": dashboard_api.iso_utc_s(exp) if exp else None},
+                              extra_headers=nostore)
+        if not a.password_set:
+            return self._json(404, {"error": {"type": "not_found",
+                                              "message": "no admin password is set"}})
+        secure = "; Secure" if (self.headers.get("X-Forwarded-Proto") or "") == "https" else ""
+        if method == "DELETE":
+            a.revoke(self.headers)
+            return self._send_empty(204, (("Set-Cookie", f"{auth_mod.COOKIE}=; HttpOnly; "
+                                                         f"SameSite=Strict; Path=/; Max-Age=0"
+                                                         f"{secure}"),))
+        if method != "POST":
+            return self._json(404, {"error": {"type": "not_found",
+                                              "message": f"no route {method} /v1/fleet/session"}})
+        who = self.headers.get("X-Real-IP") or self._peer()
+        if a.login_blocked(who):
+            return self._json(429, {"error": {"type": "too_many",
+                                              "message": "too many failed logins; wait a minute"}},
+                              extra_headers=(("Retry-After", "60"),))
+        token = body.get("token") if isinstance(body, dict) else None
+        if not isinstance(token, str) or not auth_mod._eq(token, a.admin):
+            a.login_failed(who)
+            return self._json(401, {"error": {"type": "unauthorized", "message": "wrong token"}})
         value, _ = a.make_cookie()
         return self._send_empty(204, (("Set-Cookie", f"{auth_mod.COOKIE}={value}; HttpOnly; "
                                                      f"SameSite=Strict; Path=/; "

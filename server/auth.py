@@ -42,6 +42,11 @@ exemption, and a session cookie so the dashboard's EventSource needs no token in
                                             server/laya_api.py); X1: POST /v1/laya/drive/end and
                                             GET /v1/laya/kit/<file> (the playtest kit) the same
     GET /dashboard, /dashboard/*            anyone: the static shell, no data in it
+    POST /v1/fleet/pair*, DELETE /v1/fleet/nodes/{id}
+                                            (`fleet_trust`, SEC-4: who controls a node) the admin
+                                            token/session, or trusted-local; with NO password set,
+                                            trusted-local only: pairing never opens to the network
+                                            by default
     /v1/dashboard/*                         login off (the default): anyone; login on: the admin token or
                                             session only (POST /v1/dashboard/session is the login)
 
@@ -286,12 +291,15 @@ class Auth:
         """`ok` or `unauthorized` (401) for one guarded route kind (`absent`, the 404 of the old
         fail-closed rule, is no longer returned; the callers still handle it):
         `metrics`, `cache_read`, `cache_clear`, `conductor_write`, `decider`, `dashboard`,
-        `health_full`, `setup`. With no admin password set (AU1) every kind is `ok`, but /metrics with a
-        metrics token set still wants that token (or trusted-local)."""
+        `health_full`, `setup`, `fleet_trust`. With no admin password set (AU1) every kind is `ok`,
+        but /metrics with a metrics token set still wants that token (or trusted-local), and
+        `fleet_trust` wants trusted-local."""
         local = self.trusted_local(peer, headers)
         if not self.password_set:
             if route == "metrics" and self.metrics and not local:
                 return "ok" if self.metrics_bearer(headers) else "unauthorized"
+            if route == "fleet_trust" and not local:
+                return "unauthorized"
             return "ok"
         if route == "dashboard":
             if not self.login:
@@ -305,7 +313,7 @@ class Auth:
         if route == "health_full":
             return ("ok" if self.metrics_bearer(headers) or self.admin_any(headers)
                     else "unauthorized")
-        if route in ("cache_read", "conductor_write", "decider", "setup"):
+        if route in ("cache_read", "conductor_write", "decider", "setup", "fleet_trust"):
             return "ok" if self.admin_any(headers) else "unauthorized"
         if route == "cache_clear":
             return "ok" if self.admin_bearer(headers) else "unauthorized"
