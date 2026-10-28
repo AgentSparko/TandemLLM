@@ -137,7 +137,7 @@ export function serves(n: FleetNode, deps: FleetDeployment[]): TemplateResult {
   return html`${mine.map((d) => {
     const i = d.members.indexOf(n.id);
     const where = d.type === 'split' ? `stage ${i + 1}/${d.members.length}` : d.type === 'replicas' ? `${i + 1} of ${d.members.length}` : '';
-    return html`<div>${typeBadge(d.type)} ${d.name}${where ? html` <span class="faint">${where}</span>` : nothing}</div>`;
+    return html`<div>${typeBadge(d.type)} ${d.name}${where ? html` <span class="faint dep-where">${where}</span>` : nothing}</div>`;
   })}`;
 }
 

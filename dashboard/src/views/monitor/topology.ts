@@ -126,7 +126,7 @@ export class QseTopology extends LightElement {
       <rect class="node-wash" x=${x0 + 1} y=${y0 + 1} width=${b.w - 2} height="3" rx="1.5" fill=${c} />
       <rect x=${x0 + 12} y=${y0 + 14} width="11" height="11" rx="2.5" fill=${isHollow(n.colour) ? 'none' : c} stroke=${c} stroke-width=${isHollow(n.colour) ? 2 : 0} />
       <text class="t-name" x=${x0 + 30} y=${y0 + 24}>${n.alias}</text>
-      <text class="t-sub t-st is-${st}" x=${x0 + b.w - 12} y=${y0 + 24} text-anchor="end">${STATUS_GLYPH[st]} ${st === 'alert' ? 'alert' : st}</text>
+      <text class="t-sub t-st is-${st}" x=${x0 + b.w - 12} y=${y0 + 24} text-anchor="end">${STATUS_GLYPH[st]} ${st === 'draining' && n.drain?.state === 'drained' ? 'drained' : st}</text>
       <text class="t-sub" x=${x0 + 12} y=${y0 + 42}>${cut(`${hwShort(n)} · ${n.transport === 'tunnel' ? 'rented · tunnel' : 'LAN'}`)}</text>
       <text class="t-sub t-serves" x=${x0 + 12} y=${y0 + 60}>${cut(what)}</text>
       <text class="t-sub t-figs" x=${x0 + 12} y=${y0 + 78}>${cut(figs)}</text>

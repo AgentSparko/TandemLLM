@@ -8,7 +8,7 @@ import type { FleetNode, NodeStatus } from '../api/fleet';
 
 export const STATUS_GLYPH: Record<NodeStatus, string> = { up: '●', draining: '◐', off: '○', alert: '⚠' };
 
-type ChipNode = Pick<FleetNode, 'alias' | 'colour'> & Partial<Pick<FleetNode, 'id' | 'status' | 'status_text' | 'hw'>>;
+type ChipNode = Pick<FleetNode, 'alias' | 'colour'> & Partial<Pick<FleetNode, 'id' | 'status' | 'status_text' | 'hw' | 'drain'>>;
 
 const clampColour = (c: number) => Math.min(8, Math.max(1, Math.round(c) || 1));
 
@@ -22,10 +22,12 @@ export function isHollow(colour: number): boolean {
   return clampColour(colour) > 4;
 }
 
-/** The status in words: `up`, `draining`, `off`, or the alert's own text. */
-export function statusWords(n: Pick<ChipNode, 'status' | 'status_text'>): string {
+/** The status in words: `up`, `draining`, `drained` (a drain with nothing left in flight), `off`,
+ *  or the alert's own text. */
+export function statusWords(n: Pick<ChipNode, 'status' | 'status_text' | 'drain'>): string {
   if (!n.status) return '';
   if (n.status === 'alert') return n.status_text && n.status_text !== 'alert' ? `alert: ${n.status_text}` : 'alert';
+  if (n.status === 'draining' && n.drain?.state === 'drained') return 'drained';
   return n.status;
 }
 

@@ -1,0 +1,634 @@
+/* Fleet → Sparks (VIS-250, views/fleet/): the list with its sort and filters, the full topology's
+   link cards, a Spark's page with its edit in place, its banners, charts, actions and links, and
+   the action dialog. Loaded with the new pages' chunk; the page column is the `mon` container, so a
+   phone and a column between two sidebars get the same narrow layout. */
+
+qse-sparks,
+qse-spark-node {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+qse-fleet-page .drain-ink,
+.ctx .drain-ink {
+  color: var(--cobalt-hi);
+}
+.node-st.is-draining {
+  color: var(--cobalt-hi);
+}
+
+/* ---- the list ------------------------------------------------------------------------------- */
+.sp-head {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+}
+.sp-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--rule);
+  margin-top: -6px;
+}
+.sp-tabs a {
+  padding: 7px 12px 8px;
+  color: var(--ink-2);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+.sp-tabs a.is-on {
+  color: var(--ink);
+  border-bottom-color: var(--cobalt-hi);
+}
+.sp-tabs a:hover {
+  color: var(--ink);
+}
+.sp-table-panel {
+  padding: 0;
+  overflow: hidden;
+}
+.sp-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.sp-search {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.sp-search input {
+  width: 100%;
+}
+/* the table scrolls sideways in a narrow column: the Spark stays, a shadow says there is more */
+.sp-table-wrap {
+  overflow-x: auto;
+  background:
+    linear-gradient(to left, var(--bg-2) 40%, transparent) right / 36px 100% no-repeat local,
+    radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, 0.45), transparent) right / 14px 100% no-repeat scroll;
+}
+.sp-table th:first-child,
+.sp-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg-2);
+}
+.sp-row:hover td:first-child {
+  background: var(--bg-raise);
+}
+.sp-why {
+  max-width: 150px;
+}
+.sp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.sp-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--rule);
+  padding: 0;
+  white-space: nowrap;
+}
+.sp-table th.r,
+.sp-table td.r {
+  text-align: right;
+}
+.sp-sort {
+  all: unset;
+  display: inline-flex;
+  gap: 3px;
+  align-items: baseline;
+  padding: 9px 12px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.sp-sort:hover,
+.sp-sort.is-on {
+  color: var(--ink);
+}
+.sp-sort:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.sp-dir {
+  font-size: 0.75em;
+  color: var(--cobalt-hi);
+  min-width: 0.8em;
+}
+.sp-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+.sp-row {
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease);
+}
+.sp-row:hover {
+  background: var(--bg-raise);
+}
+.sp-row:last-child td {
+  border-bottom: 0;
+}
+.sp-row.is-off td:not(:first-child) {
+  opacity: 0.6;
+}
+.sp-row.is-draining td:first-child {
+  box-shadow: inset 3px 0 0 var(--cobalt-hi);
+}
+.sp-table .nw {
+  white-space: nowrap;
+}
+.sp-table td[data-label='Serves'] > div {
+  white-space: nowrap;
+}
+.sp-sub {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-end {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.sp-mem {
+  width: 110px;
+  margin: 6px 0 0 auto;
+}
+.sp-none {
+  padding: 14px;
+}
+.sp-sort-pick {
+  display: none;
+  gap: 6px;
+  align-items: center;
+}
+.sp-ctx-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---- the topology's links ---------------------------------------------------------------------- */
+.sp-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.sp-link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sp-link.is-sel {
+  border-color: var(--cobalt-hi);
+}
+.sp-link-h {
+  all: unset;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  cursor: pointer;
+}
+.sp-link-h:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.sp-test {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px dashed var(--rule);
+}
+.sp-test > div {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+/* ---- a Spark's page ------------------------------------------------------------------------------ */
+.sp-crumb {
+  margin-bottom: -8px;
+}
+.sp-crumb a {
+  color: var(--ink-2);
+}
+.sp-node-head {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 14px;
+}
+.sp-node-sw {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 22px;
+  border-radius: 6px;
+  background: var(--c);
+  border: 3px solid var(--c);
+  box-shadow: 0 0 18px -4px var(--c);
+}
+.sp-node-sw.is-hollow {
+  background: transparent;
+}
+.sp-node-t {
+  flex: 1;
+  min-width: 0;
+}
+.sp-node-title {
+  gap: 10px;
+}
+.sp-status {
+  font-weight: 600;
+}
+.sp-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: sp-in var(--dur-2) var(--ease-out);
+}
+.sp-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.sp-swatches {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.sp-swatches legend {
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+.sp-sw-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.sp-sw {
+  all: unset;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 3px solid var(--c);
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: transform var(--dur-1) var(--ease-spring);
+}
+.sp-sw.is-hollow {
+  background: transparent;
+}
+.sp-sw:hover:not(:disabled) {
+  transform: scale(1.12);
+}
+.sp-sw.is-on {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.sp-sw:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+.sp-sw:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.sp-banner {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+}
+.sp-banner > div {
+  flex: 1;
+  min-width: 0;
+}
+.sp-banner-g {
+  font-size: 22px;
+  line-height: 1;
+}
+.sp-banner.is-drain {
+  border-color: var(--cobalt-hi);
+  background: var(--cobalt-wash), var(--bg-2);
+}
+.sp-banner.is-drain .sp-banner-g {
+  color: var(--cobalt-hi);
+}
+.sp-banner.is-alert {
+  border-color: var(--warn);
+  background: var(--warn-wash), var(--bg-2);
+}
+.sp-banner.is-alert .sp-banner-g {
+  color: var(--warn-ink);
+}
+.sp-banner.is-off {
+  border-color: var(--err);
+  background: var(--err-wash), var(--bg-2);
+}
+.sp-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.sp-chart .row-between {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.sp-memory {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+}
+.sp-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.btn.btn-danger-ghost {
+  color: var(--err);
+  border-color: color-mix(in oklab, var(--err) 55%, transparent);
+  background: transparent;
+}
+.btn.btn-danger-ghost:hover:not(:disabled) {
+  background: var(--err-wash);
+}
+.btn.btn-danger-solid {
+  color: #fff;
+  border-color: var(--err);
+  background: var(--err);
+}
+.btn.btn-danger-solid:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.sp-lrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-top: 1px solid var(--rule);
+}
+.sp-lrow:first-of-type {
+  border-top: 0;
+}
+.sp-lrow > .xs {
+  grid-column: 1;
+}
+.sp-lrow > button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.sp-lrow > .err-ink {
+  grid-column: 1 / -1;
+}
+.sp-dep {
+  padding: 8px 0;
+  border-top: 1px solid var(--rule);
+}
+.sp-dep:first-of-type {
+  border-top: 0;
+}
+
+/* ---- the action dialog --------------------------------------------------------------------------- */
+.act-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-2);
+  color: var(--ink);
+  padding: 0;
+  box-shadow: var(--shadow-pop);
+}
+.act-dialog.is-danger {
+  border-color: var(--err);
+  border-top-width: 4px;
+}
+.act-dialog[open] {
+  animation: sp-in var(--dur-2) var(--ease-out);
+}
+.act-dialog::backdrop {
+  background: rgba(8, 12, 16, 0.55);
+}
+.act-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+}
+.act-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.act-head h2 {
+  font: 700 var(--fs-lg) / 1.2 var(--font-disp);
+}
+.act-sec ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.act-sec.is-removes li::marker {
+  color: var(--err);
+}
+.act-sec.is-keeps li::marker {
+  color: var(--ok);
+}
+.act-sec.is-removes h3 {
+  color: var(--err);
+}
+.act-blocked {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--warn-wash);
+  font-size: var(--fs-sm);
+}
+.act-done {
+  font-weight: 600;
+}
+.act-type input,
+.act-engine select {
+  width: 100%;
+}
+.act-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+@keyframes sp-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ---- narrow columns: a phone, a page between two sidebars --------------------------------------- */
+@container mon (min-width: 1001px) and (max-width: 1100px) {
+  .dep-where {
+    display: none;
+  }
+}
+@container mon (max-width: 1000px) {
+  /* the table as one card per Spark, each cell with its label */
+  .sp-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .sp-table,
+  .sp-table tbody {
+    display: block;
+  }
+  .sp-table tbody {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sp-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .sp-row td {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    border: 0;
+    text-align: left !important;
+  }
+  .sp-table th:first-child,
+  .sp-table td:first-child {
+    position: static;
+    background: none;
+  }
+  .sp-row td::before {
+    content: attr(data-label);
+    font-size: var(--fs-xs);
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .sp-row td:first-child,
+  .sp-row td:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+  .sp-row td:first-child::before {
+    content: none;
+  }
+  .sp-mem {
+    margin: 4px 0 0;
+  }
+  .sp-row:nth-child(odd) {
+    border-right: 1px solid var(--rule);
+  }
+  .sp-sort-pick {
+    display: flex;
+  }
+  .sp-sub {
+    max-width: none;
+  }
+  .sp-why {
+    max-width: none;
+  }
+  .sp-table-wrap {
+    background: none;
+  }
+}
+@container mon (max-width: 900px) {
+  .sp-edit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@container mon (max-width: 640px) {
+  .sp-table tbody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sp-row:nth-child(odd) {
+    border-right: 0;
+  }
+  .sp-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .sp-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sp-node-sw {
+    margin-top: 4px;
+    width: 16px;
+    height: 16px;
+  }
+  .sp-node-head {
+    flex-wrap: wrap;
+  }
+  .sp-node-head > .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+/* a modal sits over the whole window: the window's width decides, not the page column's */
+@media (max-width: 640px) {
+  .act-foot .btn {
+    flex: 1;
+    justify-content: center;
+  }
+  .act-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    margin: auto 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    max-height: 88dvh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-edit,
+  .act-dialog[open] {
+    animation: none;
+  }
+  .sp-sw,
+  .sp-row {
+    transition: none;
+  }
+}
