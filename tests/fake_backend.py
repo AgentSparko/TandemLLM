@@ -92,6 +92,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import select
 import socket
@@ -867,6 +868,9 @@ def main(argv=None):
     ap.add_argument("--dialect", choices=("vllm", "sglang", "sglang-off"), default=None)
     ap.add_argument("--name", default="fake")
     a = ap.parse_args(argv)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import owned
+    owned.watch()              # started by a test: it ends with that test (SRV-732)
     srv, port = start(a.port, a.host, models=[m for m in a.models.split(",") if m], key=a.key,
                       tps=a.tps, dialect=a.dialect, name=a.name)
     print(f"[fake-backend] {a.name} on {a.host}:{port}, models {a.models}", flush=True)

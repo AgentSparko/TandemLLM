@@ -2,8 +2,8 @@
 (proxy/nodeupdate.py) and the mixed-version rule (proxy/fleetwatch.py).
 
 The nodes are TandemNode agents in this process on loopback ports, each with an engine the fake
-backend plays; one model id on both is Replicas at the gateway (its route falls back to the other
-member). The agent's pip, its Python and its restart are fakes that install the wheel's version
+backend plays; a Replicas deployment record over both serves the model id (SRV-731: its members
+are the gateway's route, a drained one is never first, a rejoin waits for one token). The agent's pip, its Python and its restart are fakes that install the wheel's version
 and come back on it (the real ones run in test 7, on a real venv, where one is there).
 
   1  the order: idle first, Replicas members one at a time, Single after, a Split's members
@@ -214,6 +214,11 @@ class Fleet2:
         self.up._package = nodeinstall.Package(d, env={"TANDEM_NODE_WHEEL": self.wheel})
         self.up.sleep = lambda s: time.sleep(0.05)
         self.ids = {"a": self.a.agent.node_id(), "b": self.b.agent.node_id()}
+        # SRV-731: Replicas are a record, never two engines that serve one id
+        st, d = tf.send(self.px, "POST", "/v1/fleet/deployments",
+                        {"model": "fake-27b", "type": "replicas",
+                         "members": [self.ids["a"], self.ids["b"]]})
+        assert st == 200 and d["type"] == "replicas", d
 
     def close(self):
         for src in [s for _, s in self.f.agents.values()]:

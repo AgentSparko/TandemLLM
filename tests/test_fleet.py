@@ -380,10 +380,16 @@ def test_every_route_validates():
             lid = nodes[0]["id"]
             assert nodes[0]["version"] == "0.15.0-test"
             deps = ok(get(px, "/v1/fleet/deployments")[1], "deployments")["deployments"]
+            # no record: a Single derived from what the engine serves (SRV-731)
             assert deps == [{"id": "TandemLLM", "name": "Test Model", "model": "test-model",
                              "pack": "pack-4.0", "type": "single", "members": [lid],
                              "api_id": "TandemLLM", "ctx": 131072, "status": "serving",
-                             "status_text": "serving"}], deps
+                             "status_text": "serving", "record": False, "state": "serving",
+                             "managed": False, "job": None,
+                             "member_states": [{"node": lid, "alias": HOSTNAME, "engine": None,
+                                                "backend": "eng", "model": "TandemLLM",
+                                                "managed": False, "state": "serving",
+                                                "text": "serving", "routable": True}]}], deps
             links = ok(get(px, "/v1/fleet/links")[1], "links")["links"]
             assert links == [{"id": f"lan-{lid}", "a": "lan", "b": lid, "kind": "lan",
                               "speed": "10 GbE", "rtt_ms": None, "mtu": 1500, "state": "up",

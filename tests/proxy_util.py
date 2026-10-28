@@ -25,7 +25,10 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import fake_backend  # noqa: E402
+import owned  # noqa: E402
 from proxy import app as proxy_app  # noqa: E402
+
+owned.mark()                 # the fake engines and backends a test starts die with it (SRV-732)
 
 FIXTURE_KEYS = ("sk-fixture-ABCDEFGH1234", "sk-fixture-ZYXWVUTS9876", "dsk-fixture-QRSTUV5555")
 

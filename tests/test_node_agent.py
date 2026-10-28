@@ -24,8 +24,8 @@ the engine a box serves on :8000 is never addressed. Time is injected where the 
   8  link test against a fake peer: RTT, bandwidth per interface, MTU, RoCE, a port with one of
      its two interfaces down flagged half bandwidth                  test_linktest_fake_peer
   9  /node/setup/*: the engine's answer byte for byte, a POST's body as sent and no secret passed
-     on, an event stream, the status responder while the engine is down; weights with content ids,
-     a removal as the Setup Guide takes it                           test_setup_delegation
+     on, an event stream, the status responder while the engine is down; weights with content ids
+     and the weights store, a removal as the Setup Guide takes it                           test_setup_delegation
  10  the controller: a node read through its agent in /v1/fleet/* (nodes, metrics from the 1 s
      stream, memory, logs, deployments through the relay), this machine switching to its agent
      and back, a remote agent node, an unpaired one                  test_agent_node_in_fleet
@@ -205,6 +205,10 @@ class Running:
         for s in self.servers:
             s.shutdown()
             s.server_close()
+        # SRV-732: an engine this agent started (a fake engine in the foreground) ends with it
+        for e in self.agent.engines.list:
+            if e.proc is not None and e.proc.poll() is None:
+                nodeengines._end_group(e.proc, 2.0)
 
     def __enter__(self):
         return self
@@ -340,7 +344,11 @@ class SetupEngine:
 
 
 def fake_engine_main(port: int) -> None:
-    """`--fake-engine PORT`: an engine process in the foreground answering /health."""
+    """`--fake-engine PORT`: an engine process in the foreground answering /health; it ends with
+    the test that started it (tests/owned.py), whatever the test did."""
+    import owned
+    owned.watch()
+
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
@@ -891,8 +899,10 @@ def test_setup_delegation():
                                              "confirm": True}
         st, out = r.client.json("DELETE", "/node/weights/p-old?dry_run=1")
         assert out["echo"] == {"profiles": ["p-old"], "dry_run": True}
+        # SRV-731: the store beside the Setup Guide's weights; a receive names its copy
+        assert w["store"]["dir"] == r.agent.weights.root and w["store"]["free_gib"] > 0, w
         st, err = r.client.json("POST", "/node/weights/receive")
-        assert st == 501 and "VIS-252" in err["error"]["message"]
+        assert st == 400 and err["error"]["type"] == "bad_request", err
         # the engine restarts: its status responder answers the Setup Guide meanwhile
         status = SetupEngine()
         e = r.agent.engines.by_id["engine"]
