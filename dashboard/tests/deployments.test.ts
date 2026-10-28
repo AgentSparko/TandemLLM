@@ -40,7 +40,19 @@ describe('the records over the mock fleet', () => {
       ['dsv41', 'split', ['r1', 'r2']],
       ['wren', 'role', ['desk']],
     ]);
-    expect(deps.every((d) => d.record && d.state === 'serving' && d.managed)).toBe(true);
+    // VIS-254: the Split is recorded stopped, as the controller keeps it until ENG-307
+    expect(deps.map((d) => [d.id, d.state, d.status, d.record && d.managed])).toEqual([
+      ['qwen27', 'serving', 'serving', true],
+      ['dsv41', 'stopped', 'stopped', true],
+      ['wren', 'serving', 'serving', true],
+    ]);
+    expect(deps[1].status_text).toBe('stopped · not built yet (ENG-307)');
+    expect(deps[1].member_states!.map((x) => [x.alias, x.state, x.routable])).toEqual([
+      ['R-1', 'down', false],
+      ['R-2', 'down', false],
+    ]);
+    // the server this page talks to is Desk's engine: its members reach it through `engine`
+    expect(deps[0].member_states!.map((x) => x.backend)).toEqual(['engine', 'r3-engine']);
     const q27 = deps[0];
     expect(q27.affinity).toBe('root');
     expect(q27.member_states!.map((x) => [x.alias, x.state, x.routable])).toEqual([
@@ -103,10 +115,10 @@ describe('the actions and their jobs on the clock', () => {
     expect(plan(m, 'dsv41', 'move', T0, 'to=desk').blocked).toBe('a Split moves with ENG-307');
   });
 
-  it("a Split serves in this fleet's story; stopped, its start is 501 not_built until ENG-307", () => {
+  it('a Split is recorded stopped: its stop says so, its start is 501 not_built until ENG-307', () => {
     const m = new MockFleet({ scenario: 'fleet4', now: T0 });
-    at(m, 'POST', '/v1/fleet/deployments/dsv41/actions/stop', { confirm: plan(m, 'dsv41', 'stop').confirm });
-    const r = at(m, 'POST', '/v1/fleet/deployments/dsv41/actions/start', {}, T0 + STOP_S);
+    expect(plan(m, 'dsv41', 'stop').blocked).toBe('DeepSeek-V4.1-Flash is stopped already');
+    const r = at(m, 'POST', '/v1/fleet/deployments/dsv41/actions/start', {});
     expect(r.status).toBe(501);
     expect(valid<{ error: { type: string } }>('error', r.body).error.type).toBe('not_built');
   });
@@ -119,12 +131,8 @@ describe('the placement planner', () => {
     const p = valid<Placement>('placement', at(m, 'POST', '/v1/fleet/placement', { ...body, nodes: ['desk', 'r1'] }).body);
     const split = p.types.find((t) => t.type === 'split')!;
     expect([split.allowed, split.built, split.reason]).toEqual([false, false, 'no fabric link between Desk and R-1']);
-    // R-1 and R-2 on the switch, but full with DeepSeek: each stage must fit beside it
-    const full = valid<Placement>('placement', at(m, 'POST', '/v1/fleet/placement', { ...body, nodes: ['r1', 'r2'] }).body).types.find((t) => t.type === 'split')!;
-    expect(full.reason).toMatch(/^a stage needs \d+ GiB, R-1 has \d+ free$/);
-    // DeepSeek stopped: R-1 + R-2 take a Split, planned and not built
-    at(m, 'POST', '/v1/fleet/deployments/dsv41/actions/stop', { confirm: plan(m, 'dsv41', 'stop').confirm });
-    const ok = valid<Placement>('placement', at(m, 'POST', '/v1/fleet/placement', { ...body, nodes: ['r1', 'r2'] }, T0 + STOP_S).body).types.find((t) => t.type === 'split')!;
+    // R-1 and R-2 on the switch, DeepSeek's Split only recorded there: they take a Split, planned and not built
+    const ok = valid<Placement>('placement', at(m, 'POST', '/v1/fleet/placement', { ...body, nodes: ['r1', 'r2'] }).body).types.find((t) => t.type === 'split')!;
     expect([ok.allowed, ok.built, ok.nodes, ok.stages.length]).toEqual([true, false, ['r1', 'r2'], 2]);
     expect(ok.warn).toContain('ENG-307');
   });

@@ -23,7 +23,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import type { BackendStatus, LogLevel, LogLine, SystemInfo } from '../src/api/types.ts';
+import type { BackendStatus, LogLevel, LogLine, ServerSystem } from '../src/api/types.ts';
 import { createChatHandler } from './chat.ts';
 import { mockHosts } from './hosts.ts';
 import { dayKey } from '../src/lib/time.ts';
@@ -191,9 +191,9 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
 
   const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  const liveStatus = (): SystemInfo['engine']['status'] => (draining ? 'draining' : state.waiting > 0 || state.running > 0 ? 'busy' : 'ok');
+  const liveStatus = (): ServerSystem['engine']['status'] => (draining ? 'draining' : state.waiting > 0 || state.running > 0 ? 'busy' : 'ok');
 
-  const sysSnapshot = (): SystemInfo => {
+  const sysSnapshot = (): ServerSystem => {
     const now = Date.now();
     const rows = rowsFor().rows;
     return {
@@ -433,13 +433,15 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
   };
 
   // ---- streaming chat completion (mock/chat.ts: thinking, formats, tools, stops, budgets) ---
+  /** a body the gateway read first (VIS-254), handed to the chat handler */
+  const preRead = new WeakMap<IncomingMessage, string>();
   const chat = createChatHandler({
     mode: () => mode,
     draining: () => draining,
     rng: liveRng,
     state,
     live,
-    readBody,
+    readBody: (r) => (preRead.has(r) ? Promise.resolve(preRead.get(r) as string) : readBody(r)),
     finishRow: (row) => {
       row.ts_ms = Date.now();
       row.id = full.rows[full.rows.length - 1].id + 1;
@@ -472,6 +474,69 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
       usage_source: 'backend', cache_write_tokens: null, cost_micros: 812, proxy_ms: 0.31, retries: 0, fallback_from: null, upstream_status: 200, user: 'laptop',
       queue_ms: 0, prompt_ms: null, prefill_tps: null, blocks: null, tokens_per_block: null, draft_tokens: null, draft_accepted: null, cache_source: null, lane: null, conductor: null,
     });
+  }
+
+
+  /** /v1/dashboard/{summary,usage,requests} over a ledger's rows: this server's, or the controller's
+   *  (VIS-254) with its fleet dimensions (`usageExtra`) and each row's node and deployment (`rowExtra`) */
+  function ledgerAnswer(res: ServerResponse, q: URLSearchParams, name: string, data: { rows: LedgerRow[]; since: string }, usageExtra?: (u: Record<string, any>) => void, rowExtra?: (r: Record<string, unknown>) => void): void {
+    if (name === 'summary') {
+      if (mode === '500') return json(res, 500, { error: { type: 'internal_error', message: 'ledger query failed: database is locked' } });
+      const now = Date.now();
+      const last = data.rows.length ? data.rows[data.rows.length - 1] : null;
+      return json(
+        res,
+        200,
+        aggSummary({
+          rows: data.rows,
+          tz: q.get('tz') || tz,
+          now,
+          since: data.since,
+          live: {
+            status: liveStatus(),
+            running: state.running,
+            waiting: state.waiting,
+            uptime_s: Math.round((now - startedAt) / 100) / 10,
+            last_request_at: last ? new Date(last.ts_ms).toISOString().replace(/\.\d{3}Z$/, 'Z') : null,
+            ...(live.conductorMode ? { conductor: { mode: live.conductorMode } } : {}),
+            ...(backends.off ? {} : { backends: backends.status() as unknown as BackendStatus[] }),
+          },
+        }),
+      );
+    }
+    if (name === 'usage') {
+      const ztz = q.get('tz') || tz;
+      const bucket = (q.get('bucket') as 'day' | 'hour') || 'day';
+      const today = dayKey(Date.now(), ztz);
+      const to = (q.get('to') || today).slice(0, 10);
+      const defFrom = shiftDay(to, bucket === 'day' ? -364 : -2);
+      const from = (q.get('from') || defFrom).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return error(res, 400, 'bad_request', 'from/to must be YYYY-MM-DD');
+      if (bucket !== 'day' && bucket !== 'hour') return error(res, 400, 'bad_request', 'bucket must be day or hour');
+      const span = (Date.parse(to) - Date.parse(from)) / 86400000 + 1;
+      if (bucket === 'hour' && span > 31) return error(res, 400, 'bad_request', 'bucket=hour allows at most 31 days');
+      if (span > 400) return error(res, 400, 'bad_request', 'at most 400 days');
+      const u = aggUsage(data.rows, { from, to, bucket, tz: ztz, model: q.get('model'), client: q.get('client') }) as unknown as Record<string, any>;
+      if (!backends.off) {
+        // 1.3: the backends and users the ledger has seen (the mock's rows are the engine's)
+        u.contract_version = '1.3';
+        u.dimensions.backends = [{ id: 'engine', kind: 'engine', label: 'this engine' }, ...backends.backends.map((b) => ({ id: b.id, kind: b.kind, label: b.label }))];
+        u.dimensions.users = ['laptop'];
+        if (q.get('backend') || q.get('user')) u.filters = { ...u.filters, backend: q.get('backend'), user: q.get('user') };
+        u.totals.cost_micros = 41_230;
+      }
+      usageExtra?.(u);
+      return json(res, 200, u);
+    }
+    const limit = Number(q.get('limit') || 50);
+    if (!Number.isFinite(limit) || limit < 1 || limit > 500) return error(res, 400, 'bad_request', 'limit must be 1..500');
+    const before = q.get('before') ? Number(q.get('before')) : null;
+    const page = aggRequests(data.rows, { limit, before, model: q.get('model'), client: q.get('client'), finish: q.get('finish') });
+    // a server without the monitor (VIS-44's older server) sends no conductor block
+    if (live.conductorMode == null) for (const r of page.requests) delete r.conductor;
+    if (!backends.off) for (const r of page.requests) proxied(r as unknown as Record<string, unknown>);
+    if (rowExtra) for (const r of page.requests) rowExtra(r as unknown as Record<string, unknown>);
+    return json(res, 200, { contract_version: '1.0', ...page });
   }
 
   // ---- the middleware ----------------------------------------------------------------------
@@ -761,6 +826,51 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         return res.end(renderMetrics(state, Date.now(), { spec: mode !== 'nospec' }) + engineFamilies(Date.now(), ids, mode !== 'nospec'));
       }
 
+      // VIS-254: the controller's own ledger: the rows since its first Spark joined, each with its
+      // node and deployment (mock/fleet.ts attribute); `node=` and `deployment=` filter it
+      const fleetLedger = /^\/v1\/fleet\/ledger\/(summary|usage|requests)$/.exec(path);
+      if (fleetLedger) {
+        if (fleetPassword && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
+        const f = fleetFor(req);
+        const from = f.ledgerStart() * 1000;
+        const all = rowsFor().rows.filter((r) => r.ts_ms >= from).map((r) => ({ ...r, ...f.attribute(r.id, r.ts_ms) }));
+        const node = q.get('node');
+        const dep = q.get('deployment');
+        const rows = all.filter((r) => (!node || r.node === node) && (!dep || r.deployment === dep));
+        const where = new Map(rows.map((r) => [r.request_id, { node: r.node, deployment: r.deployment }]));
+        const fleetDims = { nodes: [...new Set(all.map((r) => r.node).filter((x): x is string => !!x))], deployments: [...new Set(all.map((r) => r.deployment).filter((x): x is string => !!x))] };
+        const since = dayKey(from, q.get('tz') || tz);
+        return ledgerAnswer(res, q, fleetLedger[1], { rows, since }, (u) => {
+          u.dimensions = { ...u.dimensions, ...fleetDims };
+          if (node || dep) u.filters = { ...u.filters, node, deployment: dep };
+        }, (r) => Object.assign(r, where.get(String(r.request_id)) ?? { node: null, deployment: null }));
+      }
+      // VIS-254: a completion through the controller's gateway: a deployment's member answers (the
+      // one `X-Tandem-Pin` names), and says which, as proxy/deployments.py does
+      if (path === '/v1/fleet/gateway/chat/completions' && req.method === 'POST') {
+        const raw = await readBody(req);
+        let body: { model?: unknown } = {};
+        try {
+          body = raw ? JSON.parse(raw) : {};
+        } catch {
+          return error(res, 400, 'invalid_request_error', 'bad json');
+        }
+        const oai = (status: number, code: string, message: string) => json(res, status, { error: { message, type: status === 503 ? 'server_busy' : 'invalid_request_error', code } });
+        const d = fleetFor(req).deployments(Date.now() / 1000).find((x) => x.api_id === body.model || x.id === body.model);
+        if (!d) return oai(404, 'model_not_found', `no model ${JSON.stringify(body.model)}`);
+        if (d.type === 'split') return oai(501, 'not_built', `${d.name} runs Split: the pipeline split (ENG-307) is not built, so it serves no request yet`);
+        if (d.state === 'stopped') return oai(503, 'deployment_stopped', `${d.name} is stopped: start it to serve requests`);
+        const pin = String(req.headers['x-tandem-pin'] ?? '').trim();
+        const ms = d.member_states ?? [];
+        const m = pin ? ms.find((x) => x.node === pin || x.alias === pin) : ms.find((x) => x.routable);
+        if (pin && !m) return oai(409, 'not_a_member', `${pin} is not a member of ${d.name}`);
+        if (!m) return oai(503, 'no_member', `${d.name} has no member that takes requests`);
+        if (!m.routable) return oai(503, 'member_not_serving', `${m.alias} does not take ${d.name}'s requests now: ${m.text}`);
+        res.setHeader('X-Tandem-Node', m.alias);
+        res.setHeader('X-Tandem-Deployment', d.id);
+        preRead.set(req, raw);
+        return chat(req, res);
+      }
       // VIS-252: a Spark's Setup Guide through the controller, under the rule of the engine's own
       // /v1/setup (the admin password once one is set, reads too)
       const relay = /^\/v1\/fleet\/nodes\/([^/]+)\/(setup|setup-confirm)\/(.+)$/.exec(path);
@@ -786,66 +896,8 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         return json(res, r.status, r.body);
       }
 
-      if (path === '/v1/dashboard/summary') {
-        if (mode === '500') return json(res, 500, { error: { type: 'internal_error', message: 'ledger query failed: database is locked' } });
-        const data = rowsFor();
-        const now = Date.now();
-        const last = data.rows.length ? data.rows[data.rows.length - 1] : null;
-        return json(
-          res,
-          200,
-          aggSummary({
-            rows: data.rows,
-            tz: q.get('tz') || tz,
-            now,
-            since: data.since,
-            live: {
-              status: liveStatus(),
-              running: state.running,
-              waiting: state.waiting,
-              uptime_s: Math.round((now - startedAt) / 100) / 10,
-              last_request_at: last ? new Date(last.ts_ms).toISOString().replace(/\.\d{3}Z$/, 'Z') : null,
-              ...(live.conductorMode ? { conductor: { mode: live.conductorMode } } : {}),
-              ...(backends.off ? {} : { backends: backends.status() as unknown as BackendStatus[] }),
-            },
-          }),
-        );
-      }
-      if (path === '/v1/dashboard/usage') {
-        const data = rowsFor();
-        const ztz = q.get('tz') || tz;
-        const bucket = (q.get('bucket') as 'day' | 'hour') || 'day';
-        const today = dayKey(Date.now(), ztz);
-        const to = (q.get('to') || today).slice(0, 10);
-        const defFrom = shiftDay(to, bucket === 'day' ? -364 : -2);
-        const from = (q.get('from') || defFrom).slice(0, 10);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return error(res, 400, 'bad_request', 'from/to must be YYYY-MM-DD');
-        if (bucket !== 'day' && bucket !== 'hour') return error(res, 400, 'bad_request', 'bucket must be day or hour');
-        const span = (Date.parse(to) - Date.parse(from)) / 86400000 + 1;
-        if (bucket === 'hour' && span > 31) return error(res, 400, 'bad_request', 'bucket=hour allows at most 31 days');
-        if (span > 400) return error(res, 400, 'bad_request', 'at most 400 days');
-        const u = aggUsage(data.rows, { from, to, bucket, tz: ztz, model: q.get('model'), client: q.get('client') }) as unknown as Record<string, any>;
-        if (!backends.off) {
-          // 1.3: the backends and users the ledger has seen (the mock's rows are the engine's)
-          u.contract_version = '1.3';
-          u.dimensions.backends = [{ id: 'engine', kind: 'engine', label: 'this engine' }, ...backends.backends.map((b) => ({ id: b.id, kind: b.kind, label: b.label }))];
-          u.dimensions.users = ['laptop'];
-          if (q.get('backend') || q.get('user')) u.filters = { ...u.filters, backend: q.get('backend'), user: q.get('user') };
-          u.totals.cost_micros = 41_230;
-        }
-        return json(res, 200, u);
-      }
-      if (path === '/v1/dashboard/requests') {
-        const data = rowsFor();
-        const limit = Number(q.get('limit') || 50);
-        if (!Number.isFinite(limit) || limit < 1 || limit > 500) return error(res, 400, 'bad_request', 'limit must be 1..500');
-        const before = q.get('before') ? Number(q.get('before')) : null;
-        const page = aggRequests(data.rows, { limit, before, model: q.get('model'), client: q.get('client'), finish: q.get('finish') });
-        // a server without the monitor (VIS-44's older server) sends no conductor block
-        if (live.conductorMode == null) for (const r of page.requests) delete r.conductor;
-        if (!backends.off) for (const r of page.requests) proxied(r as unknown as Record<string, unknown>);
-        return json(res, 200, { contract_version: '1.0', ...page });
-      }
+      const own = /^\/v1\/dashboard\/(summary|usage|requests)$/.exec(path);
+      if (own) return ledgerAnswer(res, q, own[1], rowsFor());
       if (path === '/v1/dashboard/system') {
         return json(res, 200, sysSnapshot());
       }

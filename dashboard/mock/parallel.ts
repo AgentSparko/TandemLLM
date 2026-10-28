@@ -1,8 +1,9 @@
 // The parallel view in the mock (`GET /v1/dashboard/parallel`): a simulator that keeps about
-// `streams` requests in flight over six backends -- the engine (one at a time, with a prefill),
+// `streams` requests in flight over seven backends -- the engine (one at a time, with a prefill),
 // a vLLM and an SGLang (frames checked as tokens), DeepSeek (text frames checked, tool-call
 // frames not: its call phase has no live count), an OpenAI-compatible one whose frames were never
-// checked (no live count at all) and the fake backend (many, at different speeds). It moves with
+// checked (no live count at all), the fake backend (many, at different speeds) and another Spark's
+// engine through the gateway (`r3-engine`, the mock fleet's R-3: VIS-254's grouping). It moves with
 // the wall clock, so a page that polls once a second sees lanes arrive, think, call tools, write
 // and finish. `POST /__mock/parallel {streams, reset, engine_slots}` sets the load (0: idle) and how
 // many requests the engine serves at once (its sequence slots, server --parallel N; 1: one at a time).
@@ -37,6 +38,8 @@ const BACKENDS: { id: string; kind: string; models: string[]; tps: [number, numb
   { id: 'ds', kind: 'deepseek', models: ['deepseek-flash', 'deepseek-v4-pro'], tps: [38, 62], ttft: [0.5, 1.6], share: 4, frames: 'text', price: 0.6, inPrice: 0.15 },
   { id: 'oa', kind: 'generic', models: ['gpt-oss-120b'], tps: [30, 45], ttft: [0.4, 1.2], share: 1, frames: 'none', price: 0.3, inPrice: 0.1 },
   { id: 'fake', kind: 'generic', models: ['fake-a'], tps: [25, 120], ttft: [0.05, 1.2], share: 5, frames: 'all', price: null, inPrice: null },
+  // VIS-254: another Spark's engine through the gateway (the mock fleet's R-3, a Qwen3.8-27B replica)
+  { id: 'r3-engine', kind: 'tandemllm', models: ['qwen3.8-27b'], tps: [30, 42], ttft: [0.5, 1.4], share: 2, frames: 'all', price: null, inPrice: null },
 ];
 
 export class MockParallel {

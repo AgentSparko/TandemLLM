@@ -19,7 +19,7 @@
 // for it and a second after), a finished turn with two actions and one with a shadow decision.
 // `conductorMode: null` (the default) answers like a server without the monitor.
 
-import type { ActivityState, EngineState, FinishingStep, Live, LiveActivity, LiveCounts, LiveEngine, LivePhase, LiveRecent, LiveRequest, LiveSample, LiveStop, LiveTimelineEntry, StopReason } from '../src/api/types.ts';
+import type { ActivityState, EngineState, FinishingStep, ServerLive, LiveActivity, LiveCounts, LiveEngine, LivePhase, LiveRecent, LiveRequest, LiveSample, LiveStop, LiveTimelineEntry, StopReason } from '../src/api/types.ts';
 import type { LedgerRow } from './generate.ts';
 
 export interface ActSegment {
@@ -93,7 +93,7 @@ export interface MockLiveRequest {
 }
 
 /** VIS-40: the settings the server reports as `windows` (its QSE_LIVE_* defaults). */
-export const WINDOWS: NonNullable<Live['windows']> = { decode_warmup_tokens: 50, prefill_warmup_chunks: 1, now_window_s: 2, mostly_cached_pct: 10, mostly_cached_tokens: 4096 };
+export const WINDOWS: NonNullable<ServerLive['windows']> = { decode_warmup_tokens: 50, prefill_warmup_chunks: 1, now_window_s: 2, mostly_cached_pct: 10, mostly_cached_tokens: 4096 };
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 
@@ -798,7 +798,7 @@ export class MockLive {
     };
   }
 
-  snapshot(now = Date.now(), history = true): Live {
+  snapshot(now = Date.now(), history = true): ServerLive {
     this.admit(now);
     this.prune(now);
     this.advanceAll(now);
@@ -826,7 +826,7 @@ export class MockLive {
     }
     const dec = live.find((r) => r.firstAt != null);
     const busy = live.length > 0;
-    const out: Live = {
+    const out: ServerLive = {
       contract_version: this.contract,
       generated_at: new Date(now).toISOString().replace(/\.\d{3}Z$/, 'Z'),
       interval_s: this.contract === '1.1' && this.activity && busy ? 0.25 : 1.0,

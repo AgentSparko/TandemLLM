@@ -108,7 +108,7 @@ describe('mock fleet: the scenarios', () => {
     for (const n of nodes) expect(n.address).toMatch(/^(192\.0\.2|198\.51\.100|203\.0\.113)\./);
     expect(nodes.filter((n) => !n.owned).every((n) => n.lease_end! > T0)).toBe(true);
     const deps = get<{ deployments: FleetDeployment[] }>(m, '/v1/fleet/deployments').deployments;
-    expect(deps.map((d) => `${d.id}:${d.type}:${d.members.join('+')}:${d.status}`)).toEqual(['qwen27:replicas:desk+r3:serving', 'dsv41:split:r1+r2:serving', 'wren:role:desk:serving']);
+    expect(deps.map((d) => `${d.id}:${d.type}:${d.members.join('+')}:${d.status}`)).toEqual(['qwen27:replicas:desk+r3:serving', 'dsv41:split:r1+r2:stopped', 'wren:role:desk:serving']);
     const links = get<{ links: { kind: string; a: string; b: string }[] }>(m, '/v1/fleet/links').links;
     expect(links.filter((l) => l.kind === 'fabric').map((l) => `${l.a}-${l.b}`)).toEqual(['r1-sw', 'r2-sw', 'r3-sw']);
     const alerts = get<{ alerts: FleetAlert[] }>(m, '/v1/fleet/alerts').alerts;

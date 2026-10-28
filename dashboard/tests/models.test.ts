@@ -209,9 +209,12 @@ describe('the Setup Guide relay in the mock', () => {
     expect(a.impact).toContain('Qwen3.8-27B: new requests go to R-3, another member');
     expect(a.allowed && !!a.confirm).toBe(true);
     expect(plan('assistant/load').title).toBe('Wake Wren on Desk');
-    // a Split needs every stage: R-1's restart takes DeepSeek away, R-2 does not stand in
+    // the Split over R-1 + R-2 is recorded, not running (ENG-307): R-1 serves nothing to take away
     const r1 = valid<SetupConfirm>('setup-confirm', m.handle('GET', '/v1/fleet/nodes/r1/setup-confirm/apply', new URLSearchParams('model=m&profile=p'), null, T0 * 1000).body);
-    expect(r1.impact).toContain("DeepSeek-V4.1-Flash does not answer until R-1's engine is back");
+    expect(r1.impact).toContain('R-1 serves nothing through this gateway now');
+    // a Single only Desk serves does not answer while Desk's engine restarts
+    const wren = valid<SetupConfirm>('setup-confirm', m.handle('GET', '/v1/fleet/nodes/desk/setup-confirm/reset', new URLSearchParams('level=2'), null, T0 * 1000).body);
+    expect(wren.impact).toContain("Wren does not answer until Desk's engine is back");
     expect(plan('remove').blocked).toBe('name the profiles to remove (?profiles=a,b)');
     expect(m.handle('GET', '/v1/fleet/nodes/desk/setup-confirm/estimate', new URLSearchParams(), null, T0 * 1000).status).toBe(404);
     const down = new MockFleet({ scenario: 'node-down', now: T0 });

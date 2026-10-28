@@ -4,8 +4,8 @@
 // own deployments (Qwen3.8-27B Replicas on Desk + R-3, DeepSeek-V4.1-Flash Split over R-1 + R-2, Wren
 // a Role on Desk; fleet4 starts with a copy of DeepSeek's pack R-1 → Desk running). Jobs run on the clock, a function of the time since they started:
 //
-//   start   START_S per member; a Split's start is 501 not_built (ENG-307), its stop allowed (it
-//           serves in this fleet's story), its move refused
+//   start   START_S per member; a Split's start is 501 not_built (ENG-307): it is recorded stopped,
+//           as on the controller; its stop says it is stopped already, its move is refused
 //   stop    STOP_S; the record turns stopped at once, the status after the job
 //   move    MOVE_S; the new member joins halfway, the old one leaves at the end; the API id stays
 //   copy    the bytes at COPY_GBPS; done and verified (the source's content id) at the end
@@ -131,17 +131,22 @@ export class MockDeploy {
     const ms: DeploymentMember[] = members.map((m) => {
       const n = by.get(m);
       const starting = j && j.job.action === 'start' && now - j.start < j.span;
-      const state = !n ? 'gone' : n.status === 'off' ? 'off' : leaving.includes(m) ? 'leaving' : n.status === 'draining' ? 'draining' : starting ? 'starting' : 'serving';
-      const text = { gone: 'no longer in the fleet', off: n?.status_text ?? 'off', leaving: 'moving away: no new requests', draining: `${n?.alias} is drained`, starting: 'its engine e starts', serving: 'serving' }[state];
-      return { node: m, alias: n?.alias ?? m, engine: 'engine', backend: `${m}-engine`, model: d.api_id, managed: true, state, text, routable: state === 'serving' };
+      // a Split serves nothing until ENG-307: its stages are down, whatever their nodes do
+      const unbuilt = d.type === 'split';
+      const state = !n ? 'gone' : n.status === 'off' ? 'off' : unbuilt ? 'down' : leaving.includes(m) ? 'leaving' : n.status === 'draining' ? 'draining' : starting ? 'starting' : 'serving';
+      const text = { gone: 'no longer in the fleet', off: n?.status_text ?? 'off', down: 'not built yet (ENG-307)', leaving: 'moving away: no new requests', draining: `${n?.alias} is drained`, starting: 'its engine e starts', serving: 'serving' }[state];
+      // the first Spark's engine is the server this page talks to: its own backend `engine`, the
+      // main model under the server's own name (TandemLLM), as the box's engine serves it
+      const here = m === this.fleet.hereId();
+      return { node: m, alias: n?.alias ?? m, engine: 'engine', backend: here ? 'engine' : `${m}-engine`, model: here && d.type !== 'role' ? 'TandemLLM' : d.api_id, managed: true, state, text, routable: state === 'serving' };
     });
-    const state = o?.state ?? 'serving';
+    const state = o?.state ?? d0.state ?? 'serving';
     const stopping = j && j.job.action === 'stop';
     let status = d0.status;
     let statusText = d0.status_text;
     if (state === 'stopped' && (!stopping || now - j!.start >= j!.span)) {
       status = 'stopped';
-      statusText = 'stopped';
+      statusText = d.type === 'split' ? 'stopped · not built yet (ENG-307)' : 'stopped';
     } else if (j && j.job.action === 'start' && now - j.start < j.span) {
       status = 'starting';
       statusText = `start: ${this.jobLine(j, now)}`;
