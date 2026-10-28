@@ -11,7 +11,7 @@ import { LogRing, reqLine } from '../mock/logs.ts';
 import { MockLive } from '../mock/live.ts';
 import { makeRow } from '../mock/generate.ts';
 import { rng } from '../mock/generate.ts';
-import { FLEET_SCENARIOS, MockFleet } from '../mock/fleet.ts';
+import { FLEET_SCENARIOS, MOCK_PAIR, MockFleet } from '../mock/fleet.ts';
 import { METRIC_KEYS, RANGE_KEYS, WINDOW_KINDS } from '../src/api/fleet.ts';
 import { addDays, dayKey } from '../src/lib/time.ts';
 
@@ -279,7 +279,10 @@ describe('fleet contract', () => {
   const q = (s = '') => new URLSearchParams(s);
 
   it('has a schema per route, and they are strict', () => {
-    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'layout', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'rules', 'topology']);
+    expect(Object.keys(fleet).sort()).toEqual(['alert', 'alerts', 'deployments', 'error', 'events', 'hostkey', 'layout', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rules', 'session', 'topology', 'trust']);
+    expect(fleet.pair({ address: '192.0.2.60', code: '48291' })).toBe(false);
+    expect(fleet.pair({ address: '192.0.2.60', code: '482913', owner: 'x' })).toBe(false);
+    expect(fleet['pair-ssh']({ host: 'h' })).toBe(false);
     expect(fleet['node-patch']({})).toBe(false);
     expect(fleet['node-patch']({ colour: 9 })).toBe(false);
     expect(fleet['node-patch']({ owner: 'x' })).toBe(false);
@@ -370,8 +373,84 @@ describe('fleet contract', () => {
       const e = m.handle('PATCH', `/v1/fleet/nodes/${id}`, q(), wrong, T0);
       expect(e.status, JSON.stringify(wrong)).toBe(status);
       fcheck('error', e.body);
+
     }
     expect(m.handle('GET', '/v1/fleet/nodes/r9', q(), null, T0).status).toBe(404);
+  });
+
+  // node trust (SEC-4): the Gherkin of SEC-4 against the mock, every answer held to the schemas
+  it('pairing by code: the code pairs once, five wrong codes spend it, an owned node says so', () => {
+    const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    const before = (m.handle('GET', '/v1/fleet/nodes', q(), null, T0).body as { nodes: unknown[] }).nodes.length;
+    const pair = (code: string, address: string = MOCK_PAIR.address) => m.handle('POST', '/v1/fleet/pair', q(), { address, code }, T0 + 1000);
+    fcheck('pair', { address: MOCK_PAIR.address, code: MOCK_PAIR.code });
+    for (let i = 4; i >= 1; i--) {
+      const r = pair('000000');
+      expect(r.status).toBe(403);
+      fcheck('error', r.body);
+      expect((r.body as { error: { message: string } }).error.message).toContain(`${i} tries left`);
+    }
+    const ok = pair(MOCK_PAIR.code);
+    expect(ok.status).toBe(200);
+    fcheck('node', ok.body);
+    expect(ok.body).toMatchObject({ status: 'up', pairing: { state: 'paired', via: 'code', host_key: null } });
+    const nodes = m.handle('GET', '/v1/fleet/nodes', q(), null, T0 + 2000).body as { nodes: { id: string }[] };
+    fcheck('nodes', nodes);
+    expect(nodes.nodes.length).toBe(before + 1);
+    // used once: the window is gone
+    expect(pair(MOCK_PAIR.code).status).toBe(502);
+    const owned = pair(MOCK_PAIR.code, MOCK_PAIR.owned);
+    expect(owned.status).toBe(409);
+    expect(owned.body).toMatchObject({ error: { type: 'owned' } });
+    const m2 = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    for (let i = 0; i < 5; i++) m2.handle('POST', '/v1/fleet/pair', q(), { address: MOCK_PAIR.address, code: '111111' }, T0);
+    const spent = m2.handle('POST', '/v1/fleet/pair', q(), { address: MOCK_PAIR.address, code: MOCK_PAIR.code }, T0);
+    expect(spent.status).toBe(410);
+    fcheck('error', spent.body);
+    const trust = m.handle('GET', '/v1/fleet/trust', q(), null, T0 + 3000);
+    fcheck('trust', trust.body);
+    expect((trust.body as { audit: { action: string; node: string }[] }).audit[0]).toMatchObject({ action: 'pair', node: (ok.body as { id: string }).id });
+  });
+
+  it('pairing by SSH once, release, and the errors', () => {
+    const m = new MockFleet({ seed: 42, scenario: 'fleet4', now: T0 / 1000 });
+    const hk = m.handle('POST', '/v1/fleet/pair/ssh/hostkey', q(), { host: MOCK_PAIR.ssh }, T0);
+    expect(hk.status).toBe(200);
+    fcheck('hostkey', hk.body);
+    const fp = (hk.body as { fingerprint: string }).fingerprint;
+    const body = { host: MOCK_PAIR.ssh, user: 'spark', password: MOCK_PAIR.password, host_key: fp };
+    fcheck('pair-ssh', body);
+    for (const [b, status, type] of [
+      [{ ...body, password: 'nope' }, 502, 'ssh_failed'],
+      [{ ...body, host_key: 'SHA256:other' }, 409, 'host_key_changed'],
+      [{ ...body, host: MOCK_PAIR.bare }, 409, 'not_installed'],
+      [{ ...body, user: '-oProxyCommand=x' }, 400, 'bad_request'],
+      [{ ...body, key: 'k' }, 400, 'bad_request'],
+    ] as const) {
+      const r = m.handle('POST', '/v1/fleet/pair/ssh', q(), b, T0);
+      expect(r.status, JSON.stringify(b)).toBe(status);
+      fcheck('error', r.body);
+      expect(r.body).toMatchObject({ error: { type } });
+      expect(JSON.stringify(r.body)).not.toContain('nope');
+    }
+    const ok = m.handle('POST', '/v1/fleet/pair/ssh', q(), body, T0);
+    expect(ok.status).toBe(200);
+    fcheck('node', ok.body);
+    expect(ok.body).toMatchObject({ pairing: { state: 'paired', via: 'ssh', host_key: fp } });
+    const id = (ok.body as { id: string }).id;
+    const rel = m.handle('DELETE', `/v1/fleet/nodes/${id}`, q(), null, T0 + 1000);
+    expect(rel.status).toBe(200);
+    fcheck('release', rel.body);
+    expect(rel.body).toMatchObject({ id, node: 'unpinned' });
+    expect(m.handle('GET', `/v1/fleet/nodes/${id}`, q(), null, T0 + 2000).status).toBe(404);
+    // a released member leaves its deployments; every route still validates
+    expect(m.handle('DELETE', '/v1/fleet/nodes/r3', q(), null, T0).status).toBe(200);
+    fcheck('deployments', m.handle('GET', '/v1/fleet/deployments', q(), null, T0).body);
+    fcheck('topology', m.handle('GET', '/v1/fleet/topology', q(), null, T0).body);
+    const one = new MockFleet({ seed: 42, scenario: 'fleet1', now: T0 / 1000 });
+    const local = one.handle('DELETE', '/v1/fleet/nodes/desk', q(), null, T0);
+    expect(local.status).toBe(409);
+    fcheck('error', local.body);
   });
 
   it('logs: a node’s own, oldest first, filtered by level and text, the same for the same instant', () => {
