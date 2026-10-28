@@ -615,7 +615,7 @@ export class QseAddSpark extends LightElement {
     const added = s.targets.map((t) => nodes.find((n) => n.id === t.node)).filter((n): n is NonNullable<typeof n> => !!n);
     return html`<section class="panel wz-done" data-panel="done">
         <div class="wz-row wz-between"><div><h2 class="panel-title"><span class="ok-ink">✓</span> ${added.length || s.targets.length} Spark${s.targets.length > 1 ? 's' : ''} added</h2><p class="panel-sub">${added.map((n) => nodeChip(n, { status: true }))} ${added.length > 1 ? 'report' : 'reports'} metrics now. Nothing is served on ${added.length > 1 ? 'them' : 'it'} yet.</p></div>
-          <div class="wz-row"><a class="btn" href="#/sparks">Open Sparks</a><a class="btn btn-primary" data-act="serve" href="#/models">Serve a model</a></div></div>
+          <div class="wz-row"><a class="btn" href="#/sparks">Open Sparks</a><a class="btn btn-primary" data-act="serve" href="#/models/place">Serve a model</a></div></div>
         ${s.reminders.length
           ? html`<div class="wz-remind" data-reminders>${s.reminders.map((r) => {
               const n = nodes.find((x) => x.id === r.node);

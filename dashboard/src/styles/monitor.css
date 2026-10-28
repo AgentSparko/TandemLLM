@@ -93,7 +93,8 @@ qse-fleet-page .ok-ink,
 }
 
 /* ---- tiles with each Spark's share ----------------------------------------------------------- */
-.mtiles {
+/* the page column's own: the Setup Guide's model tiles (setup.css) share the class names */
+qse-fleet-page .mtiles {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   border: 1px solid var(--rule);
@@ -102,22 +103,22 @@ qse-fleet-page .ok-ink,
   box-shadow: var(--shadow-1);
   overflow: hidden;
 }
-.mtiles.is-4 {
+qse-fleet-page .mtiles.is-4 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-.mtile {
+qse-fleet-page .mtile {
   padding: 13px 15px 12px;
   min-width: 0;
   border-left: 1px solid var(--rule);
   transition: background 0.2s;
 }
-.mtile:first-child {
+qse-fleet-page .mtile:first-child {
   border-left: 0;
 }
-.mtile:hover {
+qse-fleet-page .mtile:hover {
   background: color-mix(in srgb, var(--cobalt) 5%, transparent);
 }
-.mtile-label {
+qse-fleet-page .mtile-label {
   display: flex;
   gap: 6px;
   align-items: baseline;
@@ -127,25 +128,25 @@ qse-fleet-page .ok-ink,
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mtile-label .op {
+qse-fleet-page .mtile-label .op {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   color: var(--ink-3);
 }
-.mtile-val {
+qse-fleet-page .mtile-val {
   margin-top: 4px;
   font: 650 26px/1.1 var(--font-disp);
   letter-spacing: -0.028em;
   white-space: nowrap;
 }
-.mtile-val .u {
+qse-fleet-page .mtile-val .u {
   margin-left: 5px;
   font-size: var(--fs-sm);
   font-weight: 500;
   letter-spacing: 0;
   color: var(--ink-2);
 }
-.mtile-sub {
+qse-fleet-page .mtile-sub {
   margin-top: 6px;
   font: var(--fs-xs) var(--font-mono);
   color: var(--ink-2);
@@ -1138,13 +1139,13 @@ qse-fleet-page .ok-ink,
 
 /* ---- narrower columns: tablet, a page between two sidebars, a phone ----------------------------- */
 @container mon (max-width: 1180px) {
-  .mtiles:not(.is-4) {
+  qse-fleet-page .mtiles:not(.is-4) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  .mtiles:not(.is-4) .mtile:nth-child(4) {
+  qse-fleet-page .mtiles:not(.is-4) .mtile:nth-child(4) {
     border-left: 0;
   }
-  .mtiles:not(.is-4) .mtile:nth-child(n + 4) {
+  qse-fleet-page .mtiles:not(.is-4) .mtile:nth-child(n + 4) {
     border-top: 1px solid var(--rule);
   }
   .ncards {
@@ -1162,23 +1163,23 @@ qse-fleet-page .ok-ink,
   }
 }
 @container mon (max-width: 640px) {
-  .mtiles,
-  .mtiles.is-4,
-  .mtiles:not(.is-4) {
+  qse-fleet-page .mtiles,
+  qse-fleet-page .mtiles.is-4,
+  qse-fleet-page .mtiles:not(.is-4) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .mtiles .mtile,
-  .mtiles:not(.is-4) .mtile:nth-child(n) {
+  qse-fleet-page .mtiles .mtile,
+  qse-fleet-page .mtiles:not(.is-4) .mtile:nth-child(n) {
     border-left: 0;
     border-top: 1px solid var(--rule);
   }
-  .mtiles .mtile:nth-child(2n) {
+  qse-fleet-page .mtiles .mtile:nth-child(2n) {
     border-left: 1px solid var(--rule);
   }
-  .mtiles .mtile:nth-child(-n + 2) {
+  qse-fleet-page .mtiles .mtile:nth-child(-n + 2) {
     border-top: 0;
   }
-  .mtile-val {
+  qse-fleet-page .mtile-val {
     font-size: 22px;
   }
   .ncards,

@@ -420,80 +420,6 @@ qse-fleet-page .drain-ink,
   border-top: 0;
 }
 
-/* ---- the action dialog --------------------------------------------------------------------------- */
-.act-dialog {
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(100dvh - 48px);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius-lg);
-  background: var(--bg-2);
-  color: var(--ink);
-  padding: 0;
-  box-shadow: var(--shadow-pop);
-}
-.act-dialog.is-danger {
-  border-color: var(--err);
-  border-top-width: 4px;
-}
-.act-dialog[open] {
-  animation: sp-in var(--dur-2) var(--ease-out);
-}
-.act-dialog::backdrop {
-  background: rgba(8, 12, 16, 0.55);
-}
-.act-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 18px;
-}
-.act-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-.act-head h2 {
-  font: 700 var(--fs-lg) / 1.2 var(--font-disp);
-}
-.act-sec ul {
-  margin: 4px 0 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: var(--fs-sm);
-  line-height: 1.45;
-}
-.act-sec.is-removes li::marker {
-  color: var(--err);
-}
-.act-sec.is-keeps li::marker {
-  color: var(--ok);
-}
-.act-sec.is-removes h3 {
-  color: var(--err);
-}
-.act-blocked {
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  background: var(--warn-wash);
-  font-size: var(--fs-sm);
-}
-.act-done {
-  font-weight: 600;
-}
-.act-type input,
-.act-engine select {
-  width: 100%;
-}
-.act-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 4px;
-}
-
 @keyframes sp-in {
   from {
     opacity: 0;
@@ -970,10 +896,6 @@ qse-fleet-page .drain-ink,
 
 /* a modal sits over the whole window: the window's width decides, not the page column's */
 @media (max-width: 640px) {
-  .act-foot .btn {
-    flex: 1;
-    justify-content: center;
-  }
   .sp-head-acts,
   .sp-head-acts .btn {
     width: 100%;
@@ -995,18 +917,10 @@ qse-fleet-page .drain-ink,
     flex: 1;
     justify-content: center;
   }
-  .act-dialog {
-    width: 100vw;
-    max-width: 100vw;
-    margin: auto 0 0;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    max-height: 88dvh;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sp-edit,
-  .act-dialog[open],
   .upd-phase,
   .app-steps .is-running > span:first-child {
     animation: none;

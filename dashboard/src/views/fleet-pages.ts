@@ -2,8 +2,9 @@
 // opens. Overview, Hardware and Events & Alerts (VIS-248, views/monitor/) and Sparks with its
 // topology and each Spark's page (VIS-250, views/fleet/) are built, and Add Spark (VIS-246,
 // views/fleet/wizard.ts, a chunk of its own that loads when it opens) and App (OPS-234, the controller's
-// host and its move: views/fleet/app-settings.ts, a chunk of its own too); Models and API still show
-// their head, what they will hold and the step of the program that builds them.
+// host and its move: views/fleet/app-settings.ts, a chunk of its own too) and Models (VIS-252: the
+// deployments, Serve a model with its placement step, the weights matrix: views/fleet/models.ts,
+// serve.ts, weights.ts); API still shows its head, what it will hold and the step that builds it.
 
 import { html, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -18,6 +19,10 @@ import './monitor/hardware';
 import './monitor/events';
 import './fleet/sparks';
 import './fleet/node';
+import './fleet/models';
+import './fleet/serve';
+import './fleet/weights';
+import '../styles/models.css';
 
 interface PageDef {
   eyebrow: string;
@@ -29,13 +34,6 @@ interface PageDef {
 }
 
 const PAGES: Partial<Record<View, PageDef>> = {
-  models: {
-    eyebrow: 'Fleet',
-    title: 'Deployments',
-    text: 'Deployments as the unit: Single, Replicas, Split or Role, their members, status and rate, with stop, move and scale.',
-    step: 6,
-    link: { href: '#/models/serve', label: 'Serve a model' },
-  },
   api: {
     eyebrow: 'Fleet',
     title: 'Endpoint and keys',
@@ -44,13 +42,6 @@ const PAGES: Partial<Record<View, PageDef>> = {
     link: { href: '#/api/backends', label: 'Backends' },
   },
 };
-
-/** a sub-page of Models: its own title and text */
-function subPage(view: View, path: string[]): PageDef | null {
-  const p = path[0];
-  if (view === 'models' && p === 'weights') return { eyebrow: 'Models', title: 'Weights', text: 'Every model pack on every Spark: present, its size, copying; copy to a Spark, delete with a confirm.', step: 6 };
-  return null;
-}
 
 /** The Add Spark wizard: its own chunk; the element upgrades in place once it has loaded. */
 let wizardChunk: Promise<unknown> | null = null;
@@ -76,11 +67,12 @@ export class QseFleetPage extends LightElement {
       void loadApp();
       return html`<qse-app-settings></qse-app-settings>`;
     }
+    if (this.view === 'models') return this.path[0] === 'weights' ? html`<qse-weights></qse-weights>` : this.path[0] === 'place' ? html`<qse-serve></qse-serve>` : html`<qse-models></qse-models>`;
     if (this.view === 'sparks') {
       const p = this.path[0];
       return p && p !== 'topology' ? html`<qse-spark-node .nodeId=${p}></qse-spark-node>` : html`<qse-sparks .tab=${p === 'topology' ? 'topology' : 'list'}></qse-sparks>`;
     }
-    const d = subPage(this.view, this.path) ?? PAGES[this.view];
+    const d = PAGES[this.view];
     if (!d) return nothing;
     return html`<header class="page-head" data-page=${this.view}>
         <div class="eyebrow">${d.eyebrow}</div>

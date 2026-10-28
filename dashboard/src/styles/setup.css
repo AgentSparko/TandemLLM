@@ -77,6 +77,34 @@ qse-wren-figure {
   background: var(--cobalt-wash);
   border: 1px solid var(--cobalt);
 }
+/* VIS-252: the guide of another Spark of the fleet: which one, another, the way back to placement */
+.setup-node-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--cobalt) 45%, var(--rule));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--cobalt) 8%, var(--bg-2));
+}
+.setup-node-sp {
+  flex: 1;
+}
+.setup-node-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (max-width: 640px) {
+  .setup-node-bar .xs {
+    flex-basis: 100%;
+  }
+  .setup-node-sp {
+    display: none;
+  }
+}
 .setup-foot {
   margin-top: 28px;
   padding-top: 12px;
@@ -141,12 +169,12 @@ qse-wren-figure {
   margin-top: 10px;
   font-size: var(--fs-sm);
 }
-.mtiles {
+qse-setup .mtiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
-.mtile {
+qse-setup .mtile {
   position: relative;
   display: grid;
   gap: 6px;
@@ -159,7 +187,7 @@ qse-wren-figure {
   overflow: hidden;
   transition: border-color 0.15s, transform 0.15s;
 }
-.mtile::before {
+qse-setup .mtile::before {
   /* the model's measured line: a thin cobalt rule along the top, orange at its tip */
   content: '';
   position: absolute;
@@ -167,11 +195,11 @@ qse-wren-figure {
   height: 3px;
   background: linear-gradient(90deg, var(--cobalt) 0 82%, var(--orange) 82% 100%);
 }
-.mtile:hover {
+qse-setup .mtile:hover {
   border-color: var(--cobalt);
   text-decoration: none;
 }
-.mtile:hover .mtile-go .btn {
+qse-setup .mtile:hover .mtile-go .btn {
   background: var(--cobalt-hi);
 }
 .mtile-top {
@@ -3869,7 +3897,7 @@ qse-wren-figure::before {
     width: 58px;
     height: 58px;
   }
-  .mtiles,
+  qse-setup .mtiles,
   .wcards {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -4040,7 +4068,7 @@ qse-wren-figure::before {
   .membar-nowtick,
   .membar-worst,
   .wren-panel,
-  .mtile,
+  qse-setup .mtile,
   .mt-bar,
   .wmeter-bar span,
   .spar-slot-win,

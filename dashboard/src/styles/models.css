@@ -1,0 +1,508 @@
+/* Fleet → Models (VIS-252, views/fleet/models.ts, serve.ts, weights.ts, deploy-dialog.ts): the
+   deployment cards, Serve a model's steps with the placement bars and the types, the weights matrix
+   and its copies. Loaded with the new pages' chunk; the page column is the `mon` container, so a
+   phone and a column between two sidebars get the same narrow layout. */
+
+qse-models,
+qse-serve,
+qse-weights {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+qse-models .link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cobalt-hi);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* ---- deployment cards --------------------------------------------------------------------------- */
+.dcards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 14px;
+}
+.dcard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  border-top: 3px solid var(--rule-strong);
+}
+.dcard.is-serving {
+  border-top-color: var(--ok);
+}
+.dcard.is-degraded,
+.dcard.is-starting {
+  border-top-color: var(--warn);
+}
+.dcard.is-down {
+  border-top-color: var(--err);
+}
+.dcard-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dcard-h:focus-visible {
+  box-shadow: var(--focus);
+  border-radius: var(--radius-sm);
+}
+.dcard-m.is-derived {
+  color: var(--ink-2);
+  border-style: dashed;
+}
+.dcard-m.is-unmanaged {
+  color: var(--warn);
+}
+.dcard-name {
+  font: 650 var(--fs-lg) / 1.25 var(--font-disp);
+  overflow-wrap: anywhere;
+}
+.dcard-meta code {
+  font-size: inherit;
+}
+.dcard-members {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.dcard-tbl-wrap {
+  overflow-x: auto;
+}
+.dcard-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.dcard-tbl th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  padding: 0 8px 4px 0;
+}
+.dcard-tbl td {
+  padding: 5px 8px 5px 0;
+  border-top: 1px solid var(--rule);
+  vertical-align: top;
+}
+.dcard-tbl .r {
+  text-align: right;
+}
+.dcard-note,
+.dcard-warn {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--warn-wash);
+}
+.dcard-note {
+  background: color-mix(in srgb, var(--cobalt) 9%, var(--bg-3));
+}
+.dcard-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+.dm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---- a deployment's dialog: the move's pick, the edit form, the job ---------------------------- */
+.dd-pick,
+.dd-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.dd-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  grid-column: 1 / -1;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.dd-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dd-members .xs {
+  flex-basis: 100%;
+}
+.dj-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+.dj-steps li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.dj-log pre {
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  margin: 6px 0 0;
+}
+
+/* ---- Serve a model --------------------------------------------------------------------------- */
+.sv-steps {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+.sv-steps button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--ink-2);
+  font: 600 var(--fs-sm) var(--font-ui);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sv-steps button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sv-steps .n {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  font-size: var(--fs-xs);
+}
+.sv-steps .is-on button {
+  border-color: var(--orange);
+  color: var(--ink);
+}
+.sv-steps .is-on .n {
+  background: var(--orange);
+  color: #fff;
+}
+.sv-steps .is-done .n {
+  background: var(--cobalt);
+  color: #fff;
+}
+.sv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 10px;
+}
+/* the forms stack their labels: a long model name or hint never widens the column */
+.sv-grid .field,
+.dd-form .field,
+.dd-pick .field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+.sv-grid .field > span,
+.dd-form .field > span,
+.dd-pick .field > span {
+  white-space: normal;
+}
+.sv-grid .field :is(input, select),
+.dd-form .field :is(input, select),
+.dd-pick .field :is(input, select) {
+  width: 100%;
+  min-width: 0;
+}
+.sv-guides {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pnodes {
+  display: flex;
+  flex-direction: column;
+}
+.pnode {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2fr) auto;
+  grid-template-areas: 'pick bar guide' 'meta bar guide' 'src bar guide';
+  align-items: center;
+  gap: 2px 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--rule);
+}
+.pnode:first-child {
+  border-top: 0;
+}
+.pnode.is-member {
+  box-shadow: inset 3px 0 0 var(--orange);
+  padding-left: 10px;
+}
+.pnode-pick {
+  grid-area: pick;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pnode > .xs:first-of-type {
+  grid-area: meta;
+}
+.pnode > .xs:last-of-type {
+  grid-area: src;
+}
+.pnode-bar {
+  grid-area: bar;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.pnode-guide {
+  grid-area: guide;
+}
+.pbar {
+  position: relative;
+  display: flex;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--m-free);
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+  overflow: hidden;
+}
+.pbar i {
+  display: block;
+  height: 100%;
+}
+.pb-now {
+  background: repeating-linear-gradient(135deg, var(--ink-3) 0 3px, transparent 3px 6px);
+  opacity: 0.6;
+}
+.pb-base {
+  background: var(--m-other);
+}
+.pb-new {
+  background: var(--m-cache);
+}
+.pb-new.pb-weights {
+  background: var(--m-weights);
+}
+.pb-new.pb-kv {
+  background: var(--m-kv);
+}
+.pbar.is-over .pb-new {
+  background: var(--err);
+}
+.pb-budget {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+}
+.ptypes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+.ptype {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ptype.is-on {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 1px var(--orange);
+}
+.ptype.is-no {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.sv-review {
+  margin: 6px 0 10px;
+}
+.sv-acts {
+  display: flex;
+  gap: 8px;
+}
+.sv-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---- Weights ----------------------------------------------------------------------------------- */
+.wm-panel {
+  padding: 4px 6px;
+}
+.wm-wrap {
+  overflow-x: auto;
+}
+.wm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.wm-table th,
+.wm-table td {
+  padding: 8px 10px;
+  border-top: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+}
+.wm-table thead th {
+  border-top: 0;
+  font-weight: 500;
+}
+.wm-table .r {
+  text-align: right;
+}
+.wm-table tbody th {
+  font-weight: 400;
+  min-width: 140px;
+}
+.wcell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 120px;
+}
+.wcell.is-in-use {
+  color: var(--ok);
+}
+.wprog {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+.wprog i {
+  display: block;
+  height: 100%;
+  background: var(--cobalt);
+  transition: width var(--dur-2) var(--ease-out);
+}
+.wsrc {
+  font-size: var(--fs-xs);
+}
+.wm-cards {
+  display: none;
+}
+.wcopies {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 10px;
+}
+.wcopy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wcopy .row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.wcopy .wprog {
+  max-width: none;
+}
+
+/* ---- narrow columns: a phone, a page between two sidebars --------------------------------------- */
+@container mon (max-width: 760px) {
+  .dcards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pnode {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'pick' 'meta' 'bar' 'src' 'guide';
+  }
+  .pnode-guide {
+    justify-self: start;
+  }
+  .wm-wrap {
+    display: none;
+  }
+  .wm-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 6px;
+  }
+  .wm-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+  }
+  .wm-card-row {
+    display: grid;
+    grid-template-columns: minmax(90px, auto) minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding-top: 6px;
+    border-top: 1px solid var(--rule);
+  }
+  .wcopies {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sv-foot .xs {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wprog i {
+    transition: none;
+  }
+}

@@ -58,6 +58,8 @@ export const MENU: MenuGroup[] = [
 
 /** the pages that watch the fleet: the scope bar stands above them and their links keep the scope */
 export const MONITOR: Section[] = ['overview', 'performance', 'usage', 'hardware', 'events'];
+/** VIS-252: the Monitor pages and Models (its deployments and weights follow the scope too) */
+export const SCOPED: Section[] = [...MONITOR, 'models'];
 
 /** the phone's bottom bar: Chat one tap away, the two pages watched daily, then Windows and More */
 export const PHONE_BAR: Section[] = ['chat', 'overview', 'performance'];
@@ -91,7 +93,7 @@ function withScope(extra: Record<string, string> = {}): string {
 
 /** A section's link. A Monitor page keeps the scope you set on the one before it. */
 export function sectionHref(id: Section): string {
-  return `#/${id}${MONITOR.includes(id) ? withScope() : ''}`;
+  return `#/${id}${SCOPED.includes(id) ? withScope() : ''}`;
 }
 
 /** The nine screens of the Conductor (VIS-42): its own tab strip and the panel's sub-pages. */
@@ -138,9 +140,11 @@ export function subPages(r: Route, nodes: { id: string; alias: string }[] = []):
       ];
     case 'models':
       return [
-        { label: 'Deployments', href: '#/models', on: r.view === 'models' && p0 === null },
-        { label: 'Serve a model', href: '#/models/serve', on: r.view === 'setup' },
-        { label: 'Weights', href: '#/models/weights', on: r.view === 'models' && p0 === 'weights' },
+        { label: 'Deployments', href: `#/models${withScope()}`, on: r.view === 'models' && p0 === null },
+        // VIS-252: placement first; the Setup Guide (one Spark's, #/models/serve) beside it
+        { label: 'Serve a model', href: '#/models/place', on: r.view === 'models' && p0 === 'place' },
+        { label: 'Setup Guide', href: '#/models/serve', on: r.view === 'setup' },
+        { label: 'Weights', href: `#/models/weights${withScope()}`, on: r.view === 'models' && p0 === 'weights' },
       ];
     case 'api':
       return [
