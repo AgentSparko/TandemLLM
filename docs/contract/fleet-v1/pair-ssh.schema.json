@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/pair-ssh.schema.json",
+  "title": "the body of POST /v1/fleet/pair/ssh: SSH once, a password or a key for this call only (never stored); neither: the controller host's ssh agent and keys; answers the node (node.schema.json)",
+  "type": "object",
+  "properties": {
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253
+    },
+    "user": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "password": {
+      "type": "string",
+      "minLength": 1
+    },
+    "key": {
+      "type": "string",
+      "minLength": 1,
+      "description": "a private key in OpenSSH or PEM format"
+    },
+    "host_key": {
+      "type": "string",
+      "description": "the fingerprint the user confirmed (POST /v1/fleet/pair/ssh/hostkey); a different key is refused"
+    },
+    "takeover": {
+      "type": "boolean",
+      "description": "move a node another TandemApp owns to this one"
+    }
+  },
+  "required": [
+    "host",
+    "user"
+  ],
+  "additionalProperties": false
+}

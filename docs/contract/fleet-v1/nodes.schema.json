@@ -157,6 +157,59 @@
               "nics"
             ],
             "additionalProperties": false
+          },
+          "pairing": {
+            "type": "object",
+            "description": "how the controller trusts the node (SEC-4): this machine, paired by code or SSH once, or not paired yet",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "paired",
+                  "unpaired"
+                ]
+              },
+              "via": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "code",
+                  "ssh",
+                  null
+                ]
+              },
+              "fingerprint": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "SHA-256 of the node's pinned certificate, hex"
+              },
+              "paired_at": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "host_key": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "the SSH host key's fingerprint (SHA256:...) a pairing by SSH confirmed"
+              }
+            },
+            "required": [
+              "state",
+              "via",
+              "fingerprint",
+              "paired_at",
+              "host_key"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -177,7 +230,8 @@
           "since",
           "lease_end",
           "cost_per_hour",
-          "inventory"
+          "inventory",
+          "pairing"
         ],
         "additionalProperties": false
       }

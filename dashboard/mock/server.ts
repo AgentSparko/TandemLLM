@@ -469,7 +469,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
   return (req, res, next) => {
     void (async () => {
       const url = new URL(req.url ?? '/', 'http://mock');
-      const path = url.pathname.replace(/\/+$/, '') || '/';
+      let path = url.pathname.replace(/\/+$/, '') || '/';
       const q = url.searchParams;
 
       // The page itself: pick up ?fleet=<scenario> and ?mock=<mode> and remember them in cookies.
@@ -670,6 +670,20 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
       if (mode === 'offline' && (isData || isMetrics || path === '/health' || path === '/v1/dashboard/session')) {
         req.socket.destroy();
         return;
+      }
+
+      // ---- the controller's own sign-in (SEC-4, proxy/app.py _fleet_session): GET says whether a
+      // password is set and the browser is signed in; POST {token} and DELETE as the dashboard's
+      if (path === '/v1/fleet/session') {
+        if (req.method === 'GET') {
+          const c = cookies(req).qse_dash;
+          const s = c ? sessions.get(c) : null;
+          const signed = !password || authed(req);
+          return json(res, 200, { contract_version: '1.0', password_set: password, authenticated: signed, expires_at: password && signed ? new Date(s?.expires ?? Date.now() + 43_200_000).toISOString().replace(/\.\d{3}Z$/, 'Z') : null });
+        }
+        if (!password) return error(res, 404, 'not_found', 'no admin password is set');
+        req.url = '/v1/dashboard/session';
+        path = '/v1/dashboard/session';
       }
 
       // ---- session

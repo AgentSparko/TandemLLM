@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://qwen38-spark-engine/contract/fleet-v1/error.schema.json",
-  "title": "error body of every /v1/fleet/* endpoint (400/401/404)",
+  "title": "error body of every /v1/fleet/* endpoint",
   "type": "object",
   "properties": {
     "error": {
@@ -12,7 +12,16 @@
           "enum": [
             "unauthorized",
             "bad_request",
-            "not_found"
+            "not_found",
+            "wrong_code",
+            "code_spent",
+            "owned",
+            "conflict",
+            "unreachable",
+            "host_key_changed",
+            "ssh_failed",
+            "not_installed",
+            "too_many"
           ]
         },
         "message": {

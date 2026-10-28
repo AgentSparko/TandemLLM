@@ -45,6 +45,79 @@ export interface FleetNode {
   lease_end: number | null;
   cost_per_hour: number | null;
   inventory: NodeInventory;
+  pairing: NodePairing;
+}
+
+/** How the controller trusts a node (SEC-4): its own machine, a pinned certificate from pairing by
+ *  code or SSH once, or a record not paired yet. */
+export interface NodePairing {
+  state: 'local' | 'paired' | 'unpaired';
+  via: 'code' | 'ssh' | null;
+  /** SHA-256 of the node's pinned certificate, hex */
+  fingerprint: string | null;
+  paired_at: number | null;
+  /** the SSH host key (SHA256:...) an SSH pairing confirmed */
+  host_key: string | null;
+}
+
+/** POST /v1/fleet/pair: the 6-digit code `tandem node pair` shows on the node. */
+export interface PairByCode {
+  address: string;
+  code: string;
+  /** the pairing window's port, default the agent's port + 1 */
+  port?: number;
+}
+
+/** POST /v1/fleet/pair/ssh: a password or a key for this call only; neither uses the controller
+ *  host's ssh agent and keys. */
+export interface PairBySsh {
+  host: string;
+  user: string;
+  port?: number;
+  password?: string;
+  key?: string;
+  /** the host key fingerprint the user confirmed */
+  host_key?: string;
+  takeover?: boolean;
+}
+
+export interface HostKey {
+  contract_version: string;
+  host: string;
+  port: number;
+  type: string;
+  fingerprint: string;
+  known: 'new' | 'same' | 'changed';
+  stored: string | null;
+}
+
+export interface Released {
+  contract_version: string;
+  id: string;
+  node: 'unpinned' | 'unreachable' | 'refused' | 'not_paired';
+}
+
+export interface TrustAudit {
+  t: number;
+  action: 'pair' | 'takeover' | 'release' | 'forget';
+  node: string;
+  who: string;
+  via: string | null;
+  fingerprint: string | null;
+  detail: string;
+}
+
+export interface FleetTrust {
+  contract_version: string;
+  controller: { id: string; name: string; fingerprint: string; since: number };
+  audit: TrustAudit[];
+}
+
+export interface FleetSession {
+  contract_version: string;
+  password_set: boolean;
+  authenticated: boolean;
+  expires_at: string | null;
 }
 
 /** What the user sets on a node (PATCH /v1/fleet/nodes/{id}): any of these; an alias or a colour
@@ -330,7 +403,21 @@ export const fleet = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(l),
     }),
+  // node trust (SEC-4): pairing, release and take-over need the admin password's session (or a
+  // caller on the controller's machine); signIn sets it for the controller's routes
+  pair: (p: PairByCode) => request<FleetNode>('/v1/fleet/pair', post(p)),
+  pairSsh: (p: PairBySsh) => request<FleetNode>('/v1/fleet/pair/ssh', post(p)),
+  hostKey: (host: string, port?: number) => request<HostKey>('/v1/fleet/pair/ssh/hostkey', post(port == null ? { host } : { host, port })),
+  release: (id: string, force = false) => request<Released>(`/v1/fleet/nodes/${encodeURIComponent(id)}${force ? '?force=1' : ''}`, { method: 'DELETE' }),
+  trust: () => request<FleetTrust>('/v1/fleet/trust'),
+  session: () => request<FleetSession>('/v1/fleet/session'),
+  signIn: (password: string) => request<void>('/v1/fleet/session', post({ token: password }), 'none'),
+  signOut: () => request<void>('/v1/fleet/session', { method: 'DELETE' }, 'none'),
 };
+
+function post(body: unknown): RequestInit {
+  return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
 
 /** The sample times of a series answer. */
 export function sampleTimes(m: Pick<MetricSeries, 't0' | 'step_s' | 'series'>): number[] {

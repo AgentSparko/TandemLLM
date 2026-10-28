@@ -30,9 +30,12 @@ import type {
   MetricKey,
   MetricSeries,
   NodeMemory,
+  NodePairing,
   NodePatch,
   NodeStatus,
+  PairBySsh,
   Range,
+  TrustAudit,
 } from '../src/api/fleet.ts';
 import { FLEET_CONTRACT, METRICS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
 
@@ -131,6 +134,14 @@ interface Fleet {
   rules: FleetRule[];
 }
 
+/** node trust (SEC-4): the devices the mock's pairing routes know. A node at MOCK_PAIR.code's address
+ *  shows the code of the Gherkin; one other TandemApp owns; one SSH host takes the password; one
+ *  has nothing installed. */
+export const MOCK_PAIR = { address: '192.0.2.60', code: '482913', owned: '192.0.2.62', ssh: '192.0.2.61', password: 'spark-pass', bare: '192.0.2.63' } as const;
+const MOCK_HOST_KEY = 'SHA256:qQ6Rk0mOcKhOsTkEyFoRtHeMoCkNoDe0192o2o61x';
+const paired = (via: 'code' | 'ssh', at: number, fp: string): NodePairing => ({ state: 'paired', via, fingerprint: fp.repeat(64 / fp.length), paired_at: at, host_key: via === 'ssh' ? MOCK_HOST_KEY : null });
+const LOCAL: NodePairing = { state: 'local', via: null, fingerprint: null, paired_at: null, host_key: null };
+
 const INVENTORY_RENTED = {
   os: 'DGX OS 7.2.1',
   kernel: '6.11.0-1015-nvidia',
@@ -149,6 +160,7 @@ function build(scenario: FleetScenario, t0: number): Fleet {
       id: 'desk', alias: 'Desk', colour: 1, icon: 'desk', tags: ['desk', 'owned'], class: 'spark', hw: 'ASUS Ascent GX10', dmi: 'ASUS Ascent GX10 (GB10)', owned: true,
       transport: 'lan', address: '192.0.2.40:7700', version: '0.15.0', since: t0 - 60 * D, lease_end: null, cost_per_hour: null,
       inventory: { serial: 'R9NX4A00217', os: 'DGX OS 7.2.1', kernel: '6.11.0-1015-nvidia', driver: '580.95.05', cuda: '13.0', cx7: 'not cabled', disk: 'NVMe 4 TB · 2.71 TB free', nics: 'enP7s7 (10GbE, LAN) · CX7 ×2 (no cable)' },
+      pairing: paired('code', t0 - 60 * D, '3d'),
     },
     curve: 'desk', busyFrom: t0 - 60 * D, idleMem: 6.4, plan: { weights: 17.2, kv: 48, cache: 8, other: 4.6, page: 12.4, ceiling: 112, peak: 104.8 },
     ttft: [310, 280], gpuSpan: 94, fabric: false, rtt: [0.42, 0.18], heatFrom: null, throttleFrom: null, offFrom: null,
@@ -157,6 +169,7 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     id, alias, colour, icon: 'cloud', tags: ['rented'], class: 'spark', hw: 'DGX Spark Founders Edition', dmi: 'NVIDIA DGX Spark', owned: false,
     transport: 'tunnel', address: `203.0.113.${20 + colour - 1}:${port}`, version: '0.15.0', since, lease_end: leaseEnd, cost_per_hour: 2.4,
     inventory: { serial, ...INVENTORY_RENTED },
+    pairing: paired('ssh', since, (colour * 17).toString(16).padStart(2, '0')),
   });
   const dsvFrom = t0 - 3.2 * H;
   const splitPlan = (w: number, peak: number): MemPlan => ({ weights: w, kv: 22, cache: 5, other: 3.2, page: 6.1, ceiling: 116, peak });
@@ -210,7 +223,7 @@ function build(scenario: FleetScenario, t0: number): Fleet {
   ];
 
   if (scenario === 'fleet1') {
-    const one = { ...desk, rtt: [0.05, 0.03] as [number, number] };
+    const one = { ...desk, node: { ...desk.node, pairing: LOCAL }, rtt: [0.05, 0.03] as [number, number] };
     return {
       host: { name: 'Desk', address: '192.0.2.40', api_url: 'http://192.0.2.40:8000', may_sleep: false },
       infra: [],
@@ -227,8 +240,8 @@ function build(scenario: FleetScenario, t0: number): Fleet {
   }
 
   if (scenario === 'fleet2-split') {
-    const s1: NodeSim = { ...r1, node: { ...r1.node, id: 's1', alias: 'Spark 1', colour: 1, icon: 'desk', tags: ['owned'], owned: true, transport: 'lan', address: '192.0.2.41:7700', since: t0 - 20 * D, lease_end: null, cost_per_hour: null }, rtt: [0.42, 0.18] };
-    const s2: NodeSim = { ...s1, node: { ...s1.node, id: 's2', alias: 'Spark 2', colour: 2, address: '192.0.2.42:7700', inventory: { ...s1.node.inventory, serial: 'NVS1-2511-0458' } }, plan: splitPlan(76.5, 113.8) };
+    const s1: NodeSim = { ...r1, node: { ...r1.node, id: 's1', alias: 'Spark 1', colour: 1, icon: 'desk', tags: ['owned'], owned: true, transport: 'lan', address: '192.0.2.41:7700', since: t0 - 20 * D, lease_end: null, cost_per_hour: null, pairing: LOCAL }, rtt: [0.42, 0.18] };
+    const s2: NodeSim = { ...s1, node: { ...s1.node, id: 's2', alias: 'Spark 2', colour: 2, address: '192.0.2.42:7700', inventory: { ...s1.node.inventory, serial: 'NVS1-2511-0458' }, pairing: paired('code', t0 - 20 * D, '5e') }, plan: splitPlan(76.5, 113.8) };
     return {
       host: { name: 'Spark 1', address: '192.0.2.41', api_url: 'http://192.0.2.41:8080', may_sleep: false },
       infra: [{ id: 'lan', kind: 'lan', label: 'LAN' }],
@@ -339,6 +352,9 @@ export class MockFleet {
   private ph: (key: string) => number;
   private acked = new Map<string, number>();
   private layouts = new Map<string, Layout>();
+  /** the code window of MOCK_PAIR.address: tries left (5 per code, as the node allows) */
+  private triesLeft = 5;
+  private audit: TrustAudit[] = [];
 
   /** `now` in Unix seconds: the scenario's start */
   constructor(o: { seed?: number; scenario?: FleetScenario; now?: number } = {}) {
@@ -347,6 +363,10 @@ export class MockFleet {
     this.f = build(this.scenario, this.t0);
     const seed = o.seed ?? 42;
     this.ph = (key) => hash(`${seed}:${key}`);
+    this.audit = this.f.nodes
+      .filter((n) => n.node.pairing.state === 'paired')
+      .map((n) => ({ t: n.node.pairing.paired_at as number, action: 'pair' as const, node: n.node.id, who: 'dashboard session', via: n.node.pairing.via, fingerprint: n.node.pairing.fingerprint, detail: `paired by ${n.node.pairing.via}` }))
+      .sort((a, b) => b.t - a.t);
   }
 
   // ---- the generators ------------------------------------------------------------------------
@@ -546,6 +566,70 @@ export class MockFleet {
     return { page, device, rail: { open: wide, w: 248 }, ctx: { open: wide, w: 340 }, windows: [], docks: { right: { f: 0.38, act: null }, bottom: { f: 0.34, act: null } }, saved_at: null };
   }
 
+  // ---- node trust (SEC-4) ----------------------------------------------------------------------
+  private pair(rest: string[], body: unknown, now: number): Reply {
+    const v = FLEET_CONTRACT;
+    const ssh = rest[0] === 'ssh';
+    if (ssh && rest[1] === 'hostkey') {
+      const p = body as { host?: unknown; port?: unknown } | null;
+      if (!p || typeof p.host !== 'string' || !p.host) return bad(400, 'bad_request', 'the body is {host, port?}');
+      if (p.host !== MOCK_PAIR.ssh && p.host !== MOCK_PAIR.bare) return bad(502, 'unreachable', `no SSH server answers at ${p.host}:${p.port ?? 22}`);
+      const known = this.f.nodes.some((n) => n.node.address.startsWith(`${p.host}:`)) ? 'same' : 'new';
+      return { status: 200, body: { contract_version: v, host: p.host, port: (p.port as number) ?? 22, type: 'ssh-ed25519', fingerprint: MOCK_HOST_KEY, known, stored: known === 'same' ? MOCK_HOST_KEY : null } };
+    }
+    if (rest.length > (ssh ? 1 : 0)) return bad(404, 'not_found', `no route POST /v1/fleet/pair/${rest.join('/')}`);
+    const why = pairError(body, ssh);
+    if (why) return bad(400, 'bad_request', why);
+    if (ssh) {
+      const p = body as PairBySsh;
+      if (p.host !== MOCK_PAIR.ssh && p.host !== MOCK_PAIR.bare) return bad(502, 'unreachable', `no SSH server answers at ${p.host}:${p.port ?? 22}`);
+      if (p.host_key != null && p.host_key !== MOCK_HOST_KEY) return bad(409, 'host_key_changed', `the host key of ${p.host} is ${MOCK_HOST_KEY}, not the confirmed ${p.host_key}; refused`);
+      if (p.key == null && p.password !== MOCK_PAIR.password) return bad(502, 'ssh_failed', `ssh to ${p.host} failed: ${p.user}@${p.host}: Permission denied (publickey,password).`);
+      if (p.host === MOCK_PAIR.bare) return bad(409, 'not_installed', `TandemNode is not installed on ${p.host}: the Add Spark wizard's Install step installs it`);
+      return this.join(p.host, 'ssh', now);
+    }
+    const p = body as { address: string; code: string };
+    if (p.address === MOCK_PAIR.owned) return bad(409, 'owned', `${p.address} is paired with another TandemApp: take it over on the node (tandem node takeover) or release it there`);
+    if (p.address !== MOCK_PAIR.address || this.f.nodes.some((n) => n.node.address.startsWith(`${p.address}:`))) {
+      return bad(502, 'unreachable', `no pairing window answers at ${p.address}:7701 (ConnectionRefusedError); run \`tandem node pair\` on the node`);
+    }
+    if (this.triesLeft <= 0) return bad(410, 'code_spent', '5 wrong codes: this code is spent; show a new one on the node (tandem node pair)');
+    this.triesLeft -= 1;
+    if (p.code !== MOCK_PAIR.code) {
+      return this.triesLeft > 0 ? bad(403, 'wrong_code', `the code does not match: ${this.triesLeft} tries left`) : bad(403, 'wrong_code', 'the code does not match; 5 wrong codes spent it');
+    }
+    this.triesLeft = 5;
+    return this.join(p.address, 'code', now);
+  }
+
+  /** a paired device joins the fleet: an idle Spark with the next free colour */
+  private join(address: string, via: 'code' | 'ssh', now: number): Reply {
+    const used = new Set(this.f.nodes.map((n) => n.node.colour));
+    const colour = [1, 2, 3, 4, 5, 6, 7, 8].find((c) => !used.has(c)) ?? 1;
+    const k = this.f.nodes.length + 1;
+    const id = `n${k}-${address.split('.').pop()}`;
+    const tmpl = this.f.nodes[0];
+    const sim: NodeSim = {
+      ...tmpl,
+      node: { ...tmpl.node, id, alias: `Spark ${k}`, colour, icon: 'desk', tags: [], owned: true, transport: 'lan', address: `${address}:7700`, since: now, lease_end: null, cost_per_hour: null, inventory: { ...tmpl.node.inventory, serial: `MOCK-${address}` }, pairing: paired(via, now, (k * 29).toString(16).padStart(2, '0')) },
+      curve: id, busyFrom: Number.POSITIVE_INFINITY, heatFrom: null, throttleFrom: null, offFrom: null, fabric: false,
+    };
+    this.f.nodes.push(sim);
+    this.audit.unshift({ t: now, action: 'pair', node: id, who: 'dashboard session', via, fingerprint: sim.node.pairing.fingerprint, detail: `paired by ${via} at ${address}` });
+    return { status: 200, body: this.nodes(now).find((x) => x.id === id) };
+  }
+
+  /** a released node leaves the fleet, its deployments' members and its links */
+  private forget(id: string): void {
+    this.f.nodes = this.f.nodes.filter((n) => n.node.id !== id);
+    for (const d of this.f.deps) {
+      d.members = d.members.filter((m) => m.node !== id);
+      d.dep = { ...d.dep, members: d.dep.members.filter((m) => m !== id), ...(d.dep.stages ? { stages: d.dep.stages.filter((s) => s.node !== id) } : {}) };
+    }
+    this.f.deps = this.f.deps.filter((d) => d.members.length > 0);
+    this.f.links = this.f.links.filter((l) => l.a !== id && l.b !== id);
+  }
+
   // ---- the routes ----------------------------------------------------------------------------
   handle(method: string, path: string, q: URLSearchParams, body: unknown, nowMs = Date.now()): Reply {
     const now = Math.floor(nowMs / 1000);
@@ -595,6 +679,19 @@ export class MockFleet {
         }
       }
     }
+    if (method === 'GET' && parts.length === 1 && parts[0] === 'trust') {
+      return { status: 200, body: { contract_version: v, controller: { id: 'c-3dmock0c0n7r', name: `TandemApp on ${this.f.host.name}`, fingerprint: '7c'.repeat(32), since: this.t0 - 60 * D }, audit: this.audit } };
+    }
+    if (method === 'POST' && parts[0] === 'pair') return this.pair(parts.slice(1), body, now);
+    if (method === 'DELETE' && parts.length === 2 && parts[0] === 'nodes') {
+      const id = decodeURIComponent(parts[1]);
+      const n = this.f.nodes.find((x) => x.node.id === id && x.node.since <= now);
+      if (!n) return bad(404, 'not_found', `no node ${id}`);
+      if (n.node.pairing.state === 'local') return bad(409, 'conflict', "this machine is the controller's own node; there is nothing to release");
+      this.forget(id);
+      this.audit.unshift({ t: now, action: 'release', node: id, who: 'dashboard session', via: n.node.pairing.via, fingerprint: n.node.pairing.fingerprint, detail: `${n.node.alias} released (node side: unpinned)` });
+      return { status: 200, body: { contract_version: v, id, node: n.node.pairing.state === 'paired' ? 'unpinned' : 'not_paired' } };
+    }
     if (parts.length === 2 && parts[0] === 'nodes' && (method === 'GET' || method === 'PATCH')) {
       const id = decodeURIComponent(parts[1]);
       const n = this.f.nodes.find((x) => x.node.id === id && x.node.since <= now);
@@ -630,6 +727,24 @@ export class MockFleet {
     }
     return bad(404, 'not_found', `no route ${method} ${path}`);
   }
+}
+
+/** what is wrong with a pairing body (null: nothing), as the controller says it (proxy/fleettrust.py) */
+export function pairError(b: unknown, ssh: boolean): string | null {
+  const p = b as Record<string, unknown> | null;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return ssh ? 'the body is {host, user, port?, password? | key?, host_key?, takeover?}' : 'the body is {address, code, port?}';
+  const allowed = ssh ? ['host', 'user', 'port', 'password', 'key', 'host_key', 'takeover'] : ['address', 'code', 'port'];
+  if (Object.keys(p).some((k) => !allowed.includes(k))) return ssh ? 'the body is {host, user, port?, password? | key?, host_key?, takeover?}' : 'the body is {address, code, port?}';
+  if ('port' in p && (typeof p.port !== 'number' || !Number.isInteger(p.port) || p.port < 1 || p.port > 65535)) return 'port is a whole number from 1 to 65535';
+  if (ssh) {
+    if (typeof p.host !== 'string' || !p.host || /[\s@/'"`$;|&<>]/.test(p.host) || p.host.startsWith('-')) return 'host is an address or a host name';
+    if (typeof p.user !== 'string' || !/^[A-Za-z0-9._-]{1,64}$/.test(p.user) || p.user.startsWith('-')) return 'user is a login name';
+    if (p.password != null && p.key != null) return 'a password or a key, not both';
+    return null;
+  }
+  if (typeof p.address !== 'string' || !/^[0-9a-fA-F.:]+$/.test(p.address)) return `address is an IP address (the node's LAN or fabric address), not "${String(p.address)}"`;
+  if (typeof p.code !== 'string' || !/^[0-9]{6}$/.test(p.code)) return 'the code is 6 digits';
+  return null;
 }
 
 /** what is wrong with a node's PATCH body (null: nothing), as the controller says it (proxy/fleet.py) */

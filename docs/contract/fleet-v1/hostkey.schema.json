@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/hostkey.schema.json",
+  "title": "POST /v1/fleet/pair/ssh/hostkey {host, port?} (200): the host key a node's SSH server offers, against what this controller remembers",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "host": {
+      "type": "string"
+    },
+    "port": {
+      "type": "integer"
+    },
+    "type": {
+      "type": "string"
+    },
+    "fingerprint": {
+      "type": "string"
+    },
+    "known": {
+      "type": "string",
+      "enum": [
+        "new",
+        "same",
+        "changed"
+      ]
+    },
+    "stored": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "contract_version",
+    "host",
+    "port",
+    "type",
+    "fingerprint",
+    "known",
+    "stored"
+  ],
+  "additionalProperties": false
+}

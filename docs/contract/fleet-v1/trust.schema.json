@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/fleet-v1/trust.schema.json",
+  "title": "GET /v1/fleet/trust (200): this controller's certificate and the audit of pairings, take-overs and releases, newest first",
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "controller": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "since": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "fingerprint",
+        "since"
+      ],
+      "additionalProperties": false
+    },
+    "audit": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "number"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "pair",
+              "takeover",
+              "release",
+              "forget"
+            ]
+          },
+          "node": {
+            "type": "string"
+          },
+          "who": {
+            "type": "string"
+          },
+          "via": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fingerprint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "t",
+          "action",
+          "node",
+          "who",
+          "via",
+          "fingerprint",
+          "detail"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract_version",
+    "controller",
+    "audit"
+  ],
+  "additionalProperties": false
+}
