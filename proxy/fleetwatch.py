@@ -16,6 +16,8 @@ resolves once the value is `clear` back past the threshold for `clear_s`):
     node-down    no answer for 30 s                           err   clears after 10 s up
     engine-down  its health check fails for 60 s              err   clears after one up check
     host-sleep   the controller's machine may sleep (a Mac)   warn
+    lease        a rented node's lease ends in < 24 h         warn  clears when it is extended
+                 (VIS-246; a reminder, once per lease: the node's `lease_end` from Add Spark)
 
 `PATCH /v1/fleet/rules/{id}` sets `enabled`, `notify`, `threshold`, `for_s` and `scope` (all, or
 node:<id>); an edit is kept in the store and lies over the seeded rule. A rule turned off resolves
@@ -40,6 +42,7 @@ from __future__ import annotations
 import functools
 import math
 import threading
+import time
 
 NOTIFY = ("app", "system")
 NODE_HOLD_S = 10.0
@@ -64,6 +67,8 @@ DEFAULTS = (
      ["app", "system"], "all"),
     ("host-sleep", "Controller host may sleep", "host_sleep", None, None, None, 0, None, 0, "warn",
      ["app"], "host"),
+    ("lease", "Lease ends", "lease_left", "<", 24.0, "h", 0, 0.0, 0, "warn", ["app", "system"],
+     "all"),
 )
 
 
@@ -79,6 +84,10 @@ def _num(v) -> bool:
 
 def _fmt(v: float) -> str:
     return f"{v:g}"
+
+
+def _left(h: float) -> str:
+    return f"{h:.0f} h" if h >= 1 else f"{max(1, round(h * 60))} min"
 
 
 def _dur(s: float) -> str:
@@ -103,7 +112,8 @@ class Rule:
                 "disk_free": f"free < {t} on a mount{hold}",
                 "reachable": f"no answer{hold}",
                 "engine": f"health check fails{hold}",
-                "host_sleep": "sleep allowed"}[self.metric]
+                "host_sleep": "sleep allowed",
+                "lease_left": f"lease ends in < {t}"}[self.metric]
 
     def view(self) -> dict:
         return {"id": self.id, "name": self.name, "metric": self.metric,
@@ -357,6 +367,14 @@ class Watch:
                 f"{a} answers again" if resolved else
                 (f"{a} not reachable", n.get("status_text") or "its agent does not answer",
                  spark))
+        elif r.metric == "lease_left":
+            end = n.get("lease_end")
+            yield f"{r.id}:{nid}", n.get("lease_left"), lambda v, resolved=False: (
+                f"{a}'s lease runs {v:.0f} h more" if resolved else
+                (f"{a}'s lease ended" if v <= 0 else f"{a}'s lease ends in {_left(v)}",
+                 f"On {time.strftime('%Y-%m-%d %H:%M', time.localtime(end))}. Extend it with the "
+                 f"provider, or release {a} before: Release wipes its weights, caches, keys and "
+                 f"TandemNode." if end else "Extend it with the provider, or release it.", spark))
         elif r.metric == "engine":
             for e in n.get("engines") or []:
                 st = e["state"]

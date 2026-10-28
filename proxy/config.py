@@ -17,6 +17,9 @@ ledger. Its tables:
                      address, trust), what it is (hw, dmi, serial) and its maintenance drain;
                      proxy/fleet.py
     layouts          a page's window layout per device class, the JSON the dashboard saved
+    add_sessions     the Add Spark wizard's sessions (VIS-246): one active at a time, its steps,
+                     targets, checks and install progress as JSON; never a password or a key
+                     (proxy/addspark.py)
     meta             schema_version, created_at
 
 Migrations are forward only and keyed on meta.schema_version, as the ledger's are.
@@ -165,6 +168,9 @@ CREATE TABLE IF NOT EXISTS nodes (
 CREATE TABLE IF NOT EXISTS layouts (
   page TEXT NOT NULL, device TEXT NOT NULL, doc TEXT NOT NULL, saved_at REAL NOT NULL,
   PRIMARY KEY (page, device));
+CREATE TABLE IF NOT EXISTS add_sessions (
+  id TEXT PRIMARY KEY, state TEXT NOT NULL, doc TEXT NOT NULL, created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL);
 """
 
 
@@ -1198,6 +1204,26 @@ class ConfigDB:
             self._conn.execute("INSERT OR REPLACE INTO layouts(page, device, doc, saved_at) "
                                "VALUES (?, ?, ?, ?)", (doc["page"], doc["device"],
                                                        json.dumps(doc), doc["saved_at"]))
+            self._conn.commit()
+
+    def add_session(self, sid: str | None = None) -> dict | None:
+        """An Add Spark session by id, or the active one (VIS-246)."""
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT doc FROM add_sessions WHERE id = ?" if sid else
+                "SELECT doc FROM add_sessions WHERE state = 'active' ORDER BY created_at DESC "
+                "LIMIT 1", (sid,) if sid else ()).fetchone()
+        return json.loads(r[0]) if r else None
+
+    def put_add_session(self, doc: dict) -> None:
+        """A session as it is now: the last write wins. Kept with its state when it ends."""
+        now = _now_ms()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO add_sessions(id, state, doc, created_at, updated_at) VALUES "
+                "(?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET state = excluded.state, "
+                "doc = excluded.doc, updated_at = excluded.updated_at",
+                (doc["id"], doc["state"], json.dumps(doc), now, now))
             self._conn.commit()
 
     def audit(self, limit: int = 50) -> list[dict]:

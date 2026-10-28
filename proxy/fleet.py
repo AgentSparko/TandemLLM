@@ -44,6 +44,9 @@ dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_wri
                                                     classified; POST a run, /scan the consented
                                                     LAN scan, /address one device, /target an ssh
                                                     line (proxy/discovery.py, SRV-727)
+    *     /v1/fleet/add[/{id}[/...]]                the Add Spark wizard's session: its targets,
+                                                    connect, check, install, link and names,
+                                                    resumable (proxy/addspark.py, VIS-246)
 
 A FLEET OF ONE. The machine tandem-app runs on is a node when it is Spark-class (an NVIDIA GPU or an
 engine of its own, proxy/nodesource.py): at the first start it is registered with its hostname as
@@ -90,6 +93,13 @@ relay asks `svc.drain_of`); restart, reboot and update go to the node's agent; f
 release above; each destructive one runs only with the confirm of the plan it was read from.
 A virtual node on this machine (a second agent, OPS-197) serves the engine backends whose port
 its agent lists, never this machine's own.
+
+TUNNELS (proxy/sshtunnel.py). A node with `transport` tunnel (a rented or remote one, paired over
+SSH with `tunnel: true`) carries its SSH route in its trust; its source is its agent at the local
+end of the tunnel, opened when the node is read and kept open, so its endpoint's port is the
+tunnel's. THIS MACHINE'S NODE tells its agent that it is the fleet's own (PUT /node/fleet): the
+agent then advertises itself over mDNS as owned by this controller, so another TandemApp on the
+LAN lists it as "Spark owned by another TandemApp", never as one to pair.
 """
 
 from __future__ import annotations
@@ -274,6 +284,9 @@ class Fleet:
         self.ops = fleetops.Ops(self)
         svc.drain_of = self.ops.drain_of        # the gateway's question, per request
         self._discovery = None
+        self._wizard = None
+        self._tunnels = None
+        self._claimed_by = None                 # the agent told it is this fleet's own node
 
     def trust(self):
         """The controller's side of node trust (proxy/fleettrust.py), its certificate made at
@@ -294,6 +307,25 @@ class Fleet:
                 if self._discovery is None:
                     self._discovery = discovery.Discovery(self, clock=self.clock)
         return self._discovery
+
+    def wizard(self):
+        """The Add Spark wizard's sessions (proxy/addspark.py), made at the first call."""
+        if self._wizard is None:
+            from proxy import addspark
+            with self._reg:
+                if self._wizard is None:
+                    self._wizard = addspark.Wizard(self, clock=self.clock)
+        return self._wizard
+
+    @property
+    def tunnels(self):
+        """The SSH tunnels to the nodes behind one (proxy/sshtunnel.py)."""
+        if self._tunnels is None:
+            from proxy import sshtunnel
+            with self._reg:
+                if self._tunnels is None:
+                    self._tunnels = sshtunnel.Tunnels(self.trust().ssh.known_hosts, log=self.log)
+        return self._tunnels
 
     def forget(self, nid: str) -> None:
         """A node gone from the registry: its source closed, its rings dropped."""
@@ -328,6 +360,8 @@ class Fleet:
         for src in [a for _, a in self.agents.values()] + [self.agent]:
             if hasattr(src, "close"):
                 src.close()
+        if self._tunnels is not None:
+            self._tunnels.close_all()
         if self._thread is not None:
             self.store.add_event("controller", "host", "TandemApp's controller stopped",
                                  "history written")
@@ -406,8 +440,11 @@ class Fleet:
                                 "state": h["state"], "error": h["last_error"],
                                 "restarts": getattr(p, "restarts", 0),
                                 "job": jobs.get(getattr(p, "via", None))})
+            lease = row["lease_end_ms"]
             nodes.append({"id": row["id"], "alias": row["alias"], "status": status,
-                          "status_text": text, "temp": temp, "engines": engines, **checks})
+                          "status_text": text, "temp": temp, "engines": engines,
+                          "lease_left": None if lease is None else (lease / 1000 - now) / 3600,
+                          "lease_end": None if lease is None else lease / 1000, **checks})
         deps = None
         if now - self._deps_at >= DEPLOYMENTS_EVERY_S:
             self._deps_at = now
@@ -489,7 +526,22 @@ class Fleet:
                      f"{a.endpoint}" if use else
                      "[fleet] this machine is read in-process: its TandemNode agent does not "
                      "answer")
+        if use and self._claimed_by is None:
+            self._claim(a)
         return a if use else self.local
+
+    def _claim(self, a) -> None:
+        """This machine's agent hears that it is this fleet's own node (its mDNS then says
+        owned); an older agent without the route is left as it is."""
+        try:
+            fp = self.trust().fingerprint()
+            st, _ = a.client.json("PUT", "/node/fleet", {"fingerprint": fp, "name":
+                                                          self.trust().name}, timeout=3.0)
+        except Exception as exc:                                     # noqa: BLE001
+            self.log(f"[fleet] this machine's agent did not take the fleet's claim: "
+                     f"{type(exc).__name__}")
+            return
+        self._claimed_by = fp if st in (200, 404) else None
 
     def sources(self) -> list[tuple[dict, object]]:
         """(row, source) of every node; engine backends synced for the agents' nodes."""
@@ -536,6 +588,9 @@ class Fleet:
     def source(self, row: dict):
         if row["endpoint"] == "local":
             return self.here() if row["id"] == self._local_id else nodesource.Unreachable()
+        tun = (row["trust"] or {}).get("tunnel")
+        if tun and row["transport"] == "tunnel":
+            row = dict(row, endpoint=f"https://127.0.0.1:{self.tunnels.ensure(tun)}")
         ep = row["endpoint"] or ""
         if not ep.startswith(("http://", "https://")):
             return nodesource.Unreachable("not paired: run `tandem node pair` on it and enter "
@@ -995,6 +1050,12 @@ class Fleet:
             try:
                 return self.discover().handle(method, parts, q, body, who)
             except discovery.DiscoveryError as exc:
+                raise FleetError(exc.status, exc.message, exc.kind)
+        if parts[:1] == ["add"]:
+            from proxy import addspark
+            try:
+                return self.wizard().handle(method, parts, q, body, who)
+            except addspark.AddError as exc:
                 raise FleetError(exc.status, exc.message, exc.kind)
         if method == "GET" and len(parts) == 1:
             name = parts[0]
