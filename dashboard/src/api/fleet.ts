@@ -1,7 +1,7 @@
-// The fleet API of TandemApp's controller (docs/contract/fleet-v1, SRV-723, SRV-725, SRV-729,
-// SRV-731, VIS-248, VIS-250): the Sparks, the links between them, the deployments, per-node metric
-// series, each node's newest sample, the controller's host, memory, events, alerts, rules, the node
-// actions and the saved window layouts. Times are Unix seconds. The controller sends every metric per node; the page
+// The fleet API of TandemApp's controller (docs/contract/fleet-v1, SRV-723, SRV-725, SRV-727,
+// SRV-729, SRV-731, VIS-248, VIS-250): the Sparks, the links between them, the deployments, per-node
+// metric series, each node's newest sample, the controller's host, memory, events, alerts, rules, the
+// node actions, the saved window layouts and discovery (the Add Spark wizard's Find step). Times are Unix seconds. The controller sends every metric per node; the page
 // computes Total, Stacked, Lines, Split and Table itself (charts/modes.ts), so one answer serves
 // every chart mode.
 
@@ -536,6 +536,105 @@ export interface FleetLogs {
   lines: FleetLogLine[];
 }
 
+/** Discovery (SRV-727): what a found device is. */
+export type DiscoveryKind = 'spark' | 'gb10' | 'host' | 'owned' | 'unknown';
+export type DiscoverySource = 'mdns' | 'scan' | 'ssh_config' | 'address' | 'login' | 'pair';
+
+/** One box, however many sources found it (merged by node id, SSH host key, address or name). */
+export interface DiscoveryRow {
+  id: string;
+  kind: DiscoveryKind;
+  /** the kind in words: "Spark with TandemLLM 0.15.0", "GB10 box, nothing installed", "Linux host, not a Spark", … */
+  title: string;
+  /** the box and its state: "ASUS Ascent GX10 · TandemLLM 0.15.0 · not paired" */
+  detail: string;
+  name: string | null;
+  addresses: string[];
+  sources: DiscoverySource[];
+  /** what its TandemNode says over mDNS */
+  node: {
+    id: string | null;
+    class: string;
+    version: string | null;
+    hw: string | null;
+    paired: boolean;
+    owner: 'this' | 'other' | null;
+    listen: string;
+    /** the pairing window's port while `tandem node pair` shows a code */
+    window: number | null;
+    port: number | null;
+    virtual: boolean;
+  } | null;
+  hw: { label: string; spark: boolean; source: 'mdns' | 'dmi' } | null;
+  ssh: { port: number; banner: string | null; os: string | null; host_key: string | null } | null;
+  ssh_config: { alias: string; hostname: string; user: string | null; port: number; identity_file: string | null; proxy_jump: string | null } | null;
+  /** the fleet's node id when the box is in the fleet */
+  fleet: string | null;
+  /** what the Connect step can do */
+  connect: ('code' | 'ssh' | 'takeover')[];
+  evidence: string[];
+  seen_at: number;
+  seq: number;
+}
+
+export type LocalNetwork = 'not_needed' | 'not_asked' | 'granted' | 'denied';
+
+/** GET /v1/fleet/discovery: the list and each source's state; with `since` only what changed. */
+export interface Discovery {
+  contract_version: string;
+  run: number;
+  cursor: number;
+  /** `rows` is the whole list; else only the rows changed after `since` */
+  full: boolean;
+  rows: DiscoveryRow[];
+  gone: string[];
+  mdns: { state: 'idle' | 'browsing' | 'done' | 'denied' | 'failed'; types: string[]; started_at: number | null; ended_at: number | null; found: number; note: string | null };
+  scan: {
+    state: 'none' | 'ask' | 'running' | 'done' | 'stopped' | 'denied';
+    subnet: string | null;
+    interface: string | null;
+    /** "Scan 192.0.2.0/24 for SSH?": nothing goes out until POST /scan names this subnet */
+    question: string | null;
+    total: number;
+    done: number;
+    open: number;
+    started_at: number | null;
+    ended_at: number | null;
+    rate_per_s: number;
+    timeout_ms: number;
+    by: string | null;
+  };
+  ssh_config: { state: 'idle' | 'read' | 'none' | 'failed'; hosts: number; note: string | null };
+  local_network: { state: LocalNetwork; text: string; settings: string | null };
+  interfaces: { name: string; address: string; subnet: string }[];
+}
+
+/** POST /v1/fleet/discovery/target: a pasted ssh line, read. */
+export interface SshTarget {
+  user: string | null;
+  host: string;
+  port: number;
+  identity_file: string | null;
+  jumps: { user: string | null; host: string; port: number }[];
+  /** the hops in order, the node last */
+  route: { kind: 'jump' | 'node'; user: string | null; host: string; port: number }[];
+  remote: boolean;
+  warnings: string[];
+}
+
+/** A poll answer applied to the list the page holds: a full answer replaces it, a partial one
+ *  updates its changed rows and drops the gone ones. */
+export function mergeDiscovery(prev: Discovery | null, next: Discovery): Discovery {
+  if (next.full || !prev || prev.run !== next.run) return next;
+  const rows = new Map(prev.rows.map((r) => [r.id, r]));
+  for (const id of next.gone) rows.delete(id);
+  for (const r of next.rows) rows.set(r.id, r);
+  const order = (r: DiscoveryRow) => ['spark', 'gb10', 'host', 'owned', 'unknown'].indexOf(r.kind);
+  const ip = (r: DiscoveryRow) => (r.addresses[0] ?? '999').split('.').map((x) => x.padStart(3, '0')).join('.');
+  const all = [...rows.values()].sort((a, b) => order(a) - order(b) || ip(a).localeCompare(ip(b)) || (a.name ?? '').localeCompare(b.name ?? '') || a.id.localeCompare(b.id));
+  return { ...next, full: true, rows: all, gone: [] };
+}
+
 export const fleet = {
   nodes: () => request<{ contract_version: string; nodes: FleetNode[] }>('/v1/fleet/nodes'),
   node: (id: string) => request<FleetNode>(`/v1/fleet/nodes/${encodeURIComponent(id)}`),
@@ -595,6 +694,14 @@ export const fleet = {
   act: (id: string, action: NodeAction, body: { confirm?: string; engine?: string } = {}) =>
     request<ActionResult>(`/v1/fleet/nodes/${encodeURIComponent(id)}/actions/${action}`, post(body)),
   testLink: (id: string) => request<LinkTest>(`/v1/fleet/links/${encodeURIComponent(id)}/test`, { method: 'POST' }),
+  // discovery (SRV-727): start a run, poll with the cursor, say yes to the scan's question
+  discovery: (since?: number) => request<Discovery>(`/v1/fleet/discovery${since != null ? `?since=${since}` : ''}`),
+  discover: (iface?: string) => request<Discovery>('/v1/fleet/discovery', post(iface ? { interface: iface } : {})),
+  scan: (subnet: string) => request<Discovery>('/v1/fleet/discovery/scan', post({ subnet })),
+  stopScan: () => request<Discovery>('/v1/fleet/discovery/scan', { method: 'DELETE' }),
+  discoverAddress: (address: string, port?: number) =>
+    request<{ contract_version: string; row: DiscoveryRow }>('/v1/fleet/discovery/address', post(port == null ? { address } : { address, port })),
+  sshTarget: (line: string) => request<{ contract_version: string; target: SshTarget }>('/v1/fleet/discovery/target', post({ line })),
   session: () => request<FleetSession>('/v1/fleet/session'),
   signIn: (password: string) => request<void>('/v1/fleet/session', post({ token: password }), 'none'),
   signOut: () => request<void>('/v1/fleet/session', { method: 'DELETE' }, 'none'),

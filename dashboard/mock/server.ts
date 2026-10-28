@@ -17,7 +17,9 @@
 // dashboard login (VIS-248): its reads and layouts open, its other writes (ack, rule edits, node
 // changes, pairing) only with the token or a session from /v1/fleet/session.
 // Its scenario: `?fleet=<scenario>` on the page URL (a cookie), else POST /__mock/fleet {"scenario"},
-// else TANDEM_MOCK_FLEET, else fleet4.
+// else TANDEM_MOCK_FLEET, else fleet4. What macOS answers the controller's first discovery browse
+// (SRV-727): `?lan=deny` (or `allow`) on the page URL (a cookie), else POST /__mock/fleet {"lan"},
+// else allow. Discovery, its GET included, wants the token or a session like the other writes.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
@@ -454,11 +456,14 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
   // the fleet (/v1/fleet/*, mock/fleet.ts): one per scenario, its clock from its first request
   const fleets = new Map<FleetScenario, MockFleet>();
   let fleetDefault: FleetScenario = isFleetScenario(process.env.TANDEM_MOCK_FLEET) ? process.env.TANDEM_MOCK_FLEET : 'fleet4';
+  let lanDefault: 'allow' | 'deny' = 'allow';
   const fleetFor = (req: IncomingMessage): MockFleet => {
-    const c = cookies(req).qse_fleet;
-    const name = isFleetScenario(c) ? c : fleetDefault;
+    const c = cookies(req);
+    const name = isFleetScenario(c.qse_fleet) ? c.qse_fleet : fleetDefault;
     if (!fleets.has(name)) fleets.set(name, new MockFleet({ seed: seed + 31, scenario: name }));
-    return fleets.get(name)!;
+    const f = fleets.get(name)!;
+    f.discovery.lanMode = c.qse_lan === 'deny' || c.qse_lan === 'allow' ? c.qse_lan : lanDefault;
+    return f;
   };
   function proxied(r: Record<string, unknown>): void {
     if (Number(r.id) % 7 !== 0) return;
@@ -479,6 +484,9 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
       // The page itself: pick up ?fleet=<scenario> and ?mock=<mode> and remember them in cookies.
       if ((path === '/dashboard' || path === '/' || path === '/index.html') && isFleetScenario(q.get('fleet'))) {
         res.appendHeader('Set-Cookie', `qse_fleet=${q.get('fleet')}; Path=/; SameSite=Strict`);
+      }
+      if ((path === '/dashboard' || path === '/' || path === '/index.html') && (q.get('lan') === 'deny' || q.get('lan') === 'allow')) {
+        res.appendHeader('Set-Cookie', `qse_lan=${q.get('lan')}; Path=/; SameSite=Strict`);
       }
       if ((path === '/dashboard' || path === '/' || path === '/index.html') && q.has('mock')) {
         const m = q.get('mock') || 'ok';
@@ -612,9 +620,11 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         // the fleet scenario for requests without a `qse_fleet` cookie; {reset: true} starts its clock again
         const b = JSON.parse((await readBody(req)) || '{}');
         if (b.scenario != null && !isFleetScenario(b.scenario)) return error(res, 400, 'bad_request', `unknown fleet scenario ${b.scenario}`);
+        if (b.lan != null && b.lan !== 'allow' && b.lan !== 'deny') return error(res, 400, 'bad_request', 'lan is allow or deny');
         if (b.scenario) fleetDefault = b.scenario;
+        if (b.lan) lanDefault = b.lan;
         if (b.reset) fleets.clear();
-        return json(res, 200, { scenario: fleetDefault, started: [...fleets.keys()] });
+        return json(res, 200, { scenario: fleetDefault, lan: lanDefault, started: [...fleets.keys()] });
       }
       if (path === '/__mock/backends' && req.method === 'POST') {
         const b = JSON.parse((await readBody(req)) || '{}');
@@ -759,7 +769,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         } catch {
           return error(res, 400, 'bad_request', 'the body is not JSON');
         }
-        const write = req.method !== 'GET' && !(req.method === 'PUT' && path.startsWith('/v1/fleet/layouts/'));
+        const write = path.startsWith('/v1/fleet/discovery') || (req.method !== 'GET' && !(req.method === 'PUT' && path.startsWith('/v1/fleet/layouts/')));
         if (fleetPassword && write && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
         const r = fleetFor(req).handle(req.method ?? 'GET', path, q, body);
         return json(res, r.status, r.body);

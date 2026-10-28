@@ -20,6 +20,9 @@
 // engine is not managed by TandemNode and its reboot and update are not set up, as on the real
 // one; the other scenarios' nodes have both. Each destructive action needs its plan's confirm.
 //
+// Discovery (SRV-727) is mock/discovery.ts: its devices line up with MOCK_PAIR, and what a pairing
+// learns (a bare GX10's DMI, a node that joined) shows in its rows.
+//
 // The rules, alerts and events are the controller's (proxy/fleetwatch.py: its seeded rules, an
 // alert's id `<rule>:<subject>`, its title, rule text and action route, "Acknowledged: …" events),
 // plus three rules the controller does not have yet (fabric, lease, power) with mock-only scopes.
@@ -61,6 +64,7 @@ import type {
   TrustAudit,
 } from '../src/api/fleet.ts';
 import { EVENT_TYPES, FLEET_CONTRACT, METRICS, NODE_ACTIONS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
+import { MockDiscovery } from './discovery.ts';
 
 export const FLEET_SCENARIOS = ['fleet1', 'fleet4', 'fleet2-split', 'node-down', 'alert-thermal'] as const;
 export type FleetScenario = (typeof FLEET_SCENARIOS)[number];
@@ -439,12 +443,15 @@ export class MockFleet {
   /** a plan's confirm: single use, five minutes */
   private tokens = new Map<string, { node: string; action: NodeAction; until: number }>();
   private seq = 0;
+  /** the Add Spark wizard's Find step (mock/discovery.ts) */
+  readonly discovery: MockDiscovery;
 
   /** `now` in Unix seconds: the scenario's start */
   constructor(o: { seed?: number; scenario?: FleetScenario; now?: number } = {}) {
     this.scenario = o.scenario ?? 'fleet4';
     this.t0 = Math.floor(o.now ?? Date.now() / 1000);
     this.f = build(this.scenario, this.t0);
+    this.discovery = new MockDiscovery({ onMac: this.f.host.may_sleep, host: this.f.host.address, nodes: () => this.f.nodes.map((n) => n.node) });
     const seed = o.seed ?? 42;
     this.ph = (key) => hash(`${seed}:${key}`);
     this.audit = this.f.nodes
@@ -778,7 +785,10 @@ export class MockFleet {
       if (p.host !== MOCK_PAIR.ssh && p.host !== MOCK_PAIR.bare) return bad(502, 'unreachable', `no SSH server answers at ${p.host}:${p.port ?? 22}`);
       if (p.host_key != null && p.host_key !== MOCK_HOST_KEY) return bad(409, 'host_key_changed', `the host key of ${p.host} is ${MOCK_HOST_KEY}, not the confirmed ${p.host_key}; refused`);
       if (p.key == null && p.password !== MOCK_PAIR.password) return bad(502, 'ssh_failed', `ssh to ${p.host} failed: ${p.user}@${p.host}: Permission denied (publickey,password).`);
-      if (p.host === MOCK_PAIR.bare) return bad(409, 'not_installed', `TandemNode is not installed on ${p.host}: the Add Spark wizard's Install step installs it`);
+      if (p.host === MOCK_PAIR.bare) {
+        this.discovery.learn(p.host, 'gx10', now * 1000);
+        return bad(409, 'not_installed', `TandemNode is not installed on ${p.host} (ASUS Ascent GX10, a GB10): the Add Spark wizard's Install step installs it`);
+      }
       return this.join(p.host, 'ssh', now);
     }
     const p = body as { address: string; code: string };
@@ -1041,6 +1051,7 @@ export class MockFleet {
     const now = Math.floor(nowMs / 1000);
     const parts = path.split('/').slice(3); // /v1/fleet/<parts>
     const v = FLEET_CONTRACT;
+    if (parts[0] === 'discovery') return this.discovery.handle(method, parts, q, body, nowMs);
     if (method === 'GET' && parts.length === 1) {
       switch (parts[0]) {
         case 'nodes':
