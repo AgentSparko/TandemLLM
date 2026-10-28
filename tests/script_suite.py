@@ -11,7 +11,8 @@ until 0.13 (SRV-661) sixteen files had no `__main__` entry, ran nothing on the b
 (tests/scriptmode.py is their runner now); a file that runs none on purpose prints `skipped: <why>`
 and is listed as skipped. `--all` runs each file in a clean environment (no
 serve.env, no QWEN38_*, CUDA_VISIBLE_DEVICES empty), prints a line a file and a total, and exits 1
-when any file failed or ran nothing. Standard library only.
+when any file failed or ran nothing, or when this machine's own TandemNode claim or trust store
+(tests/realnode.py, SRV-745) hashes differently after the run. Standard library only.
 """
 
 from __future__ import annotations
@@ -24,6 +25,8 @@ import subprocess
 import sys
 import time
 import types
+
+import realnode
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -110,10 +113,12 @@ def run_all(args: list) -> int:
     files = files or sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
     if out:
         os.makedirs(out, exist_ok=True)
-    env = {k: v for k, v in os.environ.items() if k in ("HOME", "PATH", "LANG", "TMPDIR", "USER")}
+    env = {k: v for k, v in os.environ.items()
+           if k in ("HOME", "PATH", "LANG", "TMPDIR", "USER", realnode.OPT_IN)}
     env.update(PYTHONPATH=os.pathsep.join(p for p in (ROOT, os.environ.get("SUITE_PYTHONPATH")) if p),
                CUDA_VISIBLE_DEVICES="", TZ="Europe/Berlin", PYTHONDONTWRITEBYTECODE="1")
     bad, skipped, total = [], [], 0
+    node = realnode.state()
     for f in files:
         t0 = time.time()
         try:
@@ -140,7 +145,11 @@ def run_all(args: list) -> int:
           f"skipped={len(skipped)} tests={total}"
           + (" -- " + " ".join(bad) if bad else "") + (" -- skipped: " + " ".join(skipped) if skipped else ""),
           flush=True)
-    return 1 if bad else 0
+    after = realnode.state()
+    changed = [p for p in sorted(set(node) | set(after)) if node.get(p) != after.get(p)]
+    if changed:
+        print("the run changed this machine's own TandemNode (SRV-745): " + " ".join(changed), flush=True)
+    return 1 if bad or changed else 0
 
 
 if __name__ == "__main__":

@@ -33,6 +33,7 @@ if ROOT not in sys.path:
     # pytest puts the checkout on the path (tests/conftest.py's rootdir); a script has its folder
     sys.path.insert(1, ROOT)
 import conftest  # noqa: E402,F401  (the sandbox pins conftest sets for pytest, for lazy imports)
+import realnode  # noqa: E402  (conftest guarded this process: each test is checked, SRV-745)
 
 
 class Skip(Exception):
@@ -134,6 +135,7 @@ def run(globs: dict) -> None:
                     fn(**kw)
             else:
                 fn(**kw)
+            realnode.check()
             passed += 1
             print(f"  {name:72s} ok", flush=True)
         except BaseException as exc:                               # noqa: BLE001

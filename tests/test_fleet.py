@@ -859,7 +859,8 @@ def test_start_stop():
     port = free_port()
     d = tempfile.mkdtemp(prefix="fleet-app-")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("TANDEM_", "QSE_"))}
-    env.update(QSE_TEST="1", TANDEM_SECRETS_KEY="")
+    # no agent: the default is this machine's own, and the claim would be this test's (SRV-745)
+    env.update(QSE_TEST="1", TANDEM_SECRETS_KEY="", TANDEM_NODE_AGENT="off")
     p = subprocess.Popen([sys.executable, "-m", "proxy", "serve", "--port", str(port),
                           "--config-db", os.path.join(d, "config.sqlite3"),
                           "--usage-ledger", "off", "--conductor-config", "off",

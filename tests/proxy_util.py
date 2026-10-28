@@ -1,6 +1,7 @@
 """Test helpers: the standalone proxy in this process, in front of fake backends.
 
-    with Proxy(env={...}) as px:          # its own temp dir: config, ledger, key file
+    with Proxy(env={...}) as px:          # its own temp dir: config, ledger, key file; no node
+                                          # agent unless env names the test's own (SRV-745)
         px.post("/v1/chat/completions", {...}) -> (status, headers, body bytes)
         px.rows()                         the ledger's rows, flushed
 
@@ -26,9 +27,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import fake_backend  # noqa: E402
 import owned  # noqa: E402
+import realnode  # noqa: E402
 from proxy import app as proxy_app  # noqa: E402
 
 owned.mark()                 # the fake engines and backends a test starts die with it (SRV-732)
+realnode.guard()             # no test reaches this machine's own TandemNode (SRV-745)
 
 FIXTURE_KEYS = ("sk-fixture-ABCDEFGH1234", "sk-fixture-ZYXWVUTS9876", "dsk-fixture-QRSTUV5555")
 
@@ -39,6 +42,9 @@ class Proxy:
         self.dir = tempfile.mkdtemp(prefix="px-test-")
         self.env = dict(env or {})
         self.env.setdefault("QSE_TEST", "1")
+        # no agent unless the test gives its own: the default is this machine's real one, which a
+        # test controller claimed for itself (SRV-745)
+        self.env.setdefault("TANDEM_NODE_AGENT", "off")
         self.login = login
         self.ledger = ledger
         self.health_kw = health_kw
@@ -155,6 +161,7 @@ def run(glb: dict) -> None:
     for name, fn in sorted(glb.items()):
         if name.startswith("test_") and callable(fn):
             fn()
+            realnode.check()
             print(f"  {name:64s} ok")
             passed += 1
     print(f"{passed} passed in {time.time() - t0:.1f} s")
