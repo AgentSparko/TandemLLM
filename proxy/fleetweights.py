@@ -65,6 +65,13 @@ def size(n: int | None) -> str:
     return f"{n / GIB:.2f} GiB" if n >= GIB else f"{n / 1e6:.1f} MB"
 
 
+def bytes_of(w: dict) -> int | None:
+    """A pack's size: the store's `bytes`, else the Setup Guide's `gb` (decimal)."""
+    if w.get("bytes") is not None:
+        return int(w["bytes"])
+    return int(round(w["gb"] * 1e9)) if isinstance(w.get("gb"), (int, float)) else None
+
+
 class WeightsError(Exception):
     def __init__(self, status: int, kind: str, message: str):
         super().__init__(message)
@@ -131,10 +138,10 @@ class Weights:
                 p = packs.setdefault(name, {"profile": name, "model": w.get("model"),
                                             "nodes": {}})
                 p["model"] = p["model"] or w.get("model")
+                b = bytes_of(w)
                 p["nodes"][nid] = {"node": nid, "present": True, "source": w.get("source") or "setup",
-                                   "dir": w.get("dir"), "bytes": w.get("bytes"),
-                                   "gib": round((w.get("bytes") or 0) / GIB, 2)
-                                   if w.get("bytes") is not None else w.get("gib"),
+                                   "dir": w.get("dir"), "bytes": b,
+                                   "gib": None if b is None else round(b / GIB, 2),
                                    "content_id": w.get("content_id"), "copy": None}
         for (to, name), jid in copying.items():
             p = packs.setdefault(name, {"profile": name, "model": None, "nodes": {}})
@@ -417,12 +424,12 @@ class Weights:
         if w is None:
             p.update(allowed=False, blocked=why or f"{row['alias']} has no {name}")
         else:
-            p["bytes"] = w.get("bytes")
+            p["bytes"] = bytes_of(w)
             used = self._in_use(nid, name)
             if used:
                 p.update(allowed=False, blocked=f"{', '.join(used)} serves {name} on "
                                                 f"{row['alias']}: stop it first")
-            gib = size(w.get("bytes")) if w.get("bytes") is not None else "its space"
+            gib = size(p["bytes"]) if p["bytes"] is not None else "its space"
             p["impact"].append(f"{name} is removed from {row['alias']} ({w.get('dir')}): {gib} "
                                f"free again")
             others = [r["alias"] for k, (r, s) in srcs.items() if k != nid]

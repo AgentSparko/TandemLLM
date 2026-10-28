@@ -670,6 +670,11 @@ def test_weights_copy():
         st, err = tf.send(fx.px, "POST", "/v1/fleet/weights/copy",
                           {"from": g, "to": r1, "profile": "../etc"})
         assert st == 400, err
+        # a Setup Guide pack says its size in decimal GB, the store's in bytes
+        from proxy import fleetweights
+        assert fleetweights.bytes_of({"gb": 17.2}) == 17_200_000_000
+        assert fleetweights.bytes_of({"bytes": 5, "gb": 9.0}) == 5 and \
+            fleetweights.bytes_of({}) is None
     finally:
         fx.close()
 
