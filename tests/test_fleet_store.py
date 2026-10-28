@@ -104,13 +104,19 @@ def test_tiers_and_ranges():
                 assert (m["step_s"], m["t0"], len(vals)) == (step, t0, count)
                 for i, v in enumerate(vals):
                     ti = t0 + i * step
+                    if ti <= now - 8 * DAY:                     # 30d: before the history began
+                        assert v is None, (rng, i, ti, v)
+                        continue
+                    if ti - step < now - 8 * DAY:               # the slot the history began in
+                        continue
                     if step == 2 or (ti % 30 == 0 and ti - step >= now - 26 * 3600):
                         lo, hi = ti - step, ti                 # whole slots of a fine tier
                     else:                                       # the 10-min slots ending in it
                         hi = math.floor(ti / 600) * 600
                         lo = hi - step
                     assert v == raw_mean(lo, hi), (rng, i, ti, v, raw_mean(lo, hi))
-                assert None not in vals, rng
+                assert None not in [v for i, v in enumerate(vals)
+                                    if t0 + (i - 1) * step >= now - 8 * DAY], rng
             # the Gherkin's long range: the week answers fast
             t1 = time.perf_counter()
             get(px, "/v1/fleet/metrics?metric=power&range=7d")
