@@ -23,6 +23,12 @@ export function nowByNode(m: Pick<MetricSeries, 'series'>): Record<string, numbe
   return Object.fromEntries(m.series.map((s) => [s.node, lastValue(s.values)]));
 }
 
+/** The values now of the Sparks that answer: an off Spark's last sample is history, not now. */
+export function liveValues(values: Record<string, number | null>, nodes: Pick<FleetNode, 'id' | 'status'>[]): Record<string, number | null> {
+  const off = new Set(nodes.filter((n) => n.status === 'off').map((n) => n.id));
+  return Object.fromEntries(Object.entries(values).map(([id, v]) => [id, off.has(id) ? null : v]));
+}
+
 /** Whether a series has no sample at all: the board does not give it (memory clock on a GB10, a
  *  fabric port where there is none), or the history has not started. */
 export const noSamples = (values: (number | null)[]) => values.every((v) => v == null);

@@ -14,7 +14,7 @@ import '../../charts/fleet-chart';
 import type { NodeSeries } from '../../charts/modes';
 import { openSelection, refreshContext, type ContextContent } from '../../lib/context';
 import { activeAlerts } from '../../lib/fleet-state';
-import { aggregateNow, energyKWh, lastValue, midnight, shareParts } from '../../lib/monitor';
+import { aggregateNow, energyKWh, lastValue, liveValues, midnight, shareParts } from '../../lib/monitor';
 import type { View } from '../../lib/router';
 import { scopeSource } from '../../lib/scope';
 import type { Loadable } from '../../ui/base';
@@ -196,9 +196,14 @@ export class QseOverview extends MonitorPage {
     </div>`;
   }
 
+  /** a Spark's value now; none for one that is off (its last sample is history, not now) */
+  private nowOf(k: MetricKey): Record<string, number | null> {
+    return liveValues(this.now[k] ?? {}, this.fleetState?.nodes ?? []);
+  }
+
   private tiles(): TemplateResult {
     const nodes = this.inScope;
-    const parts = (k: MetricKey) => shareParts(nodes, this.now[k] ?? {});
+    const parts = (k: MetricKey) => shareParts(nodes, this.nowOf(k));
     const total = (k: MetricKey) => aggregateNow(parts(k), METRICS[k].agg);
     const tps = this.depScoped?.tps ?? total('tps');
     const req = this.depScoped?.req ?? total('req');
@@ -268,7 +273,7 @@ export class QseOverview extends MonitorPage {
     ]
       .filter(Boolean)
       .join(' · ');
-    const now: TopoNow = { tps: this.now.tps, temp: this.now.temp, power: this.now.power, lan: this.now.lan, fabric: this.now.fabric };
+    const now: TopoNow = { tps: this.nowOf('tps'), temp: this.nowOf('temp'), power: this.nowOf('power'), lan: this.nowOf('lan'), fabric: this.nowOf('fabric') };
     return html`<section class="panel" data-panel="topology">
       <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">Topology</h2><p class="panel-sub">${sub[0].toUpperCase()}${sub.slice(1)}. Click a Spark or a link.</p></div><div class="panel-tools"><a class="btn btn-sm" href="#/sparks/topology">Open topology</a></div></header>
       <qse-topology compact .topo=${t} .deployments=${this.fleetState?.deployments ?? []} .now=${now} @qse-topo-pick=${(e: CustomEvent<TopoPick>) => this.onPick(e.detail)}></qse-topology>
@@ -282,7 +287,7 @@ export class QseOverview extends MonitorPage {
       <div class="mon-sec-h"><span class="eyebrow">Sparks in scope</span><a class="small" href="#/sparks">Sparks table</a></div>
       <div class="ncards ${nodes.length === 1 ? 'is-one' : ''}">
         ${nodes.map((n) => {
-          const v = (k: MetricKey) => this.now[k]?.[n.id] ?? null;
+          const v = (k: MetricKey) => this.nowOf(k)[n.id] ?? null;
           const alert = n.status === 'alert';
           return html`<a class="ncard ${alert ? 'is-alert' : ''} ${n.status === 'off' ? 'is-off' : ''}" href=${`#/sparks/${encodeURIComponent(n.id)}`} style=${`--nc:var(--n${((n.colour - 1) % 4) + 1})`} data-node=${n.id}>
             <div class="ncard-h">${nodeChip(n, { lg: true })}<span class="small ${alert ? 'warn-ink' : n.status === 'off' ? 'err-ink' : 'muted'}">${n.status === 'up' ? 'up' : n.status_text}</span></div>

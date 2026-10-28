@@ -20,6 +20,7 @@ import {
   HW_GROUPS,
   holdWords,
   lastValue,
+  liveValues,
   mayHaveMore,
   mergeEvents,
   midnight,
@@ -73,6 +74,12 @@ describe('totals and each Spark’s share', () => {
     expect(seg.map((s) => s.id)).toEqual(['desk', 'r1', null]);
     expect(seg.reduce((a, s) => a + s.f, 0)).toBeCloseTo(1, 6);
     expect(seg[2].f).toBeCloseTo((243.2 - 90) / 243.2, 6);
+  });
+
+  it('node-down: an off Spark’s last sample is not counted as now, so used memory never passes the capacity', () => {
+    const live = liveValues({ desk: 60, r3: 70 }, [{ id: 'desk', status: 'up' }, { id: 'r3', status: 'off' }]);
+    expect(live).toEqual({ desk: 60, r3: null });
+    expect(aggregateNow(shareParts(nodes, live), 'sum')).toBe(60);
   });
 
   it('the newest value skips the nulls at the end; a series of nulls has none', () => {
