@@ -3,7 +3,9 @@
 // lease), sorted by any column and filtered by text, status and owned or rented; a row opens the
 // Spark's page. Topology: the full graph of <qse-topology> with its legend; a Spark or the host opens
 // its inspector in the right sidebar, a link its details with the last link test and Run again, and
-// each link below the graph has the same. A drained Spark shows ◐ wherever it appears.
+// each link below the graph has the same. A drained Spark shows ◐ wherever it appears. Update fleet
+// (OPS-234, views/fleet/update.ts) opens its plan; the update's progress shows above the list while
+// it runs (and until dismissed); `#/sparks?update=1` (the mixed-version alert's action) opens it.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -23,6 +25,8 @@ import { checkSession, fromFleet, needsSignIn, onSession } from '../monitor/data
 import { linkDetails } from '../monitor/overview';
 import '../monitor/topology';
 import type { TopoNow, TopoPick } from '../monitor/topology';
+import { parseHash, setParams } from '../../lib/router';
+import './update';
 
 const NOW_KEYS: MetricKey[] = ['tps', 'temp', 'power', 'mem', 'gpu', 'lan', 'fabric'];
 const COLS: [SortKey, string, string][] = [
@@ -72,6 +76,18 @@ export class QseSparks extends MonitorPage {
     super.connectedCallback();
     void checkSession();
     this.offSession = onSession(() => this.requestUpdate());
+  }
+
+  updated(): void {
+    // the mixed-version alert's action, a bookmark: the dialog opens once
+    if (parseHash().params.get('update') === '1' && this.fleetState) {
+      setParams({ update: null });
+      this.openUpdate();
+    }
+  }
+
+  private openUpdate(): void {
+    void this.updateComplete.then(() => this.querySelector('qse-fleet-update')?.open());
   }
   disconnectedCallback(): void {
     this.offSession?.();
@@ -288,9 +304,10 @@ export class QseSparks extends MonitorPage {
     const lan = f?.nodes.filter((n) => n.transport === 'lan').length ?? 0;
     const tun = (f?.nodes.length ?? 0) - lan;
     const sub = f ? `${f.nodes.length} Spark${f.nodes.length === 1 ? '' : 's'} in this fleet${lan ? `: ${lan} on the LAN` : ''}${tun ? `${lan ? ',' : ':'} ${tun} rented through an SSH tunnel` : ''}.` : '';
-    const head = html`<header class="page-head sp-head" data-page="sparks"><div><div class="eyebrow">Fleet</div><h1>Sparks</h1>${sub ? html`<p class="page-sub">${sub}</p>` : nothing}</div><a class="btn btn-primary" href="#/add-spark">+ Add Spark</a></header>${tabs}`;
+    const head = html`<header class="page-head sp-head" data-page="sparks"><div><div class="eyebrow">Fleet</div><h1>Sparks</h1>${sub ? html`<p class="page-sub">${sub}</p>` : nothing}</div><div class="sp-head-acts">${f?.nodes.length ? html`<button type="button" class="btn" data-act="update-fleet" @click=${() => this.openUpdate()}>Update fleet…</button>` : nothing}<a class="btn btn-primary" href="#/add-spark">+ Add Spark</a></div></header>${tabs}`;
     if (!f) return html`${head}${this.absent ? html`<p class="page-soon">The fleet comes from TandemApp’s controller, which this server does not run yet.</p>` : html`<div class="skeleton" style="height:240px"></div>`}`;
-    return html`${head}${this.tab === 'topology' ? this.topology() : this.table()}<p class="xs faint mon-foot">read ${clock(Date.now() / 1000)} · every 10 s while live</p>`;
+    return html`${head}<qse-update-progress .nodes=${f.nodes}></qse-update-progress>${this.tab === 'topology' ? this.topology() : this.table()}<p class="xs faint mon-foot">read ${clock(Date.now() / 1000)} · every 10 s while live</p>
+      <qse-fleet-update .nodes=${f.nodes} @qse-update-started=${() => this.querySelector('qse-update-progress')?.follow(1500)}></qse-fleet-update>`;
   }
 }
 

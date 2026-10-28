@@ -1,7 +1,8 @@
 // <qse-fleet-page>: TandemApp's new pages (VIS-242, concept §8), one chunk loaded when one of them
 // opens. Overview, Hardware and Events & Alerts (VIS-248, views/monitor/) and Sparks with its
 // topology and each Spark's page (VIS-250, views/fleet/) are built, and Add Spark (VIS-246,
-// views/fleet/wizard.ts, a chunk of its own that loads when it opens); Models, API and App still show
+// views/fleet/wizard.ts, a chunk of its own that loads when it opens) and App (OPS-234, the controller's
+// host and its move: views/fleet/app-settings.ts, a chunk of its own too); Models and API still show
 // their head, what they will hold and the step of the program that builds them.
 
 import { html, nothing } from 'lit';
@@ -42,7 +43,6 @@ const PAGES: Partial<Record<View, PageDef>> = {
     step: 6,
     link: { href: '#/api/backends', label: 'Backends' },
   },
-  app: { eyebrow: 'Settings', title: 'App', text: 'Where the controller runs, the permissions, the admin password, updates, and the fleet’s config to export and import.', step: 5 },
 };
 
 /** a sub-page of Models: its own title and text */
@@ -55,6 +55,8 @@ function subPage(view: View, path: string[]): PageDef | null {
 /** The Add Spark wizard: its own chunk; the element upgrades in place once it has loaded. */
 let wizardChunk: Promise<unknown> | null = null;
 const loadWizard = () => (wizardChunk ??= import('./fleet/wizard'));
+let appChunk: Promise<unknown> | null = null;
+const loadApp = () => (appChunk ??= import('./fleet/app-settings'));
 
 @customElement('qse-fleet-page')
 export class QseFleetPage extends LightElement {
@@ -69,6 +71,10 @@ export class QseFleetPage extends LightElement {
     if (this.view === 'add-spark') {
       void loadWizard();
       return html`<qse-add-spark></qse-add-spark>`;
+    }
+    if (this.view === 'app') {
+      void loadApp();
+      return html`<qse-app-settings></qse-app-settings>`;
     }
     if (this.view === 'sparks') {
       const p = this.path[0];

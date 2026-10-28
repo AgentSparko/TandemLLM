@@ -48,6 +48,8 @@ import { resizeSide, setSide } from './lib/wm';
 import './ui/workspace';
 import { pageContext } from './ui/page-context';
 import { onFleet, readout, type FleetState } from './lib/fleet-state';
+import { followUrl, landing } from './lib/controller-host';
+import { fleet, type ControllerView } from './api/fleet';
 import { watchAlerts } from './lib/alert-notify';
 import { LightElement, type Loadable } from './ui/base';
 import { icon } from './ui/bits';
@@ -101,8 +103,14 @@ function perfTabs(on: 'live' | 'requests', parallel: number | null = null): Temp
   </div>`;
 }
 
+/** the hash the page was opened with: an empty one on a fleet with no Spark opens Add Spark (OPS-234) */
+const START_HASH = location.hash;
+
 @customElement('qse-app')
 export class QseApp extends LightElement {
+  /** OPS-234: the controller moved to another host: the banner points there */
+  @state() private movedTo: ControllerView['moved_to'] = null;
+  private landed = false;
   /** a 401 came back: the server has an admin password set (never while none is) */
   @state() private refused = false;
   @state() private route: Route = (fixHash(), parseHash());
@@ -499,7 +507,19 @@ export class QseApp extends LightElement {
     this.summaryPoll.start();
     void this.loadVersion();
     if (!this.fleetOff) {
-      this.fleetOff = onFleet((f) => (this.fleet = f));
+      this.fleetOff = onFleet((f) => {
+        this.fleet = f;
+        if (f && !this.landed) {
+          this.landed = true;
+          if (landing(START_HASH, f.nodes) === 'add-spark') navigate('add-spark');
+          void fleet
+            .controller()
+            .then((v) => (this.movedTo = v.moved_to))
+            .catch(() => {
+              /* an older controller: it does not move */
+            });
+        }
+      });
       this.unsub.push(watchAlerts());
     }
   }
@@ -635,6 +655,7 @@ export class QseApp extends LightElement {
               ${this.offline && !this.restarting && !knownJob() ? html`<div class="banner banner-offline" role="alert" data-engine-away=${engineAway()?.state ?? 'unreachable'}>${icon('warn')} ${awayText(engineAway())} — panels keep their last data and say which endpoint failed.</div>` : nothing}
               ${this.refused && this.route.view !== 'setup' ? html`<div class="banner banner-offline" role="status" data-refused>${icon('warn')} The server answered 401: an admin password is set on it, and the dashboard has no sign-in yet. Unset QSE_ADMIN_TOKEN to open it again (docs/server.md).</div>` : nothing}
               ${this.setupMode ? html`<div class="banner setup-mode-banner" role="status" data-setup-mode>${icon('info')} ${S.setupModeBanner}</div>` : nothing}
+              ${this.movedTo && this.route.view !== 'app' ? html`<div class="banner" role="status" data-moved-banner>${icon('info')} TandemApp’s controller moved to ${this.movedTo.name}; its API is ${this.movedTo.api_url}/v1. <a class="btn btn-sm" href=${followUrl(this.movedTo, location.hash)}>Open it</a></div>` : nothing}
               ${this.renderView()}
             </main>
             <qse-workspace .device=${this.wclass}></qse-workspace>
@@ -670,6 +691,7 @@ export class QseApp extends LightElement {
       <span class="fdots" aria-hidden="true">${r.swatches.map((s) => html`<i class="fdot ${s.alert ? 'is-alert' : ''} ${s.drain ? 'is-drain' : ''} ${isHollow(s.colour) ? 'is-hollow' : ''}" style="--c:${nodeColour(s.colour)}" title=${s.title}></i>`)}</span>
       <span class="ftps" aria-hidden="true"><b class="num">${r.tps == null ? '—' : Math.round(r.tps)}</b><span class="ftps-u">tok/s</span></span>
       ${r.alerts ? html`<span class="warn-ink fl-alerts" aria-hidden="true">⚠ ${r.alerts}</span>` : html`<span class="fl-ok" aria-hidden="true">no alerts</span>`}
+      ${r.mixed ? html`<span class="warn-ink fl-mixed" title=${r.mixed} aria-hidden="true" data-fleet-mixed>≠ versions</span>` : nothing}
     </a>`;
   }
 

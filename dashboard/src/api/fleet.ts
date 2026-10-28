@@ -743,6 +743,140 @@ export function mergeDiscovery(prev: Discovery | null, next: Discovery): Discove
   return { ...next, full: true, rows: all, gone: [] };
 }
 
+// ---- the fleet update and the controller's host (OPS-234) ------------------------------------------
+export type UpdateStepKind = 'idle' | 'replica' | 'single' | 'split';
+
+export interface UpdateStep {
+  n: number;
+  kind: UpdateStepKind;
+  /** more than one only for a Split, whose members update together */
+  nodes: string[];
+  drain: boolean;
+  deployments: string[];
+  /** what is not served while the step runs; null when every model stays served */
+  downtime: string | null;
+  words: string;
+}
+
+export interface UpdateRefused {
+  deployment: string;
+  name: string;
+  nodes: string[];
+  why: string;
+}
+
+export interface UpdatePlan {
+  contract_version: string;
+  target: string;
+  controller: string | null;
+  allowed: boolean;
+  blocked: string | null;
+  steps: UpdateStep[];
+  skipped: { node: string; why: string }[];
+  refused: UpdateRefused[];
+  current: string[];
+  nodes: { id: string; alias: string; version: string | null; status: NodeStatus; updatable: boolean; why: string | null }[];
+  selected: string[] | null;
+  confirm: string | null;
+  expires_at: number | null;
+}
+
+export type UpdatePhase = 'todo' | 'drain' | 'drained' | 'update' | 'rejoin' | 'done' | 'failed' | 'skipped';
+
+export interface UpdateJobNode {
+  alias: string;
+  from: string | null;
+  to: string;
+  phase: UpdatePhase;
+  detail: string | null;
+  started_at: number | null;
+  ended_at: number | null;
+  drained_before: boolean;
+}
+
+export interface UpdateJob {
+  id: string;
+  kind: 'update';
+  state: 'running' | 'done' | 'failed' | 'stopped';
+  target: string;
+  by: string;
+  started_at: number;
+  ended_at: number | null;
+  stop: boolean;
+  error: { type: string; message: string } | null;
+  log: { t: number; text: string }[];
+  refused: UpdateRefused[];
+  skipped: { node: string; why: string }[];
+  steps: (UpdateStep & { state: 'todo' | 'running' | 'done' | 'failed' })[];
+  nodes: Record<string, UpdateJobNode>;
+}
+
+export interface UpdateView {
+  contract_version: string;
+  target: string;
+  job: UpdateJob | null;
+}
+
+export interface MoveNode {
+  id: string;
+  alias: string;
+  /** repin: its owner pin handed over; release: the new controller's own machine; own: this
+   *  controller's machine; stays: not moved, with why */
+  how: 'repin' | 'release' | 'own' | 'stays';
+  why: string | null;
+  state?: 'handed' | 'failed';
+  accepted?: boolean;
+}
+
+export interface MoveJob {
+  id: string;
+  kind: 'move';
+  direction: 'push' | 'pull' | 'give';
+  state: 'running' | 'done' | 'failed';
+  by: string;
+  started_at: number;
+  ended_at: number | null;
+  error: { type: string; message: string } | null;
+  log: { t: number; text: string }[];
+  result: { api_url: string; nodes: MoveNode[] } | null;
+  steps: { id: string; label: string; state: 'todo' | 'running' | 'done' | 'failed'; detail: string | null }[];
+  api_url: string;
+  nodes: MoveNode[];
+  to?: string;
+  alias?: string;
+  port?: number;
+  url?: string;
+  from?: string;
+  old_refused?: boolean | null;
+}
+
+export interface ControllerView {
+  contract_version: string;
+  host: { name: string; os: string | null; kind: 'mac' | 'linux' | 'spark'; node: string | null; may_sleep: boolean; address: string };
+  api_url: string;
+  moved_to: { api_url: string; name: string; fingerprint: string | null; at: number } | null;
+  sleep_warning: string | null;
+  targets: { node: string; alias: string; allowed: boolean; why: string | null; virtual: boolean }[];
+  job: MoveJob | null;
+}
+
+export interface MovePlan {
+  contract_version: string;
+  to: string;
+  title: string;
+  allowed: boolean;
+  blocked: string | null;
+  api_url: string;
+  port: number;
+  impact: string[];
+  removes: string[];
+  keeps: string[];
+  nodes: MoveNode[];
+  needs_password: boolean;
+  confirm: string | null;
+  expires_at: number | null;
+}
+
 export const fleet = {
   nodes: () => request<{ contract_version: string; nodes: FleetNode[] }>('/v1/fleet/nodes'),
   node: (id: string) => request<FleetNode>(`/v1/fleet/nodes/${encodeURIComponent(id)}`),
@@ -824,6 +958,16 @@ export const fleet = {
   checkAdd: (id: string, body: AddRun = {}) => request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}/check`, post(body)),
   installAdd: (id: string, body: AddRun = {}) => request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}/install`, post(body)),
   linkAdd: (id: string, action: 'test' | 'skip' | 'configure') => request<AddSession>(`/v1/fleet/add/${encodeURIComponent(id)}/link`, post({ action })),
+  // the fleet update (OPS-234): its plan with a confirm, the job per node, stop after a step
+  update: () => request<UpdateView>('/v1/fleet/update'),
+  updatePlan: (nodes?: string[]) => request<UpdatePlan>(`/v1/fleet/update/plan${nodes?.length ? `?nodes=${nodes.map(encodeURIComponent).join(',')}` : ''}`),
+  startUpdate: (body: { confirm: string; nodes?: string[] }) => request<UpdateView>('/v1/fleet/update', post(body)),
+  stopUpdate: () => request<UpdateView>('/v1/fleet/update/stop', post({})),
+  // where the controller runs and moving it (OPS-234)
+  controller: () => request<ControllerView>('/v1/fleet/controller'),
+  movePlan: (to: string, port?: number) => request<MovePlan>(`/v1/fleet/controller/move?to=${encodeURIComponent(to)}${port ? `&port=${port}` : ''}`),
+  move: (body: { to: string; confirm: string; port?: number; password?: string }) => request<MoveJob>('/v1/fleet/controller/move', post(body)),
+  take: (body: { url: string; password?: string }) => request<MoveJob>('/v1/fleet/controller/take', post(body)),
   session: () => request<FleetSession>('/v1/fleet/session'),
   signIn: (password: string) => request<void>('/v1/fleet/session', post({ token: password }), 'none'),
   signOut: () => request<void>('/v1/fleet/session', { method: 'DELETE' }, 'none'),

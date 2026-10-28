@@ -249,6 +249,11 @@
   font-size: 12.5px;
   font-weight: 700;
 }
+.fl-mixed {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
 .ftps-u,
 .fl-ok {
   color: var(--ink-3);
@@ -1036,6 +1041,7 @@ qse-fleet-page {
 .shell[data-w='phone'] .btn-theme,
 .shell[data-w='phone'] .btn-win-label,
 .shell[data-w='phone'] .ftps-u,
+.shell[data-w='phone'] .fl-mixed,
 .shell[data-w='phone'] .fl-ok {
   display: none;
 }

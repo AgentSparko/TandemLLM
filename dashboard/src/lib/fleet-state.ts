@@ -94,6 +94,8 @@ export interface Readout {
   /** the fleet's decode rate, tok/s; null before the first reading */
   tps: number | null;
   alerts: number;
+  /** the mixed-version alert's title while the Sparks run more than one release (OPS-234), else null */
+  mixed: string | null;
   /** what a screen reader hears */
   label: string;
 }
@@ -106,6 +108,7 @@ export function readout(s: FleetState): Readout {
   const tps = rates.length ? rates.reduce((a, b) => a + b, 0) : null;
   const sparks = `${s.nodes.length} Spark${s.nodes.length === 1 ? '' : 's'}`;
   const al = alerts.length ? `${alerts.length} active alert${alerts.length === 1 ? '' : 's'}` : 'no alerts';
+  const mixed = s.alerts.find((a) => a.id === 'version-mismatch:all')?.title ?? null;
   return {
     swatches: s.nodes.map((n) => ({
       id: n.id,
@@ -117,6 +120,7 @@ export function readout(s: FleetState): Readout {
     })),
     tps,
     alerts: alerts.length,
-    label: `Fleet: ${sparks}, ${tps == null ? 'no rate yet' : `${Math.round(tps)} tok/s`}, ${al}. Open Events & Alerts`,
+    mixed,
+    label: `Fleet: ${sparks}, ${tps == null ? 'no rate yet' : `${Math.round(tps)} tok/s`}, ${al}${mixed ? `, ${mixed}` : ''}. Open Events & Alerts`,
   };
 }

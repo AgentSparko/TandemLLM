@@ -179,6 +179,8 @@ export class QseOverview extends MonitorPage {
     const serving = f.deployments.filter((d) => d.status === 'serving').length;
     const weak = f.deployments.filter((d) => d.status === 'degraded' || d.status === 'down');
     const alerts = activeAlerts(f);
+    // OPS-234: the nodes run more than one release (the controller's version-mismatch rule)
+    const mixed = f.alerts.find((a) => a.id === 'version-mismatch:all') ?? null;
     const lease = f.nodes.map((n) => n.lease_end).filter((v): v is number => v != null);
     const sc = this.resolved;
     const scopeName = sc.kind === 'node' ? (f.nodes.find((n) => n.id === sc.id)?.alias ?? sc.id) : sc.kind === 'deployment' ? (f.deployments.find((d) => d.id === sc.id)?.name ?? sc.id) : 'All Sparks';
@@ -189,7 +191,8 @@ export class QseOverview extends MonitorPage {
       <span class="faint" aria-hidden="true">·</span>
       <span>${serving} deployment${serving === 1 ? '' : 's'} serving${weak.length ? html`, <span class="warn-ink">${weak.map((d) => `${d.name} ${d.status}`).join(', ')}</span>` : nothing}</span>
       <span class="faint" aria-hidden="true">·</span>
-      ${alerts.length ? html`<a class="warn-ink" href="#/events"><span aria-hidden="true">⚠</span> ${alerts.length} alert${alerts.length === 1 ? '' : 's'}: ${alerts[0].title}</a>` : html`<span class="ok-ink">no alerts</span>`}
+      ${mixed ? html`<a class="warn-ink" href=${mixed.action?.route ?? '#/sparks?update=1'} data-mixed-versions><span aria-hidden="true">⚠</span> ${mixed.title} · update the fleet</a><span class="faint" aria-hidden="true">·</span>` : nothing}
+      ${alerts.length ? html`<a class="warn-ink" href="#/events"><span aria-hidden="true">⚠</span> ${alerts.length} alert${alerts.length === 1 ? '' : 's'}: ${(alerts.find((a) => a !== mixed) ?? alerts[0]).title}</a>` : html`<span class="ok-ink">no alerts</span>`}
       ${lease.length ? html`<span class="faint" aria-hidden="true">·</span><span class="muted">leases end in ${span(Math.min(...lease) - Date.now() / 1000)}</span>` : nothing}
       <span class="grow"></span>
       <span class="muted small">scope: ${scopeName} · ${nodes.length} Spark${nodes.length === 1 ? '' : 's'}</span>

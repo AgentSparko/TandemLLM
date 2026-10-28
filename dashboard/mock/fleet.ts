@@ -12,6 +12,14 @@
 //   fleet2-split  two Sparks on the LAN with one direct fabric cable, one model Split over both
 //   node-down     fleet4, and R-3 stops answering 30 s after the scenario starts
 //   alert-thermal fleet4 without the old alert: R-3 heats up and the alert fires a minute in
+//   mixed         fleet4 where R-3 was updated by hand to 0.15.1 eight minutes ago: the version-mismatch
+//                 alert (OPS-234) fires a minute in
+//   empty         TandemApp alone on a Mac, no Spark yet: the page opens on Add Spark (OPS-234)
+//   gold3         the controller on a Mac with three Sparks on the LAN: Qwen3.8-27B as Replicas on Gold
+//                 and R-3, Wren on Bronze; the move to Gold and the rolling update (OPS-234's Gherkin)
+//
+// The fleet update and the controller's host (OPS-234, /v1/fleet/update*, /v1/fleet/controller*) are
+// mock/fleetops.ts: jobs on the clock; a Spark's version and its drain follow the update.
 //
 // The node actions (VIS-250, proxy/fleetops.py): a drain ends the requests in flight one by one
 // (4 s apart) while the node's rate falls with them, then the node is drained; a reboot takes the
@@ -68,9 +76,10 @@ import type {
 } from '../src/api/fleet.ts';
 import { EVENT_TYPES, FLEET_CONTRACT, METRICS, NODE_ACTIONS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
 import { MockWizard } from './addspark.ts';
+import { MockOps } from './fleetops.ts';
 import { MockDiscovery, MOCK_LAN } from './discovery.ts';
 
-export const FLEET_SCENARIOS = ['fleet1', 'fleet4', 'fleet2-split', 'node-down', 'alert-thermal'] as const;
+export const FLEET_SCENARIOS = ['fleet1', 'fleet4', 'fleet2-split', 'node-down', 'alert-thermal', 'mixed', 'empty', 'gold3'] as const;
 export type FleetScenario = (typeof FLEET_SCENARIOS)[number];
 export const isFleetScenario = (s: unknown): s is FleetScenario => (FLEET_SCENARIOS as readonly unknown[]).includes(s);
 
@@ -220,6 +229,8 @@ export function ruleCondition(r: Pick<FleetRule, 'metric' | 'threshold' | 'unit'
       return `< ${t} or one logical interface${hold}`;
     case 'lease_left':
       return `lease ends in < ${t}`;
+    case 'versions':
+      return `nodes run different releases${hold}`;
     default:
       return `> ${t}${hold}`;
   }
@@ -304,7 +315,21 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     rule('fabric', 'Fabric link', 'fabric', 150, 'Gb/s', 0, 'warn', ['app'], 'fabric'),
     rule('lease', 'Lease ends', 'lease_left', 72, 'h', 0, 'warn', ['app', 'system']),
     rule('power', 'Power draw', 'power', 170, 'W', 300, 'warn', ['app'], 'node:r3', false),
+    rule('version-mismatch', 'One release on every node', 'versions', null, null, 60, 'warn', ['app']),
   ];
+
+  if (scenario === 'empty') {
+    return {
+      host: { name: 'Mac', address: '127.0.0.1', api_url: 'http://127.0.0.1:8080', may_sleep: true },
+      infra: [{ id: 'host', kind: 'host', label: 'Mac' }],
+      nodes: [],
+      deps: [],
+      links: [],
+      events: [{ at: t0 - 40, item: { id: 'e-ctl', type: 'controller', severity: null, node: 'host', deployment: null, text: "TandemApp's controller started (0.15.1)", detail: 'the first start with this store' } }],
+      alerts: [],
+      rules: rules.filter((r) => !['fabric', 'power'].includes(r.id)).map((r) => (r.id === 'lease' ? leaseDefault(r) : r)),
+    };
+  }
 
   if (scenario === 'fleet1') {
     const one = { ...desk, node: { ...desk.node, pairing: LOCAL }, rtt: [0.05, 0.03] as [number, number] };
@@ -343,6 +368,43 @@ function build(scenario: FleetScenario, t0: number): Fleet {
       ],
       alerts: [],
       rules: rules.filter((r) => r.id !== 'power').map((r) => (r.id === 'lease' ? leaseDefault(r) : r)),
+    };
+  }
+
+  if (scenario === 'gold3') {
+    const lan = (id: string, alias: string, colour: number, ip: string, serial: string, fp: string): NodeSim['node'] => ({
+      ...desk.node, id, alias, colour, tags: ['owned'], address: `${ip}:7700`, since: t0 - 30 * D, inventory: { ...desk.node.inventory, serial }, pairing: paired('code', t0 - 30 * D, fp),
+    });
+    const gold: NodeSim = { ...desk, node: lan('gold', 'Gold', 1, '192.0.2.40', 'R9NX4A00217', '3d') };
+    const r3l: NodeSim = { ...desk, node: lan('r3', 'R-3', 4, '192.0.2.43', 'R9NX4A00231', '6a'), curve: 'r3', plan: { weights: 17.2, kv: 46, cache: 8, other: 3.4, page: 4.2, ceiling: 112, peak: 88.2 } };
+    const bronze: NodeSim = { ...desk, node: lan('bronze', 'Bronze', 2, '192.0.2.42', 'R9NX4A00224', '5e'), curve: 'wren', idleMem: 5.1, plan: { weights: 4.4, kv: 12, cache: 3, other: 2.8, page: 3.1, ceiling: 112, peak: 31.2 } };
+    const wrenSingle: DepSim = {
+      dep: { id: 'wren', name: 'Wren', model: 'Qwen3.5-2B', pack: 'EXL3 6.0', type: 'single', members: ['bronze'], api_id: 'wren', ctx: 65536 },
+      members: [{ node: 'bronze', from: t0 - 30 * D, base: 4, span: 14, curve: 'wren', share: 1 }],
+    };
+    const q3 = qwen(
+      [
+        { node: 'gold', from: t0 - 30 * D, base: 48, span: 150, curve: 'desk', share: 1 },
+        { node: 'r3', from: t0 - 30 * D, base: 46, span: 140, curve: 'r3', share: 1 },
+      ],
+      'replicas',
+    );
+    q3.dep = { ...q3.dep, warn: undefined };
+    return {
+      host: { name: 'Mac', address: '192.0.2.10', api_url: 'http://192.0.2.10:8080', may_sleep: true },
+      infra: [
+        { id: 'host', kind: 'host', label: 'Mac' },
+        { id: 'lan', kind: 'lan', label: 'LAN' },
+      ],
+      nodes: [gold, r3l, bronze],
+      deps: [q3, wrenSingle],
+      links: [
+        { id: 'host-lan', a: 'host', b: 'lan', kind: 'lan', speed: '10 GbE', rtt_ms: 0.3, mtu: 1500, state: 'up', note: 'the controller host on the LAN' },
+        ...(['gold', 'r3', 'bronze'] as const).map((id): FleetLink => ({ id: `lan-${id}`, a: 'lan', b: id, kind: 'lan', speed: '10 GbE', rtt_ms: 0.4, mtu: 1500, state: 'up', note: 'mTLS to the node agent :7700' })),
+      ],
+      events: [{ at: t0 - 3 * H, item: { id: 'e-ctl', type: 'controller', severity: null, node: 'host', deployment: null, text: "TandemApp's controller started (0.15.1)", detail: 'stopped for 5 s before' } }],
+      alerts: [{ at: t0 - 30 * D, item: { id: 'host-sleep:host', severity: 'warn', node: 'host', title: 'The controller runs on a machine that can sleep', rule: 'Controller host may sleep sleep allowed', detail: 'If it sleeps, the API and every metric stop. Keep it awake or move the controller to a Spark.', action: { label: 'App settings', route: '#/app' } } }],
+      rules: rules.filter((r) => !['fabric', 'power'].includes(r.id)).map((r) => (r.id === 'lease' ? leaseDefault(r) : r)),
     };
   }
 
@@ -460,6 +522,8 @@ export class MockFleet {
   readonly discovery: MockDiscovery;
   /** the Add Spark wizard's session (mock/addspark.ts) */
   readonly wizard: MockWizard;
+  /** the fleet update and the controller's host (mock/fleetops.ts) */
+  readonly ops: MockOps;
 
   /** `now` in Unix seconds: the scenario's start */
   constructor(o: { seed?: number; scenario?: FleetScenario; now?: number } = {}) {
@@ -468,6 +532,8 @@ export class MockFleet {
     this.f = build(this.scenario, this.t0);
     this.discovery = new MockDiscovery({ onMac: this.f.host.may_sleep, host: this.f.host.address, nodes: () => this.f.nodes.map((n) => n.node) });
     this.wizard = new MockWizard(this);
+    this.ops = new MockOps(this);
+    if (this.scenario === 'mixed') this.ops.seed('r3', '0.15.1');
     const seed = o.seed ?? 42;
     this.ph = (key) => hash(`${seed}:${key}`);
     this.audit = this.f.nodes
@@ -490,12 +556,13 @@ export class MockFleet {
   /** the share of a drained node's requests at its drain still in flight at t (1 before a drain) */
   private drainLeft(id: string, t: number): number {
     const d = this.drains.get(id);
+    if (!d && this.ops.drain(id, t)?.state === 'drained') return 0;
     if (!d || t < d.since) return 1;
     return d.ends.length ? d.ends.filter((e) => e > t).length / d.ends.length : 0;
   }
   private drainView(id: string, now: number): NodeDrain | null {
     const d = this.drains.get(id);
-    if (!d) return null;
+    if (!d) return this.ops.drain(id, now);
     const inflight = d.ends.filter((e) => e > now).length;
     return { state: inflight ? 'draining' : 'drained', since: d.since, by: d.by, inflight };
   }
@@ -580,8 +647,18 @@ export class MockFleet {
   nodes(now: number): FleetNode[] {
     return this.f.nodes.filter((n) => n.node.since <= now).map((n) => {
       const s = this.status(n, now);
-      return { ...n.node, status: s.status, status_text: s.text, drain: this.drainView(n.node.id, now) };
+      return { ...n.node, version: this.ops.version(n.node.id, n.node.version, now), status: s.status, status_text: s.text, drain: this.drainView(n.node.id, now) };
     });
+  }
+
+  /** the controller's host as the topology shows it */
+  hostInfo(): FleetTopology['host'] {
+    return this.f.host;
+  }
+
+  /** one line in the event log */
+  addEvent(now: number, type: EventType, node: string, text: string, detail: string): void {
+    this.f.events.push({ at: now, item: { id: `e-ops-${++this.seq}`, type, severity: null, node, deployment: null, text, detail } });
   }
 
   deployments(now: number): FleetDeployment[] {
@@ -659,9 +736,13 @@ export class MockFleet {
   }
 
   alerts(now: number): FleetAlert[] {
-    return this.f.alerts
-      .filter((a) => a.at <= now && (!a.when || a.when(now)))
-      .map((a) => ({ ...a.item, since: a.at, acked: this.acked.has(a.item.id), acked_at: this.acked.get(a.item.id) ?? null }));
+    const mixed = this.ops.alerts(now, this.nodes(now), this.scenario === 'mixed' ? this.t0 - 8 * MIN : now).map((a) => ({ ...a, acked: this.acked.has(a.id), acked_at: this.acked.get(a.id) ?? null }));
+    return [
+      ...mixed,
+      ...this.f.alerts
+        .filter((a) => a.at <= now && (!a.when || a.when(now)))
+        .map((a) => ({ ...a.item, since: a.at, acked: this.acked.has(a.item.id), acked_at: this.acked.get(a.item.id) ?? null })),
+    ];
   }
 
   // ---- a node's newest sample and the controller's host ------------------------------------------
@@ -1102,6 +1183,8 @@ export class MockFleet {
     const v = FLEET_CONTRACT;
     if (parts[0] === 'discovery') return this.discovery.handle(method, parts, q, body, nowMs);
     if (parts[0] === 'add') return this.wizard.handle(method, parts, body, nowMs);
+    if (parts[0] === 'update') return this.ops.handleUpdate(method, parts, q, body, now);
+    if (parts[0] === 'controller') return this.ops.handleController(method, parts, q, body, now);
     if (method === 'GET' && parts.length === 1) {
       switch (parts[0]) {
         case 'nodes':
