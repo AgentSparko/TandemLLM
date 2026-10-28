@@ -32,6 +32,10 @@ test: tests/owned.py). The engine a box serves on :8000 is never addressed.
   9  SRV-467's replica sets (its routing_rules columns) become Replicas records once; its env
      form says how                                                        test_srv467_migration
  10  a fake engine ends with its test, whatever the test did             test_owner_watch
+ 11  VIS-254: the controller's ledger under /v1/fleet/ledger/*, its gateway under
+     /v1/fleet/gateway/chat/completions (a page's own JSON POST only), a Replicas member pinned
+     with X-Tandem-Pin (no fallback, the conversation's home kept, 409 for a stranger, 503 for
+     a member that takes no request), the 30 d metrics range       test_fleet_ledger_gateway_pin
 
     python tests/test_deployments.py
 """
@@ -799,6 +803,76 @@ def test_srv467_migration():
         raise AssertionError("a replica set in the environment was taken")
     except config_mod.ConfigError as exc:
         assert "Replicas deployment since SRV-731" in exc.message, exc.message
+
+
+# ---------------------------------------------------------------------------- 11. VIS-254
+
+def test_fleet_ledger_gateway_pin():
+    fx = Fleet({"Gold": Node("PIN-G-0001", "g", ["fake-p"]),
+                "R-3": Node("PIN-3-0001", "r3", ["fake-p"])})
+    try:
+        g, r3 = fx.ids["Gold"], fx.ids["R-3"]
+        fx.record({"model": "fake-p", "type": "replicas", "members": [g, r3], "api_id": "qp"})
+        gw = "/v1/fleet/gateway/chat/completions"
+        page = {"Content-Type": "application/json", "Origin": f"http://127.0.0.1:{fx.px.port}",
+                "Host": f"127.0.0.1:{fx.px.port}"}
+
+        def via(pin=None, conv="pin-chat", headers=None):
+            body = {"model": "qp", "messages": [{"role": "user", "content": "hi"}],
+                    "conversation_id": conv}
+            h = dict(headers or page, **({"X-Tandem-Pin": pin} if pin else {}))
+            return fx.px.post(gw, json.dumps(body).encode(), headers=h)
+        st, h, _ = via()
+        home = h["X-Tandem-Node"]
+        assert st == 200 and h["X-Tandem-Deployment"] == "qp" and home in ("Gold", "R-3"), h
+        # each member pinned by its id or its alias, the conversation's home unchanged
+        other = "R-3" if home == "Gold" else "Gold"
+        for pin, alias in ((g, "Gold"), (r3, "R-3"), (other, other)):
+            st, h, _ = via(pin)
+            assert st == 200 and h["X-Tandem-Node"] == alias, (pin, h)
+        assert via()[1]["X-Tandem-Node"] == home
+        st, _, raw = via("n-stranger")
+        assert st == 409 and json.loads(raw)["error"]["code"] == "not_a_member", raw
+        # a pinned member that stops answering is not replaced by the other one
+        alias_srv = fx.nodes[other]
+        alias_srv.srv.shutdown()
+        alias_srv.srv.server_close()
+        fx.px.svc.relay.drop_pool(next(m["backend"] for m in
+                                       fx.px.svc.cfg.deployment("qp")["members"]
+                                       if m["node"] == fx.ids[other]))
+        fx.sync()
+        fx.f.deps._ctx = None
+        st, _, raw = via(other)
+        assert st == 503 and json.loads(raw)["error"]["code"] == "member_not_serving", raw
+        # the gateway takes the page's own JSON only
+        st, _, raw = via(headers={"Content-Type": "text/plain"})
+        assert st == 415 and json.loads(raw)["error"]["code"] == "json_only", raw
+        st, _, raw = via(headers=dict(page, Origin="http://elsewhere.example"))
+        assert st == 403 and json.loads(raw)["error"]["code"] == "cross_origin", raw
+        # the ledger: every gateway row with its node, read through /v1/fleet/ledger/*
+        rows = fx.px.rows()
+        assert {r["deployment"] for r in rows if r["status"] == 200} == {"qp"}, rows
+        tf.proxy_app.dashboard()._memo.clear()
+        st, u = tf.get(fx.px, f"/v1/fleet/ledger/usage?bucket=day&node={urllib.parse.quote(g)}")
+        dash_ok(u, "usage")
+        assert st == 200 and u["filters"]["node"] == g and u["totals"]["requests"] == sum(
+            1 for r in rows if r["node"] == g), u["totals"]
+        st, u = tf.get(fx.px, "/v1/fleet/ledger/usage?bucket=day&deployment=qp")
+        assert st == 200 and sorted(u["dimensions"]["nodes"]) == sorted([g, r3]), u["dimensions"]
+        st, rq = tf.get(fx.px, f"/v1/fleet/ledger/requests?node={urllib.parse.quote(r3)}")
+        assert st == 200 and dash_ok(rq, "requests")["requests"] and \
+            {x["node"] for x in rq["requests"]} == {r3}, rq
+        st, sm = tf.get(fx.px, "/v1/fleet/ledger/summary")
+        assert st == 200 and dash_ok(sm, "summary")["ledger"]["rows"] == len(rows), sm["ledger"]
+        st, err = tf.get(fx.px, "/v1/fleet/ledger/system")
+        assert st == 404, err
+        # a month of power for Usage's energy: hourly, 721 samples
+        m = tf.ok(tf.get(fx.px, "/v1/fleet/metrics?source=all&metric=power&range=30d")[1],
+                  "metrics")
+        assert m["range"] == "30d" and m["step_s"] == 3600 and \
+            all(len(s["values"]) == 721 for s in m["series"]), (m["step_s"], m["range"])
+    finally:
+        fx.close()
 
 
 # ---------------------------------------------------------------------------- 10. orphans

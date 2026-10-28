@@ -163,9 +163,10 @@ METRICS = {"tps": ("tok/s", "sum"), "req": ("req", "sum"), "ttft": ("ms", "mean"
            "fabric": ("Gb/s", "sum"), "rtt": ("ms", "max")}
 # the figures a deployment's scope counts per engine backend, not per node
 DEPLOYMENT_METRICS = ("tps", "req", "ttft")
-# span and sample count per range; the step is span / (count - 1)
+# span and sample count per range; the step is span / (count - 1). 30d (hourly, the 600 s tier
+# that keeps the retention) is for the energy of a month on Usage (VIS-254)
 RANGES = {"5m": (300, 151), "1h": (3600, 121), "6h": (21600, 145), "24h": (86400, 145),
-          "7d": (604800, 169)}
+          "7d": (604800, 169), "30d": (2592000, 721)}
 DEVICES = ("desk", "tablet", "phone")
 ICONS = ("desk", "cloud", "rack")
 COLOURS = range(1, 9)

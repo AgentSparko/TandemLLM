@@ -16,6 +16,14 @@ serves on one port:
     *    /v1/fleet/*               TandemApp's controller: the fleet registry, its nodes'
                                    figures and the saved layouts (proxy/fleet.py, SRV-723);
                                    each node's Setup Guide relayed (proxy/fleetsetup.py)
+    GET  /v1/fleet/ledger/{summary,usage,requests}
+                                   this controller's own ledger, as /v1/dashboard/* answers it
+                                   (VIS-254: a page whose /v1/dashboard/* is an engine's reads
+                                   the fleet's ledger here)
+    POST /v1/fleet/gateway/chat/completions
+                                   /v1/chat/completions through this gateway for a page whose
+                                   /v1/* is an engine's (VIS-254, the Playground's targets;
+                                   `X-Tandem-Pin: <node>` pins a deployment's member)
     GET  /metrics                  the proxy's families in the Prometheus text format
     GET  /health                   {"status": "ok"}; the full body for the admin or the machine
     *    /v1/conductor/*           the conductor's documents, journal and sessions (P4, with
@@ -57,6 +65,7 @@ from server import metrics as metrics_mod
 from server import static
 
 STATE: dict = {}
+GATEWAY = "/v1/fleet/gateway/chat/completions"
 # SRV-605: the request phase has a timeout, the answer has none. A client that connects and sends
 # nothing, stops halfway through its request, or keeps a connection idle between requests gives
 # the thread back after this many seconds (`--idle-timeout`, TANDEM_IDLE_TIMEOUT_S; 0 for none).
@@ -353,6 +362,8 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/v1/collect/"):          # P6: a plugin's batch, its own token
             from proxy import collect_api
             return collect_api.handle(self, STATE["svc"], path, raw)
+        if path == GATEWAY:
+            return self._gateway(raw, t_arrival)
         if path.startswith("/v1/fleet/"):
             return self._fleet("POST", path, raw)
         try:
@@ -395,6 +406,40 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(exc.status, exc.body())
         svc.serve(self, path, raw, body, route, user, t_arrival=t_arrival)
 
+    def _gateway(self, raw: bytes, t_arrival: float) -> None:
+        """`POST /v1/fleet/gateway/chat/completions` (VIS-254): the page's own JSON POST, then the
+        completion as /v1/chat/completions takes it (the proxy's API keys when users exist)."""
+        from server.setup_api import same_origin_json
+        bad = same_origin_json(self.headers)
+        if bad:
+            words = {"json_only": "the gateway takes a JSON body (Content-Type: application/json)",
+                     "cross_site": "a request from another site cannot use the gateway",
+                     "cross_origin": "a request from another origin cannot use the gateway"}
+            return self._json(bad[0], {"error": {"type": "invalid_request_error", "code": bad[1],
+                                                 "message": words.get(bad[1], bad[2])}})
+        try:
+            body = json.loads(raw or b"{}")
+        except ValueError as exc:
+            return self._json(400, {"error": {"message": f"bad json: {exc}",
+                                              "type": "invalid_request_error"}})
+        return self._complete("/v1/chat/completions", raw, body, t_arrival)
+
+    def _fleet_ledger(self, name: str) -> None:
+        """`GET /v1/fleet/ledger/{summary,usage,requests}` (VIS-254): this controller's ledger
+        under the dashboard's rule, the same answers as /v1/dashboard/*."""
+        if not self._allowed("dashboard"):
+            return
+        api = dashboard()
+        fn = {"summary": api.summary, "usage": api.usage, "requests": api.requests}.get(name)
+        if fn is None:
+            return self._json(404, {"error": {"type": "not_found",
+                                              "message": f"no route /v1/fleet/ledger/{name}"}})
+        q = {k: v[-1] for k, v in parse_qs(urlsplit(self.path).query).items()}
+        try:
+            return self._json(200, fn(q), extra_headers=(("Cache-Control", "no-store"),))
+        except dashboard_api.ApiError as exc:
+            return self._json(exc.status, exc.body())
+
     def _write(self, method: str):
         if chat_forward.route(self, method, STATE["auth"]):
             return
@@ -435,6 +480,8 @@ class Handler(BaseHTTPRequestHandler):
         connect, check and install under `fleet_trust` (server/auth.py), and the controller's
         own sign-in at /v1/fleet/session."""
         sub = path.rstrip("/").split("/")[3:]
+        if method == "GET" and len(sub) == 2 and sub[0] == "ledger":
+            return self._fleet_ledger(sub[1])
         if len(sub) >= 4 and sub[0] == "nodes" and sub[2] == "setup":
             return self._fleet_setup(method, unquote(sub[1]), [unquote(x) for x in sub[3:]], raw)
         body = None

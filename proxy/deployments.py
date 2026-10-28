@@ -126,6 +126,8 @@ PATCHABLE = ("name", "api_id", "ctx", "pack", "type", "members", "stages", "role
 CONSTRAINED = ("structured_outputs", "guided_json", "guided_regex", "guided_choice",
                "guided_grammar", "grammar", "json_schema")
 SELF = "self"                                   # SRV-467's member for this machine's engine
+# VIS-254: a request pinned to one member (the Playground's A/B of a deployment's members)
+PIN_HEADER = "X-Tandem-Pin"
 
 
 class DeployError(Exception):
@@ -146,6 +148,13 @@ class Refused(Exception):
     def body(self) -> dict:
         return {"error": {"message": self.message, "type": "server_busy" if self.status == 503
                           else "invalid_request_error", "code": self.code}}
+
+
+def _header(headers, name: str) -> str:
+    try:
+        return ((headers.get(name) if headers is not None else None) or "").strip()
+    except Exception:                                              # noqa: BLE001
+        return ""
 
 
 def constrained(body) -> bool:
@@ -486,9 +495,21 @@ class Deployments:
         ms = [m for m in self.members(rec, self._context(CTX_TTL_S)) if m["state"] != "leaving"]
         if not ms:
             raise Refused(503, "no_member", f"{rec['name']} has no member that takes requests")
+        pin = _header(headers, PIN_HEADER)
+        if pin:
+            # one member, by its node's id or alias: no fallback to another member, and the
+            # conversation's home stays where it was
+            m = next((x for x in ms if pin in (x["node"], x["alias"])), None)
+            if m is None:
+                raise Refused(409, "not_a_member", f"{pin} is not a member of {rec['name']}")
+            if not m["routable"]:
+                raise Refused(503, "member_not_serving", f"{m['alias']} does not take "
+                                                         f"{rec['name']}'s requests now: "
+                                                         f"{m['text']}")
+            ms = [m]
         ok = [m for m in ms if m["routable"]]
         key = None
-        if rec["type"] == "replicas" and ok:
+        if rec["type"] == "replicas" and ok and not pin:
             key = affinity.policy_key(affinity.conversation_key(body, headers),
                                       (rec.get("options") or {}).get("affinity") or "root")
             by = {m["backend"]: m for m in ok}
@@ -514,7 +535,8 @@ class Deployments:
         r = self.svc.table._route(s, m0["backend"], row, model)
         r.model = m0["model"]
         mine = [(m["backend"], m["model"]) for m in cands[1:]]
-        r.fallbacks = mine + [fb for fb in r.fallbacks if fb not in mine and fb[0] != m0["backend"]]
+        r.fallbacks = [] if pin else mine + [fb for fb in r.fallbacks
+                                             if fb not in mine and fb[0] != m0["backend"]]
         r.deployment = rec["id"]
         r.no_replay = constrained(body)
         if key is not None:
