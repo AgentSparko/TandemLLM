@@ -294,6 +294,16 @@ class SetupEngine:
                                       extra=(("Cache-Control", "no-store"),))
                 if u.path == "/v1/setup/jobs/j1":
                     return self._sse([("job", {"step": i}) for i in range(3)])
+                if u.path == "/v1/setup/jobs/slow":
+                    # a job between two steps: quiet for longer than any read timeout of 1 s
+                    self._sse([("job", {"step": 0, "after": self.headers.get("Last-Event-ID")})])
+                    time.sleep(1.6)
+                    try:
+                        self.wfile.write(b'event: job\ndata: {"step": 1}\n\n')
+                        self.wfile.flush()
+                    except OSError:
+                        pass
+                    return
                 if u.path == "/v1/setup/weights":
                     return self._send(200, {"contract_version": "1.0", "active": "p-run",
                                             "free_gb": 900.0, "assets": [],
@@ -331,6 +341,16 @@ class SetupEngine:
                 if self.path == "/v1/setup/remove":
                     return self._send(200, {"removed": json.loads(body)["profiles"],
                                             "echo": json.loads(body)})
+                if self.path == "/v1/setup/apply":
+                    return self._send(202, {"contract_version": "1.0",
+                                            "job": {"id": "j1", "state": "running"}})
+                if self.path in ("/v1/setup/assistant/load", "/v1/setup/assistant/unload"):
+                    return self._send(200, {"state": "loading" if self.path.endswith("load")
+                                            and not self.path.endswith("unload") else
+                                            "not_loaded"})
+                if self.path == "/v1/setup/assistant/chat":
+                    return self._sse([("message", {"type": "delta", "text": "Hi"}),
+                                      ("message", {"type": "done"})])
                 return self._send(404, {"error": {"type": "not_found"}})
 
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
