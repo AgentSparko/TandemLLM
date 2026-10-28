@@ -143,16 +143,18 @@ test.describe('performance', () => {
   });
 
   test('history source: 30 days uses hourly buckets from the ledger and says so', async ({ page }) => {
-    await login(page, '#/performance');
+    // VIS-254: History is its own tab; its period is `period`, apart from the scope bar's range
+    await login(page, '#/performance?tab=history');
     await page.getByRole('radio', { name: '30 d' }).click();
     await expect(page.locator('#history .panel-sub').first()).toContainText('hourly buckets from the ledger');
-    expect(page.url()).toContain('range=30d');
+    expect(page.url()).toContain('period=30d');
+    expect(page.url()).not.toContain('range=30d');
     await page.getByRole('radio', { name: '365 d' }).click();
     await expect(page.locator('#history .panel-sub').first()).toContainText('daily buckets');
   });
 
   test('history charts: five charts, each with one y axis and a legend for banded series', async ({ page }) => {
-    await login(page, '#/performance');
+    await login(page, '#/performance?tab=history');
     await expect(page.locator('#history qse-ribbon')).toHaveCount(5);
     await expect(page.locator('#history qse-ribbon').first().locator('.legend')).toContainText('p90');
     await expect(page.locator('.reading')).toContainText('Tokens per block');

@@ -106,8 +106,9 @@ test.describe('desktop', () => {
     await page.locator('.live-counts').waitFor({ timeout: 10_000 });
     await page.waitForTimeout(30_000);
     await shot(page, 'performance');
-    await page.locator('.history').evaluate((el) => el.scrollIntoView({ block: 'start' }));
-    await page.evaluate(() => window.scrollBy(0, -60));
+    // VIS-254: History is a tab of its own
+    await openView(page, '#/performance?tab=history');
+    await page.locator('.history').waitFor({ timeout: 10_000 });
     await page.waitForTimeout(800);
     await shot(page, 'performance-history');
     await request.post('/__mock/live', { data: { scenario: 'clear' } });

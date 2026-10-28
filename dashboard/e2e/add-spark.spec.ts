@@ -141,6 +141,9 @@ test.describe('Add Spark', () => {
     await expect(page.locator('[data-panel="done"]')).toContainText('1 Spark added');
     await expect(page.locator('[data-act="serve"]')).toHaveAttribute('href', '#/models/place');
     await expect(page.locator('[data-panel="topology"] qse-topology')).toBeVisible();
+    // VIS-254: the Sparks that were there already show their figures, never "no figures yet"
+    await expect(page.locator('[data-panel="topology"] .node-g[data-node="desk"] title')).toContainText('tok/s');
+    await expect(page.locator('[data-panel="topology"] .node-g[data-node="desk"] title')).not.toContainText('no figures yet');
     const nodes = (await (await page.request.get('/v1/fleet/nodes')).json()).nodes as { alias: string; colour: number; tags: string[] }[];
     expect(nodes.find((x) => x.alias === 'Spark Lab')).toMatchObject({ colour: 6, tags: ['desk', 'lab'] });
   });

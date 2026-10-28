@@ -69,12 +69,9 @@ test.describe('Models pages', () => {
   test('Placement shows fit: every Spark’s bar, Single refused on Desk for memory, a Split over R-1 → R-2 allowed but not built, one with Desk refused for the fabric; Serve creates and starts', async ({ page }, info) => {
     test.setTimeout(90_000);
     await open(page, '#/models');
-    // DeepSeek's Split holds R-1 and R-2: stopped through its plan first
-    const d = await dialogFor(page, 'dsv41', 'stop');
-    await expect(d.locator('.act-sec.is-impact')).toContainText('takes no new request');
-    await d.locator('[data-act-go]').click();
-    await expect(d.locator('[data-dep-job="done"]')).toBeVisible({ timeout: 15_000 });
-    await d.locator('[data-act-cancel]').click();
+    // DeepSeek's Split over R-1 and R-2 is recorded, stopped until ENG-307: their memory is free
+    await expect(card(page, 'dsv41')).toContainText('not built yet (ENG-307)');
+    await expect(card(page, 'dsv41').locator('[data-dep-act="stop"]')).toHaveCount(0);
     // Serve a model: a 120B model, one lane of 32k
     await open(page, '#/models/place');
     await page.locator('[data-sv-model]').selectOption('nemotron-3.5-super-vl-120b-a12b');

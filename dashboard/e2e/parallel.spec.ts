@@ -1,6 +1,6 @@
 // Performance → Requests (Parallel before VIS-242; #/performance?tab=parallel still opens it): every
 // request in flight on every backend at once. On the mock's
-// simulator (mock/parallel.ts, 14 streams over six backends): the aggregate, the per-backend cards,
+// simulator (mock/parallel.ts, 14 streams over seven backends): the aggregate, the per-backend cards,
 // the stacked chart, the lanes; rows keep their place between polls; "not reported" where a
 // backend gives no live count; idle; no horizontal scroll at 390 px; the hero does not move.
 import { expect, test } from '@playwright/test';
@@ -61,7 +61,8 @@ test.describe('parallel view', () => {
   });
 
   test('rows keep their place between polls', async ({ page }) => {
-    await login(page, '#/performance?tab=parallel');
+    // one Spark: the lanes' own slots (a fleet groups them by deployment and Spark: fleet-scope.spec.ts)
+    await login(page, '#/performance?tab=parallel', '?fleet=fleet1');
     await expect(page.locator('.par')).toHaveAttribute('data-in-flight', '14');
     const rows = async () => page.locator('.par-table > .par-row:not(.par-row-head)').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.lane ?? null));
     const a = await rows();

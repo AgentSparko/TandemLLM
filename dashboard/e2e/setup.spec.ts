@@ -1,4 +1,5 @@
-// QA VIS-79 (VIS-78): the setup wizard at #/setup against the mock, desktop and 390 px. @mock
+// QA VIS-79 (VIS-78): the setup wizard at #/models/serve (#/setup before TandemApp, redirected) against
+// the mock, desktop and 390 px. @mock
 // The guide opens in SIMPLE mode for a fresh browser; this file drives the ADVANCED
 // wizard, so every context asks for the advanced flow by name before it starts.
 
@@ -30,7 +31,7 @@ test('a tile shows the model and opens its overview', async ({ page }) => {
   await expect(tile).toContainText('Recommended');
   await expect(tile.locator('.mtile-speed-n')).toHaveText('84.4');
   await tile.click();
-  await expect(page).toHaveURL(new RegExp(`#/setup/${MODEL}/overview$`));
+  await expect(page).toHaveURL(new RegExp(`#/models/serve/${MODEL}/overview$`));
   await expect(page.locator('.setup-step')).toHaveAttribute('data-step', 'overview');
 });
 
@@ -39,10 +40,11 @@ test('the recommended setup is preselected and fits', async ({ page }) => {
   await expect(page.locator('.wcard.is-selected')).toHaveAttribute('data-profile-card', 'exl3-4.5');
   await expect(page.locator('.membar')).toHaveAttribute('data-fits', 'true');
   await page.locator('.setup-next').click();
-  for (const id of ['drafters', 'lookup', 'conductor', 'narrator', 'laya', 'shadow', 'vision', 'prompt_cache', 'state_store', 'disk_tier', 'nvme_spill']) {
+  for (const id of ['drafters', 'lookup', 'conductor', 'laya', 'shadow', 'vision', 'prompt_cache', 'state_store', 'disk_tier', 'nvme_spill']) {
     await expect(page.locator(`[data-component="${id}"] input`), id).toBeChecked();
   }
-  for (const id of ['response_cache', 'proxy']) await expect(page.locator(`[data-component="${id}"] input`), id).not.toBeChecked();
+  // the card's own defaults: the narrator, the response cache and the proxy start off
+  for (const id of ['narrator', 'response_cache', 'proxy']) await expect(page.locator(`[data-component="${id}"] input`), id).not.toBeChecked();
 });
 
 test('Next and Previous: the URL, the rail and the page agree and nothing is lost', async ({ page }) => {
@@ -50,7 +52,7 @@ test('Next and Previous: the URL, the rail and the page agree and nothing is los
   await page.locator('[data-profile-card="exl3-4.0"]').click();
   for (let i = 0; i < 3; i++) await page.locator('.setup-next').click();
   await page.locator('.setup-prev').click();
-  await expect(page).toHaveURL(new RegExp(`#/setup/${MODEL}/parallelism$`));
+  await expect(page).toHaveURL(new RegExp(`#/models/serve/${MODEL}/parallelism$`));
   await expect(page.locator('.setup-step')).toHaveAttribute('data-step', 'parallelism');
   if (!isPhone(page)) await expect(page.locator('[data-rail="parallelism"] a')).toHaveAttribute('aria-current', 'step');
   else await expect(page.locator('.rail-phone')).toContainText('Step 5 of 8');
@@ -99,9 +101,12 @@ test('over budget blocks Finish with How to fix, and a shorter window lets it go
   await expect(page.locator('[data-finish-blocked]')).toContainText('does not fit');
   const fix = page.locator('.rv-fixes li', { hasText: 'Lower the longest conversation' });
   await expect(fix).toBeVisible();
+  // the fix names the window that fits (SRV-707: one window for every lane, the lanes counted)
+  const to = /to ([\d,]+) tokens/.exec((await fix.textContent()) ?? '')?.[1]?.replace(/,/g, '');
+  expect(to, 'the fix names a window').toBeTruthy();
   await fix.locator('a').click();
   await expect(page.locator('.setup-step')).toHaveAttribute('data-step', 'parallelism');
-  await setWindow(page, 'window', '64k');
+  await setWindow(page, 'window', to!);
   await expect(page.locator('.membar')).toHaveAttribute('data-fits', 'true');
   await page.goto(`./#/setup/${MODEL}/review`);
   await expect(page.locator('.setup-finish')).toBeEnabled();
@@ -127,9 +132,11 @@ test('the measured table sorts, switches mode and group, marks the choice', asyn
   await page.locator('.mt-sort[data-col="code"]').click();
   await expect(rows.first()).toHaveAttribute('data-profile', 'exl3-6.0');
   await page.locator('.seg-btn[data-val="sampled"]').click();
-  await expect(page.locator('.mt-table')).toHaveAttribute('data-mode', 'sampled_512');
+  // the measured table; the parallel table beside it shares its look (.pt-table)
+  const table = page.locator('.mt-table:not(.pt-table)');
+  await expect(table).toHaveAttribute('data-mode', 'sampled_512');
   await page.locator('.seg-btn[data-val="long"]').click();
-  await expect(page.locator('.mt-table')).toHaveAttribute('data-mode', 'long_sampled');
+  await expect(table).toHaveAttribute('data-mode', 'long_sampled');
   await expect(page.locator('.mt-sort[data-col="long32k"]')).toBeVisible();
   await expect(page.locator('.mt-row.is-selected')).toHaveAttribute('data-profile', 'exl3-4.5');
   await expect(page.locator('.mt-apart-head')).toHaveText('older build, not comparable');
@@ -157,13 +164,13 @@ test('Finish: Wren is asked to unload, the steps run, the way out appears', asyn
   const unload = page.waitForRequest((r) => r.url().endsWith('/v1/setup/assistant/unload') && r.method() === 'POST');
   await finish(page);
   await unload;
-  await expect(page).toHaveURL(new RegExp(`#/setup/${MODEL}/install$`));
+  await expect(page).toHaveURL(new RegExp(`#/models/serve/${MODEL}/install$`));
   await expect(page.locator('[data-job-state="done"]')).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.inst-step[data-step="smoke"]')).toHaveClass(/is-done/);
   // VIS-211: the finished screen and its way on
   await expect(page.locator('[data-job-finished]')).toContainText('is ready');
   await expect(page.locator('[data-start-chatting]')).toHaveAttribute('href', '#/chat');
-  await expect(page.locator('[data-back-to-guide]')).toHaveAttribute('href', '#/setup');
+  await expect(page.locator('[data-back-to-guide]')).toHaveAttribute('href', '#/models/serve');
   await expect(page.locator('.inst-done-actions a', { hasText: 'See it run' })).toHaveAttribute('href', '#/performance');
 });
 
@@ -190,10 +197,10 @@ test('a failed smoke rolls back and offers the way back to Review', async ({ pag
 test('the engine restarts during the install: the page waits and resumes the job', async ({ page, request }) => {
   await setupMock(request, { scenario: 'restart', gap_s: 5 });
   await finish(page);
-  await expect(page.locator('[data-restarting]')).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator('[data-restarting]')).toContainText('The engine is restarting');
+  // VIS-209: the restart is one card (the steps and the log fold under it)
+  await expect(page.locator('[data-restart-card]')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('[data-job-state="done"]')).toBeVisible({ timeout: 40_000 });
-  await expect(page.locator('[data-restarting]')).toHaveCount(0);
+  await expect(page.locator('[data-restart-card], [data-restarting]')).toHaveCount(0);
 });
 
 test('corrupt, old or stale saved progress starts over with a note', async ({ page }) => {
@@ -248,18 +255,19 @@ test('the guide starts from what the box runs now; Review warns when a client-fa
 test('setup mode: #/ goes to #/setup and the other views are off with a reason', async ({ page, request }) => {
   await setupMock(request, { setupMode: true });
   await page.goto('./#/usage');
-  await expect(page).toHaveURL(/#\/setup$/);
+  await expect(page).toHaveURL(/#\/models\/serve$/);
   await expect(page.locator('[data-setup-mode]')).toBeVisible();
-  // VIS-161: every view but Setup is off with the reason, the Chat tab included
-  const on = page.locator('.rail a.rail-tab:not(.is-off)');
+  // VIS-161: every view but Setup is off with the reason, the Chat tab included (the shell's icon
+  // strip: one link per section since VIS-242; Models holds the Setup Guide)
+  const on = page.locator('.istrip a.strip-i:not(.is-off)');
   await expect(on).toHaveCount(1);
-  await expect(on).toHaveAttribute('href', '#/setup');
-  const off = page.locator('.rail a.rail-tab.is-off');
-  await expect(off).toHaveCount(8);
+  await expect(on).toHaveAttribute('href', '#/models/serve');
+  const off = page.locator('.istrip a.strip-i.is-off');
+  expect(await off.count()).toBe((await page.locator('.istrip a.strip-i').count()) - 1);
   for (const tab of await off.all()) await expect(tab).toHaveAttribute('title', 'Not available while the box is in setup mode');
-  await expect(off.filter({ hasText: 'Chat' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('.istrip a.strip-i.is-off[data-section="chat"]')).toHaveAttribute('aria-disabled', 'true');
   await page.evaluate(() => (location.hash = '#/system'));
-  await expect(page).toHaveURL(/#\/setup$/);
+  await expect(page).toHaveURL(/#\/models\/serve$/);
 });
 
 test('private weights without a token: the notice, and Finish stays off', async ({ page, request }) => {

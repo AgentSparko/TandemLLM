@@ -38,8 +38,11 @@ test.describe('dev', () => {
     const rid = await finishRequest(request);
     const line = page.locator('.log-line', { hasText: rid });
     await expect(line).toBeVisible({ timeout: 1500 });
-    const last = page.locator('.log-line').last();
-    await expect(last).toContainText(rid);
+    // at the bottom: the console follows, and the line is among the newest (the mock writes its
+    // own flavour lines on its clock, one may land right after it)
+    const tail = await page.locator('.log-line').evaluateAll((els) => els.slice(-3).map((e) => e.textContent ?? ''));
+    expect(tail.some((t) => t.includes(rid)), tail.join(' | ')).toBe(true);
+    expect(await page.locator('.console-scroll').evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThan(44);
   });
 
   test('pause: 50 new lines do not move the view; a chip says so and jumps to the newest', { tag: '@mock' }, async ({ page, request }) => {
@@ -118,7 +121,8 @@ test.describe('dev', () => {
 
   test('request timing breakdown: an expanded row shows queue, prefill and decode to scale', async ({ page }) => {
     await login(page, '#/dev');
-    const row = page.locator('.req-row:not(.is-failed)').first();
+    // the engine's own row: one the proxy relayed (every seventh in the mock) has no engine timing
+    const row = page.locator('.req-row:not(.is-failed):not(:has(.proxy-tag))').first();
     await expect(row).toBeVisible();
     await row.click();
     const bar = page.locator('.req-expand qse-timing-bar');

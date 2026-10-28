@@ -61,7 +61,9 @@ test.describe('the Performance page holds still', () => {
     const phone = isCards(page);
     await setMode(request, 'ok');
     expect((await request.post('/__mock/live', { data: { scenario: 'clear', contract: '1.1', activity: true, simulator: false } })).ok()).toBeTruthy();
-    await login(page, '#/performance');
+    // today's box (one Spark): the page is the engine's own Live panel; a fleet's strips sit above it
+    // and are watched apart (fleet-scope.spec.ts)
+    await login(page, '#/performance', '?fleet=fleet1');
     await expect(page.locator('.live-state')).toContainText('streaming', { timeout: 10_000 });
     // a request the mock engine started before the simulator was paused would finish mid-watch and
     // add a row to the Last 20 (a real change, not a jump): let it end first (the mock caps one at 20 s)
@@ -92,10 +94,16 @@ test.describe('the Performance page holds still', () => {
     await page.waitForTimeout(600); // the first events after the scenario lands; /metrics tiles filled
     await expect(page.locator('.live-metrics .stats')).toBeVisible();
     const t0 = await page.evaluate(() => performance.now());
+    // a request that finishes while we watch (one an earlier spec left on the mock engine: a chat it
+    // closed mid-prefill ends later, abandoned) adds a row and moves what is under it: a real change,
+    // not a jump. The engine's `served` count says so; the watch starts again from there.
+    const served = async () => ((await (await request.get('/v1/dashboard/live?follow=0')).json()) as { counts?: { served?: number } }).counts?.served ?? 0;
+    let servedAt = await served();
+    let restarts = 0;
 
     const shots = process.env.PERFUI_SHOTS;
     const tag = `${test.info().project.name}${vw ? `-${vw}` : ''}`;
-    const first = await boxes(page, phone);
+    let first = await boxes(page, phone);
     if (shots) await page.screenshot({ path: `${shots}/${tag}-1-prefilling.png`, fullPage: true });
     const headlines = new Set<string>();
     const moved: string[] = [];
@@ -104,6 +112,13 @@ test.describe('the Performance page holds still', () => {
       await page.waitForTimeout(250);
       headlines.add((await page.locator('.now-headline').textContent())?.trim().split(' ')[0] ?? '');
       const b = await boxes(page, phone);
+      const now = await served();
+      if (now !== servedAt) {
+        servedAt = now;
+        first = b;
+        restarts++;
+        continue;
+      }
       for (const [k, v] of Object.entries(first)) {
         const n = b[k];
         if (!n) {
@@ -125,7 +140,8 @@ test.describe('the Performance page holds still', () => {
       cls = shifts.reduce((a, s) => a + s.value, 0);
     }
     expect(ticks, 'the watch ran long enough to see the states change').toBeGreaterThanOrEqual(16);
-    console.log(`${tag}: ${moved.length} box moves over ${ticks} ticks; CLS ${cls == null? 'n/a': cls.toFixed(5)}`);
+    expect(restarts, 'requests that finished outside the scenario while we watched').toBeLessThanOrEqual(3);
+    console.log(`${tag}: ${moved.length} box moves over ${ticks} ticks (${restarts} restarts for a finished request); CLS ${cls == null? 'n/a': cls.toFixed(5)}`);
     expect(moved.slice(0, 20), `${moved.length} boxes moved`).toEqual([]);
     // what is left is text moving inside its own fixed box (a number that gains a digit pushes its
     // unit; a timeline segment grows): far under the 0.1 a page counts as stable, and ~0 in practice

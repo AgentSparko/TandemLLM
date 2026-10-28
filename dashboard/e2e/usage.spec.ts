@@ -175,8 +175,9 @@ test.describe('usage', () => {
   test('phone: one-column cards, bottom tab bar, heatmap scrolls with the current week visible', async ({ page }, testInfo) => {
     test.skip(!testInfo.project.name.includes('phone'), 'phone project only');
     await login(page);
-    await expect(page.locator('.rail')).toBeVisible();
-    const railBox = await page.locator('.rail').boundingBox();
+    // the shell's bottom bar (VIS-242)
+    await expect(page.locator('.bottombar')).toBeVisible();
+    const railBox = await page.locator('.bottombar').boundingBox();
     expect(railBox!.y).toBeGreaterThan(600); // bottom bar
     const cards = page.locator('.stat-window');
     const a = await cards.nth(0).boundingBox();
