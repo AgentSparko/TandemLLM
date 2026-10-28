@@ -95,8 +95,10 @@ describe('AU1: no password prompt in the source', () => {
       // the Backends form's upstream API key (a provider's sk-..., not the dashboard's password), the
       // setup guide's sign-in (shown only on a 401 from a /v1/setup route, a box with a password
       // set) and the Add Spark wizard's SSH login to the box being added (VIS-246: the box's own
-      // password, used once, never the dashboard's) are the password-type inputs
-      if (/type="password"/.test(text) && ![join('views', 'backends.ts'), join('setup', 'signin.ts'), join('views', 'fleet', 'wizard.ts')].includes(rel)) bad.push(`${rel}: a password input`);
+      // password, used once, never the dashboard's) are the password-type inputs; so are App settings'
+      // (OPS-234: the admin password a moved controller gets, and the one of the controller a fleet is
+      // taken from, never this page's own)
+      if (/type="password"/.test(text) && ![join('views', 'backends.ts'), join('setup', 'signin.ts'), join('views', 'fleet', 'wizard.ts'), join('views', 'fleet', 'app-settings.ts')].includes(rel)) bad.push(`${rel}: a password input`);
       for (const [re, what] of [
         [/Unlock editing|>Unlock<|'Unlock'/, 'an unlock step'],
         [/Admin token needed|Enter admin token|Enter the admin token/, 'a token prompt'],

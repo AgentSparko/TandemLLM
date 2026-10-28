@@ -279,7 +279,11 @@ describe('fleet contract', () => {
   const q = (s = '') => new URLSearchParams(s);
 
   it('has a schema per route, and they are strict', () => {
-    expect(Object.keys(fleet).sort()).toEqual(['action', 'action-plan', 'action-result', 'add', 'add-connect', 'add-link', 'add-patch', 'add-run', 'add-session', 'add-start', 'add-target', 'alert', 'alerts', 'deployments', 'discovered', 'discovery', 'discovery-address', 'discovery-start', 'error', 'events', 'host', 'hostkey', 'layout', 'link-test', 'links', 'logs', 'memory', 'metrics', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'scan-consent', 'session', 'ssh-line', 'ssh-target', 'topology', 'trust']);
+    expect(Object.keys(fleet).sort()).toEqual(['action', 'action-plan', 'action-result', 'add', 'add-connect', 'add-link', 'add-patch', 'add-run', 'add-session', 'add-start', 'add-target', 'alert', 'alerts', 'controller', 'deployments', 'discovered', 'discovery', 'discovery-address', 'discovery-start', 'error', 'events', 'handover', 'handover-commit', 'host', 'hostkey', 'layout', 'link-test', 'links', 'logs', 'memory', 'metrics', 'move', 'move-job', 'move-plan', 'node', 'node-patch', 'nodes', 'pair', 'pair-ssh', 'release', 'rule', 'rule-patch', 'rules', 'sample', 'scan-consent', 'session', 'ssh-line', 'ssh-target', 'take', 'topology', 'trust', 'update', 'update-job', 'update-plan', 'update-start']);
+    expect(fleet['update-start']({})).toBe(false);
+    expect(fleet['update-start']({ confirm: 'x', force: true })).toBe(false);
+    expect(fleet.move({ to: 'desk' })).toBe(false);
+    expect(fleet.take({ password: 'x' })).toBe(false);
     expect(fleet['scan-consent']({ subnet: '192.0.2.0/24', all: true })).toBe(false);
     expect(fleet['scan-consent']({})).toBe(false);
     expect(fleet['discovery-start']({ interface: 'en0', scan: true })).toBe(false);
@@ -334,6 +338,12 @@ describe('fleet contract', () => {
         const nodes = (get('/v1/fleet/nodes').nodes as { id: string }[]).map((n) => `node:${n.id}`);
         const depIds = (deps.deployments as { id: string }[]).map((d) => `deployment:${d.id}`);
         for (const source of [...nodes, ...depIds]) for (const metric of ['tps', 'temp', 'fabric'] as const) fcheck('metrics', get('/v1/fleet/metrics', `source=${source}&metric=${metric}&range=1h`));
+        // OPS-234: the fleet update's plan and job, the controller's host and each move's plan
+        fcheck('update', get('/v1/fleet/update'));
+        fcheck('update-plan', get('/v1/fleet/update/plan'));
+        const ctl = get('/v1/fleet/controller');
+        fcheck('controller', ctl);
+        for (const t of ctl.targets as { node: string }[]) fcheck('move-plan', get('/v1/fleet/controller/move', `to=${t.node}&port=8080`));
       }
       // discovery (SRV-727): before a run, a run, the scan, add by address, the ssh line
       const call = (method: string, path: string, body: unknown, at: number, qs = '') => {

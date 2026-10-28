@@ -70,8 +70,10 @@ describe('mock fleet: seeded and live', () => {
               // what a board does not give has no samples, never zeros: Desk (a GX10) has no fabric
               // cable and no memory clock; a node the controller runs on has no RTT to time
               const host = get<{ host: { name: string } }>(m, '/v1/fleet/topology', '', at).host.name;
-              const alias = get<{ nodes: FleetNode[] }>(m, '/v1/fleet/nodes', '', at).nodes.find((n) => n.id === s.node)?.alias;
-              const absent = ((metric === 'fabric' || metric === 'memclk') && s.node === 'desk') || (metric === 'rtt' && alias === host);
+              const node = get<{ nodes: FleetNode[] }>(m, '/v1/fleet/nodes', '', at).nodes.find((n) => n.id === s.node);
+              const alias = node?.alias;
+              // gold3's three Sparks are GX10s like Desk (OPS-234)
+              const absent = ((metric === 'fabric' || metric === 'memclk') && /GX10/.test(node?.dmi ?? '')) || (metric === 'rtt' && alias === host);
               if (absent) expect(vals, `${scenario} ${metric} ${s.node}`).toEqual([]);
               else expect(vals.length, `${scenario} ${metric} ${range} ${s.node}`).toBeGreaterThan(0);
               for (const v of vals) {

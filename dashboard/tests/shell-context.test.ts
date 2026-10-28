@@ -118,6 +118,12 @@ describe('the fleet readout', () => {
     expect(r.swatches).toHaveLength(1);
     expect(r.tps).toBeNull();
     expect(r.label).toBe('Fleet: 1 Spark, no rate yet, no alerts. Open Events & Alerts');
+    expect(r.mixed).toBeNull();
+  });
+  it('OPS-234: the mixed-version alert is said on the readout', () => {
+    const r = readout(fleet({ nodes: [node('a', 1), node('b', 2)], alerts: [{ ...alert('version-mismatch:all', 'all'), title: 'Mixed versions: 0.15.0 on A · 0.15.1 on B' }] }));
+    expect(r.mixed).toBe('Mixed versions: 0.15.0 on A · 0.15.1 on B');
+    expect(r.label).toBe('Fleet: 2 Sparks, no rate yet, 1 active alert, Mixed versions: 0.15.0 on A · 0.15.1 on B. Open Events & Alerts');
   });
 });
 
