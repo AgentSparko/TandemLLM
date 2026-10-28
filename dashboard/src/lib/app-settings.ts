@@ -4,7 +4,7 @@
 // controller's answers are /v1/fleet/app* (proxy/appsettings.py, proxy/adminpw.py).
 
 import type { AppPermission, FleetNode, ImportItem, ImportPlan, ImportResult, PasswordState } from '../api/fleet';
-import { mixedVersions, needsUpdate } from './fleet-update';
+import { mixedVersions, releaseOf } from './fleet-update';
 
 export type Tone = 'ok' | 'warn' | 'err' | 'muted';
 /** the browser's notification permission, or `unsupported` (no Notification API, or a page not
@@ -148,10 +148,11 @@ export function resultWords(r: ImportResult): string {
 
 // ---- updates ------------------------------------------------------------------------------------
 
-/** The Updates block's line: the controller's release and the Sparks on another one. */
+/** The Updates block's line: the controller's release and the Sparks on another one (a local build
+ *  label is its release's, as the version-mismatch rule reads it). */
 export function updateLine(release: string | null, nodes: Pick<FleetNode, 'alias' | 'version' | 'status'>[]): { text: string; behind: number; mixed: boolean } {
-  const target = release ?? '';
-  const behind = target ? nodes.filter((n) => n.status !== 'off' && n.version && needsUpdate(n.version, target)).length : 0;
+  const target = release ? releaseOf(release) : '';
+  const behind = target ? nodes.filter((n) => n.status !== 'off' && n.version && releaseOf(n.version) !== target).length : 0;
   const mixed = mixedVersions(nodes) != null;
   const rel = release ? `This controller carries TandemLLM ${release}.` : 'This controller’s release is not known.';
   if (!nodes.length) return { text: `${rel} No Spark in the fleet yet.`, behind, mixed };

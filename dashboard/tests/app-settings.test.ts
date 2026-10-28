@@ -110,7 +110,9 @@ describe('the Updates line', () => {
   const n = (alias: string, version: string, status: 'up' | 'off' = 'up') => ({ alias, version, status });
   it('counts the Sparks on another release', () => {
     expect(updateLine('0.15.1', []).text).toContain('No Spark');
-    expect(updateLine('0.15.1', [n('A', '0.15.1'), n('B', '0.15.1+abc')]).behind).toBe(1);
+    // a local build label is its release's (the version-mismatch rule)
+    expect(updateLine('0.15.0', [n('A', '0.15.0+flashnext-3.05')]).behind).toBe(0);
+    expect(updateLine('0.15.1', [n('A', '0.15.1'), n('B', '0.15.0+abc')]).behind).toBe(1);
     const mixed = updateLine('0.15.1', [n('A', '0.15.1'), n('B', '0.15.0'), n('C', '0.14.0', 'off')]);
     expect([mixed.behind, mixed.mixed]).toEqual([1, true]);
     expect(mixed.text).toContain('1 Spark runs another release');
