@@ -39,9 +39,12 @@ test.describe('Monitor pages', () => {
       await expect(page.locator('[data-fleet-health]')).toContainText(`${topo.nodes.length} Spark${topo.nodes.length === 1 ? '' : 's'} up`);
       await expect(page.locator('[data-tiles] .mtile')).toHaveCount(6);
       await expect(page.locator('[data-tile="kwh"]')).toContainText('computed from power samples');
-      // the share bar splits by node, and its tooltip lists every node's value
-      const share = page.locator('[data-tile="tps"] .share');
-      await expect(share.locator('i')).toHaveCount(topo.nodes.length);
+      // the share bar splits by the nodes that decode (a Split's Sparks idle until ENG-307: none of
+      // fleet2-split's, then the list stands in), and its tooltip lists every node's value
+      const tps = await json<{ series: { node: string; values: (number | null)[] }[] }>(page, '/v1/fleet/metrics?source=all&metric=tps&range=5m');
+      const busy = tps.series.filter((x) => ([...x.values].reverse().find((v) => v != null) ?? 0) > 0).length;
+      const share = page.locator('[data-tile="tps"]').locator(busy ? '.share' : '.share-list');
+      if (busy) await expect(share.locator('i')).toHaveCount(busy);
       for (const n of topo.nodes) {
         const alias = (await json<{ alias: string }>(page, `/v1/fleet/nodes/${n.id}`)).alias;
         await expect(share).toHaveAttribute('title', new RegExp(`${alias}: \\d+ tok/s`));

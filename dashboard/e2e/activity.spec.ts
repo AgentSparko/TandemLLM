@@ -282,7 +282,8 @@ test.describe('live activity', () => {
     await scenario(request, 'busy');
     await scenario(request, 'constrained', { at: 1500 });
     await scenario(request, 'agent-turn', { at: 6000 });
-    await login(page, '#/performance');
+    // the engine's Live panel alone (one Spark): a fleet's strips above it poll on their own clock
+    await login(page, '#/performance', '?fleet=fleet1');
     const live = page.locator('.live');
     await expect(live.locator('.live-state')).toContainText('4/s', { timeout: 10_000 });
     expect(await live.locator(isPhone(page) ? '.live-card' : '.live-row').count()).toBeGreaterThanOrEqual(6);

@@ -58,7 +58,9 @@ test.describe('dev', () => {
     expect(await scroller.evaluate((el) => el.scrollTop)).toBe(before);
     await page.locator('.chip-float').click();
     await expect(page.locator('.chip-float')).toHaveCount(0);
-    await expect(page.locator('.log-line').last()).toContainText('pause test line');
+    // the newest lines: the mock's own flavour lines may land after the injected ones
+    const tail = await page.locator('.log-line').evaluateAll((els) => els.slice(-4).map((e) => e.textContent ?? ''));
+    expect(tail.some((t) => t.includes('pause test line')), tail.join(' | ')).toBe(true);
   });
 
   test('level filter: warning shows only warning and error lines and re-opens the stream with level=warning', async ({ page }) => {
