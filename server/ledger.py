@@ -81,6 +81,11 @@ SCHEMA VERSION 10 (VIS-207): `system_fingerprint`, the backend configuration a r
 engine's own rows and for a backend that sends none. A model id such as `deepseek-flash` stays
 while the provider swaps the snapshot behind it; a new fingerprint in the rows shows the swap.
 
+SCHEMA VERSION 11 (SRV-731): `node` and `deployment`, the TandemApp fleet node (its id, never its
+alias, which the user may change) and the deployment that served a relayed request
+(proxy/deployments.py); null for an engine's own rows, for a cloud backend and on a proxy without
+a fleet. Indexed with the time, as the backend is, for the Usage filters `node=` and `deployment=`.
+
 RETENTION. Rows older than `--usage-retention-days` (400; less is refused outside tests) are
 deleted once a day at 04:00 local, then `PRAGMA incremental_vacuum`. Once an ISO week, an online
 backup (the sqlite3 backup API) goes to `backup/ledger-<year>-W<week>.sqlite3` beside the file,
@@ -104,7 +109,7 @@ import time
 from server.conductor import signals
 
 PRODUCTION = "~/.qwen38-spark-engine/usage/ledger.sqlite3"
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 MIN_RETENTION_DAYS = 400
 QUEUE_MAX = 10_000
 BACKUP_KEEP = 8
@@ -120,7 +125,7 @@ COLUMNS = ("ts_ms", "request_id", "model", "client_id", "client_kind", "endpoint
            "proxy_ms", "retries", "fallback_from", "upstream_status", "user", "preemptions",
            "engine_finish", "corrupted", "l2_join", "wait_own_ms", "parent_request",
            "slot", "engine_cached", "forwarded_tokens", "wait_mem_ms", "sampling",
-           "system_fingerprint")
+           "system_fingerprint", "node", "deployment")
 
 # The conductor's columns (SRV-117, then SRV-115's three of schema version 2), added in place to a
 # ledger that lacks them. Additive and idempotent: an old row reads null in each.
@@ -153,7 +158,9 @@ ADDED = (("model_served", "TEXT"), ("profile", "TEXT"), ("profile_version", "INT
          # `regenerate`)
          ("sampling", "TEXT"),
          # schema version 10 (VIS-207): a relayed answer's `system_fingerprint`
-         ("system_fingerprint", "TEXT"))
+         ("system_fingerprint", "TEXT"),
+         # schema version 11 (SRV-731): the fleet node and the deployment that served it
+         ("node", "TEXT"), ("deployment", "TEXT"))
 
 # the columns `Ledger.amend` may set on a row already written (proxy/collect_api.py)
 AMENDABLE = ("queue_ms", "prompt_ms", "decode_ms", "decode_tps", "prefill_tps", "cached_tokens",
@@ -330,6 +337,10 @@ def migrate(conn: sqlite3.Connection, now_ms: int | None = None) -> int:
             conn.execute(f"ALTER TABLE requests ADD COLUMN {name} {kind}")
     conn.executescript(CONDUCTOR_DDL)
     conn.execute("CREATE INDEX IF NOT EXISTS requests_backend_ts ON requests(backend, ts_ms)")
+    conn.execute("CREATE INDEX IF NOT EXISTS requests_node_ts ON requests(node, ts_ms) "
+                 "WHERE node IS NOT NULL")
+    conn.execute("CREATE INDEX IF NOT EXISTS requests_deployment_ts ON requests(deployment, ts_ms) "
+                 "WHERE deployment IS NOT NULL")
     # FX14 (2026-10-08): the dashboard's filter lists answer from these by seeks instead of reading
     # every row on each usage call (dimensions(): VIS-60's "internal only" pairs and the proxy's
     # users cost 230 ms of a 1.1 s 365-day query over 500k rows). Indexes only, no row touched

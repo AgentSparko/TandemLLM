@@ -59,6 +59,20 @@
         "internal": {
           "type": "boolean",
           "description": "VIS-60: TandemLLM's own calls are counted (the query's internal=1)"
+        },
+        "node": {
+          "description": "SRV-731: a fleet node id (TandemApp's gateway rows)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deployment": {
+          "description": "SRV-731: a deployment id (TandemApp's gateway rows)",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -422,6 +436,20 @@
         },
         "users": {
           "description": "1.3: the proxy users seen in the ledger",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "nodes": {
+          "description": "SRV-731: the fleet node ids seen in the ledger (TandemApp's gateway)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deployments": {
+          "description": "SRV-731: the deployment ids seen in the ledger (TandemApp's gateway)",
           "type": "array",
           "items": {
             "type": "string"

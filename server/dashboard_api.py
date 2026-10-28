@@ -56,6 +56,8 @@ from server.activity import REPLAY  # noqa: E402  (answered from memory, nothing
 
 # 1.3 (the proxy, P1): rows and dimensions gain the backend and the user, the totals a cost, and
 # `backend=` / `user=` filter usage and requests. Every new field is optional in the schemas.
+# SRV-731 (ledger schema 11, still 1.3: optional fields only): rows gain `node` and `deployment`,
+# the dimensions `nodes` and `deployments`, and `node=` / `deployment=` filter usage and requests.
 CONTRACT = "1.3"
 # the log endpoints did not change: their answers stay at 1.0
 LOGS_CONTRACT = "1.0"
@@ -251,7 +253,8 @@ ENGINE = "engine"     # the `backend=` filter's value for the engine's own rows 
 
 
 def _filters(model: str | None, client: str | None, backend: str | None = None,
-             user: str | None = None, internal: bool = False) -> tuple[str, list]:
+             user: str | None = None, internal: bool = False, node: str | None = None,
+             deployment: str | None = None) -> tuple[str, list]:
     """The rows a view counts. VIS-60: TandemLLM's own calls (client kind `internal`, the router's
     question to the engine) are left out unless `internal` (the views' "show internal" switch)."""
     sql, args = "", []
@@ -271,6 +274,12 @@ def _filters(model: str | None, client: str | None, backend: str | None = None,
     if user:
         sql += " AND user = ?"
         args.append(user)
+    if node:
+        sql += " AND node = ?"
+        args.append(node)
+    if deployment:
+        sql += " AND deployment = ?"
+        args.append(deployment)
     return sql, args
 
 
@@ -386,13 +395,13 @@ class DashboardAPI:
 
     # ----------------------------------------------------------------- the aggregation
     def _scan(self, rng: Range, model=None, client=None, backend=None, user=None,
-              internal=False) -> list:
+              internal=False, node=None, deployment=None) -> list:
         """Every bucket of a range from the ledger: two scans, the sums and the decoded rows."""
         aggs = [Agg() for _ in rng.starts]
         db = self._db()
         if db is None:
             return aggs
-        fsql, fargs = _filters(model, client, backend, user, internal)
+        fsql, fargs = _filters(model, client, backend, user, internal, node, deployment)
         where = f"ts_ms >= ? AND ts_ms < ?{fsql}"
         args = rng.idx_args + [rng.start_ms, rng.end_ms] + fargs
         for row in db.execute(f"SELECT {rng.idx_sql} AS i, {_SUMS} FROM requests "
@@ -412,7 +421,7 @@ class DashboardAPI:
         return aggs
 
     def _days(self, first: _dt.date, last: _dt.date, tz, tz_name, model, client,
-              backend=None, user=None, internal=False) -> list:
+              backend=None, user=None, internal=False, node=None, deployment=None) -> list:
         """One `Agg` per local day, from the memo where the day is final.
 
         A day is final two hours after it ended: a row carries its request's ARRIVAL time and is
@@ -426,7 +435,8 @@ class DashboardAPI:
             if self._memo_gen != gen:
                 self._memo.clear()
                 self._memo_gen = gen
-            memo = self._memo.setdefault((tz_name, model, client, backend, user, internal), {})
+            memo = self._memo.setdefault((tz_name, model, client, backend, user, internal, node,
+                                          deployment), {})
             while len(self._memo) > 8:
                 self._memo.pop(next(iter(self._memo)))
         dates = [first + _dt.timedelta(days=i) for i in range((last - first).days + 1)]
@@ -441,7 +451,8 @@ class DashboardAPI:
             while j + 1 < len(out) and out[j + 1] is None:
                 j += 1
             for k, a in enumerate(self._scan(Range(dates[i], dates[j], "day", tz), model,
-                                             client, backend, user, internal)):
+                                             client, backend, user, internal, node,
+                                             deployment)):
                 d = dates[i + k]
                 out[i + k] = a
                 if local_midnight_ms(d + _dt.timedelta(days=1), tz) < cutoff:
@@ -450,9 +461,9 @@ class DashboardAPI:
         return out
 
     def _top_client(self, day: _dt.date, tz, model, client, backend=None,
-                    user=None, internal=False) -> str | None:
+                    user=None, internal=False, node=None, deployment=None) -> str | None:
         """The client with the most tokens on one local day (the ts index makes it cheap)."""
-        fsql, fargs = _filters(model, client, backend, user, internal)
+        fsql, fargs = _filters(model, client, backend, user, internal, node, deployment)
         row = self._db().execute(
             "SELECT client_id, SUM(COALESCE(prompt_tokens, 0) + COALESCE(completion_tokens, 0)) "
             f"AS t FROM requests WHERE ts_ms >= ? AND ts_ms < ?{fsql} GROUP BY client_id "
@@ -478,16 +489,21 @@ class DashboardAPI:
             raise _bad("a range may span at most ten years")
         model, client = q.get("model") or None, q.get("client") or None
         backend, user = q.get("backend") or None, q.get("user") or None
+        node, deployment = q.get("node") or None, q.get("deployment") or None
         internal = _flag(q.get("internal"))
-        key = ("usage", tz_name, bucket, first, last, model, client, backend, user, internal)
+        key = ("usage", tz_name, bucket, first, last, model, client, backend, user, internal,
+               node, deployment)
         return self._cached(key, lambda: self._usage(first, last, bucket, tz, tz_name, model,
-                                                     client, backend, user, internal))
+                                                     client, backend, user, internal, node,
+                                                     deployment))
 
     def _usage(self, first, last, bucket, tz, tz_name, model, client, backend=None,
-               user=None, internal=False) -> dict:
+               user=None, internal=False, node=None, deployment=None) -> dict:
         rng = Range(first, last, bucket, tz)
-        aggs = (self._days(first, last, tz, tz_name, model, client, backend, user, internal)
-                if bucket == "day" else self._scan(rng, model, client, backend, user, internal))
+        aggs = (self._days(first, last, tz, tz_name, model, client, backend, user, internal,
+                           node, deployment)
+                if bucket == "day" else self._scan(rng, model, client, backend, user, internal,
+                                                   node, deployment))
         buckets = []
         for i, a in enumerate(aggs):
             b = a.totals(None)
@@ -503,12 +519,15 @@ class DashboardAPI:
                 top_days.append({"date": d.isoformat(), "total_tokens": aggs[i].p + aggs[i].o,
                                  "requests": aggs[i].n,
                                  "top_client": self._top_client(d, tz, model, client, backend,
-                                                                user, internal)})
+                                                                user, internal, node,
+                                                                deployment)})
         filters = {"model": model, "client": client}
         if internal:
             filters["internal"] = True
         if backend or user:
             filters.update(backend=backend, user=user)
+        if node or deployment:
+            filters.update(node=node, deployment=deployment)
         return {"contract_version": CONTRACT, "from": first.isoformat(), "to": last.isoformat(),
                 "bucket": bucket, "tz": tz_name, "filters": filters,
                 "buckets": buckets,
@@ -561,14 +580,27 @@ class DashboardAPI:
             u = db.execute("SELECT MIN(user) FROM requests WHERE user > ?", (u,)).fetchone()[0]
         return sorted(out)
 
+    @staticmethod
+    def _distinct(db, col: str) -> list:
+        """SRV-731: the nodes or deployments the ledger has seen, one seek each on their partial
+        index (as the users)."""
+        out = []
+        v = db.execute(f"SELECT MIN({col}) FROM requests WHERE {col} IS NOT NULL").fetchone()[0]
+        while v is not None:
+            out.append(v)
+            v = db.execute(f"SELECT MIN({col}) FROM requests WHERE {col} > ?", (v,)).fetchone()[0]
+        return out
+
     def _proxy_dimensions(self, db) -> dict | None:
         """1.3: the backends and users the ledger has seen, with the configured ones; None on a
         server without the proxy and a ledger with no relayed row (the 1.0 answer)."""
-        rows, users = [], []
+        rows, users, fleet = [], [], {"nodes": [], "deployments": []}
         if db is not None:
             try:
                 rows = [r[0] for r in db.execute("SELECT DISTINCT backend FROM requests")]
                 users = self._distinct_users(db)
+                fleet = {k: self._distinct(db, col) for k, col in (("nodes", "node"),
+                                                                  ("deployments", "deployment"))}
             except sqlite3.Error:
                 rows, users = [], []
         conf = {}
@@ -586,7 +618,10 @@ class DashboardAPI:
         for bid in sorted(set(seen) | set(conf)):
             b = conf.get(bid) or {}
             backends.append({"id": bid, "kind": b.get("kind"), "label": b.get("label") or bid})
-        return {"backends": backends, "users": users}
+        out = {"backends": backends, "users": users}
+        if fleet["nodes"] or fleet["deployments"]:
+            out.update(fleet)                          # SRV-731: rows a fleet's gateway wrote
+        return out
 
     def summary(self, q: dict) -> dict:
         tz_name = q.get("tz") or DEFAULT_TZ
@@ -646,7 +681,8 @@ class DashboardAPI:
                 sql += " AND id < ?"
                 args.append(before)
             fsql, fargs = _filters(q.get("model"), q.get("client"), q.get("backend"),
-                                   q.get("user"), _flag(q.get("internal")))
+                                   q.get("user"), _flag(q.get("internal")), q.get("node"),
+                                   q.get("deployment"))
             sql += fsql
             args += fargs
             if q.get("finish"):
@@ -739,6 +775,8 @@ def _proxy_fields(r: dict, conf: dict) -> dict:
             "upstream_status": r.get("upstream_status"),
             # VIS-207 (ledger schema 10): the backend configuration the answer named
             "system_fingerprint": r.get("system_fingerprint"),
+            # SRV-731 (ledger schema 11): the fleet node and the deployment that served it
+            "node": r.get("node"), "deployment": r.get("deployment"),
             # P6: the engine's own numbers came from its plugin (ledger schema 4)
             "l2": ({"join": r["l2_join"], "preemptions": r.get("preemptions"),
                     "engine_finish": r.get("engine_finish"),
