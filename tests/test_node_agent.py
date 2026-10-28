@@ -883,7 +883,7 @@ def test_setup_delegation():
         st, out = r.client.json("DELETE", "/node/weights/p-old?dry_run=1")
         assert out["echo"] == {"profiles": ["p-old"], "dry_run": True}
         st, err = r.client.json("POST", "/node/weights/receive")
-        assert st == 501 and "SEC-4" in err["error"]["message"]
+        assert st == 501 and "VIS-252" in err["error"]["message"]
         # the engine restarts: its status responder answers the Setup Guide meanwhile
         status = SetupEngine()
         e = r.agent.engines.by_id["engine"]

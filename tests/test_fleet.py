@@ -16,7 +16,8 @@ list, system snapshot and log. Time is injected; nothing sleeps.
   6  memory split and the engine's log beside tandem-app's        test_memory_and_logs
   7  layouts: the default, a save that comes back, refused bodies, kept across a restart
                                                                    test_layouts_round_trip
-  8  the guard: reads as the dashboard, writes as the configuration      test_auth_guard
+  8  the guard: reads and layouts as the dashboard, writes as the configuration
+                                                                         test_auth_guard
   9  tandem-app starts, answers the fleet API and stops on SIGTERM       test_start_stop
 
     python tests/test_fleet.py
@@ -645,7 +646,9 @@ def test_auth_guard():
     with Proxy(env={"TANDEM_ADMIN_TOKEN": ADMIN}, login="off") as px:
         fleet_on(px, local_node(fake_root()))
         assert get(px, "/v1/fleet/nodes", lan)[0] == 200          # the login off: reads open
-        assert send(px, "PUT", "/v1/fleet/layouts/overview", layout, lan)[0] == 401
+        # a page's window layout follows the reads (SEC-4): where windows sit, no fleet state
+        assert send(px, "PUT", "/v1/fleet/layouts/overview", layout, lan)[0] == 200
+        assert send(px, "PATCH", f"/v1/fleet/nodes/{nid}", {"alias": "Desk"}, lan)[0] == 401
     with Proxy() as px:                                             # no password: all open
         fleet_on(px, local_node(fake_root()))
         assert send(px, "PUT", "/v1/fleet/layouts/overview", layout, lan)[0] == 200
