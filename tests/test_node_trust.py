@@ -564,8 +564,13 @@ class FakeSsh:
             os.chmod(p, 0o755)
         self.state = os.path.join(self.dir, "state.json")
         self.log = os.path.join(self.dir, "argv.log")
+        # another machine than the controller's (the probe refuses its own, SSH once)
+        self.machine = os.path.join(self.dir, "machine-id")
+        with open(self.machine, "w") as f:
+            f.write("0123456789abcdef0123456789abcdef\n")
         self.st = {"hostkey": HOSTKEY, "password": PASSWORD, "key": KEY, "home": self.home,
-                   "path": "/usr/bin:/bin", "root": ROOT, "log": self.log}
+                   "path": "/usr/bin:/bin", "root": ROOT, "log": self.log,
+                   "env": {"TANDEM_MACHINE_ID_FILE": self.machine}}
         self.unit(node)
         os.environ["FAKE_SSH_STATE"] = self.state
 

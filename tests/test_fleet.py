@@ -410,7 +410,7 @@ def test_every_route_validates():
                 assert ok(get(px, f"/v1/fleet/{name}")[1], name)[name] == []
             assert [r["id"] for r in ok(get(px, "/v1/fleet/rules")[1], "rules")["rules"]] == \
                 ["gpu-temp", "throttle", "mem-avail", "disk-free", "node-down", "engine-down",
-                 "host-sleep"]
+                 "host-sleep", "lease"]
             assert ok(get(px, "/v1/fleet/events?since=1800000000")[1], "events")["events"] == []
             ok(get(px, "/v1/fleet/logs?node=all")[1], "logs")
             ok(get(px, f"/v1/fleet/logs?node={lid}&level=warn&limit=20")[1], "logs")
