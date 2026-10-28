@@ -761,6 +761,16 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         return res.end(renderMetrics(state, Date.now(), { spec: mode !== 'nospec' }) + engineFamilies(Date.now(), ids, mode !== 'nospec'));
       }
 
+      // VIS-252: a Spark's Setup Guide through the controller, under the rule of the engine's own
+      // /v1/setup (the admin password once one is set, reads too)
+      const relay = /^\/v1\/fleet\/nodes\/([^/]+)\/(setup|setup-confirm)\/(.+)$/.exec(path);
+      if (relay && (fleetPassword || password) && !authed(req)) return error(res, 401, 'unauthorized', 'a session or an admin token is required');
+      if (relay && relay[2] === 'setup') {
+        const raw = req.method === 'POST' ? await readBody(req) : '';
+        const r = await fleetFor(req).setup.handle(req, res, fleetFor(req), decodeURIComponent(relay[1]), relay[3].split('/').map(decodeURIComponent), q, raw);
+        if (r) json(res, r.status, r.body);
+        return;
+      }
       if (path.startsWith('/v1/fleet/')) {
         const raw = req.method === 'PUT' || req.method === 'POST' || req.method === 'PATCH' ? await readBody(req) : '';
         let body: unknown = null;

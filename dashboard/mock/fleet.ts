@@ -80,6 +80,7 @@ import type {
 import { EVENT_TYPES, FLEET_CONTRACT, METRICS, NODE_ACTIONS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
 import { MockWizard } from './addspark.ts';
 import { MockDeploy } from './deploy.ts';
+import { MockSetupRelay } from './setup-relay.ts';
 import { MockOps } from './fleetops.ts';
 import { MockDiscovery, MOCK_LAN } from './discovery.ts';
 
@@ -288,18 +289,18 @@ function build(scenario: FleetScenario, t0: number): Fleet {
 
   const qwen = (members: Member[], type: 'single' | 'replicas'): DepSim => ({
     dep: {
-      id: 'qwen27', name: 'Qwen3.8-27B', model: 'Qwen3.8-27B', pack: 'EXL3 4.0', type, members: members.map((m) => m.node), api_id: 'qwen3.8-27b', ctx: 262144,
+      id: 'qwen27', name: 'Qwen3.8-27B', model: 'Qwen3.8-27B', pack: 'exl3-4.0', type, members: members.map((m) => m.node), api_id: 'qwen3.8-27b', ctx: 262144,
       ...(type === 'replicas' ? { warn: 'Desk is on the LAN, R-3 is remote: 38 ms between them. Each conversation stays on one member; a failover moves it across the internet.' } : {}),
     },
     members,
   });
   const wren: DepSim = {
-    dep: { id: 'wren', name: 'Wren', model: 'Qwen3.5-2B', pack: 'EXL3 6.0', type: 'role', members: ['desk'], api_id: 'wren', ctx: 65536, role_of: 'qwen27', role: 'assistant · setup and fleet help' },
+    dep: { id: 'wren', name: 'Wren', model: 'Qwen3.5-2B', pack: 'qwen3.5-2b-exl3-6.0', type: 'role', members: ['desk'], api_id: 'wren', ctx: 65536, role_of: 'qwen27', role: 'assistant · setup and fleet help' },
     members: [{ node: 'desk', from: t0 - 4.2 * D, base: 4, span: 14, curve: 'wren', share: 1 }],
   };
   const dsv = (a: string, b: string): DepSim => ({
     dep: {
-      id: 'dsv41', name: 'DeepSeek-V4.1-Flash', model: 'DeepSeek-V4.1-Flash', pack: 'NVFP4', type: 'split', members: [a, b], api_id: 'deepseek-v4.1-flash', ctx: 131072,
+      id: 'dsv41', name: 'DeepSeek-V4.1-Flash', model: 'DeepSeek-V4.1-Flash', pack: 'deepseek-v4.1-flash-nvfp4', type: 'split', members: [a, b], api_id: 'deepseek-v4.1-flash', ctx: 131072,
       stages: [{ node: a, layers: 'layers 0–30', gib: 78.2 }, { node: b, layers: 'layers 31–60 + head', gib: 76.5 }],
     },
     members: [a, b].map((node) => ({ node, from: dsvFrom, base: 80, span: 110, curve: 'dsv', share: 0.5 })),
@@ -383,7 +384,7 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     const r3l: NodeSim = { ...desk, node: lan('r3', 'R-3', 4, '192.0.2.43', 'R9NX4A00231', '6a'), curve: 'r3', plan: { weights: 17.2, kv: 46, cache: 8, other: 3.4, page: 4.2, ceiling: 112, peak: 88.2 } };
     const bronze: NodeSim = { ...desk, node: lan('bronze', 'Bronze', 2, '192.0.2.42', 'R9NX4A00224', '5e'), curve: 'wren', idleMem: 5.1, plan: { weights: 4.4, kv: 12, cache: 3, other: 2.8, page: 3.1, ceiling: 112, peak: 31.2 } };
     const wrenSingle: DepSim = {
-      dep: { id: 'wren', name: 'Wren', model: 'Qwen3.5-2B', pack: 'EXL3 6.0', type: 'single', members: ['bronze'], api_id: 'wren', ctx: 65536 },
+      dep: { id: 'wren', name: 'Wren', model: 'Qwen3.5-2B', pack: 'qwen3.5-2b-exl3-6.0', type: 'single', members: ['bronze'], api_id: 'wren', ctx: 65536 },
       members: [{ node: 'bronze', from: t0 - 30 * D, base: 4, span: 14, curve: 'wren', share: 1 }],
     };
     const q3 = qwen(
@@ -530,6 +531,8 @@ export class MockFleet {
   readonly ops: MockOps;
   /** the deployment records, the placement planner and the weights (mock/deploy.ts, SRV-731) */
   readonly deploy: MockDeploy;
+  /** each Spark's Setup Guide through the controller (mock/setup-relay.ts, VIS-252) */
+  readonly setup = new MockSetupRelay();
 
   /** `now` in Unix seconds: the scenario's start */
   constructor(o: { seed?: number; scenario?: FleetScenario; now?: number } = {}) {
@@ -1198,6 +1201,7 @@ export class MockFleet {
     if (parts[0] === 'update') return this.ops.handleUpdate(method, parts, q, body, now);
     if (parts[0] === 'controller') return this.ops.handleController(method, parts, q, body, now);
     if (parts[0] === 'placement' || parts[0] === 'weights' || (parts[0] === 'deployments' && (parts.length > 1 || method !== 'GET'))) return this.deploy.handle(method, parts, q, body, now);
+    if (method === 'GET' && parts[0] === 'nodes' && parts[2] === 'setup-confirm' && parts.length >= 4) return this.setup.plan(this, decodeURIComponent(parts[1]), parts.slice(3).map(decodeURIComponent).join('/'), q, now);
     if (method === 'GET' && parts.length === 1) {
       switch (parts[0]) {
         case 'nodes':

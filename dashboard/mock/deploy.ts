@@ -2,7 +2,7 @@
 // `/v1/fleet/placement`, `/v1/fleet/weights*`, docs/contract/fleet-v1, SRV-731), as the controller
 // answers them (proxy/deployments.py, proxy/placement.py, proxy/fleetweights.py), over the mock fleet's
 // own deployments (Qwen3.8-27B Replicas on Desk + R-3, DeepSeek-V4.1-Flash Split over R-1 + R-2, Wren
-// a Role on Desk). Jobs run on the clock, a function of the time since they started:
+// a Role on Desk; fleet4 starts with a copy of DeepSeek's pack R-1 → Desk running). Jobs run on the clock, a function of the time since they started:
 //
 //   start   START_S per member; a Split's start is 501 not_built (ENG-307), its stop allowed (it
 //           serves in this fleet's story), its move refused
@@ -89,6 +89,8 @@ interface Copy {
   start: number;
   span: number;
   stopAt: number | null;
+  /** a done copy's pack is on its receiver once: a delete after it stays deleted */
+  landed?: boolean;
 }
 
 const cid = (s: string) => {
@@ -439,6 +441,8 @@ export class MockDeploy {
       { profile: 'deepseek-v4.1-flash-nvfp4', model: 'deepseek-v4.1-flash', gib: 154.7, content_id: cid('dsv41-nvfp4'), on: on('r1', 'r2', 's1', 's2') },
       { profile: 'exl3-6.0', model: 'qwen3.8-27b', gib: 23.4, content_id: cid('qwen27-exl3-6.0'), on: on('desk') },
     ].filter((p) => Object.keys(p.on).length);
+    // VIS-252: a copy in progress since a minute ago, R-1 → Desk through the controller (R-1 is rented)
+    if (ids.has('r1') && ids.has('desk')) this.copy({ from: 'r1', to: 'desk', profile: 'deepseek-v4.1-flash-nvfp4' }, now - 60);
     return this.packs;
   }
 
@@ -469,7 +473,10 @@ export class MockDeploy {
     for (const c of this.copies) {
       const s = this.copyState(c, now);
       const p = packs.find((x) => x.profile === c.job.profile);
-      if (s.state === 'done' && p && !p.on[c.job.to]) p.on[c.job.to] = 'store';
+      if (s.state === 'done' && p && !c.landed) {
+        p.on[c.job.to] ??= 'store';
+        c.landed = true;
+      }
     }
     const running = new Map<string, string>();
     for (const c of this.copies) if (this.copyState(c, now).state === 'running') running.set(`${c.job.to}:${c.job.profile}`, c.job.id);
@@ -543,11 +550,8 @@ export class MockDeploy {
     return ok(plan);
   }
 
-  /** the pack a deployment serves, as the mock's packs name it */
+  /** the pack a deployment serves: its record's, a Setup Guide profile */
   private packOf(d: FleetDeployment): string {
-    if (d.id === 'qwen27') return 'exl3-4.0';
-    if (d.id === 'wren') return 'qwen3.5-2b-exl3-6.0';
-    if (d.id === 'dsv41') return 'deepseek-v4.1-flash-nvfp4';
     return d.pack;
   }
 
