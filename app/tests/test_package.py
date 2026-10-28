@@ -1,6 +1,7 @@
 """P5, the installable package: pyproject.toml against the tree, the version mapping, the page in
 an installed layout, and the `tandem-app` commands besides `serve`. The wheel itself is built and
-installed into a clean venv by tools/package_check.sh (CI and the night pass).
+installed into a clean venv by tools/package_check.sh (CI and the night pass); its isolation from
+this machine's own TandemNode (SRV-745) is held here.
 
     python tests/test_package.py
 """
@@ -11,6 +12,7 @@ import contextlib
 import importlib.util
 import io
 import os
+import re
 import shutil
 import stat
 import sys
@@ -158,6 +160,54 @@ def test_the_page_in_an_installed_layout():
         assert mod.default_dir() == os.path.join(d, "dashboard", "dist"), "a checkout wins"
     finally:
         shutil.rmtree(d, ignore_errors=True)
+
+
+def _script_lines(path: str) -> list[str]:
+    """A shell script's commands: continuation lines joined, stripped."""
+    out, cur = [], ""
+    with open(path) as f:
+        for raw in f.read().splitlines():
+            if raw.endswith("\\"):
+                cur += raw[:-1] + " "
+                continue
+            out.append((cur + raw).strip())
+            cur = ""
+    return out
+
+
+def test_package_check_keeps_off_the_real_node():
+    """SRV-745: tools/package_check.sh hashes the real node's claim and trust store (the home from
+    the password database) before the pip steps, gives every command after them a home of its own
+    and no TandemNode agent, keeps the conductor's documents in its temp dir, and fails at the exit
+    when the real state changed."""
+    lines = _script_lines(os.path.join(ROOT, "tools", "package_check.sh"))
+    code = [(i, s) for i, s in enumerate(lines) if s and not s.startswith("#")]
+
+    def first(pattern: str) -> int:
+        for i, s in code:
+            if re.search(pattern, s):
+                return i
+        raise AssertionError(f"package_check.sh has no line matching {pattern}")
+
+    snap = first(r'^REAL=\$\(realnode snap\)')
+    pips = [i for i, s in code if re.search(r'/bin/pip"? (-q )?install|-m pip install', s)]
+    assert pips and snap < min(pips), "the real node is hashed before the pip steps"
+    home = first(r'^export HOME="\$T/home" TANDEM_NODE_AGENT=off$')
+    assert first(r'^mkdir -p "\$T/home"$') < home and home > max(pips), \
+        "the home of its own and TANDEM_NODE_AGENT=off come after the pip steps"
+    runs = [(i, s) for i, s in code if re.search(r'"\$(APP|OLD)" (version|check|serve)\b', s)]
+    assert {m for _, s in runs for m in re.findall(r'"\$APP" (version|check|serve)\b', s)} == \
+        {"version", "check", "serve"}, runs
+    for i, s in runs:
+        assert i > home, f"before HOME and TANDEM_NODE_AGENT=off: {s}"
+        if re.search(r'"\$APP" (check|serve)\b', s):
+            assert '--conductor-config "$T/conductor"' in s, f"no --conductor-config: {s}"
+    text = "\n".join(lines)
+    assert "pwd.getpwuid(os.getuid()).pw_dir" in text, "the real home, not $HOME"
+    assert "trap finish EXIT" in text and "real_check || rc=1" in text
+    assert 'echo "FAIL the real TandemNode state changed"' in text
+    assert code[-1][1].startswith('echo "PASS all') and \
+        code[-2][1] == "real_check || exit 1", "the real node is compared before PASS all"
 
 
 def _run(argv, env) -> tuple[int, str]:
