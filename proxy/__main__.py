@@ -11,6 +11,11 @@
     tandem-app launch vllm|sglang --model M --port P [-- engine args]
                                                      the engine with TandemLLM's plugin, registered
                                                      as a backend (P6, proxy/launch.py)
+    tandem-app service install|uninstall|status      the controller as a background service: a
+                                                     launchd agent (macOS), a systemd user unit
+                                                     (Linux); proxy/appservice.py, OPS-234
+    tandem-app package [--version V] [--out DIR]     the wheel this controller installs on nodes
+                                                     and updates them to (proxy/nodeinstall.py)
     tandem-app version
 
 `python -m proxy` takes the same commands; with none it serves, so `python -m proxy --port 8080`
@@ -126,7 +131,8 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
-COMMANDS = ("serve", "check", "secrets", "backends", "hostcollect", "launch", "version")
+COMMANDS = ("serve", "check", "secrets", "backends", "hostcollect", "launch", "service", "package",
+            "version")
 
 
 def main(argv=None) -> None:
@@ -145,6 +151,12 @@ def main(argv=None) -> None:
             load_env_file(known.env_file)
         from proxy import launch
         raise SystemExit(launch.main(rest))
+    if cmd == "service":
+        from proxy import appservice
+        raise SystemExit(appservice.main(argv))
+    if cmd == "package":
+        from proxy import nodeinstall
+        raise SystemExit(nodeinstall.package_main(argv))
     if cmd == "version":
         from proxy import _version
         print(f"tandemllm {_version.release() or 'unknown'} (python {sys.version.split()[0]})")

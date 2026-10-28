@@ -210,6 +210,16 @@ class Package:
                                                  f"({type(exc).__name__}: {exc}); set "
                                                  f"TANDEM_NODE_WHEEL to a TandemLLM wheel", 500)
 
+    def target(self) -> str:
+        """The version the wheel carries, as a node reports it once installed (PEP 440, a local
+        label kept): the update's target (proxy/fleetupdate.py)."""
+        given = self.env.get("TANDEM_NODE_WHEEL")
+        if given:
+            v = wheel_version(given)
+            if v:
+                return v
+        return _version.pep440(self.version) if self.version else ""
+
     def install_sh(self) -> bytes | None:
         p = os.path.join(self.root, "install.sh")
         try:
@@ -453,6 +463,36 @@ class Install:
         with self._lock:
             self.node = row["id"]
         return f"paired as {row['alias']} ({row['id']}) · certificate pinned"
+
+
+def wheel_version(path: str) -> str | None:
+    """The version in a wheel's file name (`tandemllm-0.15.0+test-py3-none-any.whl`)."""
+    parts = os.path.basename(path).split("-")
+    return parts[1] if len(parts) >= 5 and parts[0] == "tandemllm" and \
+        path.endswith(".whl") else None
+
+
+def package_main(argv: list[str]) -> int:
+    """`tandem-app package`: the wheel this controller sends, built here; its path on stdout."""
+    import argparse
+    ap = argparse.ArgumentParser(prog="tandem-app package",
+                                 description="the TandemLLM wheel a node is installed or "
+                                             "updated from")
+    ap.add_argument("--version", default=None,
+                    help="the release name (default this copy's VERSION); a local label such as "
+                         "0.15.0+test marks a build of the release")
+    ap.add_argument("--out", default="dist-node", help="the directory (default ./dist-node)")
+    a = ap.parse_args(argv)
+    v = a.version or _version.release()
+    try:
+        path = build_wheel(os.path.abspath(a.out), v)
+    except (OSError, KeyError, ValueError, ImportError) as exc:
+        print(f"[package] cannot build: {type(exc).__name__}: {exc}", flush=True)
+        return 1
+    with open(path, "rb") as f:
+        sha = hashlib.sha256(f.read()).hexdigest()
+    print(f"{path}\n[package] tandemllm {wheel_version(path)}, sha256 {sha}", flush=True)
+    return 0
 
 
 def _last(text: str) -> str:

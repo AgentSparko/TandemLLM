@@ -33,16 +33,20 @@ def release() -> str:
 
 
 def pep440(name: str) -> str:
-    m = re.fullmatch(r"(\d+(?:\.\d+)*)(?:-(test|dev|rc\d*|a\d*|b\d*))?", name.strip())
+    """The PEP 440 form of a release name; a local label (`0.15.0+test`, a build of the release
+    made here, OPS-234's update check) stays as it is."""
+    m = re.fullmatch(r"(\d+(?:\.\d+)*)(?:-(test|dev|rc\d*|a\d*|b\d*))?(\+[a-z0-9]+(?:\.[a-z0-9]+)*)?",
+                     name.strip(), re.I)
     if not m:
-        raise ValueError(f"VERSION '{name}' is not N.N.N with an optional -test, -rcN, -aN, -bN")
-    base, tag = m.group(1), m.group(2)
+        raise ValueError(f"VERSION '{name}' is not N.N.N with an optional -test, -rcN, -aN, -bN "
+                         f"and +label")
+    base, tag, local = m.group(1), m.group(2), (m.group(3) or "").lower()
     if not tag:
-        return base
+        return base + local
     if tag in ("test", "dev"):
-        return base + ".dev0"
+        return base + ".dev0" + local
     n = re.sub(r"\D", "", tag) or "0"
-    return base + tag[0:2 if tag.startswith("rc") else 1] + n
+    return base + tag[0:2 if tag.startswith("rc") else 1] + n + local
 
 
 def _pep440_now() -> str:

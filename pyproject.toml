@@ -3,6 +3,10 @@
 #   pip install .                  TandemApp (the proxy and the dashboard, `tandem-app`) and TandemNode,
 #                                  the agent on each Spark (`tandem-node`); cryptography only
 #   pip install '.[host]'          plus psutil and NVML for the System view's hosts
+#   pip install '.[app]'           TandemApp alone on a Mac or a Linux PC (OPS-234): the controller
+#                                  and its page, psutil for the host's figures; no engine, no
+#                                  torch, no GPU (`tandem-app service install` runs it in the
+#                                  background); the same as `brew install tandemapp`
 #
 # The wheel never pulls torch. It carries `proxy/`, the `server/` modules the dashboard uses
 # (`server/app.py` is in it but imports torch only when the engine itself runs) and the built
@@ -44,6 +48,7 @@ dependencies = ["cryptography>=42"]
 
 [project.optional-dependencies]
 host = ["nvidia-ml-py>=12", "psutil>=5.9"]
+app = ["psutil>=5.9"]
 
 [project.scripts]
 tandem-app = "proxy.__main__:main"
