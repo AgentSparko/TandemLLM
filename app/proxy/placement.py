@@ -4,10 +4,10 @@ may serve it there.
     planner = Planner(fleet)                     one per Fleet (fleet.placement)
     POST /v1/fleet/placement {model, pack, ctx, slots?, nodes?}   (proxy/fleet.py)
 
-THE INPUTS. `model` and `pack` are a Setup Guide model and one of its weight profiles (models/,
-server/setup/registry.py), `ctx` the context window a lane holds, `slots` the parallel lanes (1).
-`nodes` (the node ids, in pipeline order for a Split) narrows the plan to those; without it every
-node of the fleet is planned.
+THE INPUTS. `model` and `pack` are a Setup Guide model and one of its weight profiles (the
+engine's `GET /v1/setup/models` and `/v1/setup/models/{id}`), `ctx` the context window a lane
+holds, `slots` the parallel lanes (1). `nodes` (the node ids, in pipeline order for a Split)
+narrows the plan to those; without it every node of the fleet is planned.
 
 EACH NODE is planned from its own memory estimate, the engine's Setup Guide formula with that
 node's device and MemAvailable, read over HTTP only: `POST /node/setup/estimate` through its
