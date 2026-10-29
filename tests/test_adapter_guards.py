@@ -83,6 +83,9 @@ from engine.models import REGISTRY  # noqa: E402
 #: fn_pf_hc extension in tools/gpu/base.py's inline list; no row changes on the GB10: v2 again
 #: SPD-249: a layer-major window asks the memory policy for its bytes before it runs (`WINDOW_GRANT`,
 #: `Budget.window`, engine/cache.py): v2's second value again
+#: SRV-747: engine/disk_cache.py's knob owners gain app/ (the conductor's knobs left server/): the tier's v2
+#: moves with that file's bytes; the spill form, the one the engine computes (server/diskcache.py
+#: legacy_fingerprints), keeps its value
 GOLDEN_V2 = ("fc7ccaed9feffdbe43ec4147f552a6052829438d0f2b2c138eb1c63946af6fb9",
              "1013afc4e3367d9afcc96e2c533df47d30105902b93d3cb3a89594c2e0fb5985")
 GOLDEN_FP4 = {

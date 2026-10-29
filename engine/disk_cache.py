@@ -1648,11 +1648,12 @@ _TOOLS_IMPORT = re.compile(r"^\s*(?:from\s+tools\s+import\s+([\w\s,()]+)|from\s+
 
 
 #: knob owners whose defaults cannot change the 27B's rows: the server's (no code under `server/`
-#: is in the fingerprint), the model layer's (`engine/models/`, which `_engine_files` leaves out) and
-#: Flash-Next's kernels (`tools/fn_*`, imported only from `engine/models/flashnext/`). Part of the
+#: is in the fingerprint), the model layer's (`engine/models/`, which `_engine_files` leaves out),
+#: Flash-Next's kernels (`tools/fn_*`, imported only from `engine/models/flashnext/`) and TandemApp's
+#: (`app/`: SRV-747 moved the conductor's knobs there from `server/`). Part of the
 #: frozen v2 formula: without it v2 of this tree would not be the served tree's, and v3 could not
 #: adopt its files; v3 counts only the knobs its manifest's files own
-_NOT_27B_KNOBS = ("server/", "engine/models/", "tools/fn_")
+_NOT_27B_KNOBS = ("server/", "engine/models/", "tools/fn_", "app/")
 
 
 def _arithmetic_knobs(path: str) -> bytes | None:
