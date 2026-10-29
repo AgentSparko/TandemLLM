@@ -8,7 +8,8 @@ The Gherkin of VIS-48 on the server's side:
   2 transcript viewer    test_2_* (blocks with their header fields; hidden notes keep their
                           journal rows; a compaction block is marked; 3,000 blocks page at 200)
   3 keep toggle          test_3_* (meta.json.keep, and the prune leaves the session)
-  4 phone layout         the dashboard's tests (dashboard/tests/memory.test.ts, e2e/memory.spec.ts)
+  4 phone layout         the dashboard's tests (app/dashboard/tests/memory.test.ts,
+                          app/dashboard/e2e/memory.spec.ts)
 All text is synthetic.
 
 Run: python tests/test_memory_api.py
