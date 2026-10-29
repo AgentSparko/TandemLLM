@@ -211,13 +211,23 @@ def _script_lines(path: str) -> list[str]:
     return out
 
 
+def _shell_function(lines: list[str], name: str) -> list[str]:
+    """The commands of the top-level function `name() {` ... `}` among _script_lines' lines."""
+    start = [i for i, s in enumerate(lines) if s.startswith(name + "() {")]
+    assert len(start) == 1, f"package_check.sh defines {name}() {len(start)} times"
+    end = lines.index("}", start[0])
+    return [s for s in lines[start[0] + 1:end] if s and not s.startswith("#")]
+
+
 def test_package_check_keeps_off_the_real_node():
     """SRV-745: tools/package_check.sh hashes the real node's claim and trust store (the home from
     the password database) before the pip steps, gives every command after them a home of its own
-    and no TandemNode agent, keeps the conductor's documents in its temp dir, and fails at the exit
-    when the real state changed."""
+    and no TandemNode agent, keeps the conductor's documents in its temp dir, runs its own agent on
+    a port of its own and stops every process it started before it compares the real state again,
+    and fails at the exit when that state changed."""
     lines = _script_lines(os.path.join(ROOT, "tools", "package_check.sh"))
     code = [(i, s) for i, s in enumerate(lines) if s and not s.startswith("#")]
+    codeset = {s for _, s in code}
 
     def first(pattern: str) -> int:
         for i, s in code:
@@ -225,7 +235,8 @@ def test_package_check_keeps_off_the_real_node():
                 return i
         raise AssertionError(f"package_check.sh has no line matching {pattern}")
 
-    snap = first(r'^REAL=\$\(realnode snap\)')
+    snap = first(r'^REAL=\$\(realnode snap\b')
+    assert 'fail "reading the real TandemNode state"' in lines[snap], "an unread state is fatal"
     pips = [i for i, s in code if re.search(r'/bin/pip"? (-q )?install|-m pip install', s)]
     assert pips and snap < min(pips), "the real node is hashed before the pip steps"
     home = first(r'^export HOME="\$T/home" TANDEM_NODE_AGENT=off$')
@@ -243,13 +254,56 @@ def test_package_check_keeps_off_the_real_node():
     assert nodes, "package_check.sh starts no tandem-node"
     for i, s in nodes:
         assert i > home and re.search(r'^"\$T/venv/bin/tandem-node" serve ', s), s
-        for arg in ('--host 127.0.0.1 ', '--state-dir "$T/node" ', '--mdns off ', '--virtual '):
+        for arg in ('--host 127.0.0.1 ', '--port $NPORT ', '--state-dir "$T/node" ', '--mdns off ',
+                    '--virtual '):
             assert arg in s, f"tandem-node without {arg.strip()}: {s}"
-    text = "\n".join(lines)
-    assert 'importlib.util.find_spec("server")' in text, "the installed app's imports are audited"
-    assert "pwd.getpwuid(os.getuid()).pw_dir" in text, "the real home, not $HOME"
-    assert "trap finish EXIT" in text and "real_check || rc=1" in text
-    assert 'echo "FAIL the real TandemNode state changed"' in text
+    # its port is its own, set once (19500-19589), and nothing names the real agent's 7700
+    nport = [s for _, s in code if re.search(r'\bNPORT=', s)]
+    assert len(nport) == 1 and re.search(r'(^|; )NPORT=\$\(\(19500 \+ \$\$ % 90\)\)$', nport[0]), \
+        nport
+    assert not [s for _, s in code if "7700" in s], "package_check.sh names port 7700"
+    # the identity comes from that agent: its port and its own state dir's loopback secret
+    assert [s for _, s in code if s.startswith('"$T/venv/bin/python" -I - "$NPORT" '
+                                               '"$T/node/secret" "$VER" ')], "no identity check"
+    for want in ('port, secret, want = sys.argv[1], sys.argv[2], sys.argv[3]',
+                 'node = nodesource.AgentNode(f"http://127.0.0.1:{port}",',
+                 'secret=lambda: nodetrust.load_secret(secret))'):
+        assert want in codeset, f"the identity check lost: {want}"
+    # stop() halts every process started in the background, the agent included
+    started = {m.group(1) for _, s in code for m in [re.fullmatch(r'(\w+)=\$!', s)] if m}
+    stops = [s for _, s in code if s.startswith("stop() {")]
+    assert started >= {"FAKE", "SRV", "NODE"} and len(stops) == 1, (started, stops)
+    halted = set(re.findall(r'\bhalt "\$(\w+)";', stops[0]))
+    assert started <= halted, f"stop() leaves running: {sorted(started - halted)}"
+    # the import audit, from the temp dir with -I: a server, engine, torch or numpy module or a
+    # findable `server` fails it
+    assert [s for _, s in code if s.startswith('"$T/venv/bin/python" -I - >"$OUT/imports.log" ')
+            and '|| fail "the installed app reaches the engine' in s], "no import audit"
+    for want in ('for name in ("proxy.__main__", "proxy.app", "proxy.nodeagent", "chatd", '
+                 '"tandemapp.conductor.routes"):',
+                 'bad = sorted(m for m in sys.modules if m.split(".")[0] in ("server", "engine", '
+                 '"torch", "numpy"))',
+                 'spec = importlib.util.find_spec("server")',
+                 'sys.exit(1 if bad or spec is not None else 0)'):
+        assert want in codeset, f"the import audit lost: {want}"
+    # the real node: the home from the password database (not $HOME), and a change fails
+    for want in ("home = pwd.getpwuid(os.getuid()).pw_dir", "sys.exit(1 if bad else 0)"):
+        assert want in codeset, f"the real-node comparison lost: {want}"
+    real = _shell_function(lines, "real_check")
+    same = [k for k, s in enumerate(real)
+            if s == """if printf '%s' "$REAL" | realnode same >"$T/real.txt" 2>&1; then"""]
+    assert same and "stop" in real[:same[0]], "the processes stop before the comparison"
+    assert real[-2:] == ['echo "FAIL the real TandemNode state changed" | tee -a '
+                         '"$OUT/summary.txt"', "return 1"], real
+    # at the exit: a failure stays a failure, the real node is compared, and only the temp dir
+    # from mktemp's pattern is removed
+    assert "trap finish EXIT" in codeset, "no trap finish EXIT"
+    guarded = 'case "$T" in */tandem-pkg-??????) rm -rf "$T" ;; esac'
+    assert _shell_function(lines, "finish") == [
+        "local rc=$?", "real_check || rc=1", "stop", guarded, 'exit "$rc"'], \
+        "finish keeps the exit code, compares the real node and removes only its temp dir"
+    assert [s for _, s in code if "rm -rf" in s] == [guarded], "rm -rf only behind the pattern"
+    assert first(r'^T=\$\(mktemp -d "\$\{TMPDIR:-/tmp\}/tandem-pkg-XXXXXX"\)') < snap
     assert code[-1][1].startswith('echo "PASS all') and \
         code[-2][1] == "real_check || exit 1", "the real node is compared before PASS all"
 
