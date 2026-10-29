@@ -2,21 +2,27 @@
 box. bump writes the version into the pointer lines and leaves the prose; preflight passes on the bumped
 tree and names what is missing on the old one; a dry run prints the tag and push commands and changes no
 ref; the milestone section closes vX.Y.Z and opens the next patch through a stand-in gh. Under
-/bin/bash where it is bash 3.2 (macOS), else the bash on PATH.
+/bin/bash where it is bash 3.2 (macOS), else the bash on PATH. tools/release_box_gate.sh's live steps,
+smoke and loose, with stand-in scripts and a /health on loopback: each runs only while /health names the
+version, with the smoke key in its environment and on no command line; --skip leaves each out.
 
 Run: python tests/test_release_script.py
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "tools", "release.sh")
+GATE = os.path.join(ROOT, "tools", "release_box_gate.sh")
 BASH = "/bin/bash" if os.path.exists("/bin/bash") else (shutil.which("bash") or "bash")
 ID = ["-c", "user.name=Release Test", "-c", "user.email=release@example.invalid"]
 
@@ -213,6 +219,97 @@ def test_the_milestone_section_closes_the_release_and_opens_the_next_patch():
         assert r.returncode == 0 and "nothing to close" in r.stdout, r.stdout
         assert any("title=v1.2.5" in c for c in calls), calls
     finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+# a stand-in for tools/client_smoke.py and tools/loose_ends_live.py: it notes how it ran
+GATE_STUB = r'''import json, os, sys
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ran.jsonl"), "a") as f:
+    f.write(json.dumps({"tool": os.path.basename(__file__), "argv": sys.argv[1:],
+                        "key": os.environ.get("QSE_API_KEY")}) + "\n")
+print("stub ok")
+'''
+
+
+def _health():
+    """A server on loopback whose /health names `srv.version`; `srv.hits` lists the paths asked."""
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            srv.hits.append(self.path)
+            data = json.dumps({"status": "ok", "version": srv.version}).encode()
+            self.send_response(200 if self.path == "/health" else 404)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    srv.version, srv.hits = "", []
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def test_the_box_gate_runs_smoke_and_loose_on_the_candidate_with_the_key():
+    d = tempfile.mkdtemp(prefix="release-gate-")
+    srv = _health()
+    try:
+        tree = os.path.join(d, "tree")
+        os.makedirs(os.path.join(tree, "tools"))
+        shutil.copy(GATE, os.path.join(tree, "tools", "release_box_gate.sh"))
+        for name in ("client_smoke.py", "loose_ends_live.py"):
+            with open(os.path.join(tree, "tools", name), "w") as fh:
+                fh.write(GATE_STUB)
+        ran = os.path.join(tree, "ran.jsonl")
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+        def gate(skip, key=None):
+            if os.path.exists(ran):
+                os.remove(ran)
+            if key is not None:
+                with open(os.path.join(tree, ".smoke-key"), "w") as fh:
+                    fh.write(key)
+            out = tempfile.mkdtemp(dir=d)
+            r = subprocess.run([BASH, "tools/release_box_gate.sh", "--version", "1.2.3", "--py",
+                                sys.executable, "--smoke-base", base + "/v1", "--skip", skip,
+                                "--out", out], cwd=tree, capture_output=True, text=True, timeout=120)
+            runs = [json.loads(x) for x in open(ran)] if os.path.exists(ran) else []
+            return r, _read(out, "SUMMARY").splitlines(), runs, out
+
+        # another version serves: neither live step runs, each says why; --skip smoke keeps loose's rule
+        srv.version = "1.2.2"
+        r, summary, runs, _ = gate("suite,setup")
+        want = f"FAIL the server at {base} runs '1.2.2', not 1.2.3: deploy the candidate first"
+        assert r.returncode == 1 and runs == [], (r.stdout, r.stderr, runs)
+        assert summary == ["suite  skipped", "setup  skipped", f"smoke  {want} (or --skip smoke)",
+                           f"loose  {want} (or --skip loose)"], summary
+        r, summary, runs, _ = gate("suite,setup,smoke")
+        assert r.returncode == 1 and runs == [], (r.stdout, r.stderr, runs)
+        assert summary[2:] == ["smoke  skipped", f"loose  {want} (or --skip loose)"], summary
+        # the candidate (a local label is its release): both run, with the key in the environment
+        srv.version = "1.2.3+build"
+        r, summary, runs, out = gate("suite,setup", key="k-gate-test")
+        assert r.returncode == 0, (r.stdout, r.stderr, summary)
+        assert summary[2:4] == ["smoke  PASS conductor: stub ok (1.2.3+build)",
+                                "smoke  PASS raw: stub ok (1.2.3+build)"], summary
+        assert summary[4].startswith("loose  PASS ") and \
+            summary[4].endswith(f" s ({out}/loose.json; 1.2.3+build)"), summary
+        assert [x["tool"] for x in runs] == ["client_smoke.py", "client_smoke.py",
+                                             "loose_ends_live.py"], runs
+        assert runs[2]["argv"] == ["--base", base, "--out", f"{out}/loose.json"], runs
+        assert runs[1]["argv"][:3] == ["--base", base + "/v1", "--x-tandem"], runs
+        assert all(x["key"] == "k-gate-test" for x in runs), runs
+        assert not any("k-gate-test" in a for x in runs for a in x["argv"]), runs
+        assert not os.path.exists(os.path.join(tree, ".smoke-key")), "the gate keeps the key"
+        # both skipped: /health is not asked
+        hits = len(srv.hits)
+        r, summary, runs, _ = gate("suite,setup,smoke,loose")
+        assert r.returncode == 0 and runs == [] and len(srv.hits) == hits, (summary, srv.hits)
+        assert summary[2:] == ["smoke  skipped", "loose  skipped"], summary
+    finally:
+        srv.shutdown()
         shutil.rmtree(d, ignore_errors=True)
 
 

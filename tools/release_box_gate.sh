@@ -17,7 +17,8 @@
 #   loose  tools/loose_ends_live.py against --smoke-base without /v1, after smoke: the live checks of
 #          the 2026-10-05 loose ends (a streamed call cut by the token limit reaches the client once;
 #          a streamed turn behind a running one gets `: waiting` comments and its answer, never a
-#          429), written to OUT/loose.json
+#          429), written to OUT/loose.json. As for smoke, /health there must name X.Y.Z, and the API
+#          key goes in the environment (QSE_API_KEY)
 #
 # Writes OUT/SUMMARY (a line a step) and OUT/EXIT (0 when every step run passed) last, which
 # tools/release.sh polls for. Every process it starts ends before it exits.
@@ -33,7 +34,7 @@ while [ $# -gt 0 ]; do
         --skip) SKIP="$2"; shift 2 ;;
         --version) VERSION="$2"; shift 2 ;;
         --out) OUT="$2"; shift 2 ;;
-        -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,/^set -u$/p' "$0" | sed '$d'; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -86,36 +87,42 @@ else
     line "setup  $st $(( $(date +%s) - start )) s ($OUT/setup.log; $(grep -m1 -o 'report: .*' "$OUT/setup.log" || echo 'no report line'))"
 fi
 
-if skipped smoke; then
-    line "smoke  skipped"
-else
-    root_url="${BASE%/v1}"
+# the live steps (smoke, loose) run against the candidate only: /health at --smoke-base names it
+root_url="${BASE%/v1}"
+served=""
+if ! skipped smoke || ! skipped loose; then
     if curl -fsS --max-time 20 -o "$OUT/health.json" "$root_url/health"; then
         served="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("version", ""))' "$OUT/health.json" 2>/dev/null)"
-    else
-        served=""
     fi
-    if [ "${served%%+*}" != "$VERSION" ]; then
-        line "smoke  FAIL the server at $root_url runs '${served:-nothing}', not $VERSION: deploy the candidate first (or --skip smoke)"
-        FAILS=$((FAILS + 1))
-    else
-        for path in conductor raw; do
-            extra=""; [ "$path" = raw ] && extra="--x-tandem raw"
-            # shellcheck disable=SC2086
-            if QSE_API_KEY="$KEY" "$PY" -u tools/client_smoke.py --base "$BASE" $extra --json "$OUT/smoke-$path.json" \
-                    > "$OUT/smoke-$path.out" 2>&1; then st=PASS; else st=FAIL; FAILS=$((FAILS + 1)); fi
-            line "smoke  $st $path: $(tail -1 "$OUT/smoke-$path.out") ($served)"
-        done
-    fi
+fi
+not_candidate() {
+    line "$1  FAIL the server at $root_url runs '${served:-nothing}', not $VERSION: deploy the candidate first (or --skip $1)"
+    FAILS=$((FAILS + 1))
+}
+
+if skipped smoke; then
+    line "smoke  skipped"
+elif [ "${served%%+*}" != "$VERSION" ]; then
+    not_candidate smoke
+else
+    for path in conductor raw; do
+        extra=""; [ "$path" = raw ] && extra="--x-tandem raw"
+        # shellcheck disable=SC2086
+        if QSE_API_KEY="$KEY" "$PY" -u tools/client_smoke.py --base "$BASE" $extra --json "$OUT/smoke-$path.json" \
+                > "$OUT/smoke-$path.out" 2>&1; then st=PASS; else st=FAIL; FAILS=$((FAILS + 1)); fi
+        line "smoke  $st $path: $(tail -1 "$OUT/smoke-$path.out") ($served)"
+    done
 fi
 
 if skipped loose; then
     line "loose  skipped"
+elif [ "${served%%+*}" != "$VERSION" ]; then
+    not_candidate loose
 else
     start=$(date +%s)
-    if "$PY" -u tools/loose_ends_live.py --base "${BASE%/v1}" --out "$OUT/loose.json" \
+    if QSE_API_KEY="$KEY" "$PY" -u tools/loose_ends_live.py --base "$root_url" --out "$OUT/loose.json" \
             > "$OUT/loose.out" 2>&1; then st=PASS; else st=FAIL; FAILS=$((FAILS + 1)); fi
-    line "loose  $st $(( $(date +%s) - start )) s ($OUT/loose.json)"
+    line "loose  $st $(( $(date +%s) - start )) s ($OUT/loose.json; $served)"
 fi
 
 echo "$FAILS" > "$OUT/EXIT.tmp" && mv "$OUT/EXIT.tmp" "$OUT/EXIT"

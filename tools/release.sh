@@ -26,9 +26,11 @@
 #   gate       on the box (ssh --box): a git archive of HEAD into ~/release-gate-X.Y.Z-<sha>, then
 #              tools/release_box_gate.sh there under nohup (a dropped ssh session does not stop it), polled
 #              until it ends: the CPU suite through tests/script_suite.py, the Setup Guide gate
-#              (tools/release_gate_setup.sh), client_smoke on the conductor path and the raw path against
-#              --smoke-base, whose /health must already name X.Y.Z (deploy the candidate first). --skip
-#              suite,setup,smoke leaves parts out.
+#              (tools/release_gate_setup.sh), client_smoke on the conductor path and the raw path, then
+#              tools/loose_ends_live.py (a streamed call cut by the token limit, a turn behind a running
+#              one), both against --smoke-base, whose /health must already name X.Y.Z (deploy the
+#              candidate first; both get RELEASE_SMOKE_KEY). --skip suite,setup,smoke,loose leaves parts
+#              out.
 #   tag        the annotated tag vX.Y.Z "TandemLLM X.Y.Z" on HEAD (git's configured identity)
 #   push       HEAD as origin's main and the tag, no force
 #   release    one GitHub release, "TandemLLM X.Y.Z", the notes file, latest. CI's manual workflow

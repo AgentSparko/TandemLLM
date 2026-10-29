@@ -12,6 +12,9 @@
          (when it waits more than 10 s), and its answer; never a 429. The first request's
          length is chosen to make the wait about 25 s at 50 tok/s.
 
+The API key, when the engine needs one, is --key or QSE_API_KEY (as for tools/client_smoke.py),
+sent as `Authorization: Bearer`; tools/release_box_gate.sh passes it in the environment.
+
 Exit code: the number of failed checks. Prints the JSON it writes (no conversation text).
 """
 
@@ -19,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
 import time
@@ -32,6 +36,11 @@ WRITE = {"type": "function", "function": {
         "filePath": {"type": "string", "description": "absolute path"},
         "content": {"type": "string", "description": "the file's content"}},
         "required": ["filePath", "content"]}}}
+
+
+def auth(key: str) -> dict:
+    """The API key's header; none without a key."""
+    return {"Authorization": f"Bearer {key}"} if key else {}
 
 
 def raw_stream(base, body, headers, timeout=900):
@@ -75,7 +84,7 @@ def parse(lines):
     return out
 
 
-def check_cut(base) -> dict:
+def check_cut(base, key: str = "") -> dict:
     body = {"model": "TandemLLM", "stream": True, "max_tokens": 400, "temperature": 0,
             "tools": [WRITE],
             "chat_template_kwargs": {"enable_thinking": False},
@@ -83,7 +92,8 @@ def check_cut(base) -> dict:
                          {"role": "user", "content": "Write /tmp/loose/big.txt with the numbers "
                           "1 to 2000, one per line, spelled out in English words. Call the "
                           "write tool now; do not explain."}]}
-    status, lines = raw_stream(base, body, {"X-Tandem": "raw", "x-session-id": "loose-cut"})
+    status, lines = raw_stream(base, body, {**auth(key), "X-Tandem": "raw",
+                                            "x-session-id": "loose-cut"})
     p = parse(lines)
     ok = (status == 200 and p["names"] == ["write"] and p["finish"] == "length"
           and "<tool_call>" not in p["content"] and "<function=" not in p["content"]
@@ -93,7 +103,7 @@ def check_cut(base) -> dict:
             "block_text_in_content": "<parameter=" in p["content"]}
 
 
-def check_queue(base, hold_tokens: int) -> dict:
+def check_queue(base, hold_tokens: int, key: str = "") -> dict:
     long_body = {"model": "TandemLLM", "stream": True, "max_tokens": hold_tokens,
                  "temperature": 0,
                  "chat_template_kwargs": {"enable_thinking": False},
@@ -103,10 +113,11 @@ def check_queue(base, hold_tokens: int) -> dict:
               "messages": [{"role": "user", "content": "In two sentences: why is the sky blue?"}]}
     box = {}
     t = threading.Thread(target=lambda: box.update(long=raw_stream(
-        base, long_body, {"X-Tandem": "raw", "x-session-id": "loose-hold"})), daemon=True)
+        base, long_body, {**auth(key), "X-Tandem": "raw", "x-session-id": "loose-hold"})),
+        daemon=True)
     t.start()
     time.sleep(1.0)
-    status, lines = raw_stream(base, second, {"x-session-id": "loose-second"})
+    status, lines = raw_stream(base, second, {**auth(key), "x-session-id": "loose-second"})
     t.join(900)
     p = parse(lines)
     waited = p["first_data_s"] or 0.0
@@ -124,12 +135,14 @@ def main() -> int:
     ap.add_argument("--hold-tokens", type=int, default=1300)
     ap.add_argument("--only", default="cut,queue")
     ap.add_argument("--out", default="")
+    ap.add_argument("--key", default=os.environ.get("QSE_API_KEY", ""),
+                    help="the API key (default: QSE_API_KEY), when the engine needs one")
     a = ap.parse_args()
     res = {}
     if "cut" in a.only:
-        res["cut"] = check_cut(a.base)
+        res["cut"] = check_cut(a.base, a.key)
     if "queue" in a.only:
-        res["queue"] = check_queue(a.base, a.hold_tokens)
+        res["queue"] = check_queue(a.base, a.hold_tokens, a.key)
     print(json.dumps(res, indent=1))
     if a.out:
         with open(a.out, "w") as f:
