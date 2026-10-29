@@ -1,5 +1,6 @@
-"""Install over SSH (VIS-246, the Add Spark wizard's Install step): TandemNode and the engine at the
-fleet's version on a box with nothing installed, then its pairing; progress per step and a log.
+"""Install over SSH (VIS-246, the Add Spark wizard's Install step): TandemNode at the fleet's
+version and the engine's runtime at the engine ref (Package.engine_ref) on a box with nothing
+installed, then its pairing; progress per step and a log.
 
     pkg = Package(state_dir)              the wheel this controller installs (built once per code)
     job = Install(trust, target, secret, version=..., options=..., on_change=fn)
