@@ -730,7 +730,7 @@
     }
    },
    "assets": [],
-   "docs": "docs/proxy.md",
+   "docs": "app/docs/proxy.md",
    "note": "You add the backends later, on the Backends screen."
   },
   {

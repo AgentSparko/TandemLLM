@@ -416,7 +416,7 @@ components:
       'on': ${HOME}/.qwen38-spark-engine/backends/config.sqlite3
       'off': ''
   assets: []
-  docs: docs/proxy.md
+  docs: app/docs/proxy.md
   note: You add the backends later, on the Backends screen.
 - id: prompt_cache
   label: Conversation cache

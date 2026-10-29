@@ -30,8 +30,8 @@ The test matrix:
      refused, and numbers keep their range                  test_field_values
  11  the KV bytes a token are the server's (server/slots.py) and the units add up: 104.25 KiB,
      26.06 GiB = 27.98 GB at 262,144 tokens                 test_kv_units
- 12  the dashboard mock's copies (dashboard/mock/setup/<id>.json: the 27B, Flash-Next, LFM2.5, Bolt,
-     Super VL) are what GET /v1/setup/models/<id> answers, key for key        test_the_mock_copy
+ 12  the dashboard mock's copies (app/dashboard/mock/setup/<id>.json: the 27B, Flash-Next, LFM2.5,
+     Bolt, Super VL) are what GET /v1/setup/models/<id> answers, key for key    test_the_mock_copy
 
  13  LFM2.5's card is its runs' own numbers: per profile the disk size and commit of its Hugging Face
      repository, the weights at load, the chat KL and top-1 (exllamav3's model_diff, the engine's own beside
@@ -47,8 +47,8 @@ The test matrix:
      community author with a GitHub login (turboderp); Bolt's IQ2 names NVIDIA's GGUF repository; a
      profile without `made_by`, a community maker without a login, an unknown kind and a repo that is
      not owner/name are refused                             test_every_pack_names_its_maker
- 16  dashboard/mock/setup/community-qwen3.8-flash-next.json is the API's list of turboderp's packs
-                                                            test_the_builtin_community_mock
+ 16  app/dashboard/mock/setup/community-qwen3.8-flash-next.json is the API's list of turboderp's
+     packs                                                  test_the_builtin_community_mock
 
 Run: python tests/test_setup_registry.py
 """
@@ -591,7 +591,7 @@ MOCKED = ("qwen3.8-27b", "qwen3.8-flash-next", "lfm2.5-24b-a2b") + NEMOTRON_TABL
 
 
 def _mock_copy(mid: str) -> str:
-    return os.path.join(ROOT, "dashboard", "mock", "setup", mid + ".json")
+    return os.path.join(ROOT, "app", "dashboard", "mock", "setup", mid + ".json")
 
 
 # VIS-175: Flash-Next's community list is the release's own (models/community-builtin.json), so the mock
@@ -600,7 +600,7 @@ BUILTIN_MOCKED = ("qwen3.8-flash-next",)
 
 
 def _builtin_copy(mid: str) -> str:
-    return os.path.join(ROOT, "dashboard", "mock", "setup", f"community-{mid}.json")
+    return os.path.join(ROOT, "app", "dashboard", "mock", "setup", f"community-{mid}.json")
 
 
 def _builtin_served(mid: str) -> dict:
@@ -608,8 +608,8 @@ def _builtin_served(mid: str) -> dict:
 
 
 def test_the_builtin_community_mock():
-    """dashboard/mock/setup/community-qwen3.8-flash-next.json is the API's community list of Flash-Next
-    (turboderp's packs). Write it again with: python tests/test_setup_registry.py --write-mock"""
+    """app/dashboard/mock/setup/community-qwen3.8-flash-next.json is the API's community list of
+    Flash-Next (turboderp's packs). Write it again with: python tests/test_setup_registry.py --write-mock"""
     for mid in BUILTIN_MOCKED:
         with open(_builtin_copy(mid)) as fh:
             assert json.load(fh) == _builtin_served(mid), (
