@@ -6,10 +6,10 @@
 \texttt{QWEN38\_\allowbreak{}ATTN\_\allowbreak{}INV\_\allowbreak{}SPLIT} & \texttt{1024} & \texttt{tools/\allowbreak{}attn\_\allowbreak{}kernels.py} \\
 \texttt{QWEN38\_\allowbreak{}ATTN\_\allowbreak{}STAGES3} & \texttt{1} & \texttt{tools/\allowbreak{}attn\_\allowbreak{}kernels.py} \\
 \texttt{QWEN38\_\allowbreak{}BLOCKING\_\allowbreak{}SYNC} & \texttt{0} & \texttt{server/\allowbreak{}app.py} \\
-\texttt{QWEN38\_\allowbreak{}CLIENT\_\allowbreak{}CWD} & \texttt{note} & \texttt{server/\allowbreak{}conductor/\allowbreak{}router.py} \\
+\texttt{QWEN38\_\allowbreak{}CLIENT\_\allowbreak{}CWD} & \texttt{note} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}router.py} \\
 \texttt{QWEN38\_\allowbreak{}CLIENT\_\allowbreak{}REASONING} & \texttt{*=\allowbreak{}reasoning\_\allowbreak{}content,\allowbreak{}hermes=\allowbreak{}tags} & \texttt{server/\allowbreak{}compat.py} \\
 \texttt{QWEN38\_\allowbreak{}COMMIT\_\allowbreak{}IN\_\allowbreak{}VERIFY} & \texttt{0} & \texttt{1} \textbullet{} \texttt{engine/\allowbreak{}model.py} \\
-\texttt{QWEN38\_\allowbreak{}CONDUCTOR\_\allowbreak{}FIT} & \texttt{model} & \texttt{server/\allowbreak{}conductor/\allowbreak{}modelfit.py} \\
+\texttt{QWEN38\_\allowbreak{}CONDUCTOR\_\allowbreak{}FIT} & \texttt{model} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}modelfit.py} \\
 \texttt{QWEN38\_\allowbreak{}CORPUS} & \texttt{none} & \texttt{engine/\allowbreak{}drafters/\allowbreak{}ngram.py} \\
 \texttt{QWEN38\_\allowbreak{}DECIDER\_\allowbreak{}COLLATE} & \texttt{call} & \texttt{server/\allowbreak{}decider\_\allowbreak{}api.py} \\
 \texttt{QWEN38\_\allowbreak{}DECIDER\_\allowbreak{}DEVICE} & \texttt{auto} & \texttt{server/\allowbreak{}decider\_\allowbreak{}api.py} \\
@@ -223,16 +223,16 @@
 \texttt{QWEN38\_\allowbreak{}MEMORY\_\allowbreak{}WRITER\_\allowbreak{}TEXT} & \texttt{none} & \texttt{server/\allowbreak{}app.py} \\
 \texttt{QWEN38\_\allowbreak{}MM\_\allowbreak{}END} & \texttt{on} & \texttt{server/\allowbreak{}app.py} \\
 \texttt{QWEN38\_\allowbreak{}MODEL} & \texttt{none} & \texttt{engine/\allowbreak{}config.py} \\
-\texttt{QWEN38\_\allowbreak{}MODEL\_\allowbreak{}NAME} & \texttt{none} & \texttt{server/\allowbreak{}conductor/\allowbreak{}schema.py} \\
+\texttt{QWEN38\_\allowbreak{}MODEL\_\allowbreak{}NAME} & \texttt{none} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}schema.py} \\
 \texttt{QWEN38\_\allowbreak{}MTP\_\allowbreak{}BACKLOG\_\allowbreak{}CAP} & \texttt{2048} & \texttt{engine/\allowbreak{}methods/\allowbreak{}mtp\_\allowbreak{}drafter.py} \\
-\texttt{QWEN38\_\allowbreak{}NARRATOR\_\allowbreak{}DEVICE} & \texttt{auto} & \texttt{server/\allowbreak{}conductor/\allowbreak{}narrator.py} \\
-\texttt{QWEN38\_\allowbreak{}NARRATOR\_\allowbreak{}DIR} & \texttt{none} & \texttt{server/\allowbreak{}conductor/\allowbreak{}narrator.py} \\
-\texttt{QWEN38\_\allowbreak{}NARRATOR\_\allowbreak{}MODEL} & \texttt{none} & \texttt{server/\allowbreak{}conductor/\allowbreak{}narrator.py} \\
+\texttt{QWEN38\_\allowbreak{}NARRATOR\_\allowbreak{}DEVICE} & \texttt{auto} & \texttt{server/\allowbreak{}conductor/\allowbreak{}inproc.py} \\
+\texttt{QWEN38\_\allowbreak{}NARRATOR\_\allowbreak{}DIR} & \texttt{none} & \texttt{server/\allowbreak{}conductor/\allowbreak{}inproc.py} \\
+\texttt{QWEN38\_\allowbreak{}NARRATOR\_\allowbreak{}MODEL} & \texttt{none} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}narrator.py} \\
 \texttt{QWEN38\_\allowbreak{}NH\_\allowbreak{}KV\_\allowbreak{}FP8} & \texttt{0} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}engine.py} \\
 \texttt{QWEN38\_\allowbreak{}NOTES\_\allowbreak{}HEAD} & \texttt{off} & \texttt{server/\allowbreak{}conductor/\allowbreak{}router.py} \\
 \texttt{QWEN38\_\allowbreak{}NOTES\_\allowbreak{}HEAD\_\allowbreak{}ORDER} & \texttt{memory} & \texttt{server/\allowbreak{}conductor/\allowbreak{}router.py} \\
-\texttt{QWEN38\_\allowbreak{}NOTE\_\allowbreak{}ANCHOR} & \texttt{on} & \texttt{server/\allowbreak{}conductor/\allowbreak{}router.py} \\
-\texttt{QWEN38\_\allowbreak{}NOTE\_\allowbreak{}DEDUP} & \texttt{parts} & \texttt{server/\allowbreak{}conductor/\allowbreak{}router.py} \\
+\texttt{QWEN38\_\allowbreak{}NOTE\_\allowbreak{}ANCHOR} & \texttt{on} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}router.py} \\
+\texttt{QWEN38\_\allowbreak{}NOTE\_\allowbreak{}DEDUP} & \texttt{parts} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}router.py} \\
 \texttt{QWEN38\_\allowbreak{}NVFP4} & \texttt{none} & \texttt{engine/\allowbreak{}loader.py} \\
 \texttt{QWEN38\_\allowbreak{}NVFP4\_\allowbreak{}BLOCK\_\allowbreak{}TILES} & \texttt{0} & \texttt{tools/\allowbreak{}nvfp4\_\allowbreak{}linear.py} \\
 \texttt{QWEN38\_\allowbreak{}NVFP4\_\allowbreak{}DEQUANT\_\allowbreak{}FROM} & \texttt{512} & \texttt{tools/\allowbreak{}nvfp4\_\allowbreak{}linear.py} \\
@@ -289,7 +289,7 @@
 \texttt{QWEN38\_\allowbreak{}SAMPLE\_\allowbreak{}SPARSE\_\allowbreak{}KEYED} & \texttt{1} & \texttt{engine/\allowbreak{}sample.py} \\
 \texttt{QWEN38\_\allowbreak{}SAMPLE\_\allowbreak{}TOPP\_\allowbreak{}K} & \texttt{1024} & \texttt{engine/\allowbreak{}sample.py} \\
 \texttt{QWEN38\_\allowbreak{}SCALE\_\allowbreak{}ON} & \texttt{weight} & \texttt{tools/\allowbreak{}fp8\_\allowbreak{}linear.py} \\
-\texttt{QWEN38\_\allowbreak{}SESSION\_\allowbreak{}GENERATIONS} & \texttt{on} & \texttt{server/\allowbreak{}conductor/\allowbreak{}router.py} \\
+\texttt{QWEN38\_\allowbreak{}SESSION\_\allowbreak{}GENERATIONS} & \texttt{on} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}router.py} \\
 \texttt{QWEN38\_\allowbreak{}SHADOW\_\allowbreak{}ASK} & \texttt{idle} & \texttt{server/\allowbreak{}conductor/\allowbreak{}deferred.py} \\
 \texttt{QWEN38\_\allowbreak{}SHADOW\_\allowbreak{}ASK\_\allowbreak{}IDLE\_\allowbreak{}S} & \texttt{5} & \texttt{server/\allowbreak{}conductor/\allowbreak{}deferred.py} \\
 \texttt{QWEN38\_\allowbreak{}SHADOW\_\allowbreak{}DIR} & \texttt{none} & \texttt{server/\allowbreak{}conductor/\allowbreak{}shadow.py} \\
@@ -333,11 +333,11 @@
 \texttt{QWEN38\_\allowbreak{}STAIR\_\allowbreak{}SKIP} & \texttt{0} & \texttt{1} \textbullet{} \texttt{engine/\allowbreak{}lenrouter.py} \\
 \texttt{QWEN38\_\allowbreak{}STAIR\_\allowbreak{}TABLES} & \texttt{none} & \texttt{(a path)} \textbullet{} \texttt{engine/\allowbreak{}lenrouter.py} \\
 \texttt{QWEN38\_\allowbreak{}STAIR\_\allowbreak{}TEMP\_\allowbreak{}SAMPLED} & \texttt{none} & \texttt{engine/\allowbreak{}lenrouter.py} \\
-\texttt{QWEN38\_\allowbreak{}STATUS\_\allowbreak{}CLIENTS} & \texttt{open-\allowbreak{}webui} & \texttt{server/\allowbreak{}conductor/\allowbreak{}states.py} \\
+\texttt{QWEN38\_\allowbreak{}STATUS\_\allowbreak{}CLIENTS} & \texttt{open-\allowbreak{}webui} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}states.py} \\
 \texttt{QWEN38\_\allowbreak{}SUFFIX\_\allowbreak{}STORE} & \texttt{\textasciitilde{}/\allowbreak{}.qwen38-\allowbreak{}spark-\allowbreak{}engine/\allowbreak{}suffix} & \texttt{server/\allowbreak{}app.py} \\
-\texttt{QWEN38\_\allowbreak{}TANDEM\_\allowbreak{}SCRATCH} & \texttt{none} & \texttt{server/\allowbreak{}conductor/\allowbreak{}packages.py} \\
-\texttt{QWEN38\_\allowbreak{}TANDEM\_\allowbreak{}URL} & \texttt{none} & \texttt{server/\allowbreak{}conductor/\allowbreak{}packages.py} \\
-\texttt{QWEN38\_\allowbreak{}TOOL\_\allowbreak{}FIT} & \texttt{on} & \texttt{server/\allowbreak{}conductor/\allowbreak{}router.py} \\
+\texttt{QWEN38\_\allowbreak{}TANDEM\_\allowbreak{}SCRATCH} & \texttt{none} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}packages.py} \\
+\texttt{QWEN38\_\allowbreak{}TANDEM\_\allowbreak{}URL} & \texttt{none} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}packages.py} \\
+\texttt{QWEN38\_\allowbreak{}TOOL\_\allowbreak{}FIT} & \texttt{on} & \texttt{app/\allowbreak{}tandemapp/\allowbreak{}conductor/\allowbreak{}router.py} \\
 \texttt{QWEN38\_\allowbreak{}TREE\_\allowbreak{}ALIAS\_\allowbreak{}STATE} & \texttt{0} & \texttt{0} \textbullet{} \texttt{engine/\allowbreak{}model.py} \\
 \texttt{QWEN38\_\allowbreak{}TREE\_\allowbreak{}CHAIN\_\allowbreak{}DELEGATE} & \texttt{1} & \texttt{engine/\allowbreak{}model.py} \\
 \texttt{QWEN38\_\allowbreak{}TREE\_\allowbreak{}HOST\_\allowbreak{}DEPTH} & \texttt{0} & \texttt{1} \textbullet{} \texttt{engine/\allowbreak{}model.py} \\

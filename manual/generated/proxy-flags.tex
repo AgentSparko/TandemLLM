@@ -7,6 +7,8 @@
 \texttt{-{}-port} & \texttt{8080 (TANDEM\_\allowbreak{}PORT)} & the port to listen on. \\
 \texttt{-{}-usage-\allowbreak{}ledger} & \texttt{\textasciitilde{}/\allowbreak{}.tandemllm/\allowbreak{}ledger.sqlite3 (TANDEM\_\allowbreak{}USAGE\_\allowbreak{}LEDGER)} & the usage ledger (one row per request, no text); 'off' for none. \\
 \texttt{-{}-usage-\allowbreak{}retention-\allowbreak{}days} & \texttt{400} & days the usage ledger keeps its rows (at least 400). \\
+\texttt{-{}-fleet-\allowbreak{}store} & \texttt{beside (TANDEM\_\allowbreak{}FLEET\_\allowbreak{}STORE)} & the fleet's metric history, event log and alerts (SQLite); 'beside' puts fleet.sqlite3 next to the config database, 'off' keeps them in memory only. \\
+\texttt{-{}-fleet-\allowbreak{}retention-\allowbreak{}days} & \texttt{30 (TANDEM\_\allowbreak{}FLEET\_\allowbreak{}RETENTION\_\allowbreak{}DAYS)} & days of 10-minute history, events and resolved alerts (at least 7). \\
 \texttt{-{}-dashboard-\allowbreak{}login} & \texttt{off (QSE\_\allowbreak{}DASHBOARD\_\allowbreak{}LOGIN) (TANDEM\_\allowbreak{}DASHBOARD\_\allowbreak{}LOGIN)} & on, with TANDEM\_ADMIN\_TOKEN (the admin password) set: the dashboard API needs it or a session too; with no password set every route is open. One of: on, off. \\
 \texttt{-{}-dashboard-\allowbreak{}dir} & \texttt{none} & default: dashboard/dist. \\
 \texttt{-{}-trust-\allowbreak{}loopback} & \texttt{on} & a request from this machine without proxy headers counts as the admin. One of: on, off. \\

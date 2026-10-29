@@ -14,6 +14,7 @@
 \texttt{-{}-setup} & set up in the browser instead: install the code and Wren's model only, then start setup mode (the dashboard's \#/setup page; docs/setup.md); 127.0.0.1 unless -\kern0pt-host says otherwise \\
 \texttt{-{}-force-\allowbreak{}setup} & with -\kern0pt-setup, on a directory that already has a configured engine \\
 \texttt{-{}-systemd} & also install a systemd user unit, tandemllm.service (off by default) \\
+\texttt{-{}-runtime-\allowbreak{}only} & the engine's source and Python environment only: no weights, no corpus, no config, no start (what TandemApp's Add Spark wizard installs on a new node) \\
 \texttt{-{}-yes,\allowbreak{} -\allowbreak{}y} & non-interactive: answer yes to every question \\
 \texttt{-{}-dry-\allowbreak{}run} & print every step and command, change nothing \\
 \texttt{-{}-uninstall} & stop the engine, remove the unit and DIR (the weights stay in the HF cache) \\
