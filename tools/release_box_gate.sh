@@ -3,7 +3,7 @@
 # and starts this there, from the archive's root, under nohup; it can also run by hand:
 #
 #   bash tools/release_box_gate.sh --version X.Y.Z [--py PYTHON] [--pythonpath P] [--jobs N]
-#        [--smoke-base URL] [--skip suite,setup,smoke] [--out DIR]
+#        [--smoke-base URL] [--skip suite,setup,smoke,loose] [--out DIR]
 #
 #   suite  every tests/test_*.py on the CPU through tests/script_suite.py, one clean process a file
 #          (env -i, CUDA_VISIBLE_DEVICES empty), N files at a time, 900 s a file; a file that runs no
@@ -14,6 +14,10 @@
 #          (--x-tandem raw), after /health there names X.Y.Z (the candidate must be deployed). The API
 #          key, when the server needs one, is read from .smoke-key in this tree (tools/release.sh writes
 #          it, mode 600, and this script removes it) and passed in the environment (QSE_API_KEY)
+#   loose  tools/loose_ends_live.py against --smoke-base without /v1, after smoke: the live checks of
+#          the 2026-10-05 loose ends (a streamed call cut by the token limit reaches the client once;
+#          a streamed turn behind a running one gets `: waiting` comments and its answer, never a
+#          429), written to OUT/loose.json
 #
 # Writes OUT/SUMMARY (a line a step) and OUT/EXIT (0 when every step run passed) last, which
 # tools/release.sh polls for. Every process it starts ends before it exits.
@@ -29,7 +33,7 @@ while [ $# -gt 0 ]; do
         --skip) SKIP="$2"; shift 2 ;;
         --version) VERSION="$2"; shift 2 ;;
         --out) OUT="$2"; shift 2 ;;
-        -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -103,6 +107,15 @@ else
             line "smoke  $st $path: $(tail -1 "$OUT/smoke-$path.out") ($served)"
         done
     fi
+fi
+
+if skipped loose; then
+    line "loose  skipped"
+else
+    start=$(date +%s)
+    if "$PY" -u tools/loose_ends_live.py --base "${BASE%/v1}" --out "$OUT/loose.json" \
+            > "$OUT/loose.out" 2>&1; then st=PASS; else st=FAIL; FAILS=$((FAILS + 1)); fi
+    line "loose  $st $(( $(date +%s) - start )) s ($OUT/loose.json)"
 fi
 
 echo "$FAILS" > "$OUT/EXIT.tmp" && mv "$OUT/EXIT.tmp" "$OUT/EXIT"

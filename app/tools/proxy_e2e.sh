@@ -11,19 +11,18 @@
 #   3 engine     tools/proxy_gate.py against a live TandemLLM engine (20 small raw requests;
 #                skipped without --engine-url): tokens equal, decode within 2 %, proxy_ms < 2 ms;
 #                tools/proxy_harness_check.py, the harness (P4) in front of the same engine:
-#                the class question through it, the note and its replay, a title capped
-#                tools/loose_ends_live.py: a streamed call cut by the token limit reaches the
-#                client once (no block text as content); a streamed turn behind a running one
-#                gets `: waiting` comments and its answer, no 429
+#                the class question through it, the note and its replay, a title capped. The
+#                engine's own live checks of its loose ends are the `loose` step of the engine's
+#                release box gate (tools/release_box_gate.sh in the engine's tree)
 #   4 dashboard  vitest, the size budget, and the Playwright suite on the mock (backends, shell,
 #                usage, dev, performance, system) on chromium desktop and webkit at 390 px,
 #                one worker
 #   5 standalone `python -m proxy` from an env file alone, two fake backends: /v1/models, a
 #                stream, a request with a fallback, the dashboard's endpoints against the contract
-#   6 box        (--box, run on the engine's host) tests/test_proxy_engine.py: the engine's own
-#                server with --backends and the fake engine; tools/hostcollect_check.py: the
-#                host collector against /proc/meminfo and nvidia-smi, the process behind :8000,
-#                its own CPU cost
+#   6 box        (--box, run on the engine's host) tools/hostcollect_check.py: the host collector
+#                against /proc/meminfo and nvidia-smi, the process behind :8000, its own CPU
+#                cost. The engine's server with --backends (tests/test_proxy_engine.py) runs in
+#                the engine's own suite
 #   P1.5 + P5    tests/test_hostcollect.py and tests/test_package.py with the unit steps, and
 #                tools/package_check.sh: the wheel built and installed into a clean venv without
 #                torch, `tandem-app check` and `serve` against a fake backend (needs pip's
@@ -80,9 +79,6 @@ step bench         $PY tools/proxy_bench.py --n 200 --streams 64 --out "$OUT/ben
 if [ -n "$ENGINE" ]; then
   step engine-gate $PY tools/proxy_gate.py --url "$ENGINE" --n 20 --out "$OUT/gate.json"
   step engine-harness $PY tools/proxy_harness_check.py --url "$ENGINE" --out "$OUT/harness.json"
-  # 2026-10-05: a live call cut by the token limit is sent once; a turn behind a turn waits
-  # with `: waiting` comments and is served, never a 429
-  step engine-loose-ends $PY tools/loose_ends_live.py --base "${ENGINE%/v1}" --out "$OUT/loose.json"
 else
   echo "SKIP engine-gate (no --engine-url)" | tee -a "$OUT/summary.txt"
 fi
@@ -146,7 +142,6 @@ finally:
     p.terminate(); p.wait(10); a.shutdown(); b.shutdown()
 EOF
 if [ $BOX = 1 ]; then
-  step box-engine $PY tests/test_proxy_engine.py
   # P1.5: the collector against /proc/meminfo and nvidia-smi on this machine, the engine's
   # process behind :8000 with its GPU memory, and the collector's own CPU cost
   step box-hostcollect $PY tools/hostcollect_check.py --port 8000 --samples 60 \
