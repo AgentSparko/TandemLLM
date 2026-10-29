@@ -1295,8 +1295,10 @@ class Night:
                 "pristine": {"ok": not changed, "changed": changed, "restored": restored}}
 
     def _smoke(self, s: dict, item: dict, t0: float) -> dict:
-        # the protocol set is the engine's own script (TandemApp's tree has none): named here
-        script = os.path.expanduser(getattr(self.a, "smoke_script", "") or "")
+        # the protocol set is the engine's own script (TandemApp's tree has none): named here, a
+        # relative path read from the caller's directory, since the script runs from ROOT
+        given = getattr(self.a, "smoke_script", "") or ""
+        script = os.path.abspath(os.path.expanduser(given)) if given else ""
         if not script:
             raise RuntimeError(f"suite {s['id']} runs the engine's tools/client_smoke.py: name it "
                                f"with --smoke-script PATH")
@@ -1423,8 +1425,9 @@ def main(argv=None) -> int:
     ap.add_argument("--night", default="")
     ap.add_argument("--opencode", default=shutil.which("opencode") or "opencode")
     ap.add_argument("--smoke-script", default="",
-                    help="the engine's tools/client_smoke.py (a TandemLLM checkout's), which a "
-                         "client_smoke suite runs on each arm; without it such a suite fails")
+                    help="the engine's tools/client_smoke.py (a TandemLLM checkout's; a relative "
+                         "path is read from the current directory), which a client_smoke suite "
+                         "runs on each arm; without it such a suite fails")
     ap.add_argument("--smoke-python", default=sys.executable,
                     help="the interpreter for --smoke-script (needs openai and jsonschema), "
                          "e.g. 'uv run --with openai --with jsonschema python'")
