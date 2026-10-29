@@ -4,7 +4,8 @@ The contract is app/contracts/engine-api-v1 (README.md, routes.json; its version
 `version`, equal to SPEAKS). The engine's full /health answer, its setup-mode /health and its status
 responder's /health carry `engine_api` (MAJOR.MINOR). An engine that does not send it (every engine
 up to 0.15.x) speaks 1.0. A MINOR step only adds, so any 1.x is fine here; another major is not, and
-the reason names the major this TandemApp needs.
+the reason names the major this TandemApp needs. Nor is a value outside the plain form (a string of
+ASCII digits, a dot, ASCII digits, nothing around it); its reason quotes what the engine sent.
 
     read(doc, kind)   {engine_api, assumed, ok, why} for kind tandemllm; None for any other kind
 
@@ -23,7 +24,7 @@ from proxy import _version
 SPEAKS = "1.0"
 #: what an engine without the field speaks
 ASSUMED = "1.0"
-_FORM = re.compile(r"^(\d+)\.(\d+)$")
+_FORM = re.compile(r"([0-9]+)\.([0-9]+)")
 
 
 def read(doc, kind: str = "tandemllm") -> dict | None:
@@ -36,10 +37,13 @@ def read(doc, kind: str = "tandemllm") -> dict | None:
     if got is None:
         return {"engine_api": ASSUMED, "assumed": True, "ok": True, "why": None}
     text = got if isinstance(got, str) else repr(got)
-    m = _FORM.match(text) if isinstance(got, str) else None
+    m = _FORM.fullmatch(got) if isinstance(got, str) else None
     want = SPEAKS.split(".")[0]
-    if m is not None and m.group(1) == want:
+    if m is not None and int(m.group(1)) == int(want):
         return {"engine_api": text, "assumed": False, "ok": True, "why": None}
     app = _version.release() or "this release"
+    said = f"speaks engine API {text}" if m is not None else \
+        f"sends engine_api {text!r}, not MAJOR.MINOR" if isinstance(got, str) else \
+        f"sends engine_api {text}, not a MAJOR.MINOR string"
     return {"engine_api": text, "assumed": False, "ok": False,
-            "why": f"this engine speaks engine API {text}; TandemApp {app} needs {want}.x"}
+            "why": f"this engine {said}; TandemApp {app} needs {want}.x"}

@@ -15,8 +15,9 @@ callers. The engine's side is the repository's tests/test_engine_api_contract.py
   3  every route is used: a file of its used_by holds a literal for it, or a relay prefix
      covers it; nodeengines.RELAY is in the routes               test_every_route_is_used
   4  the version: a missing field reads 1.0 (assumed, ok), 1.4 is ok, 2.0 is not and names 1.x,
-     another kind is not read; nodeengines.health against fake engines that say nothing, 1.4,
-     2.0 and garbage; the health example validates against its schema   test_versions
+     a value not in the plain MAJOR.MINOR form is not ok and its reason quotes it, another kind
+     is not read; nodeengines.health against fake engines that say nothing, 1.4, 2.0 and
+     garbage; the health example validates against its schema   test_versions
   5  the node fixtures: nodeengines.default_engine reads node/serve.env.example's port and builds
      node/control.json's verbs; nodeweights reads a folder laid out as
      node/hub_manifest.example.json says (files_of, the sha256 per file, the content id)
@@ -411,6 +412,15 @@ def test_versions():
     for kind in ("vllm", "sglang", "generic"):
         assert engineapi.read({"engine_api": "2.0"}, kind) is None
     assert engineapi.read({"engine_api": "one"}, "tandemllm")["ok"] is False
+    # only the plain MAJOR.MINOR form, ASCII digits, a string; the reason quotes what was sent
+    for got, said in (("1.0\n", "'1.0\\n', not MAJOR.MINOR"), ("", "'', not MAJOR.MINOR"),
+                      (" 1.4", "' 1.4', not MAJOR.MINOR"),
+                      ("1.\u0663", "'1.\u0663', not MAJOR.MINOR"),
+                      (1.0, "1.0, not a MAJOR.MINOR string"),
+                      (2, "2, not a MAJOR.MINOR string")):
+        r = engineapi.read({"engine_api": got}, "tandemllm")
+        assert (r["ok"], r["why"]) == (False, why.replace("speaks engine API 2.0",
+                                                          f"sends engine_api {said}")), (got, r)
     # nodeengines.health and the view against engines on loopback
     fakes = {"unsaid": FakeEngine({"status": "ok", "version": "0.15.0"}),
              "v14": FakeEngine({"status": "ok", "engine_api": "1.4"}),
