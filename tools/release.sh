@@ -10,13 +10,15 @@
 # Sections (--only takes a comma-separated list; the default is
 # preflight,gate,tag,push,release,milestone,verify):
 #
-#   bump       VERSION, install.sh's default tag, the manual's \version, and the lines that point at the
-#              previous tag (the install commands and --ref defaults of README.md, docs/setup.md and the
-#              manual, the generated install flags); prose (CHANGELOG.md, README's release paragraph,
-#              install.sh's release comment, the manual's changelog) stays the author's. Writes files, no commit.
+#   bump       VERSION and app/VERSION (TandemApp's own number, written next to the engine's while one
+#              release ships both), install.sh's default tag, the manual's \version, and the lines that
+#              point at the previous tag (the install commands and --ref defaults of README.md,
+#              docs/setup.md and the manual, the generated install flags); prose (CHANGELOG.md, README's
+#              release paragraph, install.sh's release comment, the manual's changelog) stays the author's.
+#              Writes files, no commit.
 #   preflight  read-only: a clean tree on main; origin's main an ancestor of HEAD (fast-forward only); no
-#              vX.Y.Z on origin; VERSION, install.sh, the manual's \version and the pointer lines say
-#              X.Y.Z, none still says the previous tag; CHANGELOG.md's first section and the manual's
+#              vX.Y.Z on origin; VERSION, app/VERSION, install.sh, the manual's \version and the pointer
+#              lines say X.Y.Z, none still says the previous tag; CHANGELOG.md's first section and the manual's
 #              changelog have X.Y.Z; no commit since the previous tag carries a co-author or session trailer
 #              (subjects over 72 characters are listed); the notes file is there (RELEASE_NOTES_CHECK, a
 #              command, runs on it; RELEASE_NOTES_DENY, a regex, must not match it); gh is logged in; each
@@ -39,9 +41,9 @@
 #              is created when it is missing (CONTRIBUTING.md: a milestone is a release)
 #   verify     read-only, against what is published: the tag on origin (and the local tag's commit), main
 #              containing it, the release's title, draft state and latest flag, CI's manual PDF (waits up
-#              to --asset-wait minutes), README.md, install.sh and VERSION at the tag (each body saved to a
-#              file and then searched: a reader that stops early under a pipe makes curl fail with
-#              "(56) Failure writing output"), anonymous HTTP 200 for install.sh, the manual asset and the
+#              to --asset-wait minutes), README.md, install.sh, VERSION and app/VERSION at the tag (each
+#              body saved to a file and then searched: a reader that stops early under a pipe makes curl
+#              fail with "(56) Failure writing output"), anonymous HTTP 200 for install.sh, the manual asset and the
 #              weight packs' README.md and config.json
 #
 # --dry-run runs preflight, gate and verify (verify only lists its checks while the tag is not on origin)
@@ -189,6 +191,7 @@ if want bump; then
     OLD="${PREV#v}"
     say "previous release $PREV"
     printf '%s\n' "$VERSION" > "$ROOT/VERSION"
+    printf '%s\n' "$VERSION" > "$ROOT/app/VERSION"
     # the pointer lines, by exact pattern (python3: sed's alternation and in-place flags differ between
     # BSD and GNU sed)
     python3 - "$ROOT" "$OLD" "$VERSION" <<'PY'
@@ -257,6 +260,9 @@ if want preflight; then
 
     g show HEAD:VERSION > "$WORK/VERSION" 2>/dev/null || : > "$WORK/VERSION"
     [ "$(cat "$WORK/VERSION")" = "$VERSION" ] && pass "VERSION $VERSION" || fail "VERSION says $(cat "$WORK/VERSION")"
+    g show HEAD:app/VERSION > "$WORK/app-VERSION" 2>/dev/null || : > "$WORK/app-VERSION"
+    [ "$(cat "$WORK/app-VERSION")" = "$VERSION" ] && pass "app/VERSION $VERSION" \
+        || fail "app/VERSION says $(cat "$WORK/app-VERSION")"
     pin() {                      # pin FILE STRING [WHAT]: HEAD's FILE holds STRING
         g show "HEAD:$1" > "$WORK/pin" 2>/dev/null || : > "$WORK/pin"
         if has "$WORK/pin" "$2"; then pass "$1: ${3:-$2}"; else fail "$1 lacks: ${3:-$2}"; fi
@@ -429,7 +435,7 @@ if want verify; then
         if [ "$DRY" = 1 ]; then
             say "(dry run: $TAG is not on $GH_REPO yet; after the push these run)"
             echo "  the tag on origin = the local tag's commit; main contains it; release \"TandemLLM $VERSION\","
-            echo "  not a draft, latest; CI's $ASSET (up to $ASSET_WAIT min); README.md, install.sh and VERSION"
+            echo "  not a draft, latest; CI's $ASSET (up to $ASSET_WAIT min); README.md, install.sh, VERSION and app/VERSION"
             echo "  at $TAG; anonymous HTTP 200: install.sh, the manual asset, each weight pack's README.md, config.json"
         else
             fail "no annotated tag $TAG on $GH_REPO"
@@ -490,6 +496,12 @@ if want verify; then
                 || fail "VERSION at $TAG: $(cat "$WORK/VERSION.tag")"
         else
             fail "VERSION at $TAG: download failed"
+        fi
+        if fetch "$RAW/app/VERSION" "$WORK/app-VERSION.tag"; then
+            [ "$(cat "$WORK/app-VERSION.tag")" = "$VERSION" ] && pass "app/VERSION at $TAG: $VERSION" \
+                || fail "app/VERSION at $TAG: $(cat "$WORK/app-VERSION.tag")"
+        else
+            fail "app/VERSION at $TAG: download failed"
         fi
         for u in "$RAW/install.sh" "https://github.com/$GH_REPO/releases/download/$TAG/$ASSET"; do
             code="$(code_of "$u")"

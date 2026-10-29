@@ -732,6 +732,12 @@
     "app/"
    ]
   },
+  "tests/test_gate_script.py": {
+   "imports": [],
+   "reads": [
+    "app/tests"
+   ]
+  },
   "tests/test_gpu_health.py": {
    "imports": [
     "chatd.engine:Engine",
@@ -1210,6 +1216,13 @@
    "imports": [],
    "reads": [
     "app/dashboard"
+   ]
+  },
+  "tests/test_release_script.py": {
+   "imports": [],
+   "reads": [
+    "app/VERSION",
+    "app/tests"
    ]
   },
   "tests/test_residency.py": {

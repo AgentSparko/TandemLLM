@@ -8,7 +8,9 @@
 #       bash ~/qwen38-spark-engine-p1/ops/gate.sh spd29 --flags "QWEN38_VERIFY_GRAPH=1 QWEN38_GDN_AB=1"
 #
 # Steps, in order, each with a PASS/FAIL line; a failing step stops the script (exit 1):
-#   1 suite      every tests/test_*.py on the CPU, in a clean environment (no serve.env, no QWEN38_*)
+#   1 suite      every tests/test_*.py on the CPU, in a clean environment (no serve.env, no QWEN38_*),
+#                then every app/tests/test_*.py through app/tests/script_suite.py the same way;
+#                the step fails when either pass does
 #   2 gpu        every tests/gpu/test_*.py, served environment
 #   3 identity   tools/flagoff_identity.py --from-env in the BASE directory and here, new flags off:
 #                the served engine must be bit-identical to the one it replaces; then, with the
@@ -168,6 +170,14 @@ if [ $SKIP_SUITE = 0 ]; then
   stub '```'; stub "\$ python tests/script_suite.py --all  (every tests/test_*.py, env -i, CUDA off)"
   stub "$SUM"; stub '```'
   say "suite $SUM"
+  # SRV-748: TandemApp's tests, app/tests/test_*.py, through their own runner (PYTHONPATH app/)
+  ASUM=$(env -i HOME="$HOME" PATH="$PATH" SUITE_PYTHONPATH="$HOME/pylibs" \
+         "$PY" -u app/tests/script_suite.py --all --out "$OUT/app-suite" --timeout 900 2>&1 \
+         | tee "$OUT/app-suite.log" | tail -1)
+  case "$ASUM" in *" fail=0 "*) ;; *) bad=1 ;; esac
+  stub '```'; stub "\$ python app/tests/script_suite.py --all  (every app/tests/test_*.py, env -i, CUDA off)"
+  stub "$ASUM"; stub '```'
+  say "app suite $ASUM"
   verdict "1 suite" $bad; [ $bad = 0 ] || abort "1 suite"
 fi
 

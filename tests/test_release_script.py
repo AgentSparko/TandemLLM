@@ -1,10 +1,11 @@
 """tools/release.sh (OPS-223) on a scratch repository with a local bare remote: no network, no GitHub, no
-box. bump writes the version into the pointer lines and leaves the prose; preflight passes on the bumped
-tree and names what is missing on the old one; a dry run prints the tag and push commands and changes no
+box. bump writes the version into VERSION, app/VERSION and the pointer lines and leaves the prose;
+preflight passes on the bumped tree and names what is missing on the old one; a dry run prints the tag and push commands and changes no
 ref; the milestone section closes vX.Y.Z and opens the next patch through a stand-in gh. Under
 /bin/bash where it is bash 3.2 (macOS), else the bash on PATH. tools/release_box_gate.sh's live steps,
 smoke and loose, with stand-in scripts and a /health on loopback: each runs only while /health names the
-version, with the smoke key in its environment and on no command line; --skip leaves each out.
+version, with the smoke key in its environment and on no command line; --skip leaves each out. Its
+suite step runs tests/ and then app/tests/ through app/tests/script_suite.py, and fails when either does.
 
 Run: python tests/test_release_script.py
 """
@@ -28,6 +29,7 @@ ID = ["-c", "user.name=Release Test", "-c", "user.email=release@example.invalid"
 
 FILES = {
     "VERSION": "1.2.3\n",
+    "app/VERSION": "1.2.3\n",
     "install.sh": '#!/bin/bash\n# The engine release. v1.2.3 adds a thing.\nTANDEM_REF="${TANDEM_REF:-v1.2.3}"\n',
     "README.md": ("curl -fsSLO https://raw.githubusercontent.com/o/r/v1.2.3/install.sh\n\n"
                   "It clones the engine at the tag `v1.2.3` into `~/T/src`, via install.sh.\n\n"
@@ -87,10 +89,11 @@ def test_bump_then_preflight_then_a_dry_run():
         r = _release(work, "1.2.4", "--only", "preflight")
         assert r.returncode != 0, r.stdout
         assert "FAIL  VERSION says 1.2.3" in r.stdout and "still points at v1.2.3" in r.stdout, r.stdout
+        assert "FAIL  app/VERSION says 1.2.3" in r.stdout, r.stdout
 
         r = _release(work, "1.2.4", "--only", "bump")
         assert r.returncode == 0, r.stdout + r.stderr
-        assert _read(work, "VERSION") == "1.2.4\n"
+        assert _read(work, "VERSION") == "1.2.4\n" and _read(work, "app/VERSION") == "1.2.4\n"
         inst = _read(work, "install.sh")
         assert 'TANDEM_REF="${TANDEM_REF:-v1.2.4}"' in inst and "# The engine release. v1.2.3" in inst, inst
         readme = _read(work, "README.md")
@@ -117,6 +120,7 @@ def test_bump_then_preflight_then_a_dry_run():
         r = _release(work, "1.2.4", "--only", "preflight", "--notes", notes)
         assert r.returncode == 0, r.stdout + r.stderr
         assert "PREFLIGHT: all checks pass" in r.stdout and "previous release v1.2.3" in r.stdout, r.stdout
+        assert "PASS  app/VERSION 1.2.4" in r.stdout, r.stdout
 
         head = _git(work, "rev-parse", "HEAD").stdout.strip()
         r = _release(work, "1.2.4", "--only", "preflight,tag,push", "--notes", notes, "--dry-run")
@@ -310,6 +314,68 @@ def test_the_box_gate_runs_smoke_and_loose_on_the_candidate_with_the_key():
         assert summary[2:] == ["smoke  skipped", "loose  skipped"], summary
     finally:
         srv.shutdown()
+        shutil.rmtree(d, ignore_errors=True)
+
+
+# stand-ins for the two suite runners: tests/script_suite.py takes one file; app/tests/script_suite.py
+# takes --all, the options and one file, and ends with the real runner's total line
+ENGINE_RUNNER = r'''import sys
+sys.exit(1 if "FAIL" in open(sys.argv[1]).read() else 0)
+'''
+APP_RUNNER = r'''import os, sys
+assert sys.argv[1] == "--all", sys.argv
+f = sys.argv[-1]
+assert not os.environ.get("PYTHONPATH"), "env -i"
+bad = "FAIL" in open(f).read()
+name = os.path.relpath(f, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+print(f"{name:56s}     1 tests     0.0 s  {'FAIL (exit 1)' if bad else 'ok'}")
+print(f"files=1 ok={0 if bad else 1} fail={1 if bad else 0} skipped=0 tests=1" + (f" -- {name}" if bad else ""))
+sys.exit(1 if bad else 0)
+'''
+
+
+def test_the_box_gate_suite_counts_the_app_tests():
+    d = tempfile.mkdtemp(prefix="release-gate-suite-")
+    try:
+        tree = os.path.join(d, "tree")
+        for sub in ("tools", "tests", "app/tests"):
+            os.makedirs(os.path.join(tree, sub))
+        shutil.copy(GATE, os.path.join(tree, "tools", "release_box_gate.sh"))
+        for rel, text in (("tests/script_suite.py", ENGINE_RUNNER), ("app/tests/script_suite.py", APP_RUNNER),
+                          ("tests/test_a.py", "pass\n"), ("app/tests/test_b.py", "pass\n"),
+                          ("app/tests/test_c.py", "pass\n")):
+            with open(os.path.join(tree, rel), "w") as fh:
+                fh.write(text)
+
+        env = dict(os.environ)
+        if shutil.which("timeout") is None:                        # macOS
+            fbin = os.path.join(d, "bin")
+            os.makedirs(fbin)
+            with open(os.path.join(fbin, "timeout"), "w") as fh:
+                fh.write('#!/bin/sh\nshift\nexec "$@"\n')
+            os.chmod(os.path.join(fbin, "timeout"), 0o755)
+            env["PATH"] = fbin + os.pathsep + env["PATH"]
+
+        def suite():
+            out = tempfile.mkdtemp(dir=d)
+            r = subprocess.run([BASH, "tools/release_box_gate.sh", "--version", "1.2.3", "--py", sys.executable,
+                                "--jobs", "2", "--skip", "setup,smoke,loose", "--out", out],
+                               cwd=tree, capture_output=True, text=True, timeout=120, env=env)
+            return r, _read(out, "SUMMARY").splitlines()
+
+        r, summary = suite()
+        assert r.returncode == 0, (r.stdout, r.stderr, summary)
+        assert summary[0].startswith("suite  PASS files=1 ok=1 skipped=0 failed=0 "), summary
+        assert summary[1].startswith("suite  PASS app/tests files=2 ok=2 skipped=0 failed=0 "), summary
+        # a failing TandemApp test fails the step, and the gate, with the engine's tests passing
+        with open(os.path.join(tree, "app/tests/test_c.py"), "w") as fh:
+            fh.write("FAIL\n")
+        r, summary = suite()
+        assert r.returncode == 1, (r.stdout, r.stderr, summary)
+        assert summary[0].startswith("suite  PASS files=1 "), summary
+        assert summary[1].startswith("suite  FAIL app/tests files=2 ok=1 skipped=0 failed=1 "), summary
+        assert summary[2].strip().startswith("app/tests/test_c.py ") and "FAIL (exit 1)" in summary[2], summary
+    finally:
         shutil.rmtree(d, ignore_errors=True)
 
 
