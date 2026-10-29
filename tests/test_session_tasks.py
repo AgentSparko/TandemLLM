@@ -642,7 +642,7 @@ def test_the_watch_lists_what_the_session_tasks_hold():
     assert row["compaction"] == {"task": "S2", "count": 1, "watching": True, "steps": 0}
     assert row["watch"]["minutes"] == 20 and row["watch"]["notify"] is False
     assert row["idle_minutes"] == round(25 - 1 / 60, 1) and not row["running"]
-    schema = json.load(open(os.path.join(ROOT, "docs", "contract", "conductor-v1",
+    schema = json.load(open(os.path.join(ROOT, "app", "contracts", "conductor-v1",
                                          "watch.schema.json")))
     from tools import contract_check
     errs = contract_check.validate({"contract_version": "1.0", "monitor": True, "sessions": w},

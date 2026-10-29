@@ -332,7 +332,7 @@ def test_the_writer():
     assert meta["counts"]["snapshots"] == 7 and meta["counts"]["blocks"] == 8
     sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
     import contract_check
-    root = os.path.join(os.path.dirname(HERE), "docs", "contract", "conductor-v1")
+    root = os.path.join(os.path.dirname(HERE), "app", "contracts", "conductor-v1")
     for name in ("memory-sessions", "memory-session"):
         sch = contract_check.load(name, root)
         assert not contract_check.validate(meta["counts"], sch["$defs"]["counts"], root=root), name

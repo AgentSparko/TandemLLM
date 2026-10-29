@@ -9,7 +9,7 @@ The test matrix:
   2  search: [{name, description, score}] best first, `k` (default 5), `class` filters by
      INDEX.md's fit, [] when nothing matches; read: the body the router injects and the
      reference only a read gets; list: every enabled skill; each against its contract file
-     (docs/contract/conductor-v1/library*.schema.json)
+     (app/contracts/conductor-v1/library*.schema.json)
                                                         test_search_read_and_list
   3  limits, the OpenAI error shape: no q, q over 1,000 characters, k 0, 21 or not a number,
      an unknown class (422); an unknown, disabled or nested name and no library at all (404);
@@ -41,8 +41,8 @@ from tandemapp import library_api  # noqa: E402
 from tandemapp.conductor.hook import Conductor  # noqa: E402
 from tools import contract_check  # noqa: E402
 
-CONTRACT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs",
-                        "contract", "conductor-v1")
+CONTRACT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app",
+                        "contracts", "conductor-v1")
 
 
 def _ok(obj, name):

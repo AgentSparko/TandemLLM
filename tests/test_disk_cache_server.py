@@ -43,7 +43,7 @@ from test_cache import fresh, tokens  # noqa: E402
 from disk_tier_util import waiting  # noqa: E402
 from test_disk_cache import CH, HUGE, Pos  # noqa: E402
 
-CONTRACT = os.path.join(ROOT, "docs", "contract", "conductor-v1")
+CONTRACT = os.path.join(ROOT, "app", "contracts", "conductor-v1")
 
 
 def _check(obj, name):

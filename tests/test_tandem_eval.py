@@ -36,7 +36,7 @@ sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, 
 
 from tools import contract_check, tandem_eval as te  # noqa: E402
 
-EXAMPLE = os.path.join(ROOT, "docs", "contract", "dashboard-v1", "tandem-eval.example.json")
+EXAMPLE = os.path.join(ROOT, "app", "contracts", "dashboard-v1", "tandem-eval.example.json")
 BUILD = {"version": "0.3.2-test", "code_sha": "abc123def456"}
 
 FAKE_OPENCODE = r'''#!/usr/bin/env python3

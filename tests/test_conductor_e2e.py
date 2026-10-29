@@ -19,7 +19,7 @@ into the turn shows up as a larger count while the stream carries no byte of the
   * the config API: 401 through the proxy without a token, a write with the admin token makes the
     next version, raw is 409, invalid is 422, restore, diff, the mode switch, a label;
   * the session export lists every hidden text; stats, sessions and the test box answer, and every
-    response validates against docs/contract/conductor-v1;
+    response validates against app/contracts/conductor-v1;
   * any decision model works: another model name with limits 256/96 gets states of at most
     (256 - 96) x 3.5 characters.
 
@@ -46,7 +46,7 @@ sys.path.insert(0, ROOT)
 
 from tools import contract_check  # noqa: E402
 
-CONTRACT = os.path.join(ROOT, "docs", "contract", "conductor-v1")
+CONTRACT = os.path.join(ROOT, "app", "contracts", "conductor-v1")
 ADMIN = "e2e-" + "0" * 40
 PROXY = {"X-Forwarded-For": "203.0.113.44", "X-Real-IP": "203.0.113.44"}
 LAUNCH = ("import sys, runpy; sys.modules['triton'] = None; sys.modules['triton.language'] = None;"
@@ -220,7 +220,7 @@ def test_the_conductor_end_to_end():
         st, _, sysd = _call(port, "GET", "/v1/dashboard/system")
         assert st == 200 and (sysd["engine"]["model"], sysd["engine"]["base_model"]) == \
             ("TandemLLM", "qwen38-spark-engine"), sysd.get("engine")
-        dash = os.path.join(ROOT, "docs", "contract", "dashboard-v1")
+        dash = os.path.join(ROOT, "app", "contracts", "dashboard-v1")
         assert not contract_check.validate(sysd, contract_check.load("system", dash), root=dash)
         one = {"model": "qwen38-spark-engine", "max_tokens": 16, "temperature": 0,
                "messages": [{"role": "user", "content": "Say ok."}]}

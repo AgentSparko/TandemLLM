@@ -1,10 +1,10 @@
-"""Write or check the conductor's config schemas in docs/contract/conductor-v1/.
+"""Write or check the conductor's config schemas in app/contracts/conductor-v1/.
 
     python tools/conductor_contract.py --write     regenerate <kind>.config.schema.json, seeds.json
     python tools/conductor_contract.py             exit 1 when a file differs from the code
 
-The schemas live in server/conductor/schema.py; the files are what the dashboard's contract test
-(ajv) and anyone editing a version by hand read; seeds.json is the built-in version 0 of every
+The schemas live in app/tandemapp/conductor/schema.py; the files are what the dashboard's contract
+test (ajv) and anyone editing a version by hand read; seeds.json is the built-in version 0 of every
 document, which the dashboard's mock engine serves. The API's response schemas in the same
 directory are written by hand, like dashboard-v1's.
 """
@@ -21,7 +21,7 @@ sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, 
 
 from tandemapp.conductor import schema  # noqa: E402
 
-DIR = os.path.join(ROOT, "docs", "contract", "conductor-v1")
+DIR = os.path.join(ROOT, "app", "contracts", "conductor-v1")
 
 
 def rendered(kind: str) -> str:

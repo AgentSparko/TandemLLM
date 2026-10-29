@@ -246,7 +246,7 @@ def _the_27b_verbs(eng):
 
 
 def _split_schema():
-    with open(os.path.join(ROOT, "docs", "contract", "dashboard-v1", "system.schema.json")) as fh:
+    with open(os.path.join(ROOT, "app", "contracts", "dashboard-v1", "system.schema.json")) as fh:
         return json.load(fh)["properties"]["memory"]["properties"]["split"]
 
 

@@ -52,8 +52,8 @@ from tandemapp.conductor import catalog  # noqa: E402
 from tandemapp.conductor.hook import Conductor  # noqa: E402
 from tools import contract_check  # noqa: E402
 
-CONTRACT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs",
-                        "contract", "conductor-v1")
+CONTRACT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app",
+                        "contracts", "conductor-v1")
 LONG = "Keep every frame under 16 ms. " * 14          # 420 characters: over a library's 350
 CARD = "Search the library with curl before unfamiliar work. " * 5     # 265: over the card's 200
 PENCIL = ("---\nname: pencil-sketch\ndescription: Turn a photo into a pencil sketch.\n"

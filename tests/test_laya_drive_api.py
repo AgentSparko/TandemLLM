@@ -48,7 +48,7 @@ sys.path.insert(0, HERE)
 from test_conductor_e2e import ADMIN, LAUNCH, PROXY, _call, _port, _wait  # noqa: E402
 from tools import contract_check  # noqa: E402
 
-CONTRACT = os.path.join(ROOT, "docs", "contract", "conductor-v1")
+CONTRACT = os.path.join(ROOT, "app", "contracts", "conductor-v1")
 LEDGER = os.path.join(tempfile.mkdtemp(prefix="drive-led-"), "ledger.sqlite3")
 MODEL = "other-decider"
 LOCK_DIR = tempfile.mkdtemp(prefix="drive-lock-")
