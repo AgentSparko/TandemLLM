@@ -23,14 +23,21 @@ in memory only, proxy/addspark.py), each line it prints kept in the log:
     upload    the wheel to <prefix>/pkg, its sha256 checked there
     agent     python3 -m venv <prefix>/venv and pip install the wheel; the version it reports must
               be the fleet's
-    engine    the engine's runtime: this controller's install.sh, run there with --runtime-only at
-              the fleet's tag (the engine's source and its Python environment with the CUDA 13.0
-              torch; no weights, no corpus, no config: Serve a model, step 6, brings those). Off
-              with `engine: false`
+    engine    the engine's runtime: the engine's install.sh (TANDEM_ENGINE_INSTALL_SH), run there
+              with --runtime-only at the engine ref (Package.engine_ref; the engine's source and its
+              Python environment with the CUDA 13.0 torch; no weights, no corpus, no config: Serve a
+              model, step 6, brings those). Without TANDEM_ENGINE_INSTALL_SH the step fails and says
+              so. Off with `engine: false`
     unit      `tandem-node unit` written to ~/.config/systemd/user/<unit>.service, enabled and
               started; the agent must answer on its loopback within 30 s
     pair      SSH once's adopt (proxy/fleettrust.py) with the installed tandem-node: the node is
               paired and its certificate pinned
+
+THE ENGINE. TandemApp carries no engine: the controller's operator names the engine's installer,
+TANDEM_ENGINE_INSTALL_SH (a path on this machine; the fleet update sends the same file), and the
+release it installs is `engine_ref()`: TANDEM_ENGINE_REF (a tag), else `v` and the VERSION file
+beside the installer, else `v` and this controller's own release. The installer goes to the box as
+the login's input, never on a command line; the ref is a checked tag name, quoted there.
 
 The prefix is ~/.local/share/tandemllm, the agent's state ~/.tandemllm/node, its port 7700 and the
 unit `tandemnode`, unless `options` say otherwise (a virtual node, OPS-197: its own of each). The
@@ -59,10 +66,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULTS = {"prefix": "~/.local/share/tandemllm", "state_dir": "~/.tandemllm/node", "port": 7700,
             "unit": "tandemnode", "virtual": None, "engine": True}
 STEPS = (("check", "Check the box"), ("upload", "Upload TandemLLM {v}"),
-         ("agent", "Install TandemNode {v}"), ("engine", "Install the engine's runtime {v}"),
+         ("agent", "Install TandemNode {v}"), ("engine", "Install the engine's runtime {ref}"),
          ("unit", "Start the agent ({unit}.service)"), ("pair", "Pair and pin its certificate"))
 LOG_MAX = 400
 UNIT_WAIT_S = 30
+#: the engine's installer and the release it installs come from the controller's environment
+INSTALL_SH_ENV, ENGINE_REF_ENV = "TANDEM_ENGINE_INSTALL_SH", "TANDEM_ENGINE_REF"
+#: an engine ref as install.sh hands it to git: a tag name, a letter or digit first
+REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 
 class InstallError(Exception):
@@ -74,6 +85,12 @@ class InstallError(Exception):
 def same_version(a: str | None, b: str | None) -> bool:
     """One release (proxy/preflight.py same_release): -test and .dev0, a local label aside."""
     return preflight.same_release(a, b)
+
+
+def tag_ok(ref: str) -> bool:
+    """A tag name install.sh can take for --ref: letters, digits, '.', '_' and '-', a letter or
+    digit first (never an option to git), at most 64 characters, no '..'."""
+    return bool(REF.fullmatch(ref or "")) and ".." not in ref
 
 
 # ---------------------------------------------------------------------- the package
@@ -188,7 +205,8 @@ def build_wheel(out_dir: str, version: str, root: str = ROOT) -> str:
 
 
 class Package:
-    """The wheel this controller sends (TANDEM_NODE_WHEEL, else built from its own copy)."""
+    """The wheel this controller sends (TANDEM_NODE_WHEEL, else built from its own copy), and the
+    engine's installer and release that go with it (TANDEM_ENGINE_INSTALL_SH, engine_ref)."""
 
     def __init__(self, cache_dir: str, *, version: str | None = None, root: str = ROOT,
                  env=os.environ):
@@ -222,12 +240,67 @@ class Package:
                 return v
         return _version.pep440(self.version) if self.version else ""
 
+    def install_sh_path(self) -> str | None:
+        """The engine's installer this controller sends (Add Spark's engine step, the fleet
+        update): the file TANDEM_ENGINE_INSTALL_SH names, None while that is unset. TandemApp's
+        own copy has none."""
+        p = (self.env.get(INSTALL_SH_ENV) or "").strip()
+        return os.path.expanduser(p) if p else None
+
     def install_sh(self) -> bytes | None:
-        p = os.path.join(self.root, "install.sh")
+        """That file's bytes; None while TANDEM_ENGINE_INSTALL_SH is unset. A file it names that
+        cannot be read is an InstallError that names both."""
+        p = self.install_sh_path()
+        if p is None:
+            return None
         try:
             with open(p, "rb") as f:
                 return f.read()
-        except OSError:
+        except OSError as exc:
+            raise InstallError("no_installer", f"{INSTALL_SH_ENV} {p}: "
+                                               f"{exc.strerror or type(exc).__name__}", 500)
+
+    def engine_ref(self) -> str:
+        """The engine release install.sh installs (--ref): TANDEM_ENGINE_REF; else `v` and the
+        VERSION file beside TANDEM_ENGINE_INSTALL_SH, so that the ref names the installer sent;
+        else `v` and this controller's release. A local label (`+build`) is its release's tag.
+        A value that makes no tag name (tag_ok) is an InstallError naming where it came from."""
+        given = (self.env.get(ENGINE_REF_ENV) or "").strip()
+        if given:
+            if not tag_ok(given):
+                raise InstallError("bad_engine_ref",
+                                   f"{ENGINE_REF_ENV} {given[:80]!r} is not a tag name: letters, "
+                                   f"digits, '.', '_' and '-', a letter or digit first, at most "
+                                   f"64, no '..'", 500)
+            return given
+        sh = self.install_sh_path()
+        if sh is not None:
+            vf = os.path.join(os.path.dirname(os.path.abspath(sh)), "VERSION")
+            try:
+                with open(vf) as f:
+                    v = f.read().strip()
+            except FileNotFoundError:
+                v = None                         # an installer alone: this controller's release
+            except OSError as exc:
+                raise InstallError("bad_engine_ref", f"{vf}: {exc.strerror or type(exc).__name__}",
+                                   500)
+            if v is not None:
+                ref = "v" + v.split("+", 1)[0]
+                if not tag_ok(ref):
+                    raise InstallError("bad_engine_ref", f"{vf} says {v[:80]!r}: no release name "
+                                                         f"for install.sh's --ref", 500)
+                return ref
+        ref = "v" + (self.version or "").strip().split("+", 1)[0]
+        if ref == "v" or not tag_ok(ref):
+            raise InstallError("bad_engine_ref", f"no engine ref: this controller's release is "
+                                                 f"{self.version!r}; set {ENGINE_REF_ENV}", 500)
+        return ref
+
+    def engine_ref_or_none(self) -> str | None:
+        """engine_ref(), None when it refuses its inputs: the step that runs install.sh says why."""
+        try:
+            return self.engine_ref()
+        except InstallError:
             return None
 
 
@@ -257,7 +330,9 @@ class Install:
         self.error: dict | None = None
         self.node: str | None = None
         self.started_at = self.ended_at = None
-        self.steps = [{"id": sid, "label": label.format(v=version, unit=self.o["unit"]),
+        ref = package.engine_ref_or_none() if self.o["engine"] else None
+        self.steps = [{"id": sid, "label": label.format(v=version, unit=self.o["unit"],
+                                                        ref=ref or "").strip(),
                        "state": "skip" if sid == "engine" and not self.o["engine"] else "todo",
                        "detail": None, "started_at": None, "ended_at": None}
                       for sid, label in STEPS]
@@ -405,16 +480,20 @@ class Install:
     def _engine(self) -> str:
         script = self.pkg.install_sh()
         if script is None:
-            self._fail("engine", "no_package", "this controller has no install.sh to send")
+            self._fail("engine", "no_installer", f"this controller has no engine installer to "
+                                                 f"send: set {INSTALL_SH_ENV} to the engine's "
+                                                 f"install.sh (its VERSION beside it names the "
+                                                 f"release), or install without the engine")
+        ref = self.pkg.engine_ref()
         p = _q(self.o["prefix"])
         cmd = (f"set -eu; mkdir -p {p}; cat > {p}/install.sh; bash {p}/install.sh --dir "
-               f"{p}/engine --ref v{shlex.quote(self.version)} --runtime-only --yes 2>&1 | "
+               f"{p}/engine --ref {shlex.quote(ref)} --runtime-only --yes 2>&1 | "
                f"tail -n 60; exit ${{PIPESTATUS[0]:-0}}")
         rc, out, err = self._ssh("engine", "bash -c " + shlex.quote(cmd), script)
         if rc != 0:
             self._fail("engine", "install_failed", _last(out) or _last(err) or
                        f"exit status {rc}")
-        return f"engine {self.version} runtime in {self.o['prefix']}/engine"
+        return f"the engine's runtime {ref} in {self.o['prefix']}/engine"
 
     def _agent_args(self) -> str:
         o = self.o

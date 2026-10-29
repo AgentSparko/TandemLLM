@@ -14,6 +14,10 @@ THE TARGET is the release of the package this controller installs (proxy/nodeins
 copy, or TANDEM_NODE_WHEEL), local label included: a node needs the update when the TandemNode it
 runs reports another version. The mixed-version alert (proxy/fleetwatch.py) compares releases
 only; the update compares the whole version, so a build of the release (`0.15.0+fix`) rolls too.
+The engine's runtime goes with it as Add Spark installs it (proxy/nodeinstall.py THE ENGINE): the
+installer TANDEM_ENGINE_INSTALL_SH names, at `engine_ref()` (TANDEM_ENGINE_REF, else the
+installer's VERSION, and only without both this controller's release). Without that variable a
+node's agent skips its engine step and says so.
 
 THE ORDER (`order`, the same rules as the dashboard's lib/fleet-update.ts):
 
@@ -61,7 +65,7 @@ import threading
 import time
 from urllib.parse import quote
 
-from proxy import _version, nodesource
+from proxy import _version, nodeinstall, nodesource
 from proxy.nodeupdate import norm
 
 CONTRACT = "1.0"
@@ -502,6 +506,13 @@ class Updater:
             self._node(job, nid, "update", "its agent's update runs")
             return
         pkg = self.package()
+        # the engine's installer and the release it installs (TANDEM_ENGINE_INSTALL_SH,
+        # Package.engine_ref), read before anything is sent; given no installer, the node's agent
+        # skips its engine step
+        try:
+            ref, script = pkg.engine_ref(), pkg.install_sh()
+        except nodeinstall.InstallError as exc:
+            raise UpdateError(exc.status, exc.kind, exc.message)
         path = pkg.wheel()
         with open(path, "rb") as f:
             data = f.read()
@@ -513,9 +524,7 @@ class Updater:
         if st != 200:
             raise UpdateError(502, "send_failed", f"{n['alias']}'s agent took no package: HTTP "
                                                   f"{st} {raw[:200]!r}")
-        body = {"name": name, "sha256": sha, "version": job["target"],
-                "ref": "v" + (_version.release() or job["target"]).split("+", 1)[0]}
-        script = pkg.install_sh()
+        body = {"name": name, "sha256": sha, "version": job["target"], "ref": ref}
         if script is not None:
             body["install_sh"] = base64.b64encode(script).decode()
         st, doc = src.post("/node/update", body, timeout=30.0)

@@ -40,6 +40,10 @@ Addresses are 192.0.2.x and 198.51.100.x; every name is invented.
      stops after the Python environment                     test_script_and_runtime_only
  13  the wheel this controller builds: TandemApp's packages and the built page, no engine
      code, the console scripts, cryptography; cached by content          test_the_node_wheel
+ 14  the engine step (SRV-747): TandemApp 1.0.0 with a stub installer (TANDEM_ENGINE_INSTALL_SH)
+     whose VERSION says 0.16.0 runs it on the box with --ref v0.16.0; TANDEM_ENGINE_REF
+     overrides that; without an installer the step fails and names the variable; a ref that is no
+     tag name is refused before any login          test_the_engine_step_takes_the_installer_and_ref
 
     python tests/test_add_spark.py
 """
@@ -55,6 +59,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -941,6 +946,111 @@ def test_tunnel_process():
     assert len(procs) == 3
     t.close(route)
     assert procs[2].returncode == -15 and t.view(route)["state"] == "down"
+
+
+class Login:
+    """A box's SSH login as a local shell: HOME a temporary folder, the command and its input as
+    ssh hands them over (no host key to confirm, no secret)."""
+
+    def __init__(self, home: str):
+        self.home, self.ran = home, []
+
+    def host_key(self, host, port, jumps=None):
+        return {"known": "known", "fingerprint": "SHA256:box", "type": "ssh-ed25519",
+                "stored": "SHA256:box"}, ""
+
+    def run(self, host, port, user, command, stdin, **kw):
+        self.ran.append(command)
+        r = subprocess.run(["sh", "-c", command], input=stdin, capture_output=True, timeout=60,
+                           env={"HOME": self.home, "PATH": os.environ["PATH"]})
+        return r.returncode, r.stdout.decode(), r.stderr.decode()
+
+
+def test_the_engine_step_takes_the_installer_and_ref():
+    d = tempfile.mkdtemp(prefix="add-engine-")
+    stub = os.path.join(d, "engine", "install.sh")
+    os.makedirs(os.path.dirname(stub))
+    with open(stub, "w") as f:
+        f.write('#!/bin/bash\nprintf "%s\\n" "$@" > "$HOME/install.argv"\necho "[stub] runtime"\n')
+    with open(os.path.join(d, "engine", "VERSION"), "w") as f:
+        f.write("0.16.0\n")
+    home = os.path.join(d, "home")
+    os.makedirs(home)
+    seen = os.path.join(home, "install.argv")
+
+    def job(env):
+        login = Login(home)
+        pkg = nodeinstall.Package(os.path.join(d, "pkg"), env=env)
+        return nodeinstall.Install(types.SimpleNamespace(ssh=login), {"host": BOX, "port": 22,
+                                                                       "user": "spark"}, {},
+                                   package=pkg, version=pkg.version), login
+
+    def engine_step(j):
+        return next(x for x in j.view()["steps"] if x["id"] == "engine")
+
+    real = _version.release
+    _version.release = lambda: "1.0.0"          # TandemApp 1.0.0 beside the engine 0.16.0
+    try:
+        j, login = job({"TANDEM_ENGINE_INSTALL_SH": stub})
+        assert j.version == "1.0.0" and engine_step(j)["label"] == \
+            "Install the engine's runtime v0.16.0", engine_step(j)
+        assert j._engine() == "the engine's runtime v0.16.0 in ~/.local/share/tandemllm/engine"
+        prefix = os.path.join(home, ".local", "share", "tandemllm")
+        argv = open(seen).read().splitlines()
+        assert argv == ["--dir", os.path.join(prefix, "engine"), "--ref", "v0.16.0",
+                        "--runtime-only", "--yes"], argv
+        # the installer went over as the login's input: the box runs the stub's own bytes
+        assert open(os.path.join(prefix, "install.sh")).read() == open(stub).read()
+        assert stub not in login.ran[0] and "--ref v0.16.0" in login.ran[0]
+        # TANDEM_ENGINE_REF wins over the installer's VERSION
+        j, _ = job({"TANDEM_ENGINE_INSTALL_SH": stub, "TANDEM_ENGINE_REF": "v0.16.1-rc1"})
+        j._engine()
+        argv = open(seen).read().splitlines()
+        assert argv[argv.index("--ref") + 1] == "v0.16.1-rc1", argv
+        # no installer: the step fails, names the variable, and logs in nowhere
+        j, login = job({})
+        try:
+            j._engine()
+            raise AssertionError("an engine step ran without an installer")
+        except nodeinstall.InstallError as exc:
+            assert exc.kind == "no_installer" and "TANDEM_ENGINE_INSTALL_SH" in exc.message, exc
+        st = engine_step(j)
+        assert st["state"] == "failed" and "TANDEM_ENGINE_INSTALL_SH" in st["detail"], st
+        assert not login.ran
+        # a ref that is no tag name is refused before any login: nothing runs on the box
+        os.remove(seen)
+        for bad in ('v1; touch "$HOME/pwned"', "--upload-pack=x", "v1..2", "v" * 65, "v1 v2"):
+            j, login = job({"TANDEM_ENGINE_INSTALL_SH": stub, "TANDEM_ENGINE_REF": bad})
+            assert engine_step(j)["label"] == "Install the engine's runtime", bad
+            try:
+                j._engine()
+                raise AssertionError(bad)
+            except nodeinstall.InstallError as exc:
+                assert exc.kind == "bad_engine_ref" and "TANDEM_ENGINE_REF" in exc.message, \
+                    (bad, exc.message)
+            assert not login.ran, bad
+        assert not os.path.exists(os.path.join(home, "pwned")) and not os.path.exists(seen)
+        # the same for a VERSION beside the installer; without one, TandemApp's own release
+        with open(os.path.join(d, "engine", "VERSION"), "w") as f:
+            f.write("0.16.0 $(id)\n")
+        try:
+            nodeinstall.Package(d, env={"TANDEM_ENGINE_INSTALL_SH": stub}).engine_ref()
+            raise AssertionError("a VERSION that makes no tag was taken")
+        except nodeinstall.InstallError as exc:
+            assert exc.kind == "bad_engine_ref" and "VERSION" in exc.message, exc.message
+        os.remove(os.path.join(d, "engine", "VERSION"))
+        assert nodeinstall.Package(d, env={"TANDEM_ENGINE_INSTALL_SH": stub}).engine_ref() == \
+            "v1.0.0"
+        # an installer path that cannot be read is an error that names it
+        gone = os.path.join(d, "gone", "install.sh")
+        try:
+            nodeinstall.Package(d, env={"TANDEM_ENGINE_INSTALL_SH": gone}).install_sh()
+            raise AssertionError("a missing installer was taken")
+        except nodeinstall.InstallError as exc:
+            assert exc.kind == "no_installer" and gone in exc.message, exc.message
+    finally:
+        _version.release = real
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def test_script_and_runtime_only():

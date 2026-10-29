@@ -1,10 +1,11 @@
 """A TandemNode's own update (OPS-234, the fleet update): the wheel its controller sends, installed
-into the agent's own environment, the engine's runtime brought to the same release, and the agent
-restarted into the new code.
+into the agent's own environment, the engine's runtime brought to the controller's engine ref, and
+the agent restarted into the new code.
 
     up = Updater(state_dir, virtual=..., tandem_dir=..., log=...)
     up.receive(name, sha256, data)        PUT  /node/update/package?name=&sha256=   the wheel
-    up.start(body, who)                   POST /node/update {name, sha256, version, install_sh?}
+    up.start(body, who)                   POST /node/update {name, sha256, version, ref?,
+                                                             install_sh?}
     up.view()                             GET  /node/update  {managed, why, version, job}
 
 THE PACKAGE is the controller's wheel (proxy/nodeinstall.py: built from its own copy, or
@@ -18,10 +19,12 @@ restart at its end:
     install   `<python> -m pip install --upgrade <wheel>` into the environment the agent runs
               from (a virtual environment of its own, as the Add Spark install makes it); the
               version it then reports must be the job's
-    engine    the engine's runtime at the same release: the controller's install.sh, run with
-              --runtime-only over the install the agent names (`--tandem-dir`); none named: there
-              is no engine install here to update (an engines.json engine is its owner's).
-              SIMULATED on a virtual node (OPS-197): the runtime under it is the machine's
+    engine    the engine's runtime at the controller's engine ref (`ref`, else `v` and the job's
+              version): the engine installer the controller sends (`install_sh`), run with
+              --runtime-only over the install the agent names (`--tandem-dir`). None named: there
+              is no engine install here to update (an engines.json engine is its owner's); no
+              installer sent: skipped, saying so. SIMULATED on a virtual node (OPS-197): the
+              runtime under it is the machine's
     restart   the agent replaces itself with the new code (exec, same process id, so systemd and
               launchd keep it); the job is done when the agent that comes up runs the version
 
@@ -43,8 +46,10 @@ import time
 
 PKG_MAX = 256 << 20
 SIMULATED_S = 2.0
-STEPS = (("install", "Install TandemNode {v}"), ("engine", "Engine runtime {v}"),
+STEPS = (("install", "Install TandemNode {v}"), ("engine", "Engine runtime {ref}"),
          ("restart", "Restart the agent on {v}"))
+#: the engine step's words when the controller sent no installer (its TANDEM_ENGINE_INSTALL_SH)
+NO_INSTALLER = "the controller sent no engine installer (TANDEM_ENGINE_INSTALL_SH)"
 LOG_MAX = 200
 COMMAND_TIMEOUT_S = 1800.0
 
@@ -56,6 +61,12 @@ class UpdateError(Exception):
 
     def body(self) -> dict:
         return {"error": {"type": self.kind, "message": self.message}}
+
+
+def _ref_of(version: str) -> str:
+    """The ref a job without one installs: `v` and its version's release (a controller from
+    before TANDEM_ENGINE_REF sends none)."""
+    return "v" + version.split("+", 1)[0]
 
 
 def norm(v: str | None) -> str:
@@ -198,17 +209,19 @@ class Updater:
                 script = base64.b64decode(script, validate=True)
             except (ValueError, TypeError):
                 raise UpdateError(400, "bad_request", "install_sh is base64")
+        ref = body.get("ref") if isinstance(body.get("ref"), str) and body.get("ref") else None
         with self._lock:
             if self.job is not None and self.job["state"] == "running":
                 raise UpdateError(409, "busy", f"an update to {self.job['version']} runs")
             now = round(self.clock(), 3)
             self.job = {"id": f"update-{int(now * 1000)}", "state": "running",
                         "version": version, "from": self.release() or None, "who": who,
-                        "ref": body.get("ref") if isinstance(body.get("ref"), str) else None,
-                        "simulated": bool(self.virtual), "started_at": now, "ended_at": None,
-                        "message": None, "log": [],
-                        "steps": [{"id": sid, "label": label.format(v=version), "state": "todo",
-                                   "detail": None, "ended_at": None} for sid, label in STEPS]}
+                        "ref": ref, "simulated": bool(self.virtual), "started_at": now,
+                        "ended_at": None, "message": None, "log": [],
+                        "steps": [{"id": sid, "label": label.format(v=version,
+                                                                    ref=ref or _ref_of(version)),
+                                   "state": "todo", "detail": None, "ended_at": None}
+                                  for sid, label in STEPS]}
             self._save(self.job)
             job = self.job
         self.log(f"[node] update to {version} by {who}"
@@ -260,7 +273,7 @@ class Updater:
                 sh = os.path.join(self.state_dir, "install.sh")
                 with open(sh, "wb") as f:
                     f.write(script)
-                ref = job.get("ref") or "v" + job["version"].split("+", 1)[0]
+                ref = job.get("ref") or _ref_of(job["version"])
                 rc, out = self.run(["bash", sh, "--dir", d, "--ref", ref, "--runtime-only",
                                     "--yes"])
                 self._say(job, out)
@@ -268,6 +281,8 @@ class Updater:
                     raise UpdateError(500, "install_failed", f"install.sh exited {rc}: "
                                                              f"{(out.strip().splitlines() or [''])[-1][:200]}")
                 self._step(job, sid, "done", f"the engine's runtime at {ref} in {d}")
+            elif self.tandem_dir:
+                self._step(job, sid, "skip", NO_INSTALLER)
             else:
                 self._step(job, sid, "skip", "no install.sh install named here (--tandem-dir): "
                                              "an engine from engines.json is its owner's to update")

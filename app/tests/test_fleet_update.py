@@ -32,6 +32,10 @@ and come back on it (the real ones run in test 7, on a real venv, where one is t
      package index, the agent re-executes itself and answers on the new version, its process id
      kept (skipped without a venv, cryptography or the index for the first install)
                                                                             test_real_venv_update
+  9  the engine's installer and release are the controller's inputs (SRV-747): TandemApp 1.0.0 with
+     an installer whose VERSION says 0.16.0 sends ref v0.16.0, and a node with an install.sh install
+     runs that installer at v0.16.0; TANDEM_ENGINE_REF overrides the ref, and a node that gets no
+     installer skips its engine step and says why          test_the_engine_installer_and_its_ref
 
     python tests/test_fleet_update.py
 """
@@ -57,7 +61,8 @@ import fake_backend  # noqa: E402
 import test_fleet as tf  # noqa: E402
 import test_node_agent as tna  # noqa: E402
 from ports import free_port  # noqa: E402
-from proxy import fleetstore, fleetupdate, fleetwatch, nodeinstall, nodeupdate  # noqa: E402
+from proxy import _version, fleetstore, fleetupdate, fleetwatch  # noqa: E402
+from proxy import nodeinstall, nodeupdate  # noqa: E402
 from proxy_util import Proxy, run  # noqa: E402
 
 TARGET = "0.15.0+test"
@@ -137,6 +142,8 @@ class FakeNode:
     def __init__(self, serial: str, port: int, virtual=None):
         self.agent = tna.agent_on(tna.machine(serial), engines=[tna.engine_doc("e", port)],
                                   address="127.0.0.1", virtual=virtual)
+        self.tandem_dir = None                   # an install.sh install's engine (--tandem-dir)
+        self.engine_runs: list[list[str]] = []   # the engine installer's runs, as argv
         self.dir = tempfile.mkdtemp(prefix="upd-node-")
         self.ver = os.path.join(self.dir, "version")
         with open(self.ver, "w") as f:
@@ -155,11 +162,15 @@ class FakeNode:
 
     def updater(self):
         return nodeupdate.Updater(self.agent.state_dir, virtual=self.agent.virtual,
-                                  log=lambda m: None, python=self.py, prefix=self.dir,
-                                  base_prefix="/", restart=self.restart, run=self.pip,
-                                  sleep=lambda s: None, release=self.agent.code_release)
+                                  tandem_dir=self.tandem_dir, log=lambda m: None, python=self.py,
+                                  prefix=self.dir, base_prefix="/", restart=self.restart,
+                                  run=self.pip, sleep=lambda s: None,
+                                  release=self.agent.code_release)
 
     def pip(self, argv):
+        if argv[:1] == ["bash"]:                 # the engine's installer, --runtime-only
+            self.engine_runs.append(list(argv))
+            return 0, "[stub] the engine's runtime"
         self.pips.append(list(argv))
         wheel = argv[-1]
         v = nodeinstall.wheel_version(wheel)
@@ -520,6 +531,68 @@ def test_shared_address():
         assert fx.f._virtual_ports(row, fx.f.source(row)) is None
     finally:
         fx.close()
+
+
+# ---------------------------------------------------------------------------- 9. the engine
+
+def _update_to_the_end(px) -> dict:
+    p = tf.ok(tf.get(px, "/v1/fleet/update/plan")[1], "update-plan")
+    assert p["allowed"], p
+    st, res = tf.send(px, "POST", "/v1/fleet/update", {"confirm": p["confirm"]})
+    assert st == 200, res
+    job = tf.ok(_job_end(px)["job"], "update-job")
+    assert job["state"] == "done", job
+    return job
+
+
+def test_the_engine_installer_and_its_ref():
+    d = tempfile.mkdtemp(prefix="upd-engine-")
+    sh = os.path.join(d, "install.sh")
+    with open(sh, "wb") as f:
+        f.write(b"#!/bin/bash\necho '[stub] the engine installer'\n")
+    with open(os.path.join(d, "VERSION"), "w") as f:
+        f.write("0.16.0\n")
+    real = _version.release
+    _version.release = lambda: "1.0.0"         # TandemApp 1.0.0 beside the engine 0.16.0
+    fx = Fleet2()
+    try:
+        a, b = fx.a, fx.b
+        a.tandem_dir = os.path.join(d, "engine")     # node a: an install.sh install
+        a.agent.updater = a.updater()
+        fx.up._package = nodeinstall.Package(d, env={"TANDEM_NODE_WHEEL": fx.wheel,
+                                                     "TANDEM_ENGINE_INSTALL_SH": sh})
+        assert fx.up._package.engine_ref() == "v0.16.0"
+        _update_to_the_end(fx.px)
+        ja, jb = a.agent.updater.job, b.agent.updater.job
+        assert ja["ref"] == "v0.16.0" and jb["ref"] == "v0.16.0", (ja["ref"], jb["ref"])
+        eng = ja["steps"][1]
+        assert eng["label"] == "Engine runtime v0.16.0" and eng["state"] == "done", eng
+        assert a.engine_runs == [["bash", os.path.join(a.agent.state_dir, "install.sh"), "--dir",
+                                  a.tandem_dir, "--ref", "v0.16.0", "--runtime-only", "--yes"]], \
+            a.engine_runs
+        with open(os.path.join(a.agent.state_dir, "install.sh"), "rb") as f, open(sh, "rb") as g:
+            assert f.read() == g.read(), "the node ran another installer"
+        assert jb["steps"][1]["detail"].startswith("simulated"), jb["steps"][1]
+        # TANDEM_ENGINE_REF overrides the installer's VERSION; with no installer sent, the node
+        # with an install.sh install skips its engine step and says why
+        target2 = "0.15.0+test2"
+        wheel2 = os.path.join(os.path.dirname(fx.wheel), f"tandemapp-{target2}-py3-none-any.whl")
+        with open(wheel2, "wb") as f:
+            f.write(b"PK fake wheel two " * 64)
+        fx.up._package = nodeinstall.Package(d, env={"TANDEM_NODE_WHEEL": wheel2,
+                                                     "TANDEM_ENGINE_REF": "v0.16.1"})
+        job = _update_to_the_end(fx.px)
+        assert job["target"] == target2
+        ja, jb = a.agent.updater.job, b.agent.updater.job
+        assert ja["ref"] == "v0.16.1" and jb["ref"] == "v0.16.1", (ja["ref"], jb["ref"])
+        assert ja["steps"][1]["state"] == "skip" and \
+            ja["steps"][1]["detail"] == nodeupdate.NO_INSTALLER, ja["steps"][1]
+        assert "TANDEM_ENGINE_INSTALL_SH" in nodeupdate.NO_INSTALLER
+        assert len(a.engine_runs) == 1, a.engine_runs
+    finally:
+        _version.release = real
+        fx.close()
+        shutil.rmtree(d, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------- 7. a real venv
