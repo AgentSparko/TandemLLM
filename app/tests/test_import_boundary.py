@@ -18,8 +18,11 @@ dashboard/node_modules, dashboard/dist and __pycache__ left out) and the dashboa
   4  torch, numpy and triton are imported only at the sites in HOOKS, each an engine-process hook
      until ENG-413; every site there still holds its import     test_heavy_imports_only_at_hooks
   5  the dashboard reads nothing outside app/: new URL(..., import.meta.url), fileURLToPath,
-     join/resolve(__dirname, ...) and import/export ... from in mock, tests, e2e, scripts, src
-     and the vite and playwright configs                     test_dashboard_reads_stay_in_app
+     join/resolve(__dirname, ...) and join/resolve(X, ...) for a name X set from __dirname,
+     dirname(fileURLToPath(import.meta.url)), fileURLToPath(new URL(..., import.meta.url)) or
+     such a join, fs reads of a relative literal (from app/dashboard, the cwd of vitest and
+     playwright) and import/export ... from in mock, tests, e2e, scripts, src and the vite,
+     vitest and playwright configs                           test_dashboard_reads_stay_in_app
   6  a child process (python -I -B, app/ the only path of the tree) imports every module of
      proxy, chatd and tandemapp with server, engine, torch, numpy, triton, models and bench
      blocked; none fails, and none binds, listens, forks or starts a process while it imports
@@ -29,7 +32,7 @@ dashboard/node_modules, dashboard/dist and __pycache__ left out) and the dashboa
      'import engine.cache', a shell string through `import subprocess as _sp`, an os.execl and a
      create_subprocess_exec with '-m' server.app, name each x.py:N, and pass a curl URL and a
      log text that hold engine/                                test_the_checks_find_planted_hits
-     and four reads out of a made-up dashboard        test_the_dashboard_check_finds_planted_reads
+     and eight reads out of a made-up dashboard     test_the_dashboard_check_finds_planted_reads
 
 Each hit is one line: app/<file>:<line>: <source> -- TandemApp reaches the engine; use the engine
 API (app/contracts/engine-api-v1). Checks 1 and 2 allow nothing.
@@ -328,7 +331,19 @@ DASH_EXT = (".ts", ".tsx", ".mts", ".cts", ".js", ".mjs", ".cjs")
 LIT = r"""(?:'[^'\n]*'|"[^"\n]*"|`[^`]*`)"""
 URL_LIT = re.compile(r"new\s+URL\(\s*(" + LIT + r")\s*,\s*import\.meta\.url")
 URL_VAR = re.compile(r"new\s+URL\(\s*[A-Za-z_$][\w$]*\s*,\s*import\.meta\.url")
-DIRNAME = re.compile(r"\b(?:join|resolve)\(\s*__dirname((?:\s*,\s*" + LIT + r")*)")
+LITS = r"((?:\s*,\s*" + LIT + r")*)"
+#: join/resolve(<name>, '<lit>', ...): <name> is __dirname or a name _bases() knows
+JOIN = re.compile(r"\b(?:join|resolve)\(\s*([A-Za-z_$][\w$]*)" + LITS)
+#: `const X = ` and what sets a directory name X: the file's own directory or a URL from it
+ASSIGN = re.compile(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[\w$.]+\s*)?=\s*")
+HERE_DIR = re.compile(r"__dirname\b|import\.meta\.dirname\b|(?:[\w$]+\.)?dirname\(\s*"
+                      r"(?:[\w$]+\.)?fileURLToPath\(\s*import\.meta\.url\s*\)\s*\)")
+URL_DIR = re.compile(r"(?:[\w$]+\.)?fileURLToPath\(\s*new\s+URL\(\s*(" + LIT +
+                     r")\s*,\s*import\.meta\.url\s*\)\s*\)")
+#: fs reads of a literal path, relative to the cwd
+FS_LIT = re.compile(r"\b(?:readFileSync|readdirSync|existsSync|statSync|lstatSync|accessSync|"
+                    r"opendirSync|realpathSync|createReadStream|readFile|readdir|stat|lstat|"
+                    r"access|opendir)\(\s*(" + LIT + ")")
 FROM = re.compile(r"""(?:\bfrom|\bimport|\bimport\s*\()\s*(['"])(\.\.?/[^'"\n]*)\1""")
 REL_LIT = re.compile(r"""(['"`])(\.\.?/[^'"`$\n]*)""")
 
@@ -346,29 +361,56 @@ def dashboard_files(app: str = APP) -> list[str]:
             dirs[:] = sorted(x for x in dirs if x not in ("node_modules", "dist"))
             out += [os.path.join(base, n) for n in sorted(names) if n.endswith(DASH_EXT)]
     out += [os.path.join(dash, n) for n in sorted(os.listdir(dash) if os.path.isdir(dash) else [])
-            if re.fullmatch(r"(vite|playwright[\w.-]*|pw-[\w.-]+)\.config\.[mc]?[jt]s", n)]
+            if re.fullmatch(r"(vite|vitest|playwright[\w.-]*|pw-[\w.-]+)\.config\.[mc]?[jt]s", n)]
     return out
+
+
+def _joined(m, bases: dict) -> list[str]:
+    """The paths a JOIN match spells, relative to its file's directory."""
+    parts = [_lit(x) for x in re.findall(LIT, m.group(2))]
+    roots = ["."] if m.group(1) == "__dirname" else sorted(bases.get(m.group(1), ()))
+    return ["/".join([r] + parts) for r in roots]
+
+
+def _bases(src: str) -> dict:
+    """{name: directories} for each `const X = ` set from the file's directory, a URL from it,
+    or a join/resolve of one, relative to the file's directory; in source order."""
+    bases: dict = {}
+    for m in ASSIGN.finditer(src):
+        name, at = m.group(1), m.end()
+        here, url, join = HERE_DIR.match(src, at), URL_DIR.match(src, at), JOIN.match(src, at)
+        if url:
+            bases.setdefault(name, set()).add(_lit(url.group(1)) or ".")
+        elif join and _joined(join, bases):
+            bases.setdefault(name, set()).update(_joined(join, bases))
+        elif here:
+            bases.setdefault(name, set()).add(".")
+    return bases
 
 
 def dashboard_reads(app: str = APP) -> tuple[int, list[str]]:
     """(reads seen, hits): each relative path the dashboard resolves, against app/."""
     seen, hits = 0, []
     top = os.path.realpath(app)
+    dash = os.path.join(app, "dashboard")
     for path in dashboard_files(app):
         with open(path, encoding="utf-8") as f:
             src = f.read()
-        found = []                                           # (offset, relative path)
-        found += [(m.start(), _lit(m.group(1))) for m in URL_LIT.finditer(src)]
-        for m in DIRNAME.finditer(src):
-            parts = [_lit(x) for x in re.findall(LIT, m.group(1))]
-            found.append((m.start(), "/".join(parts) or "."))
-        found += [(m.start(), m.group(2)) for m in FROM.finditer(src)]
+        here = os.path.dirname(path)
+        found = []                                     # (offset, path, directory it is from)
+        found += [(m.start(), _lit(m.group(1)), here) for m in URL_LIT.finditer(src)]
+        bases = _bases(src)
+        for m in JOIN.finditer(src):
+            found += [(m.start(), p, here) for p in _joined(m, bases)]
+        found += [(m.start(), m.group(2), here) for m in FROM.finditer(src)]
         if URL_VAR.search(src):                              # a helper: new URL(p, import.meta.url)
-            found += [(m.start(), m.group(2)) for m in REL_LIT.finditer(src)]
+            found += [(m.start(), m.group(2), here) for m in REL_LIT.finditer(src)]
+        found += [(m.start(), _lit(m.group(1)), dash) for m in FS_LIT.finditer(src)
+                  if not m.group(1)[1:].startswith(("/", "${"))]
         rel = os.path.relpath(path, app).replace(os.sep, "/")
-        for off, p in found:
+        for off, p, base in found:
             seen += 1
-            target = os.path.realpath(os.path.join(os.path.dirname(path), p))
+            target = os.path.realpath(os.path.join(base, p))
             if target != top and not target.startswith(top + os.sep):
                 ln = src.count("\n", 0, off) + 1
                 hits.append(_hit(rel, ln, _line(src, ln)))
@@ -524,9 +566,21 @@ def test_the_dashboard_check_finds_planted_reads():
                     "const j = join(__dirname, '..', '..', '..', 'engine');\n"
                     "const here = (p: string) => new URL(p, import.meta.url);\n"
                     "const r = here('../../../docs');\n")
+        with open(os.path.join(mock, "y.ts"), "w") as f:
+            f.write("const HERE = dirname(fileURLToPath(import.meta.url));\n"
+                    "const a = readFileSync(resolve(HERE, '../../../server/app.py'));\n"
+                    "const b = readFileSync('../../server/setup.ts', 'utf8');\n"
+                    "const c = readFileSync(join(HERE, '..', 'src', 'main.ts'));\n"
+                    "const ROOT = fileURLToPath(new URL('../../', import.meta.url));\n"
+                    "const e = join(ROOT, '..', 'engine', 'x.py');\n"
+                    "const f = readFileSync('src/main.ts', 'utf8');\n")
+        with open(os.path.join(mock, "..", "vitest.config.ts"), "w") as f:
+            f.write("const v = join(__dirname, '../../server/setup.ts');\n")
         seen, hits = dashboard_reads(os.path.join(d, "app"))
-    assert seen >= 6 and [h.split(": ")[0] for h in hits] == \
-        [f"app/dashboard/mock/x.ts:{n}" for n in (2, 3, 4, 6)], (seen, hits)
+    assert seen >= 15 and [h.split(": ")[0] for h in hits] == \
+        [f"app/dashboard/mock/x.ts:{n}" for n in (2, 3, 4, 6)] + \
+        [f"app/dashboard/mock/y.ts:{n}" for n in (2, 3, 6)] + \
+        ["app/dashboard/vitest.config.ts:1"], (seen, hits)
     return f"{len(hits)} of {seen} planted reads named"
 
 
