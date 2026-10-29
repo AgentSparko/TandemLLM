@@ -29,6 +29,9 @@ The test matrix:
                                                          test_the_tool_checks
   8  retrieval: a question about a tool brings the tool's registry sentence into the prompt, among
      the top four sections                               test_retrieval
+  8b every package text and TandemApp document the index reads (knowledge.PACKAGES, APP_DOCS:
+     app/ until ENG-413) is a file, and the index holds sections of each (SRV-747)
+                                                         test_the_knowledge_sources_are_files
   9  the page state is data and has no secret: a field named like a key arrives as "<set>"; a
      page too long for the window is cut, never an error  test_page_state
  10  one stream at a time; an unload while a stream runs ends it with "Wren went to sleep"
@@ -483,6 +486,19 @@ def test_retrieval():
         ev[-1]["sources"], ev[-1]["sources"]
     hits = w.knowledge.search("lookup store what does it do", k=4)
     assert "Tool: Lookup store (lookup)" in [h["title"] for h in hits], hits
+
+
+def test_the_knowledge_sources_are_files():
+    """A package text or document that moves without its entry fails here; the index itself
+    skips a missing file without a word."""
+    from server.setup import knowledge
+    want = knowledge.PACKAGES + knowledge.APP_DOCS
+    missing = [p for p in want if not os.path.isfile(os.path.join(knowledge.ROOT, p))]
+    assert not missing, f"not in the repository: {missing}"
+    k = knowledge.Knowledge()
+    k.ensure()
+    unread = sorted(set(want) - {d["path"] for d in k.docs})
+    assert not unread, f"no section in the index: {unread}"
 
 
 def test_page_state():

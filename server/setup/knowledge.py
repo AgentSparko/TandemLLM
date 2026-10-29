@@ -1,15 +1,19 @@
 """What Wren reads from (SRV-325): sections of the docs, the manual, the model registry and the
 packages that describe TandemLLM itself, and a BM25 search over them.
 
-The scorer is the conductor's (server/conductor/libsearch.py `TextIndex`, the BM25 the package
-library's `SkillIndex` and the memory notes use: lower-case words, a plural s dropped, no
+The scorer is the conductor's (app/tandemapp/conductor/libsearch.py `TextIndex`, the BM25 the
+package library's `SkillIndex` and the memory notes use: lower-case words, a plural s dropped, no
 embeddings). The documents:
 
     docs/*.md                 one per heading section (#, ##, ###), long sections cut in parts
+    APP_DOCS                  the same: TandemApp's documents (app/docs/proxy.md)
     manual/chapters/*.tex     the same, after a plain-text pass over the LaTeX
     models/*/model.yaml       one per model overview, weight profile, tool and field, in words
                               built from the registry (numbers with their units)
-    PACKAGES                  the packages that describe TandemLLM to the model
+    PACKAGES                  the packages that describe TandemLLM to the model (app/packages)
+
+APP_DOCS and PACKAGES are TandemApp's files, read by their paths under app/ until the split
+(ENG-413).
 
 A section's title counts three times. The index is built at the first search and again when a
 source file's mtime moves or a file comes or goes, looked at once a second at most; a build over
@@ -28,8 +32,9 @@ from tandemapp.conductor.libsearch import TextIndex
 from server.setup import registry
 
 ROOT = registry.ROOT
-PACKAGES = ("packages/system/tandem-core/PACKAGE.md", "packages/inline/tandem-harness.md",
-            "packages/inline/tandem-memory.md", "packages/skills/tandem-library/SKILL.md")
+PACKAGES = ("app/packages/system/tandem-core/PACKAGE.md", "app/packages/inline/tandem-harness.md",
+            "app/packages/inline/tandem-memory.md", "app/packages/skills/tandem-library/SKILL.md")
+APP_DOCS = ("app/docs/proxy.md",)
 PART_CHARS = 1800
 RECHECK_S = 1.0
 WEIGHTS = {"title": 3, "text": 1}
@@ -208,6 +213,7 @@ class Knowledge:
     def _files(self) -> list[str]:
         r = self.root
         files = sorted(glob.glob(os.path.join(r, "docs", "*.md")))
+        files += [os.path.join(r, p) for p in APP_DOCS if os.path.isfile(os.path.join(r, p))]
         files += sorted(glob.glob(os.path.join(r, "manual", "chapters", "*.tex")))
         files += sorted(glob.glob(os.path.join(r, "models", "*", "model.yaml")))
         files += [os.path.join(r, p) for p in self.packages if os.path.isfile(os.path.join(r, p))]
