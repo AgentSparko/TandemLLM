@@ -215,7 +215,7 @@ Set them in `run/local.env` (chatd reads serve.env and local.env), then `tandem 
 `sandbox_unavailable`, bash, render_page and the terminals are not offered, and the file tools work
 on the chat's workspace folder.
 
-The unit tests (`tests/test_chatd*.py`, `app/tests/test_chat_forward.py`) never reach a container
+The unit tests (`app/tests/test_chatd*.py`, `app/tests/test_chat_forward.py`) never reach a container
 runtime: `app/tests/chatd_util.py` points `QSE_SANDBOX_SOCKET` at a path that does not exist, and a test
 that needs a sandbox installs a fake one. On the Spark, Docker and the sandbox image are there, and
 before this the tests found them: `bash` was offered, the tools' order changed and the capabilities

@@ -78,8 +78,8 @@ The proxy's own \code{/metrics} carries the mapped families as \code{qse_backend
 The page gives totals. A single request's queue time, its prefill time and whether the scheduler preempted it are not on it. Two small packages in \code{plugins/} run inside the engine and send those numbers per request:
 
 \begin{shell}
-pip install plugins/vllm        # tandemllm-vllm-plugin, into vLLM's own Python
-pip install plugins/sglang      # tandemllm-sglang-plugin, into SGLang's own Python
+pip install app/plugins/vllm    # tandemllm-vllm-plugin, into vLLM's own Python
+pip install app/plugins/sglang  # tandemllm-sglang-plugin, into SGLang's own Python
 TANDEM_COLLECT_URL=http://proxy-host:8080/v1/collect/<backend id>
 TANDEM_COLLECT_TOKEN=<the proxy's collect token>
 \end{shell}

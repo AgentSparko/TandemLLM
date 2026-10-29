@@ -1,6 +1,6 @@
 # Conductor API contract v1
 
-These files are the truth for `/v1/conductor/*` (server/conductor/routes.py). The server's tests validate real responses against them (`tests/test_conductor_e2e.py`), and the dashboard's mock engine validates its fixtures and every mock response (`dashboard/tests/conductor-contract.test.ts`). They live beside `dashboard-v1` rather than inside it so the two contracts can change on their own.
+These files are the truth for `/v1/conductor/*` (app/tandemapp/conductor/routes.py). The server's tests validate real responses against them (`tests/test_conductor_e2e.py`), and the dashboard's mock engine validates its fixtures and every mock response (`app/dashboard/tests/conductor-contract.test.ts`). They live beside `dashboard-v1` rather than inside it so the two contracts can change on their own.
 
 | file | endpoint |
 |-|-|
@@ -32,7 +32,7 @@ These files are the truth for `/v1/conductor/*` (server/conductor/routes.py). Th
 | `scan.schema.json` | `GET /v1/conductor/packages/scan` |
 | `packages-catalog.schema.json`, `packages-item.schema.json`, `packages-tokens.schema.json`, `packages-usage.schema.json` | G2, the Packages and Skills screen's reads: `GET /v1/conductor/packages/catalog` (every package: category, source and path, the tokens of the text that goes in on the engine's tokenizer or the 3.5-character estimate, its limit and whether it is over, the classes of the router and of each profile that list it, INDEX.md's fit, each profile's library switch), `GET /v1/conductor/packages/item/{name}` (frontmatter, body, reference, the text that goes in, their tokens, a library skill's BM25 neighbours; 404 for an unknown name), `POST /v1/conductor/packages/tokens {texts}` (a read: the tokens of 1 to 20 texts; 400 otherwise), `GET /v1/conductor/packages/usage?name=&limit=` (the journal's 7 days: per package its injections, shadow notes and library picks in 24 h and 7 d, one package's newest rows, the library's newest retrieval rows; 400 for a limit outside 1 to 200) |
 | `error.schema.json` | every 4xx body; a 422 adds `errors` with one line per violation and its JSON path |
-| `<kind>.config.schema.json` | the documents themselves; written from server/conductor/schema.py by `tools/conductor_contract.py --write` |
+| `<kind>.config.schema.json` | the documents themselves; written from app/tandemapp/conductor/schema.py by `tools/conductor_contract.py --write` |
 | `seeds.json` | the built-in version 0 of every document and the meta; the mock engine serves it |
 
 Rules the schemas cannot express, which both sides test:
