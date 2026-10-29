@@ -320,7 +320,7 @@ def test_a_refused_load_is_a_409_with_the_planners_numbers():
     nothing loaded."""
     from engine.decision.fake import FakeModel
     from engine.decision.registry import Registry
-    from server.conductor import residency
+    from server.conductor import inproc, residency
     from tandemapp.conductor import routes, schema
 
     def plan(name, *, loading, service_start, hold_restart):
@@ -331,7 +331,7 @@ def test_a_refused_load_is_a_409_with_the_planners_numbers():
                    log=lambda s: None)
 
     class Cond:
-        state = {"deciders": reg}
+        state = {"deciders": reg, routes.ENGINE_ROUTES: inproc.ROUTES}
 
     st, out, _ = routes._deciders(Cond, "POST", ["models", "other-decider", "load"], {})
     assert st == 409 and out["decision"]["reason"] == "refused_memory", out
