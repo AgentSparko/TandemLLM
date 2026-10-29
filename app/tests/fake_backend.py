@@ -83,8 +83,9 @@ engine's 400 for a prompt past the context window (`fake.windowed` counts them);
 `strict = True` the prompt and `max_tokens` together count, and the 400 is a strict
 OpenAI-compatible backend's ("maximum context length is n tokens", a relay's backend). `tokenize` (in a test) answers `POST
 /v1/tokenize` (server/tokenize_api.py) with the prompt's tokens, or this number when it is an int;
-None: 404, a server without the route (`fake.counted` counts the calls). `--key` makes
-every route need `Authorization: Bearer <key>`.
+None: 404, a server without the route (`fake.counted` counts the calls). `estimate` (in a test)
+answers `POST /v1/setup/estimate` (our engine's Setup Guide estimate) with this dict; None: 404, a
+server without the Setup Guide. `--key` makes every route need `Authorization: Bearer <key>`.
 
 Our engine's side of a relay (SRV-733): `board = True` answers `GET /v1/dashboard/parallel` with a
 lane per request in flight that carries `X-Tandem-Relay-Id` (None: 404, a server without the
@@ -171,6 +172,7 @@ class Fake:
         self.strict = False             # the window holds the prompt and max_tokens (strict)
         self.tokenize = None            # POST /v1/tokenize: True (count) or an int; None: 404
         self.counted = 0
+        self.estimate: dict | None = None   # POST /v1/setup/estimate's answer; None: 404
         self.key = key
         self.tps = float(tps)
         self.dialect = dialect
@@ -349,6 +351,10 @@ def make_handler(fake: Fake):
                         fake.prewarms += 1
                     return self._json(200, {"prewarmed": True, **fake.peek})
                 return self._json(200, fake.peek)
+            if p == "/v1/setup/estimate":
+                if fake.estimate is None:
+                    return self._json(404, {"error": {"message": "no route", "type": "not_found"}})
+                return self._json(200, fake.estimate)
             text = _last_user(body)
             if text.startswith("Memory pass."):
                 # the memory writer's request (proxy/memwriter.py): steered by the session's

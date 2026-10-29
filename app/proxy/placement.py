@@ -9,15 +9,18 @@ server/setup/registry.py), `ctx` the context window a lane holds, `slots` the pa
 `nodes` (the node ids, in pipeline order for a Split) narrows the plan to those; without it every
 node of the fleet is planned.
 
-EACH NODE is planned from its own memory estimate, the Setup Guide's formula
-(server/setup/estimate.py) with that node's device and MemAvailable: `POST /node/setup/estimate`
-through its TandemNode agent, which relays it to the engine's Setup Guide, or computes the same
-formula itself when no engine there serves one (`source` engine or agent). This machine read
-without an agent is estimated in-process (`process`). A node that serves nothing has the engine's
-whole budget (device memory less the floor): it fits when the estimate does. A node that serves
-something keeps it: the new engine's own parts (the estimate's total less the OS) and the floor
-must fit in what is free now, else `needs 98 GiB, Gold has 61 free`. An off node, one without an
-estimate (an older agent, a model its registry lacks), says why and fits nothing.
+EACH NODE is planned from its own memory estimate, the engine's Setup Guide formula with that
+node's device and MemAvailable, read over HTTP only: `POST /node/setup/estimate` through its
+TandemNode agent, which relays it to its engine's `POST /v1/setup/estimate`; this machine read
+without an agent asks its own engine's `POST /v1/setup/estimate` (the fleet's local `tandemllm`
+backend, proxy/fleetsetup.py local_engine). `source` is engine (or what an older agent that
+computed the estimate itself says); neither the planner nor TandemNode computes one. A node that
+serves nothing has the engine's whole budget (device memory less the floor): it fits when the
+estimate does. A node that serves something keeps it: the new
+engine's own parts (the estimate's total less the OS) and the floor must fit in what is free now,
+else `needs 98 GiB, Gold has 61 free`. An off node, one without an estimate (no engine there
+serves the Setup Guide, its engine does not answer, a model its registry lacks), says why and fits
+nothing.
 
 THE TYPES:
 
@@ -38,10 +41,12 @@ A type that may not serve says why in `reason` (`no fabric link between Gold and
 
 from __future__ import annotations
 
+import http.client
+import json
 import threading
 import time
 
-from proxy import linktest, nodesource
+from proxy import fleetsetup, linktest, nodesource
 
 CONTRACT = "1.0"
 FABRIC_TTL_S = 60.0
@@ -52,37 +57,6 @@ class PlanError(Exception):
     def __init__(self, status: int, kind: str, message: str):
         super().__init__(message)
         self.status, self.kind, self.message = status, kind, message
-
-
-def estimate_here(body) -> tuple[int, dict]:
-    """The Setup Guide's estimate of a selection on this machine (its device, its MemAvailable):
-    (status, answer). A node agent's fallback when no engine serves the Setup Guide, and the
-    controller's for its own machine read without an agent."""
-    sel = body.get("selection", body) if isinstance(body, dict) else body
-    try:
-        from server.setup import device as device_mod
-        from server.setup import estimate as estimate_mod
-        from server.setup import registry
-    except ImportError as exc:
-        return 503, {"error": {"type": "no_setup", "message": f"no Setup Guide models here: "
-                                                              f"{exc}"}}
-    mid = sel.get("model") if isinstance(sel, dict) else None
-    try:
-        m = device_mod.windowed(registry.get(mid)) if isinstance(mid, str) else None
-    except Exception as exc:                                         # noqa: BLE001
-        return 503, {"error": {"type": "no_setup", "message": f"the models' registry: "
-                                                              f"{type(exc).__name__}: {exc}"}}
-    if m is None:
-        return 400, {"error": {"type": "unknown_model", "message": f"no model {mid!r} in models/"}}
-    try:
-        s = estimate_mod.check(m, sel)
-    except estimate_mod.SelectionError as exc:
-        return exc.status, exc.body()
-    mem = device_mod.meminfo()
-    out = estimate_mod.estimate(m, s, available_gb=round(mem["MemAvailable"], 2)
-                                if "MemAvailable" in mem else None)
-    out["source"] = "agent"
-    return 200, out
 
 
 def _part(est: dict, pid: str) -> float:
@@ -106,11 +80,36 @@ class Planner:
             err = (doc or {}).get("error") or {}
             return None, err.get("message") or f"its agent answered HTTP {st}", "none"
         if isinstance(src, nodesource.LocalNode):
-            st, doc = estimate_here({"selection": sel})
-            if st == 200:
-                return doc, None, "process"
-            return None, (doc.get("error") or {}).get("message") or f"HTTP {st}", "none"
+            return self._local_estimate(sel)
         return None, src.status()[1], "none"
+
+    def _local_estimate(self, sel: dict) -> tuple[dict | None, str | None, str]:
+        """This machine read without its agent: its own engine's Setup Guide estimate, over HTTP."""
+        from proxy.fleet import FleetError
+        try:
+            host, port = fleetsetup.local_engine(self.fleet)
+        except FleetError as exc:
+            return None, exc.message, "none"
+        conn = http.client.HTTPConnection(host, port, timeout=ESTIMATE_TIMEOUT_S)
+        try:
+            conn.request("POST", "/v1/setup/estimate", body=json.dumps({"selection": sel}).encode(),
+                         headers={"Content-Type": "application/json",
+                                  "Accept": "application/json"})
+            r = conn.getresponse()
+            st, raw = r.status, r.read()
+        except (OSError, http.client.HTTPException):
+            return None, "the engine on this machine does not answer", "none"
+        finally:
+            conn.close()
+        try:
+            doc = json.loads(raw)
+        except ValueError:
+            doc = None
+        if st == 200 and isinstance(doc, dict) and "total_gb" in doc:
+            return doc, None, "engine"
+        err = doc.get("error") if isinstance(doc, dict) else None
+        msg = err.get("message") if isinstance(err, dict) else None
+        return None, msg or f"its engine answered HTTP {st}", "none"
 
     def _node(self, row: dict, src, sel: dict, busy: set) -> dict:
         a = row["alias"]

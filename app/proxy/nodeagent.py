@@ -50,9 +50,10 @@ ROUTES (every one behind the caller check below; JSON unless an event stream):
     POST   /node/linktest/sink         a body read and dropped: the bandwidth test's far end
     POST   /node/linktest              {peer, bytes?, streams?, rtt_n?}: this node to the peer's agent
     *      /node/setup/<route>         the engine's /v1/setup/<route> (the Setup Guide) as it answers;
-                                       its status responder (OPS-175) while it restarts; POST
-                                       estimate is computed here (the same formula,
-                                       proxy/placement.py) when no engine serves the Setup Guide
+                                       its status responder (OPS-175) while it restarts; 503
+                                       no_engine when no engine here serves the Setup Guide,
+                                       engine_down when it does not answer. POST estimate too:
+                                       this agent computes no estimate itself
     GET    /node/pair                  the owner, this node's fingerprint, the window (its code only
                                        to this node's own caller), the audit log's last lines
     POST   /node/pair                  {address?, port?, takeover?}: open a pairing window (this
@@ -1173,8 +1174,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def _setup(self, method: str, sub: str, query: str) -> None:
         body = self._body() if method == "POST" else None
-        if method == "POST" and sub == "estimate":
-            return self._estimate(body, query)
         got = self._setup_call(method, f"/v1/setup/{sub}" + (f"?{query}" if query else ""), body)
         if got is None:
             return
@@ -1183,26 +1182,6 @@ class Handler(BaseHTTPRequestHandler):
             self._audit(f"{method} setup/{sub}", st)
         extra = tuple((k, r.getheader(k)) for k in ("Retry-After",) if r.getheader(k))
         self._pass(st, ctype, conn, r, extra)
-
-    def _estimate(self, body: bytes | None, query: str) -> None:
-        """POST /node/setup/estimate: the engine's Setup Guide's, as it answers; when no engine
-        here serves one (none, down, or one without the Setup Guide), the same formula computed
-        by this agent (`source` agent)."""
-        got = self._setup_call("POST", "/v1/setup/estimate" + (f"?{query}" if query else ""),
-                               body, quiet=True)
-        if got is not None:
-            st, ctype, conn, r = got
-            if st not in (404, 405, 501, 503):
-                self._audit("POST setup/estimate", st)
-                return self._pass(st, ctype, conn, r)
-            conn.close()
-        from proxy import placement
-        try:
-            doc = json.loads(body or b"null")
-        except ValueError:
-            raise ValueError("the body is {selection}")
-        st, out = placement.estimate_here(doc)
-        return self._json(st, out)
 
     def _setup_weights(self) -> dict:
         """The engine's Setup Guide weights with content ids; {} when no engine serves them."""

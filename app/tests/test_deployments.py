@@ -19,7 +19,9 @@ test: tests/owned.py). The engine a box serves on :8000 is never addressed.
      replayed, a member on another release is a mismatch                  test_replicas
   4  Gherkin "Split refused without fabric": "no fabric link between Gold and R-1"; with a fabric
      link it is allowed but not built; its record is stopped, its start and its requests 501;
-     a node that serves something: "needs 98 GiB, Gold has 61 free"; the agent's own estimate
+     a node that serves something: "needs 98 GiB, Gold has 61 free"; each estimate is its
+     engine's Setup Guide's as the agent relays it (source engine), a node whose engine does not
+     answer has none and fits nothing; this machine without an agent asks its own engine
                                                                           test_placement_and_split
   5  jobs through the agents: start (engine started, health, one token), move (the API id stays,
      the old engine stopped), stop (confirm, 503 deployment_stopped)      test_start_move_stop
@@ -78,18 +80,19 @@ def dash_ok(obj, name):
 
 
 class Node:
-    """A virtual node: its agent on a loopback port, one engine `e` (a fake backend in this
-    process serving `models`, or a managed process on `port`)."""
+    """A virtual node: its agent on a loopback port, one engine `e` of `kind` (a fake backend in
+    this process serving `models`, or a managed process on `port`). The agent relays the Setup
+    Guide to a `tandemllm` engine only."""
 
     def __init__(self, serial: str, name: str, models=None, managed_port=None, addrs=None,
-                 secret=None):
+                 secret=None, kind="generic"):
         self.srv = None
         if managed_port is None:
             self.srv, self.eport = fake_backend.start(models=models)
-            doc = tna.engine_doc("e", self.eport, kind="generic")
+            doc = tna.engine_doc("e", self.eport, kind=kind)
         else:
             self.eport = managed_port
-            doc = tna.engine_doc("e", managed_port, kind="generic", start_timeout_s=20,
+            doc = tna.engine_doc("e", managed_port, kind=kind, start_timeout_s=20,
                                  start=[sys.executable, FAKE, "--port", str(managed_port),
                                         "--models", ",".join(models)])
         self.agent = tna.agent_on(tna.machine(serial), engines=[doc], address="127.0.0.1",
@@ -422,22 +425,27 @@ EST = {"total_gb": 108.0, "budget_gb": 106.63, "floor_gb": 15.0, "available_gb":
 
 def test_placement_and_split():
     addrs = {"Gold": {"fab0": ["10.77.0.1/24"]}, "R-1": {"fab0": ["10.77.0.2/24"]}}
-    fx = Fleet({"Gold": Node("PL-G-0001", "g", ["fake-a"]),
-                "R-1": Node("PL-1-0001", "r1", ["fake-b"]),
-                "R-2": Node("PL-2-0001", "r2", ["fake-c"])})
+    # what the planner sends each engine's Setup Guide for the body below
+    sel = {"model": "qwen3.8-27b", "profile": "exl3-4.0", "window": 32768, "slots": 1}
+    fx = Fleet({"Gold": Node("PL-G-0001", "g", ["fake-a"], kind="tandemllm"),
+                "R-1": Node("PL-1-0001", "r1", ["fake-b"], kind="tandemllm"),
+                "R-2": Node("PL-2-0001", "r2", ["fake-c"], kind="tandemllm")})
     try:
         g, r1, r2 = fx.ids["Gold"], fx.ids["R-1"], fx.ids["R-2"]
+        for n in fx.nodes.values():
+            n.srv.fake.estimate = dict(EST)
         body = {"model": "qwen3.8-27b", "pack": "exl3-4.0", "ctx": 32768, "nodes": [g, r1]}
-        # the agent's own estimate (no engine here serves the Setup Guide): the same formula
-        st, est = fx.nodes["Gold"].run.client.json(
-            "POST", "/node/setup/estimate", {"selection": {"model": "qwen3.8-27b",
-                                                           "profile": "exl3-4.0",
-                                                           "window": 32768}})
-        assert st == 200 and est["source"] == "agent" and est["total_gb"] > 20, est
+        # each node's estimate is its engine's Setup Guide's, as its agent relays it
+        st, est = fx.nodes["Gold"].run.client.json("POST", "/node/setup/estimate",
+                                                   {"selection": sel})
+        assert st == 200 and est == EST, est
         st, p = tf.send(fx.px, "POST", "/v1/fleet/placement", body)
         assert st == 200, p
         tf.ok(p, "placement")
-        assert [n["source"] for n in p["nodes"]] == ["agent", "agent"], p["nodes"]
+        assert [n["source"] for n in p["nodes"]] == ["engine", "engine"], p["nodes"]
+        assert all(n["fits"] and n["need_gib"] == 98.0 for n in p["nodes"]), p["nodes"]
+        last = fx.nodes["R-1"].srv.fake.last
+        assert (last["path"], last["body"]) == ("/v1/setup/estimate", {"selection": sel}), last
         split = next(t for t in p["types"] if t["type"] == "split")
         assert not split["allowed"] and not split["built"], split
         assert split["reason"] == "no fabric link between Gold and R-1", split
@@ -474,22 +482,68 @@ def test_placement_and_split():
         assert rep["allowed"] and len(rep["nodes"]) == 3, rep
         # a node that serves something keeps it: the new engine must fit in what is free
         fx.record({"model": "fake-a", "type": "single", "members": [g]})
-        fx.f.placement._estimate = lambda row, src, sel: (dict(EST), None, "engine")
         p = tf.ok(tf.send(fx.px, "POST", "/v1/fleet/placement", dict(body, nodes=[g, r2]))[1],
                   "placement")
         ng, nr = p["nodes"]
         assert (ng["fits"], ng["reason"]) == (False, "needs 98 GiB, Gold has 61 free"), ng
+        assert ng["source"] == "engine" and ng["serving"], ng
         assert nr["fits"] and nr["need_gib"] == 98.0 and not nr["serving"], nr
         single = next(t for t in p["types"] if t["type"] == "single")
         assert single["allowed"] and single["nodes"] == [r2], single
         rep = next(t for t in p["types"] if t["type"] == "replicas")
         assert not rep["allowed"] and rep["reason"] == "needs two nodes that fit: only R-2 fits"
+        # a node whose engine does not answer has no estimate and fits nothing
+        down = fx.nodes["R-2"]
+        down.srv.shutdown()
+        down.srv.server_close()
+        down.srv = None
+        p = tf.ok(tf.send(fx.px, "POST", "/v1/fleet/placement", dict(body, nodes=[g, r2]))[1],
+                  "placement")
+        nr = p["nodes"][1]
+        assert (nr["fits"], nr["source"], nr["need_gib"]) == (False, "none", None), nr
+        assert nr["reason"] == f"R-2 has no estimate: the engine on :{down.eport} does not " \
+                               f"answer", nr
+        assert not next(t for t in p["types"] if t["type"] == "single")["allowed"], p["types"]
         st, err = tf.send(fx.px, "POST", "/v1/fleet/placement", dict(body, ctx=0))
         assert st == 400, err
         st, err = tf.send(fx.px, "POST", "/v1/fleet/placement", dict(body, nodes=["n-x"]))
         assert st == 404, err
     finally:
         fx.close()
+    # this machine read without its agent: the planner asks its own engine over HTTP
+    srv, port = fake_backend.start(models=["fake-l"])
+    srv.fake.estimate = dict(EST)
+    try:
+        with Proxy() as px:
+            f = tf.fleet_on(px, tf.local_node(tf.fake_root()))
+            one = {"model": "qwen3.8-27b", "pack": "exl3-4.0", "ctx": 32768,
+                   "nodes": [f.ensure_local()]}
+
+            def here():
+                st, p = tf.send(px, "POST", "/v1/fleet/placement", one)
+                assert st == 200, p
+                return tf.ok(p, "placement")["nodes"][0]
+            n = here()
+            assert (n["fits"], n["source"]) == (False, "none"), n
+            assert n["reason"] == f"{n['alias']} has no estimate: no TandemLLM engine on this " \
+                                  f"machine serves the Setup Guide", n
+            px.svc.cfg.create_backend({"id": "box", "kind": "tandemllm",
+                                       "url": f"http://127.0.0.1:{port}/v1"})
+            px.sync()
+            n = here()
+            assert (n["source"], n["need_gib"], n["total_gib"]) == ("engine", 98.0, 108.0), n
+            last = srv.fake.last
+            assert (last["path"], last["body"]) == ("/v1/setup/estimate", {"selection": sel})
+            assert last["headers"].get("Content-Type") == "application/json", last["headers"]
+            srv.shutdown()
+            srv.server_close()
+            n = here()
+            assert (n["fits"], n["source"]) == (False, "none"), n
+            assert n["reason"] == f"{n['alias']} has no estimate: the engine on this machine " \
+                                  f"does not answer", n
+    finally:
+        srv.shutdown()
+        srv.server_close()
 
 
 # ---------------------------------------------------------------------------- 5. jobs

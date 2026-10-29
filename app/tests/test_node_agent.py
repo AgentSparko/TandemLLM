@@ -24,8 +24,10 @@ the engine a box serves on :8000 is never addressed. Time is injected where the 
   8  link test against a fake peer: RTT, bandwidth per interface, MTU, RoCE, a port with one of
      its two interfaces down flagged half bandwidth                  test_linktest_fake_peer
   9  /node/setup/*: the engine's answer byte for byte, a POST's body as sent and no secret passed
-     on, an event stream, the status responder while the engine is down; weights with content ids
-     and the weights store, a removal as the Setup Guide takes it                           test_setup_delegation
+     on, an event stream, the status responder while the engine is down; POST estimate relayed as
+     every route (503 engine_down, no_engine: no estimate of the agent's own); weights with
+     content ids and the weights store, a removal as the Setup Guide takes it
+                                                                     test_setup_delegation
  10  the controller: a node read through its agent in /v1/fleet/* (nodes, metrics from the 1 s
      stream, memory, logs, deployments through the relay), this machine switching to its agent
      and back, a remote agent node, an unpaired one                  test_agent_node_in_fleet
@@ -933,8 +935,15 @@ def test_setup_delegation():
         status.close()
         st, _, body = raw(r.port, "GET", "/node/setup/device", auth)
         assert st == 503 and json.loads(body)["error"]["type"] == "engine_down"
+        # POST estimate is relayed as every route is: this agent computes no estimate itself
+        st, _, body = raw(r.port, "POST", "/node/setup/estimate",
+                          dict(auth, **{"Content-Type": "application/json"}),
+                          json.dumps({"selection": {"model": "m"}}).encode())
+        assert st == 503 and json.loads(body)["error"]["type"] == "engine_down", body
     with Running(agent_on(engines=[])) as r:
         assert r.client.json("GET", "/node/setup/device")[0] == 503
+        st, err = r.client.json("POST", "/node/setup/estimate", {"selection": {"model": "m"}})
+        assert st == 503 and err["error"]["type"] == "no_engine", err
     # content ids from a --local-dir download's metadata, and a cache snapshot's blob links
     d = tempfile.mkdtemp()
     tf._write(d, ".cache/huggingface/download/model.safetensors.metadata",

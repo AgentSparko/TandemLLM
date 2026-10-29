@@ -4,11 +4,12 @@ the controller asks the node's TandemNode agent, the agent its engine. The brows
     relay = SetupRelay(fleet)                    one per Fleet (fleet.setup)
     *    /v1/fleet/nodes/{id}/setup/<route>      the node's Setup Guide: its engine's
                                                  /v1/setup/<route>, as the agent relays it
-                                                 (/node/setup/<route>; POST estimate is the agent's
-                                                 own formula when no engine serves the guide); an
-                                                 event stream (a job's log, Wren's answer) as it
+                                                 (/node/setup/<route>, POST estimate included: 503
+                                                 no_engine when no engine there serves the guide);
+                                                 an event stream (a job's log, Wren's answer) as it
                                                  comes. The controller's own machine read without
                                                  its agent: its engine's /v1/setup/<route>
+                                                 (local_engine)
     GET  /v1/fleet/nodes/{id}/setup-confirm/<route>[?model=&profile=|?profiles=|?level=]
                                                  what a write does on that node, whether it may,
                                                  and its confirm (proxy/fleet.py routes it)
@@ -72,6 +73,19 @@ def bound(write: str, src: dict) -> str:
 
 def _plural(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def local_engine(fleet, alias: str | None = None) -> tuple[str, int]:
+    """(host, port) of this machine's TandemLLM engine, the fleet's local `tandemllm` backend,
+    which serves the Setup Guide over HTTP; FleetError 503 `no_engine` without one (`alias`, when
+    given, names the node in its message)."""
+    from proxy.fleet import FleetError
+    eng = next((b for b in fleet.engine_backends() if b["kind"] == "tandemllm"), None)
+    if eng is None:
+        raise FleetError(503, f"{alias + ': ' if alias else ''}no TandemLLM engine on this "
+                              f"machine serves the Setup Guide", "no_engine")
+    u = urllib.parse.urlsplit(eng["url"])
+    return u.hostname, u.port or 80
 
 
 class SetupRelay:
@@ -206,12 +220,8 @@ class SetupRelay:
             target = f"/node/setup/{path}"
             h = src.client.headers()
         elif isinstance(src, nodesource.LocalNode):
-            eng = next((b for b in f.engine_backends() if b["kind"] == "tandemllm"), None)
-            if eng is None:
-                raise FleetError(503, f"{row['alias']}: no TandemLLM engine on this machine serves "
-                                      f"the Setup Guide", "no_engine")
-            u = urllib.parse.urlsplit(eng["url"])
-            conn = http.client.HTTPConnection(u.hostname, u.port or 80, timeout=RELAY_TIMEOUT_S)
+            host, port = local_engine(f, row["alias"])
+            conn = http.client.HTTPConnection(host, port, timeout=RELAY_TIMEOUT_S)
             target, h = f"/v1/setup/{path}", {}
         else:
             raise FleetError(503, f"{row['alias']} does not answer: {src.status()[1]}",
