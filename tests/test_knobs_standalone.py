@@ -1,30 +1,28 @@
 """#108: the standalone proxy (`tandem-app`, its image) ships `proxy` and `tandemapp` without the
-engine, so neither may need the engine to import.
+engine, so the knobs they read carry the engine's defaults in app/tandemapp/knobs.py.
 
   1  app/tandemapp/knobs.py's defaults are engine/settings.py's for every knob the conductor and the
      proxy read, and every such read is one of them          test_the_defaults_are_the_registry
-  2  with `engine`, `torch` and `server` missing and app/ on the path, every module of app/proxy/,
-     app/tandemapp/conductor/ and its monitor imports, and the knobs read the environment with
-     those defaults                                          test_every_module_imports_without_the_engine
-  3  no module of theirs imports the engine at its top but inside a guard   test_no_bare_engine_import
+
+The checks without the engine run on TandemApp's side: app/tests/test_knobs.py (the knobs read the
+environment with these defaults, an unknown name raises KeyError) and
+app/tests/test_import_boundary.py (every module of proxy, chatd and tandemapp imports with the
+engine blocked, and none imports it).
 
 CPU. Run: python tests/test_knobs_standalone.py
 """
 
 from __future__ import annotations
 
-import ast
 import glob
 import os
 import re
-import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
-APP = os.path.join(ROOT, "app")
 
 DIRS = ("app/proxy", "app/tandemapp/conductor", "app/tandemapp/conductor/monitor")
 
@@ -45,73 +43,6 @@ def test_the_defaults_are_the_registry():
         read |= set(re.findall(r'_S\.get\("([A-Z0-9_]+)"', open(p, encoding="utf-8").read()))
     assert read and read <= set(knobs.DEFAULTS), sorted(read - set(knobs.DEFAULTS))
     return f"{len(knobs.DEFAULTS)} knobs, {len(read)} read"
-
-
-BLOCKED = r'''
-import importlib, os, pkgutil, sys
-class Block:
-    def find_spec(self, name, path=None, target=None):
-        top = name.split(".")[0]
-        if top in ("engine", "torch", "server"):
-            raise ModuleNotFoundError(f"No module named {name!r}", name=name)
-        return None
-sys.meta_path.insert(0, Block())
-sys.path.insert(0, sys.argv[1])
-import proxy, tandemapp.conductor, tandemapp.conductor.monitor
-bad = []
-mods = [(p.__name__, m.name) for p in (proxy, tandemapp.conductor, tandemapp.conductor.monitor)
-        for m in pkgutil.iter_modules(p.__path__) if m.name != "__main__"]
-for pkg, name in mods:
-    try:
-        importlib.import_module(f"{pkg}.{name}")
-    except Exception as e:
-        bad.append(f"{pkg}.{name}: {type(e).__name__}: {e}")
-from tandemapp import knobs
-assert type(knobs.SETTINGS).__name__ == "StandaloneSettings", knobs.SETTINGS
-os.environ["QWEN38_TOOL_FIT"] = "off"
-assert knobs.SETTINGS.get("TOOL_FIT") == "off" and knobs.SETTINGS.get("NOTE_DEDUP") == "parts"
-try:
-    knobs.SETTINGS.get("NOT_A_KNOB")
-except KeyError:
-    pass
-else:
-    bad.append("an unknown knob was read")
-print(len(mods), "modules")
-print("\n".join(bad))
-sys.exit(1 if bad else 0)
-'''
-
-
-def test_every_module_imports_without_the_engine():
-    env = {k: v for k, v in os.environ.items() if not k.startswith("QWEN38_") and k != "PYTHONPATH"}
-    p = subprocess.run([sys.executable, "-c", BLOCKED, APP], capture_output=True, text=True, timeout=300,
-                       env=env, cwd=APP)
-    assert p.returncode == 0, (p.stdout[-3000:], p.stderr[-3000:])
-    return p.stdout.splitlines()[0]
-
-
-def _guarded(tree) -> set[int]:
-    """Line numbers of imports inside a try at module level."""
-    out = set()
-    for node in tree.body:
-        if isinstance(node, ast.Try):
-            for sub in ast.walk(node):
-                if isinstance(sub, (ast.Import, ast.ImportFrom)):
-                    out.add(sub.lineno)
-    return out
-
-
-def test_no_bare_engine_import():
-    bad = []
-    for p in _files():
-        tree = ast.parse(open(p, encoding="utf-8").read())
-        ok = _guarded(tree)
-        for node in tree.body:
-            names = ([a.name for a in node.names] if isinstance(node, ast.Import) else
-                     [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
-            if any(n == "engine" or n.startswith("engine.") for n in names) and node.lineno not in ok:
-                bad.append(f"{os.path.relpath(p, ROOT)}:{node.lineno}")
-    assert not bad, bad
 
 
 if __name__ == "__main__":
