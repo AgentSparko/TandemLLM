@@ -14,8 +14,8 @@ the engine a box serves on :8000 is never addressed. Time is injected where the 
   4  callers: no secret, a wrong secret, a secret file others can read; mTLS without a
      certificate, with one nobody pinned, with the pinned one       test_auth_refusal
   5  the bind rule: loopback only until paired, never 0.0.0.0, never a WAN address, never a name;
-     `tandem node check` and `tandem node unit` through install.sh's bin/tandem
-                                                                     test_bind_rule
+     the unit text (`tandem node check` and `unit` through install.sh's bin/tandem are the
+     engine's: tests/test_engine_scripts.py)                         test_bind_rule
   6  engines: list, start, stop, restart a fake engine (foreground, and one that daemonizes with
      its own stop command), refused when not managed or busy; its routes relayed, its live stream
      passed on as it comes                                           test_engines_on_a_fake_engine
@@ -685,30 +685,6 @@ def test_bind_rule():
     unit = nodeagent.unit_text(nodeagent.parser().parse_args(["--state-dir", "/x/node"]))
     assert "--host 127.0.0.1 --port 7700 --state-dir /x/node" in unit
     assert "Restart=on-failure" in unit and "WantedBy=default.target" in unit
-    # `tandem node` in the bin/tandem install.sh writes: this install's engine, the same rule
-    d = tempfile.mkdtemp(prefix="node-install-")
-    text = open(os.path.join(ROOT, "install.sh")).read()
-    fn = text[text.index("write_control() {"):text.index("\nCTL\n}\n") + len("\nCTL\n}\n")]
-    script = subprocess.run(["bash", "-c", fn + '\nDIR="$1"; write_control', "-", d],
-                            capture_output=True, text=True, check=True).stdout
-    os.makedirs(os.path.join(d, "bin"))
-    os.makedirs(os.path.join(d, "venv", "bin"))
-    os.symlink(sys.executable, os.path.join(d, "venv", "bin", "python"))
-    os.symlink(ROOT, os.path.join(d, "src"))
-    with open(os.path.join(d, "bin", "tandem"), "w") as f:
-        f.write(script)
-    ctl = ["bash", os.path.join(d, "bin", "tandem"), "node"]
-    state = ["--state-dir", os.path.join(d, "node")]
-    r = subprocess.run(ctl + ["check"] + state, capture_output=True, text=True, timeout=60)
-    lines = r.stdout.strip().splitlines()
-    assert r.returncode == 0 and lines[0] == \
-        "127.0.0.1:7700 secret (plain HTTP, the loopback secret)", (r.stdout, r.stderr)
-    assert len(lines) == 2 and lines[1].startswith("mDNS: "), lines     # SRV-727
-    r = subprocess.run(ctl + ["unit"] + state, capture_output=True, text=True, timeout=60)
-    assert f"--tandem-dir {d}" in r.stdout, r.stdout
-    r = subprocess.run(ctl + ["check", "--host", "0.0.0.0"] + state, capture_output=True,
-                       text=True, timeout=60)
-    assert r.returncode != 0 and "unspecified" in r.stderr, (r.stdout, r.stderr)
 
 
 def test_engines_on_a_fake_engine():

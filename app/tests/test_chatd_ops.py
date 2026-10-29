@@ -1,6 +1,7 @@
-"""chatd's operations (OPS-103, phase 1 part): the forward key in secrets.env and in chatd's own
-file, the same key on both sides, and `python -m chatd` starting with nothing beyond the standard
-library, making its store and answering /health and the session route.
+"""chatd's operations (OPS-103, phase 1 part): the forward key in chatd's own file, the same key on
+both sides, and `python -m chatd` starting with nothing beyond the standard library, making its
+store and answering /health and the session route. make-secrets.sh, which writes the key into
+secrets.env, is the engine's (tests/test_engine_scripts.py).
 
 Run: python -m pytest -q tests/test_chatd_ops.py
 """
@@ -21,26 +22,6 @@ from chatd_util import ROOT, run_all
 
 from chatd.__main__ import load_key
 from tandemapp import chat_forward
-
-
-def test_make_secrets_writes_the_forward_key_and_adds_it_to_an_old_file():
-    d = tempfile.mkdtemp()
-    env = dict(os.environ, QSE_STATE_DIR=d)
-    subprocess.run(["bash", os.path.join(ROOT, "ops", "make-secrets.sh")], env=env, check=True,
-                   capture_output=True)
-    text = open(os.path.join(d, "secrets.env")).read()
-    key = [ln.split("=", 1)[1] for ln in text.splitlines() if ln.startswith("QSE_CHAT_FORWARD_KEY=")]
-    assert len(key) == 1 and len(key[0]) == 64
-    assert stat.S_IMODE(os.stat(os.path.join(d, "secrets.env")).st_mode) == 0o600
-    # a file from before OPS-103 gets the line, once, and keeps what it had
-    with open(os.path.join(d, "secrets.env"), "w") as fh:
-        fh.write("QSE_METRICS_TOKEN=" + "m" * 64 + "\n")
-    for _ in range(2):
-        subprocess.run(["bash", os.path.join(ROOT, "ops", "make-secrets.sh")], env=env,
-                       check=True, capture_output=True)
-    text = open(os.path.join(d, "secrets.env")).read()
-    assert text.startswith("QSE_METRICS_TOKEN=" + "m" * 64)
-    assert text.count("QSE_CHAT_FORWARD_KEY=") == 1
 
 
 def test_both_sides_read_the_same_key():

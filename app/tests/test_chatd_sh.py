@@ -18,9 +18,9 @@ The test matrix, the Gherkin of OPS-153:
                                                                      test_a_start_that_fails_is_a_failure
   5  both sides read one secrets file: the engine's forward of GET /v1/chat-app/capabilities answers
      200 with the key in QSE_SECRETS, with the key only in chatd's forward.key, and with no key
-     anywhere                                                        test_both_sides_read_one_secrets_file
-  6  make-secrets.sh writes where the engine reads, also from the setup guide's apply job, whose
-     environment has no QSE_SECRETS                                  test_make_secrets_writes_where_the_engine_reads
+     anywhere; with the admin password in the file too, chatd's environment gets the forward key
+     and never the admin token                                       test_both_sides_read_one_secrets_file
+  6  make-secrets.sh writes where the engine reads: the engine's (tests/test_engine_scripts.py)
   7  a reused pid is not a running chatd: start replaces the pid file, stop signals nothing
                                                                      test_a_reused_pid_is_not_a_running_chatd
   8  the port follows QSE_CHAT_URL                                   test_the_port_follows_qse_chat_url
@@ -344,32 +344,16 @@ def test_both_sides_read_one_secrets_file():
         assert st == 502 and obj["error"]["type"] == "chat_unavailable", (st, obj)
     finally:
         t.close()
-
-
-def test_make_secrets_writes_where_the_engine_reads():
+    # 4. the file holds the admin password too (as make-secrets.sh --admin writes it): the engine
+    #    reads it, chatd's environment does not
     t = Tree()
     try:
-        ops = os.path.join(t.dir, "run", "ops")
-        shutil.copy(os.path.join(ROOT, "ops", "make-secrets.sh"), ops)
-        # QSE_SECRETS set (what the engine's environment has)
-        own = os.path.join(t.tmp, "own", "secrets.env")
-        subprocess.run(["bash", os.path.join(ops, "make-secrets.sh")], check=True, capture_output=True,
-                       env=t.env(QSE_SECRETS=own))
-        assert "QSE_CHAT_FORWARD_KEY=" in open(own).read()
-        # the setup guide's apply job: its environment keeps PATH, HOME and a few more, never
-        # QSE_SECRETS (server/setup/apply.py Job.env); the file is still serve.env's
-        apply_env = {"PATH": os.environ["PATH"], "HOME": t.home, "LANG": "C"}
-        r = subprocess.run(["bash", os.path.join(ops, "make-secrets.sh"), "--admin"],
-                           capture_output=True, text=True, env=apply_env)
-        assert r.returncode == 0 and f"wrote {t.secrets}" in r.stdout, _out(r)
-        text = open(t.secrets).read()
-        assert "QSE_ADMIN_TOKEN=" in text and "QSE_CHAT_FORWARD_KEY=" in text
-        assert not os.path.exists(os.path.join(t.home, ".qwen38-spark-engine")), \
-            "make-secrets.sh wrote a file the installed engine never reads"
-        assert oct(os.stat(t.secrets).st_mode & 0o777) == "0o600"
-        # and the engine reads that file: the admin password reaches it
+        os.makedirs(os.path.dirname(t.secrets))
+        with open(t.secrets, "w") as fh:
+            fh.write(f"QSE_ADMIN_TOKEN={'a' * 64}\nQSE_METRICS_TOKEN={'m' * 64}\n"
+                     f"QSE_CHAT_FORWARD_KEY={key}\n")
         env = _engine_env(t)
-        assert len(env.get("QSE_ADMIN_TOKEN", "")) == 64
+        assert env["QSE_ADMIN_TOKEN"] == "a" * 64 and env["QSE_CHAT_FORWARD_KEY"] == key
         # chatd gets the forward key and never the admin or metrics token
         assert t.sh("start").returncode == 0
         pid = t.pid()

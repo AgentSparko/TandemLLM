@@ -36,8 +36,9 @@ Addresses are 192.0.2.x and 198.51.100.x; every name is invented.
      docker/br-/veth/virbr                                      test_agent_preflight_and_claim
  11  the tunnel: its argv, the local port kept, the back-off of a process that exits
                                                                         test_tunnel_process
- 12  the preflight script runs on this box and parses; install.sh --runtime-only --dry-run
-     stops after the Python environment                     test_script_and_runtime_only
+ 12  the preflight script runs on this box and parses, every row in a known state (install.sh
+     --runtime-only --dry-run is the engine's: tests/test_engine_scripts.py)
+                                                              test_preflight_reads_tandemnode_only
  13  the wheel this controller builds: TandemApp's packages and the built page, no engine
      code, the console scripts, cryptography; cached by content          test_the_node_wheel
  14  the engine step (SRV-747): TandemApp 1.0.0 with a stub installer (TANDEM_ENGINE_INSTALL_SH)
@@ -1058,6 +1059,11 @@ def test_the_engine_step_takes_the_installer_and_ref():
 
 
 def test_preflight_reads_tandemnode_only():
+    r = subprocess.run(["sh", "-c", preflight.SCRIPT], capture_output=True, text=True, timeout=60)
+    f = preflight.parse(r.stdout)
+    assert {"now", "kernel", "arch", "sudo"} <= set(f), f
+    rows = preflight.checks(f, VERSION, time.time())
+    assert all(x["state"] in preflight.STATES for x in rows)
     d = tempfile.mkdtemp(prefix="add-pf-")
     try:
         os.makedirs(os.path.join(d, "TandemLLM", "src"))
@@ -1094,23 +1100,6 @@ def test_preflight_reads_tandemnode_only():
         assert "--ref" not in tv["fix"], tv
     finally:
         shutil.rmtree(d, ignore_errors=True)
-
-
-def test_script_and_runtime_only():
-    r = subprocess.run(["sh", "-c", preflight.SCRIPT], capture_output=True, text=True, timeout=60)
-    f = preflight.parse(r.stdout)
-    assert {"now", "kernel", "arch", "sudo"} <= set(f), f
-    rows = preflight.checks(f, VERSION, time.time())
-    assert all(x["state"] in preflight.STATES for x in rows)
-    d = tempfile.mkdtemp(prefix="add-rt-")
-    r = subprocess.run(["bash", os.path.join(ROOT, "install.sh"), "--runtime-only", "--dry-run",
-                        "--yes", "--dir", os.path.join(d, "engine")], capture_output=True,
-                       text=True, timeout=300, env=dict(os.environ, HOME=d))
-    out = r.stdout + r.stderr
-    assert r.returncode == 0, out[-2000:]
-    assert "[3/3]" in out and "[4/" not in out and "Weights" not in out, out[-2000:]
-    assert "No weights, corpus or config yet" in out
-    shutil.rmtree(d, ignore_errors=True)
 
 
 def test_the_node_wheel():
