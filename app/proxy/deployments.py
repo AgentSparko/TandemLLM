@@ -44,7 +44,9 @@ move or a rejoin, its warm-up answered one token), `starting`, `down`, `draining
 drained), `leaving` (a move takes it out: it takes no new request), `mismatch` (a Replicas member
 on another release, or with other weights, than the first serving member: G15 from SRV-467, on
 what the controller reads; it takes no request), `off` (its node does not answer), `gone` (its node
-left the fleet). Only `serving` takes requests.
+left the fleet). Only `serving` takes requests. A member whose engine speaks another engine API
+major (its agent's engine view, proxy/engineapi.py) is `down` with the agent's reason, which names
+the major this TandemApp needs.
 
 THE STATUS of a deployment: `serving` when every member serves, `degraded` when some do, `starting`
 while its start runs or a member starts, `down` when none serves, `stopped` when the record says
@@ -71,7 +73,8 @@ JOBS (`fleet_jobs`, kind `deploy`; one per deployment at a time, 409 `busy`):
 
     start   every member's engine started through its agent (one TandemNode did not start: started
             only when it is up already, else refused), its backend's health up, then the warm-up:
-            one token from the model (WARM_WAIT_S). A Split: 501 not_built.
+            one token from the model (WARM_WAIT_S). A Split: 501 not_built. An engine on another
+            engine API major fails the start at the agent's first such answer (start_failed).
     stop    the record stopped first (the gateway takes no new request for it), the requests in
             flight finished (DRAIN_WAIT_S), every member's engine stopped through its agent. A
             member TandemNode does not manage blocks the stop (the plan says so).
@@ -263,6 +266,9 @@ class Deployments:
             return "draining", f"{n['row']['alias']} is drained"
         if not bid or self.svc.table.backend_for(bid) is None:
             return "down", "no backend reaches its engine"
+        why = _api_why(e)
+        if why is not None:
+            return "down", why
         h = self.svc.health.view(bid)
         w = self._warm.get((bid, mv["model"]))
         if h["state"] == "up" and w is not None:
@@ -284,6 +290,7 @@ class Deployments:
         for m in rec["members"]:
             mv = self._member(ctx, m, rec)
             mv["state"], mv["text"] = self._state(mv, rec)
+            mv["api_why"] = _api_why(mv["_e"])
             out.append(mv)
         if rec["type"] == "replicas":
             self._identity(out)
@@ -408,10 +415,13 @@ class Deployments:
                              "ctx": r["context_length"], "loaded": True}, r)
                            for m, r in sorted(rows.items())]
                 e = n["agent"].get(getattr(p, "via", None))
+                why = _api_why(e)
                 for card, row in got:
                     if row is None or (p.id, row["model"]) in covered:
                         continue
-                    if h["state"] == "up":
+                    if why is not None:
+                        st, txt = "down", why
+                    elif h["state"] == "up":
                         st, txt = ("serving", "serving") if card["loaded"] else \
                             ("starting", "loading the model")
                     elif h["state"] == "down":
@@ -525,6 +535,12 @@ class Deployments:
             cands = first + [m for m in ms if not m["routable"]]
         else:
             cands = ok + [m for m in ms if not m["routable"]]
+        # a member on another engine API major takes no request, not even as a last fallback
+        wrong = [m for m in cands if m.get("api_why")]
+        cands = [m for m in cands if not m.get("api_why")]
+        if wrong and not cands:
+            raise Refused(503, "no_member", f"{rec['name']} has no member that takes requests: "
+                                            f"{wrong[0]['alias']}: {wrong[0]['api_why']}")
         s = self.svc.table.snapshot()
         cands = [m for m in cands if m["backend"] in s["backends"]]
         if not cands:
@@ -1089,6 +1105,12 @@ class Deployments:
             while True:
                 stj, e = src.client.json("GET", f"/node/engines/{m['engine']}", timeout=10.0)
                 j = (e or {}).get("job") or {}
+                why = _api_why(e) if stj == 200 else None
+                if why is not None:
+                    # another engine API major: it will not serve here, so no need to wait; the
+                    # member's status reads the agent's engine view again
+                    src.forget_engines()
+                    raise DeployError(502, "start_failed", why)
                 if stj == 200 and e.get("state") == "up" and j.get("state") != "running":
                     break
                 if j.get("state") == "failed":
@@ -1097,11 +1119,28 @@ class Deployments:
                     raise DeployError(504, "start_timeout", f"{m['engine']} is not up after "
                                                             f"{START_WAIT_S:.0f} s")
                 self.sleep(POLL_S)
+        why = self._agent_api_why(m)
+        if why is not None:
+            m["_n"]["src"].forget_engines()
+            raise DeployError(502, "start_failed", why)
         self._step(job, nid, a, "warm", "its engine answers; warming up with one token")
         self._warm_until(m["backend"], m["model"], WARM_WAIT_S)
         if isinstance(m["_n"]["src"], nodesource.AgentNode):
             m["_n"]["src"].forget_engines()
         self._step(job, nid, a, "serving", "warm: serves")
+
+    @staticmethod
+    def _agent_api_why(m: dict) -> str | None:
+        """The agent's reason, read now, when the member's engine speaks another engine API major;
+        None otherwise, and for a node without an agent."""
+        src = (m.get("_n") or {}).get("src")
+        if not isinstance(src, nodesource.AgentNode) or not m.get("engine"):
+            return None
+        try:
+            st, e = src.client.json("GET", f"/node/engines/{m['engine']}", timeout=10.0)
+        except Exception:                                            # noqa: BLE001
+            return None
+        return _api_why(e) if st == 200 else None
 
     def _check(self, bid: str) -> bool:
         b = self.cfg.backend(bid)
@@ -1307,3 +1346,12 @@ def _job_short(j: dict | None) -> dict | None:
 
 def _last(j: dict) -> str:
     return j["log"][-1]["text"] if j.get("log") else j.get("action") or ""
+
+
+def _api_why(e: dict | None) -> str | None:
+    """An agent's engine view (GET /node/engines/{id}): its reason when the engine speaks another
+    engine API major than this TandemApp (health.api_ok false, proxy/engineapi.py), else None."""
+    h = (e or {}).get("health") if isinstance(e, dict) else None
+    if not isinstance(h, dict) or h.get("api_ok") is not False:
+        return None
+    return h.get("api_why") or "its engine speaks another engine API"

@@ -14,6 +14,10 @@ ENGINES.JSON (`<state dir>/engines.json`), a list under `engines`:
                   "restart": ["bash", "/opt/tandem/bin/tandem", "restart"],
                   "cwd": "/opt/tandem", "start_timeout_s": 1800}]}
 
+HEALTH. `health` is the engine's /health in short. A TandemLLM engine's adds the engine API it
+speaks (`engine_api`, `api_assumed`, `api_ok`, `api_why`; proxy/engineapi.py): one on another
+major is `unhealthy`, whatever its status, and `api_why` names the major this TandemApp needs.
+
 An engine without a `start` command is listed, its health and routes relayed, but never started,
 stopped or restarted here (409 `not_managed`): an engine someone else runs stays theirs. Without
 the file: the install's engine when `--tandem-dir` names one (`run/ops/serve.env`'s PORT, its
@@ -42,6 +46,8 @@ import signal
 import subprocess
 import threading
 import time
+
+from proxy import engineapi
 
 RELAY = ("/health", "/v1/models", "/v1/dashboard/live", "/v1/dashboard/system",
          "/v1/dashboard/logs", "/metrics")
@@ -149,9 +155,13 @@ class Engines:
         if isinstance(doc.get("status_port"), int):
             e.status_port = doc["status_port"]
         w = doc.get("weights") if isinstance(doc.get("weights"), dict) else {}
+        # SRV-747: the engine API it speaks (proxy/engineapi.py); None for another kind of engine
+        api = engineapi.read(doc, e.kind) or {}
         return {"http": st, "status": doc.get("status"), "version": doc.get("version"),
                 "model": doc.get("model"), "mode": doc.get("mode"),
-                "weights": w.get("name"), "uptime_s": doc.get("uptime_s")}
+                "weights": w.get("name"), "uptime_s": doc.get("uptime_s"),
+                "engine_api": api.get("engine_api"), "api_assumed": api.get("assumed"),
+                "api_ok": api.get("ok"), "api_why": api.get("why")}
 
     def view_one(self, e: Engine) -> dict:
         h = self.health(e)
@@ -161,7 +171,7 @@ class Engines:
                 job["action"]]
         elif h is None:
             state = "down"
-        elif h["http"] == 200 and h["status"] in ("ok", "busy"):
+        elif h["http"] == 200 and h["status"] in ("ok", "busy") and h["api_ok"] is not False:
             state = "up"
         else:
             state = "unhealthy"
