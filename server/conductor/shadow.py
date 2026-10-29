@@ -16,12 +16,13 @@ WHEN IT READS (the bandwidth rule: during Qwen's decode only Qwen and the drafte
     every chunk, so a request that arrives waits at most one chunk (measured: tools/shadow_measure.py).
   * Inside a turn only for the narrator (`shadow.narrator: on`): its job reads what is missing of
     the session up to the thought, then asks for the summary, in the narrator's rationed slices
-    (at most 3 % of Qwen's time, server/conductor/narrator.py `Thoughts`).
+    (at most 3 % of Qwen's time, app/tandemapp/conductor/narrator.py `Thoughts`).
 
 WHO ASKS.
   * `ask(key, question, choices)`: a typed decision of the small model over the whole session --
     each choice a letter, one forward, the letters' softmax (the in-context stage's form,
-    server/conductor/incontext.py). The route `POST /v1/shadow/ask` and the conductor's own calls.
+    app/tandemapp/conductor/incontext.py). The route `POST /v1/shadow/ask` and the conductor's own
+    calls.
   * The router's class question in shadow mode (`shadow.router: shadow`): for a turn whose prompt
     has at least `router_min_tokens` tokens, the question the router's in-context stage asks Qwen
     is put to the shadow at the turn's insertion point (the prompt's last `<|im_end|>`), answered
@@ -74,7 +75,7 @@ JOURNAL = "shadow.jsonl"
 # the model is unloaded, which drops the pool; the next use loads it again (~13 s, beside).
 # QWEN38_SHADOW_POOL_SLACK_GIB (engine/settings.py), read at each burst
 def pool_slack_gib() -> float:
-    from tandemapp.knobs import SETTINGS as _S
+    from engine.settings import SETTINGS as _S
     return float(_S.get("SHADOW_POOL_SLACK_GIB") or 2.0)
 JOURNAL_KEEP = 5000
 MODES = ("off", "on")
@@ -831,7 +832,7 @@ class ThoughtSlot:
 
 # ---------------------------------------------------------------------- the server's wiring
 def configured() -> str:
-    from tandemapp.knobs import SETTINGS as _S
+    from engine.settings import SETTINGS as _S
     return (_S.get("SHADOW_MODEL") or "").strip()
 
 
@@ -839,7 +840,7 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
     """The shadow reader for this server, or None when `QWEN38_SHADOW_MODEL` is empty. It shares
     the narrator's slot when both name the same model (one copy of the weights); else it has a
     slot of its own (role `shadow` in the residency planner). Nothing loads here."""
-    from tandemapp.knobs import SETTINGS as _S
+    from engine.settings import SETTINGS as _S
     name = configured()
     if not name:
         return None
@@ -888,7 +889,7 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
 # the shadow's claim when the stored residency document has none (it predates SR1): the 0.8B's
 # weights (1.6 GiB), its workspace, and QWEN38_SHADOW_GB of session states
 def claim_gib() -> float:
-    from tandemapp.knobs import SETTINGS as _S
+    from engine.settings import SETTINGS as _S
     from engine.generative.qwen35 import NAMES
     meta = NAMES.get(configured()) or {}
     return round(float(meta.get("claim_gib") or 2.5) + float(_S.get("SHADOW_GB") or 4.0), 2)
