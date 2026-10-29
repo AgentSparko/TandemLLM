@@ -25,11 +25,11 @@ engine/cache:
 
 server/api:
   - changed-files:
-      - all-globs-to-any-file: ['server/**', '!server/setup/**', '!server/setup_api.py', '!server/{diskcache,cache_peek}.py']
+      - all-globs-to-any-file: ['server/**', '!server/conductor/**', '!server/setup/**', '!server/setup_api.py', '!server/{diskcache,cache_peek}.py']
       - all-globs-to-any-file: ['app/tandemapp/**', '!app/tandemapp/conductor/**']
 server/conductor:
   - changed-files:
-      - any-glob-to-any-file: ['app/tandemapp/conductor/**', 'app/packages/**']
+      - any-glob-to-any-file: ['server/conductor/**', 'app/tandemapp/conductor/**', 'app/packages/**']
 server/proxy:
   - changed-files:
       - any-glob-to-any-file: ['app/proxy/**', 'app/plugins/**']
