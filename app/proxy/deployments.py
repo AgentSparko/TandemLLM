@@ -11,7 +11,7 @@ the gateway's route of a request to the node that serves it.
     deps.locate(backend id, upstream model)      (node id, alias, deployment) for the ledger row
     deps.handle(method, parts, q, body, who, now)   /v1/fleet/deployments[/...]
 
-ROUTES (docs/contract/fleet-v1):
+ROUTES (contracts/fleet-v1):
 
     GET    /v1/fleet/deployments                       every deployment with its members' states
     POST   /v1/fleet/deployments                       a record: {model, type, members, pack?, name?,

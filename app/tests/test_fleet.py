@@ -1,6 +1,6 @@
 """SRV-724: TandemApp's controller, the fleet registry and `/v1/fleet/*` (SRV-723).
 
-Every answer is held to docs/contract/fleet-v1 with tools/contract_check.py, the schemas the
+Every answer is held to contracts/fleet-v1 with tools/contract_check.py, the schemas the
 dashboard's mock is held to. The machine is a fake: a directory standing for /etc, /proc and /sys,
 a host collector's entry, and a TandemLLM engine on a loopback port with its live snapshot, model
 list, system snapshot and log. Time is injected; nothing sleeps.

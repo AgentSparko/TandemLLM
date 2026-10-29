@@ -4,7 +4,7 @@
     fleet.start() / fleet.stop()                 the sampler: every node's figures every 2 s
     fleet.handle(method, path, query, body, who) -> (status, JSON body)
 
-The contract is docs/contract/fleet-v1 (its schemas, and the rules they cannot express); the
+The contract is contracts/fleet-v1 (its schemas, and the rules they cannot express); the
 dashboard's mock (dashboard/mock/fleet.ts) answers the same routes the same way. The browser talks
 to tandem-app only: every figure of a node is read here, server-side, and the routes keep the
 dashboard's guard (proxy/app.py: reads the dashboard rule, writes `conductor_write`).

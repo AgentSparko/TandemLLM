@@ -7,8 +7,8 @@ measure, and it says null for the rest:
                    reasoning or a tool-call delta). The network and the backend's own queue are
                    inside it. Null for an answer that was not streamed.
     decode_tps     (usage.completion_tokens - 1) / (last token frame - first token frame), the
-                   engine's formula (server/usage.py). Without `usage` it is null: a frame is not a
-                   token, and a frame count is never written as a token count.
+                   engine's formula (tandemapp/usage.py). Without `usage` it is null: a frame is
+                   not a token, and a frame count is never written as a token count.
     queue_ms       the proxy's own queue: 0 (a full backend answers 503, it does not hold)
     prompt_ms, prefill_tps, blocks, draft_tokens, draft_accepted, cache_source
                    null: they come off an engine's loop, and the proxy has none

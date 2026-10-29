@@ -11,7 +11,7 @@ The Gherkin of SRV-119 is the matrix:
   * a role test answers with the latency and the answer, or why it failed;
   * a corrupt current file keeps the last good version and says so in the status.
 Plus: a note is required, two editors cannot overwrite each other (base_version), the diff names
-the changed leaves, and docs/contract/conductor-v1 holds exactly these schemas.
+the changed leaves, and contracts/conductor-v1 holds exactly these schemas.
 
 Run: python tests/test_conductor_config.py
 """
@@ -256,7 +256,7 @@ def test_the_packaged_policy_copy_is_the_policy_file():
 
 
 def test_the_contract_files_are_these_schemas():
-    """docs/contract/conductor-v1/<kind>.config.schema.json equals schema.SCHEMAS[kind]
+    """contracts/conductor-v1/<kind>.config.schema.json equals schema.SCHEMAS[kind]
     (tools/conductor_contract.py --write regenerates them)."""
     for kind, sch in schema.SCHEMAS.items():
         path = os.path.join(CONTRACT, f"{kind}.config.schema.json")

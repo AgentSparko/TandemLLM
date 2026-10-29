@@ -780,7 +780,7 @@ INFO_LABELS = ("version", "model", "drafter", "width", "tree", "nvfp4", "fp8_hea
 
 # --------------------------------------------------------------------------- contract 0.2.0
 #
-# Every per-request number below comes from `server/usage.py::RequestRecord` at the end of the
+# Every per-request number below comes from `tandemapp/usage.py::RequestRecord` at the end of the
 # request (`on_record`), not from a hook in the decode loop. Buckets are this engine's numbers: a
 # queue that times out at 240 s, a prefill of ~0.4 s at 256 tokens and minutes at 256k, decode
 # rates of 30-70 tok/s on new text and 100+ on a quotation.
@@ -1034,7 +1034,7 @@ def on_record(rec) -> None:
         request_queue_seconds.observe(rec.queue_ms / 1e3)
     if rec.prompt_ms is not None:
         request_prefill_seconds.observe(rec.prompt_ms / 1e3)
-    replay = rec.cache_source in ("response", "prepared")      # server/usage.py REPLAY
+    replay = rec.cache_source in ("response", "prepared")      # tandemapp/usage.py REPLAY
     if not replay and rec.finish_reason != "error":
         if rec.decode_tps is not None:
             request_decode_tps.observe(rec.decode_tps)

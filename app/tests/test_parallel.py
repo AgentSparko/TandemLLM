@@ -151,7 +151,7 @@ def test_verified_lanes_rates_series_cost_and_window():
     # the series: each second's tokens per backend (the last full second: 50 + 20)
     assert doc["series"][-1]["by"]["ds"] == 70.0
     assert contract_check.check(doc, "parallel") == []
-    if os.environ.get("WRITE_EXAMPLE") == "1":          # docs/contract/dashboard-v1's example
+    if os.environ.get("WRITE_EXAMPLE") == "1":          # contracts/dashboard-v1's example
         with open(EXAMPLE, "w") as f:
             json.dump(doc, f, indent=2)
             f.write("\n")

@@ -1,6 +1,6 @@
 """SRV-730: the fleet store, the event log and the alert rules on TandemApp's controller (SRV-729).
 
-Every answer is held to docs/contract/fleet-v1 (tools/contract_check.py). The machine and its
+Every answer is held to contracts/fleet-v1 (tools/contract_check.py). The machine and its
 engine are test_fleet.py's fakes; time is injected and nothing sleeps.
 
   1  the tiers: 5m from 2 s slots, 1h/6h/24h from 30 s, 7d from 30 s for its newest 26 h and from

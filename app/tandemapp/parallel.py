@@ -37,7 +37,7 @@ THE HOT PATH. Per token the relay already did `frames += 1`; it now also writes 
 lock: a few integer reads per request) and when a viewer asks, at most every `BUILD_S` whatever
 the number of viewers; a poll with `since` gets the series' new samples only.
 
-Definitions (also docs/contract/dashboard-v1/parallel.schema.json):
+Definitions (also contracts/dashboard-v1/parallel.schema.json):
 
     lane.state          queued, prefilling (engine), waiting (relayed: sent, no token yet),
                         thinking, tool_call, writing, finishing, done

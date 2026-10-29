@@ -23,7 +23,7 @@ Seven kinds of document, every one versioned by `server/conductor/store.py`:
 The schemas are the JSON Schema 2020-12 subset `validate` below understands (and `ajv` in the
 dashboard's contract test): `type`, `properties`, `required`, `additionalProperties` (false or a
 schema), `items`, `enum`, `const`, `minimum`, `maximum`, `minLength`, `maxLength`, `maxItems`,
-`pattern`. `tools/conductor_contract.py --write` puts them in `docs/contract/conductor-v1/`, and a
+`pattern`. `tools/conductor_contract.py --write` puts them in `contracts/conductor-v1/`, and a
 test holds the files to these dicts. Standard library only, like the rest of the server.
 
 `check(kind, doc, ...)` is the schema plus the rules a schema cannot say: a policy names classes

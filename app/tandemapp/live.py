@@ -23,7 +23,7 @@ for the end. The prefill's reused / forwarded split comes from `STATE["last_pref
 this request's the instant its first token exists, since the engine serves one request at a time
 and the record absorbs it only at the end.
 
-Definitions (also in docs/contract/dashboard-v1, live.schema.json):
+Definitions (also in contracts/dashboard-v1, live.schema.json):
 
     phase             queued until the engine lock, prefill until the first token, decode until the
                       end, then done (a refusal or a 400 is done too, with its status); a request the

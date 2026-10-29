@@ -3,7 +3,7 @@
 Prometheus on this cluster keeps 15 days and stores series, not requests; a year of "what did I
 spend" needs its own store. This is it: stdlib `sqlite3`, one file, WAL, one writer thread.
 
-WHAT A ROW IS. `server/usage.py::RequestRecord.row()` -- counts, timings, the finish reason, the
+WHAT A ROW IS. `tandemapp/usage.py::RequestRecord.row()` -- counts, timings, the finish reason, the
 cache source, a client id. Never the prompt, the answer, a tool name or argument, a conversation
 id, the `user` field, an IP address or a raw token. (The conductor's journal shares the file and
 not this rule: its two tables hold the texts the conductor itself hid from the client, and are

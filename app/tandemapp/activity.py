@@ -20,7 +20,7 @@ see two moments (fine for a display), and a read that raises -- a list emptied b
 `[-1]` -- gives null for that field on that tick. Nothing here imports torch, calls CUDA or takes
 a lock.
 
-Definitions (also in docs/contract/dashboard-v1, live.schema.json):
+Definitions (also in contracts/dashboard-v1, live.schema.json):
 
     state            queued, waiting_memory, prefilling, replaying, thinking, closing_reasoning,
                      writing, tool_call, finishing, done
@@ -53,7 +53,7 @@ import select
 import socket
 import time
 
-#: answered from memory, nothing decoded (server/usage.py REPLAY; kept here, this module imports
+#: answered from memory, nothing decoded (tandemapp/usage.py REPLAY; kept here, this module imports
 #: nothing of the server's)
 REPLAY = ("response", "prepared")
 

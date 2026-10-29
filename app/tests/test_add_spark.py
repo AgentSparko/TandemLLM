@@ -2,7 +2,7 @@
 over SSH, the tunnel to a rented node and the lease reminder; the 5.1 follow-ups (the route of
 /pair/ssh, the controller's own node advertised as owned, mDNS off container bridges).
 
-Every answer is held to docs/contract/fleet-v1. The boxes are fakes: an `ssh` that runs each
+Every answer is held to contracts/fleet-v1. The boxes are fakes: an `ssh` that runs each
 command in a temporary HOME on this machine (after checking the host key and the password, the key
 or the key file, as OpenSSH would), a `python3` whose venv gets a `pip` that unpacks the wheel the
 controller built (so the TandemNode that runs is the wheel's own code), and a `systemctl` that

@@ -3,7 +3,7 @@ its machine's permissions, how it runs as a service, and the fleet's configurati
 
     a = AppSettings(fleet)                              fleet.app()
     GET  /v1/fleet/app                                  permissions, service (proxy/app.py adds the
-                                                        admin password's state, docs/contract
+                                                        admin password's state, contracts/
                                                         fleet-v1 app.schema.json)
     POST /v1/fleet/app/permissions/local-network        one short mDNS browse: the state after it
     GET  /v1/fleet/app/export                           the fleet's configuration, secrets left out
