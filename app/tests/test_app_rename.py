@@ -62,7 +62,9 @@ def _hits() -> list[tuple[str, int, str]]:
                 (line.split(":", 2) for line in out.stdout.splitlines())]
     hits = []                         # a copy without .git (the fresh-install tests' release)
     for d, subs, names in os.walk(ROOT):
-        subs[:] = [s for s in subs if s not in (".git", "node_modules", "__pycache__")]
+        # git grep skips the ignored build output (build/, dist/, *.egg-info) of pip install ./app
+        subs[:] = [s for s in subs if s not in (".git", "node_modules", "__pycache__")
+                   and not s.endswith(".egg-info") and not (d == ROOT and s in ("build", "dist"))]
         for name in names:
             path = os.path.join(d, name)
             try:
