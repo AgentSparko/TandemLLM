@@ -4,12 +4,15 @@ engine-only screens of `/v1/conductor/*`.
 TandemApp's conductor (app/tandemapp/conductor/routes.py) answers every `/v1/conductor/*` route; the
 ones that read or load the engine's own models and memory it hands to the handlers in `ROUTES`,
 which server/app.py puts in its state under `routes.ENGINE_ROUTES`. tandem-app has none of them
-and answers those screens 404 (the deciders' and the shadow reader's `status` say off).
+and answers those screens 404 (the deciders' and the shadow reader's `status` say off). The same
+state names the speed-guard report this release tree ships (`SHIPPED_GUARD`, under
+`routes.SHIPPED_GUARD_KEY`), which the Compare screen lists; tandem-app lists none.
 
     start_narrator(state, gate)       the narrator for this server, or None (QWEN38_NARRATOR_MODEL)
     ROUTES["residency_plan"](cond)    GET /v1/conductor/residency/plan
     ROUTES["disk"](cond, method, rest)            GET /v1/conductor/memory/disk, POST .../clear
     ROUTES["deciders"](cond, method, rest, body)  /v1/conductor/deciders/*
+    SHIPPED_GUARD                     <repo>/release/speed-guard.json (VIS-68)
 
 The engine imports TandemApp's conductor here until ENG-413 (headless engine) moves the conductor
 out of the engine's process (app/contracts/engine-api-v1/README.md).
@@ -17,8 +20,14 @@ out of the engine's process (app/contracts/engine-api-v1/README.md).
 
 from __future__ import annotations
 
+import os
+
 from engine.settings import SETTINGS as _S
 from tandemapp.conductor.routes import ApiError
+
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+#: VIS-68: the speed-guard report a release tree ships (tools/speed_guard.py ship)
+SHIPPED_GUARD = os.path.join(_REPO, "release", "speed-guard.json")
 
 
 def start_narrator(state: dict, gate, *, fake: bool = False, log=print):

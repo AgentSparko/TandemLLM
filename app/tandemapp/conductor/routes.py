@@ -113,14 +113,14 @@ from tandemapp.conductor import decisions as dec_mod
 from tandemapp.conductor import schema, store as store_mod
 from tandemapp.conductor.store import ConfigError
 
-#: VIS-68: the speed-guard report a release tree ships (tools/speed_guard.py ship)
-SHIPPED_GUARD = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                             "release", "speed-guard.json")
-
 CONTRACT = "1.0"
 #: SRV-747: the state key under which an engine that runs this conductor in its own process hands
 #: over its engine-only screens (server/conductor/inproc.py ROUTES); absent in tandem-app
 ENGINE_ROUTES = "conductor_engine_routes"
+#: VIS-68, SRV-747: the state key under which such an engine names the speed-guard report its
+#: release tree ships (server/conductor/inproc.py SHIPPED_GUARD); absent in tandem-app, which lists
+#: no shipped report
+SHIPPED_GUARD_KEY = "conductor_shipped_guard"
 ENGINE_ONLY = "an engine screen: this server runs no TandemLLM engine in its process"
 # the engine's own words when it serves no such model (server/decider_api.py, server/conductor/shadow.py)
 DECIDERS_OFF_WHY = ("this engine serves no decision model: QWEN38_DECIDER_MODELS is empty (set it in "
@@ -209,7 +209,7 @@ def handle(handler, cond, method: str, body: dict | None, auth) -> None:
 
 def eval_errors(rep) -> list[str]:
     """What a suite report (tools/tandem_eval.py, OPS-43) lacks for the Compare screen; [] when
-    it can be kept. The full schema is docs/contract/dashboard-v1/tandem-eval.schema.json."""
+    it can be kept. The full schema is contracts/dashboard-v1/tandem-eval.schema.json."""
     if not isinstance(rep, dict):
         return ["send {report: {...}}"]
     errs = []
@@ -425,15 +425,18 @@ def _route(handler, cond, method, parts, q, body, auth):
                 continue
         # VIS-68: a release tree ships its own speed-guard report (release/speed-guard.json, written in
         # the fold by tools/speed_guard.py ship), so a release's build line reads its result out of
-        # the box; a report of the box's own for the same build comes first
-        try:
-            with open(SHIPPED_GUARD) as fh:
-                rep = json.load(fh)
-            if isinstance(rep, dict) and rep.get("kind") == "speed_guard":
-                rep["file"], rep["shipped"] = "release/speed-guard.json", True
-                reports.append(rep)
-        except (OSError, ValueError):
-            pass
+        # the box; a report of the box's own for the same build comes first. The engine names the
+        # file (SHIPPED_GUARD_KEY); tandem-app has none
+        shipped = cond.state.get(SHIPPED_GUARD_KEY)
+        if shipped:
+            try:
+                with open(shipped) as fh:
+                    rep = json.load(fh)
+                if isinstance(rep, dict) and rep.get("kind") == "speed_guard":
+                    rep["file"], rep["shipped"] = "release/speed-guard.json", True
+                    reports.append(rep)
+            except (OSError, ValueError):
+                pass
         # a report another one supersedes says so, also when its own file was never marked
         # (the kept files are not rewritten)
         names = {r["file"]: r for r in reports}

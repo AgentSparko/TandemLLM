@@ -229,8 +229,10 @@ class EngineLock:
 
 
 STATE: dict = SlotState()
-# SRV-747: the conductor's engine-only screens, which TandemApp's routes hand to the engine
+# SRV-747: the conductor's engine-only screens, which TandemApp's routes hand to the engine, and
+# the speed-guard report this release tree ships (VIS-68), which its Compare screen lists
 STATE[conductor_routes.ENGINE_ROUTES] = conductor_inproc.ROUTES
+STATE[conductor_routes.SHIPPED_GUARD_KEY] = conductor_inproc.SHIPPED_GUARD
 # the routers' prices for this weight set (engine/prices.py); empty = the code's constants
 PRICES: dict = {}
 LOCK = EngineLock()

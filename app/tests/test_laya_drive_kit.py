@@ -1,4 +1,4 @@
-"""X1 (2026-10-03): the playtest kit, `server/laya_kit/` (`laya_drive.py`, `laya-drive.js`).
+"""X1 (2026-10-03): the playtest kit, `tandemapp/laya_kit/` (`laya_drive.py`, `laya-drive.js`).
 
 Laya plays the software under test: each step the kit reads the program's state, asks Laya which
 action comes next, applies it as input and logs it; `report` turns the log into the text Qwen
@@ -48,7 +48,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-KIT = os.path.join(ROOT, "server", "laya_kit")
+KIT = os.path.join(ROOT, "tandemapp", "laya_kit")
 sys.path.insert(0, KIT)
 
 import laya_drive as ld  # noqa: E402

@@ -4,12 +4,13 @@
         | python tools/contract_check.py summary
     python tools/contract_check.py usage response.json
 
-The schemas are `docs/contract/dashboard-v1/<name>.schema.json`, the single source of truth the
-dashboard's mocks and this server are both held to. The validator is the subset of JSON Schema
-those files use -- `type` (one or a list, `integer` excluding booleans), `properties`, `required`,
-`additionalProperties: false`, `items`, `enum`, `const`, and `$ref` within a file or to a sibling
-file -- in the standard library, because the box has no pip. Exit 1 and one line per violation,
-with its JSON path, when the document does not validate.
+The schemas are `contracts/dashboard-v1/<name>.schema.json` in TandemApp's tree
+(`app/contracts/dashboard-v1/` for a copy of this file in the repository root's tools/), the
+single source of truth the dashboard's mocks and this server are both held to. The validator is
+the subset of JSON Schema those files use -- `type` (one or a list, `integer` excluding booleans),
+`properties`, `required`, `additionalProperties: false`, `items`, `enum`, `const`, and `$ref`
+within a file or to a sibling file -- in the standard library, because the box has no pip. Exit 1
+and one line per violation, with its JSON path, when the document does not validate.
 """
 
 from __future__ import annotations
@@ -18,8 +19,12 @@ import json
 import os
 import sys
 
-ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    "docs", "contract", "dashboard-v1")
+_TOP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#: <tree>/contracts/dashboard-v1 (TandemApp's own tree), else <tree>/app/contracts/dashboard-v1 (a
+#: copy of this file in the repository root's tools/)
+ROOT = next((p for p in (os.path.join(_TOP, "contracts", "dashboard-v1"),
+                         os.path.join(_TOP, "app", "contracts", "dashboard-v1")) if os.path.isdir(p)),
+            os.path.join(_TOP, "contracts", "dashboard-v1"))
 
 _TYPES = {
     "object": lambda v: isinstance(v, dict),

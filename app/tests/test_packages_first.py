@@ -109,7 +109,7 @@ def test_the_router_lists_them():
     assert p["explainer-video"]["requires_tools"] == ["render_video"] and \
         p["explainer-video"]["fallback"] == "explainer-video-script"
     assert p["tandem-core"]["general"] and p["tandem-core"]["requires_tools"] == []
-    with open(os.path.join(ROOT, "docs", "contract", "conductor-v1", "packages.config.schema.json")) as f:
+    with open(os.path.join(ROOT, "contracts", "conductor-v1", "packages.config.schema.json")) as f:
         enum = json.load(f)["properties"]["packages"]["additionalProperties"]["properties"][
             "requires_tools"]["items"]["enum"]
     assert enum == ["shell", "write", "render", "render_video"], enum

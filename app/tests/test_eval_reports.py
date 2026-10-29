@@ -4,8 +4,9 @@
      server answered its --publish with a 422 ("report.night: YYYY-MM-DD")
   2  a report another one supersedes is listed with `superseded_by`, also when its own file was
      never marked (kept files are not rewritten); a marked one keeps its own words
-  3  VIS-68: a release tree's shipped speed-guard report (release/speed-guard.json) is listed
-     beside the box's own, marked `shipped`; a broken or foreign file is left out
+  3  VIS-68: a release tree's shipped speed-guard report (release/speed-guard.json, the file the
+     engine names in its state) is listed beside the box's own, marked `shipped`; a broken or
+     foreign file is left out, and a state without the name (tandem-app) lists none
 
 Run: python tests/test_eval_reports.py
 """
@@ -38,9 +39,11 @@ def test_a_night_may_carry_a_suffix():
         assert errs and "report.night" in errs[0], night
 
 
-def _get(root):
-    cond = types.SimpleNamespace(store=None, root=root, state={"version": "0.3.8-test",
-                                                               "code_sha": "abc"})
+def _get(root, shipped=None):
+    state = {"version": "0.3.8-test", "code_sha": "abc"}
+    if shipped is not None:
+        state[routes.SHIPPED_GUARD_KEY] = shipped           # what the engine hands over
+    cond = types.SimpleNamespace(store=None, root=root, state=state)
     st, body, _ = routes._route(None, cond, "GET", ["evals"], {}, {}, None)
     assert st == 200
     return {r["file"]: r for r in body["reports"]}
@@ -80,21 +83,19 @@ def test_a_superseded_report_says_so():
 def test_a_shipped_speed_guard_report_is_listed():
     root = tempfile.mkdtemp(prefix="evals-")
     os.makedirs(os.path.join(root, "evals"))
-    real = routes.SHIPPED_GUARD
-    try:
-        routes.SHIPPED_GUARD = os.path.join(root, "speed-guard.json")
-        assert "release/speed-guard.json" not in _get(root)            # none shipped
-        with open(routes.SHIPPED_GUARD, "w") as f:
-            json.dump({"kind": "speed_guard", "build": {"version": "0.4.0", "code_sha": "abc"},
-                       "verdict": "no_noise_estimate"}, f)
-        got = _get(root)["release/speed-guard.json"]
-        assert got["shipped"] is True and got["build"]["version"] == "0.4.0"
-        for bad in ("{not json", json.dumps({"kind": "suite"})):
-            with open(routes.SHIPPED_GUARD, "w") as f:
-                f.write(bad)
-            assert "release/speed-guard.json" not in _get(root)
-    finally:
-        routes.SHIPPED_GUARD = real
+    guard = os.path.join(root, "speed-guard.json")
+    assert "release/speed-guard.json" not in _get(root, guard)     # none shipped
+    with open(guard, "w") as f:
+        json.dump({"kind": "speed_guard", "build": {"version": "0.4.0", "code_sha": "abc"},
+                   "verdict": "no_noise_estimate"}, f)
+    got = _get(root, guard)["release/speed-guard.json"]
+    assert got["shipped"] is True and got["build"]["version"] == "0.4.0"
+    # tandem-app: its state names no shipped report, so it lists none
+    assert "release/speed-guard.json" not in _get(root)
+    for bad in ("{not json", json.dumps({"kind": "suite"})):
+        with open(guard, "w") as f:
+            f.write(bad)
+        assert "release/speed-guard.json" not in _get(root, guard)
 
 
 if __name__ == "__main__":

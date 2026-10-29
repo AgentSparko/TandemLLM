@@ -71,7 +71,7 @@ from tools import contract_check  # noqa: E402
 
 ME = os.path.abspath(__file__)
 FAKE = os.path.join(ROOT, "tests", "fake_backend.py")
-DASH = os.path.join(ROOT, "docs", "contract", "dashboard-v1")
+DASH = os.path.join(ROOT, "contracts", "dashboard-v1")
 
 
 def dash_ok(obj, name):

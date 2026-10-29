@@ -33,7 +33,7 @@ from tandemapp.conductor.hook import Conductor  # noqa: E402
 from tandemapp.conductor.store import ConfigError, Store, diff  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONTRACT = os.path.join(ROOT, "docs", "contract", "conductor-v1")
+CONTRACT = os.path.join(ROOT, "contracts", "conductor-v1")
 
 
 def _store(**kw) -> Store:

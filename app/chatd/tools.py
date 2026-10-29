@@ -569,8 +569,8 @@ def quote_lines(ctx, errors: list[str], port: int | None, cwd: str) -> list[str]
 
 
 def kit_ok(ctx) -> bool:
-    """The laya kit in the chat's files (chatd/verify.py `vendor_kit`); False without the source
-    tree (an installed package): render_page then shoots with Chromium's own flags."""
+    """The laya kit in the chat's files (chatd/verify.py `vendor_kit`); False when the kit's
+    files cannot be read: render_page then shoots with Chromium's own flags."""
     from chatd import verify
     return verify.vendor_kit(ctx.ws)
 

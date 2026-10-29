@@ -440,7 +440,7 @@ def test_track_counts_every_token_and_nothing_else():
     assert rec.n_live == rec.completion_tokens
     # the registry never touches the record from the token path: only register/finish take the lock
     src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                            "server", "usage.py")).read()
+                            "tandemapp", "usage.py")).read()
     body = src.split("def track(self, source):")[1].split("def lock_acquired")[0]
     code = body.split('"""')[-1]                # after the docstring
     assert "acquire" not in code and "with " not in code and ".append" not in code, code
@@ -457,8 +457,8 @@ def test_the_example_validates_and_the_snapshot_is_json():
                            "tokens_per_block": None, "last_prefill_ms_ago": None,
                            "prefill_live_tps": None, "prefill_live_count": 0,
                            "decode_live_tps": None, "decode_warming": 0}
-    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs",
-                        "contract", "dashboard-v1")
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "contracts", "dashboard-v1")
     with open(os.path.join(root, "live.example.json")) as f:
         errs = contract_check.check(json.load(f), "live")
     assert not errs, errs[:8]
@@ -736,8 +736,8 @@ def test_the_hz_setting():
 
 def test_every_one_point_zero_field_is_still_there():
     """A 1.0 client reads a 1.1 snapshot: every 1.0 field present, same meaning."""
-    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs",
-                        "contract", "dashboard-v1")
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "contracts", "dashboard-v1")
     schema = json.load(open(os.path.join(root, "live.schema.json")))
     c = Clock()
     reg = _reg(c)

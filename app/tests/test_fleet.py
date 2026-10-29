@@ -59,7 +59,7 @@ from proxy import fleet as fleet_mod  # noqa: E402
 from proxy import nodesource  # noqa: E402
 from tools import contract_check  # noqa: E402
 
-CONTRACT = os.path.join(ROOT, "docs", "contract", "fleet-v1")
+CONTRACT = os.path.join(ROOT, "contracts", "fleet-v1")
 ADMIN = "fleet-admin-token-0123456789abcdef0123"
 SERIAL = "TEST-SERIAL-0001"
 HOSTNAME = socket.gethostname().split(".")[0]

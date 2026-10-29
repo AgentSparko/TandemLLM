@@ -20,7 +20,8 @@ for every run, a prompt (inline, or the part of a prompt file after `PROMPT STAR
 read from the checker's `RESULT:` lines in the session's tool results, an optional final check
 the harness runs itself (on the last stage's shot for the image suites, `final_shot`), which has
 the last word on its gates, the files that must stay pristine, and a time limit. The `client_smoke`
-suite runs tools/client_smoke.py on each arm (the protocol set).
+suite runs the engine's tools/client_smoke.py on each arm (the protocol set): `--smoke-script PATH`
+names it, and without one each run of that suite fails saying so.
 
 Isolation and honesty, from the August lessons:
 
@@ -71,7 +72,7 @@ before the first resumed run. `<out>/<night>/night.json` keeps the build the nig
 every resume (when, kept, left, run again); a resume on another build marks the report's build
 `changed_during_night`, and the report's `resumed` lists the resumes.
 
-Output: `<out>/<night>/report.json` (schema docs/contract/dashboard-v1/tandem-eval.schema.json),
+Output: `<out>/<night>/report.json` (schema contracts/dashboard-v1/tandem-eval.schema.json),
 `report.md` (the table for the Memo note), `runs/<tag>.json`; `--publish` keeps the report on the
 box for the Compare screen (`POST /v1/conductor/evals`, the admin token from `--admin-token-env`).
 Standard library only; it runs on the machine where opencode and the suites live.
@@ -104,7 +105,7 @@ sys.path.insert(0, ROOT)
 from tandemapp.conductor import signals  # noqa: E402
 
 SUITES = os.path.join(ROOT, "bench", "tandem-eval", "suites.json")
-SCHEMA = os.path.join(ROOT, "docs", "contract", "dashboard-v1", "tandem-eval.schema.json")
+SCHEMA = os.path.join(ROOT, "contracts", "dashboard-v1", "tandem-eval.schema.json")
 ARMS = ("raw", "tandem")
 INDICATIVE_N = 10
 CONTRACT = "1.0"
@@ -1294,10 +1295,17 @@ class Night:
                 "pristine": {"ok": not changed, "changed": changed, "restored": restored}}
 
     def _smoke(self, s: dict, item: dict, t0: float) -> dict:
+        # the protocol set is the engine's own script (TandemApp's tree has none): named here
+        script = os.path.expanduser(getattr(self.a, "smoke_script", "") or "")
+        if not script:
+            raise RuntimeError(f"suite {s['id']} runs the engine's tools/client_smoke.py: name it "
+                               f"with --smoke-script PATH")
+        if not os.path.isfile(script):
+            raise RuntimeError(f"--smoke-script {script}: no such file")
         out = os.path.join(self.work, item["tag"] + ".json")
         os.makedirs(self.work, exist_ok=True)
-        argv = [*self.a.smoke_python, os.path.join(ROOT, "tools", "client_smoke.py"),
-                "--base", self.a.base, "--json", out, *(s.get("args") or [])]
+        argv = [*self.a.smoke_python, script, "--base", self.a.base, "--json", out,
+                *(s.get("args") or [])]
         if item["arm"] == "raw":
             argv += ["--x-tandem", "raw"]
         env = dict(self.env, QSE_API_KEY=self.env.get("TANDEM_EVAL_KEY", ""))
@@ -1414,9 +1422,12 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default="~/pub-results/tandem-eval")
     ap.add_argument("--night", default="")
     ap.add_argument("--opencode", default=shutil.which("opencode") or "opencode")
+    ap.add_argument("--smoke-script", default="",
+                    help="the engine's tools/client_smoke.py (a TandemLLM checkout's), which a "
+                         "client_smoke suite runs on each arm; without it such a suite fails")
     ap.add_argument("--smoke-python", default=sys.executable,
-                    help="the interpreter for tools/client_smoke.py (needs openai and "
-                         "jsonschema), e.g. 'uv run --with openai --with jsonschema python'")
+                    help="the interpreter for --smoke-script (needs openai and jsonschema), "
+                         "e.g. 'uv run --with openai --with jsonschema python'")
     ap.add_argument("--key-env", default="TANDEM_EVAL_KEY")
     ap.add_argument("--admin-token-env", default="QSE_ADMIN_TOKEN")
     ap.add_argument("--raw-row", default="", help="the raw never-worse row (JSON) for the build")

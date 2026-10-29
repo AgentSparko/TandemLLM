@@ -183,8 +183,8 @@ def virtual_id(machine_id: str, virtual: str | None) -> str:
 
 
 def _code_sha() -> str | None:
-    if not os.path.isdir(os.path.join(ROOT, ".git")):
-        return None
+    """The commit of the checkout this code runs from, None outside one. git finds the work tree
+    from ROOT upwards: app/ in the repository, a linked worktree whose .git is a file."""
     try:
         r = subprocess.run(["git", "-C", ROOT, "rev-parse", "HEAD"], capture_output=True,
                            text=True, timeout=5)

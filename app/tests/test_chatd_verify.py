@@ -454,6 +454,15 @@ def test_a_library_text_that_downloads_the_kit_gets_it_in_the_sandbox():
     assert V.kit_note("# web-layout\n\nno kit here", ws) == ""
 
 
+def test_the_kit_files_are_in_tandemapp_laya_kit():
+    """SRV-747: the kit vendor_kit copies is TandemApp's own (tandemapp/laya_kit, which the
+    package carries too), and every file it copies is there."""
+    app = os.path.dirname(os.path.dirname(os.path.abspath(V.__file__)))
+    assert V.KIT_DIR == os.path.join(app, "tandemapp", "laya_kit"), V.KIT_DIR
+    missing = [n for n in V.KIT_FILES if not os.path.isfile(os.path.join(V.KIT_DIR, n))]
+    assert V.KIT_FILES and not missing, missing
+
+
 def test_the_kit_reads_a_screenshot_in_numbers():
     """laya_drive.py `look_of`: the PNG decoder handles every row filter Chrome writes."""
     import sys

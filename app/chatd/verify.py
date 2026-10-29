@@ -22,13 +22,13 @@ and with none running that is the finding. A page that runs only from its dev se
 starts it. Changed files with no page and no dev server (a script,
 a library) are not checked.
 
-THE CHECK. The laya kit's page check (server/laya_kit/laya_drive.py `page`, the check the
+THE CHECK. The laya kit's page check (tandemapp/laya_kit/laya_drive.py `page`, the check the
 laya-playtest and testing packages name for one screen) in the chat's sandbox: headless Chromium at
 1280 and 390 px; console errors, failed loads, the visible text, the controls, the page's state
 hook, horizontal overflow and the screenshot's look in numbers. chatd copies the kit into the
-chat's files (`.tandem/`, from the source tree), and so for a library text that downloads it
-(`kit_note`): the sandbox cannot reach TandemLLM's address. Without the source tree (an installed
-package) render_page does the check.
+chat's files (`.tandem/`, from tandemapp/laya_kit, which the package carries too), and so for a
+library text that downloads it (`kit_note`): the sandbox cannot reach TandemLLM's address. When
+the kit's files cannot be read, render_page does the check.
 
 THE ROUND. The check is a tool call of the harness's own (`render_page`, `harness: verify`) in the
 answer's step; its result goes to the model in the next step, with the 1280 px screenshot when the
@@ -62,7 +62,7 @@ WEB_EXTS = (".html", ".htm", ".js", ".mjs", ".jsx", ".ts", ".tsx", ".css", ".vue
 PAGE_EXTS = (".html", ".htm")
 WIDTHS = (1280, 390)
 CHECK_TIMEOUT_S = 90
-KIT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "server",
+KIT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tandemapp",
                        "laya_kit")
 KIT_FILES = ("laya_drive.py", "laya-drive.js")
 KIT_IN_BOX = ".tandem/laya_drive.py"
@@ -70,9 +70,9 @@ PLAYTEST = "laya-playtest"
 
 
 def vendor_kit(ws) -> bool:
-    """The laya kit into the chat's files (/workspace/.tandem/), from the source tree: the
-    sandbox cannot reach TandemLLM's address to download it (live 2026-10-16, the laya-playtest
-    package's curl failed). False without the source tree (an installed package)."""
+    """The laya kit into the chat's files (/workspace/.tandem/), from KIT_DIR: the sandbox
+    cannot reach TandemLLM's address to download it (live 2026-10-16, the laya-playtest
+    package's curl failed). False when the kit's files cannot be read."""
     try:
         for name in KIT_FILES:
             with open(os.path.join(KIT_DIR, name), "rb") as fh:

@@ -22,7 +22,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-sys.path.insert(0, os.path.join(ROOT, "server", "laya_kit"))
+sys.path.insert(0, os.path.join(ROOT, "tandemapp", "laya_kit"))
 
 import laya_drive as ld  # noqa: E402
 

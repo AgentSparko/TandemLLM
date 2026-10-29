@@ -27,7 +27,7 @@ from tandemapp import parallel as par  # noqa: E402
 from tandemapp.usage import RequestRecord  # noqa: E402
 from tools import contract_check  # noqa: E402
 
-EXAMPLE = os.path.join(ROOT, "docs", "contract", "dashboard-v1", "parallel.example.json")
+EXAMPLE = os.path.join(ROOT, "contracts", "dashboard-v1", "parallel.example.json")
 
 
 class Clock:
