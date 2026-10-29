@@ -17,7 +17,7 @@
 # agent's state live in the temp dir. The real node's claim and trust store
 # (~/.tandemllm/node/fleet.json and trust/*, under the home in the password database, as
 # tests/realnode.py reads it) are hashed before the pip steps and again at the exit, compared here
-# and never printed: a change fails the check.
+# and never printed: a change fails the check, and so does a file there that cannot be read.
 set -u
 cd "$(dirname "$0")/.."
 REPO=$PWD
@@ -50,26 +50,34 @@ halt() {                          # a process this check started: TERM, then KIL
 stop() { halt "$SRV"; halt "$FAKE"; halt "$NODE"; SRV=""; FAKE=""; NODE=""; }
 
 # {path: sha256} of the real node's fleet.json and trust/*; `same` compares it with the JSON on
-# stdin and prints the changed names and the count, never a hash
+# stdin and prints the changed names and the count, never a hash. A missing file or dir is
+# absent; one that exists but cannot be read ends `snap` and `same` alike with its name (exit 1),
+# so it is never left out of the comparison
 REALNODE_PY='
 import hashlib, json, os, pwd, sys
 home = pwd.getpwuid(os.getuid()).pw_dir
 node = os.path.join(home, ".tandemllm", "node")
+def short(p):
+    return "~" + p[len(home):] if p.startswith(home + os.sep) else p
 def state():
     out = {}
     for root in sorted({node, os.path.realpath(node)}):
         names = [os.path.join(root, "fleet.json")]
+        trust = os.path.join(root, "trust")
         try:
-            trust = os.path.join(root, "trust")
             names += [os.path.join(trust, n) for n in sorted(os.listdir(trust))]
-        except OSError:
+        except (FileNotFoundError, NotADirectoryError):
             pass
+        except OSError as exc:
+            sys.exit(f"unreadable {short(trust)}: {exc.strerror or exc}")
         for p in names:
             try:
                 with open(p, "rb") as f:
                     out[p] = hashlib.sha256(f.read()).hexdigest()
-            except OSError:
+            except (FileNotFoundError, NotADirectoryError):
                 pass
+            except OSError as exc:
+                sys.exit(f"unreadable {short(p)}: {exc.strerror or exc}")
     return out
 if sys.argv[1] == "snap":
     json.dump(state(), sys.stdout)
@@ -77,7 +85,7 @@ if sys.argv[1] == "snap":
 was, now = json.load(sys.stdin), state()
 bad = sorted(p for p in set(was) | set(now) if was.get(p) != now.get(p))
 for p in bad:
-    print("changed", "~" + p[len(home):] if p.startswith(home + os.sep) else p)
+    print("changed", short(p))
 print(f"{len(now)} files")
 sys.exit(1 if bad else 0)
 '
@@ -91,7 +99,7 @@ real_check() {                    # once, after what this check started has stop
       | tee -a "$OUT/summary.txt"
     return 0
   fi
-  cat "$T/real.txt" >>"$OUT/summary.txt"
+  tee -a "$OUT/summary.txt" <"$T/real.txt"
   echo "FAIL the real TandemNode state changed" | tee -a "$OUT/summary.txt"
   return 1
 }
@@ -103,7 +111,9 @@ finish() {
   exit "$rc"
 }
 trap finish EXIT
-REAL=$(realnode snap) || { REAL=""; fail "reading the real TandemNode state"; }
+REAL=$(realnode snap 2>"$T/real.txt") \
+  || { REAL=""; tee -a "$OUT/summary.txt" <"$T/real.txt"; \
+       fail "reading the real TandemNode state"; }
 
 # the source as git would ship it (no node_modules, no results), so the wheel sees what CI sees
 mkdir -p "$T/src"

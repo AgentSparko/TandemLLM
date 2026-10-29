@@ -15,6 +15,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import tomllib
@@ -306,6 +307,101 @@ def test_package_check_keeps_off_the_real_node():
     assert first(r'^T=\$\(mktemp -d "\$\{TMPDIR:-/tmp\}/tandem-pkg-XXXXXX"\)') < snap
     assert code[-1][1].startswith('echo "PASS all') and \
         code[-2][1] == "real_check || exit 1", "the real node is compared before PASS all"
+
+
+def _realnode_py() -> str:
+    """REALNODE_PY of tools/package_check.sh: the lines between `REALNODE_PY='` and `'`."""
+    with open(os.path.join(ROOT, "tools", "package_check.sh")) as f:
+        m = re.search(r"^REALNODE_PY='\n(.*?)^'$", f.read(), re.S | re.M)
+    assert m, "package_check.sh has no REALNODE_PY"
+    return m.group(1)
+
+
+# REALNODE_PY with the password database's home swapped for argv[1]; the code is argv[2]
+_REALNODE_IN = ("import pwd, sys\n"
+                "home = sys.argv.pop(1)\n"
+                "pwd.getpwuid = lambda uid: type('pw', (), {'pw_dir': home})\n"
+                "exec(compile(sys.argv.pop(1), 'REALNODE_PY', 'exec'), {'__name__': '__main__'})\n")
+
+
+def test_package_check_compares_the_real_node_fail_closed():
+    """package_check.sh's REALNODE_PY on a scratch home: no node at all and an unchanged claim and
+    trust store pass; a rewritten, removed or added file fails and is named, never its hash; a
+    file or dir there that cannot be read fails `snap` or `same` with its name, so an unreadable
+    store is never left out of the comparison."""
+    code = _realnode_py()
+
+    def realnode(home, mode, snap=""):
+        r = subprocess.run([sys.executable, "-I", "-c", _REALNODE_IN, home, code, mode],
+                           input=snap, capture_output=True, text=True, timeout=60)
+        assert not re.search(r"\b[0-9a-f]{64}\b", r.stderr) and \
+            (mode == "snap" or not re.search(r"\b[0-9a-f]{64}\b", r.stdout)), "a hash printed"
+        return r.returncode, r.stdout, r.stderr
+
+    def write(node, rel, body):
+        with open(os.path.join(node, rel), "w") as f:
+            f.write(body)
+
+    d = os.path.realpath(tempfile.mkdtemp(prefix="pkg-realnode-"))
+    locked: list[str] = []
+
+    def lock(p):
+        locked.append(p)
+        os.chmod(p, 0)
+
+    try:
+        os.makedirs(os.path.join(d, "none"))
+        rc, snap, err = realnode(os.path.join(d, "none"), "snap")
+        assert (rc, snap) == (0, "{}"), (rc, snap, err)
+        assert realnode(os.path.join(d, "none"), "same", snap)[:2] == (0, "0 files\n"), "no node"
+
+        def node_at(name):
+            home = os.path.join(d, name)
+            node = os.path.join(home, ".tandemllm", "node")
+            os.makedirs(os.path.join(node, "trust"))
+            write(node, "fleet.json", '{"controller": "a"}')
+            write(node, "trust/node.crt", "crt")
+            write(node, "trust/node.key", "key")
+            return home, node
+
+        cases = {   # the change between snap and same: `same`'s exit and output
+            "unchanged": (lambda n: None, 0, "3 files\n"),
+            "rewritten": (lambda n: write(n, "fleet.json", '{"controller": "b"}'), 1,
+                          "changed ~/.tandemllm/node/fleet.json\n3 files\n"),
+            "removed": (lambda n: os.remove(os.path.join(n, "trust", "node.key")), 1,
+                        "changed ~/.tandemllm/node/trust/node.key\n2 files\n"),
+            "added": (lambda n: write(n, "trust/extra.pem", "x"), 1,
+                      "changed ~/.tandemllm/node/trust/extra.pem\n4 files\n"),
+        }
+        for name, (change, want_rc, want_out) in cases.items():
+            home, node = node_at(name)
+            rc, snap, err = realnode(home, "snap")
+            assert rc == 0 and len(snap) > 3 * 64, (name, rc, err)
+            change(node)
+            assert realnode(home, "same", snap)[:2] == (want_rc, want_out), name
+        if os.geteuid() == 0:
+            return              # root reads a mode-000 file: the unreadable cases need a user
+        # unreadable before: `snap` fails and names it (package_check.sh: FAIL reading ...)
+        for name, rel, named in (("trust000", "trust", "trust"),
+                                 ("fleet000", "fleet.json", "fleet.json"),
+                                 ("node000", "", "trust")):
+            home, node = node_at(name)
+            lock(os.path.join(node, rel) if rel else node)
+            rc, snap, err = realnode(home, "snap")
+            assert rc == 1 and snap == "" and \
+                err.startswith(f"unreadable ~/.tandemllm/node/{named}: "), (name, rc, err)
+        # readable at the snapshot, unreadable at the exit: `same` fails and names it
+        home, node = node_at("trust000after")
+        rc, snap, err = realnode(home, "snap")
+        assert rc == 0, err
+        lock(os.path.join(node, "trust"))
+        rc, out, err = realnode(home, "same", snap)
+        assert rc == 1 and out == "" and \
+            err.startswith("unreadable ~/.tandemllm/node/trust: "), (rc, out, err)
+    finally:
+        for p in reversed(locked):
+            os.chmod(p, 0o700)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def _run(argv, env) -> tuple[int, str]:
