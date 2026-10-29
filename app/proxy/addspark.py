@@ -480,6 +480,7 @@ class Wizard:
             raise AddError(400, "bad_request", "the body is {secrets?, targets?}")
         only = (body or {}).get("targets")
         version = s["fleet_version"]
+        ref = self.package().engine_ref_or_none()      # the engine release Install puts there
         for t in s["targets"]:
             if only and t["id"] not in only:
                 continue
@@ -494,7 +495,8 @@ class Wizard:
                     self._save(s)
                     raise
                 continue
-            rows = preflight.checks(facts, version, self.clock(), install=t["state"] == "bare")
+            rows = preflight.checks(facts, version, self.clock(), install=t["state"] == "bare",
+                                    engine_ref=ref)
             t["preflight"] = {"at": round(self.clock(), 3), "via": via, "rows": rows,
                               "verdict": preflight.verdict(rows, t["state"] == "paired"),
                               "error": None}

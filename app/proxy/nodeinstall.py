@@ -19,7 +19,8 @@ hash in `<config dir>/packages/`.
 THE STEPS, each one SSH login with the credentials the wizard holds for this install (the password
 in memory only, proxy/addspark.py), each line it prints kept in the log:
 
-    check     the box again (proxy/preflight.py SCRIPT): another TandemLLM there refuses the install
+    check     the box again (proxy/preflight.py SCRIPT): another TandemNode release there refuses
+              the install
     upload    the wheel to <prefix>/pkg, its sha256 checked there
     agent     python3 -m venv <prefix>/venv and pip install the wheel; the version it reports must
               be the fleet's
@@ -429,9 +430,9 @@ class Install:
         f = preflight.parse(out)
         if not f:
             self._fail("check", "ssh_failed", "the box did not run the check")
-        have = (f.get("tandemllm") or "").strip()
+        have = (f.get("tandemllm") or "").strip()                # TandemNode's release there
         if have and not same_version(have, self.version):
-            self._fail("check", "version_mismatch", f"{self.t['host']} has TandemLLM {have}; the "
+            self._fail("check", "version_mismatch", f"{self.t['host']} has TandemNode {have}; the "
                                                     f"fleet runs {self.version}: update it there "
                                                     f"first. Install refuses another version")
         rows = preflight.checks(f, self.version, self.clock())
@@ -439,7 +440,7 @@ class Install:
         if bad:
             self._fail("check", "preflight_failed", "; ".join(f"{r['label']}: {r['value']}"
                                                               for r in bad))
-        return f"{f.get('dgx') or f.get('os') or 'Linux'} · TandemLLM " + \
+        return f"{f.get('dgx') or f.get('os') or 'Linux'} · TandemNode " + \
             (have or "not installed")
 
     def _upload(self) -> str:

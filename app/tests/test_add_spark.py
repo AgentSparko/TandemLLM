@@ -22,8 +22,8 @@ Addresses are 192.0.2.x and 198.51.100.x; every name is invented.
      the node                                                            test_rented_through_tunnel
   5  Gherkin "Resume": closed at Install, reopened (a new controller process): the Install step
      with its progress; a controller stopped mid-install says so      test_resume_at_install
-  6  version mismatch: another TandemLLM is a red row with its fix and Install refuses it;
-     every red row names its fix                              test_version_mismatch_and_fixes
+  6  version mismatch: another TandemNode release is a red row with its fix and Install refuses
+     it; every red row names its fix                          test_version_mismatch_and_fixes
   7  Link only with two or more new LAN nodes; skipped with why otherwise; configure 501
                                                                          test_link_needs_two
   8  the guard: the session reads and writes as discovery, connect/check/install as pairing
@@ -44,6 +44,10 @@ Addresses are 192.0.2.x and 198.51.100.x; every name is invented.
      whose VERSION says 0.16.0 runs it on the box with --ref v0.16.0; TANDEM_ENGINE_REF
      overrides that; without an installer the step fails and names the variable; a ref that is no
      tag name is refused before any login          test_the_engine_step_takes_the_installer_and_ref
+ 15  the version row reads TandemNode only (SRV-747): the preflight script in a real shell, HOME a
+     box with ~/TandemLLM/src/VERSION 0.14.2 and no TandemNode, says nothing installed; a TandemNode
+     in the install prefix is read; a red row's fix names TandemNode, the fleet's version and the
+     engine ref                                               test_preflight_reads_tandemnode_only
 
     python tests/test_add_spark.py
 """
@@ -672,7 +676,7 @@ def test_resume_at_install():
 
 def test_version_mismatch_and_fixes():
     now = time.time()
-    # another TandemLLM on the box: a red row naming the fix, Install refuses
+    # another TandemNode release on the box: a red row naming the fix, Install refuses
     rows = preflight.checks(dict(FACTS, tandemllm="0.14.2", now=str(int(now))), "0.15.0", now)
     tv = next(r for r in rows if r["id"] == "tandemllm")
     assert tv["state"] == "fail" and "0.14.2" in tv["value"] and "0.15.0" in tv["fix"]
@@ -1050,6 +1054,45 @@ def test_the_engine_step_takes_the_installer_and_ref():
             assert exc.kind == "no_installer" and gone in exc.message, exc.message
     finally:
         _version.release = real
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_preflight_reads_tandemnode_only():
+    d = tempfile.mkdtemp(prefix="add-pf-")
+    try:
+        os.makedirs(os.path.join(d, "TandemLLM", "src"))
+        with open(os.path.join(d, "TandemLLM", "src", "VERSION"), "w") as f:
+            f.write("0.14.2\n")                   # an engine checkout, as install.sh lays one out
+        path = os.pathsep.join(p for p in os.environ["PATH"].split(os.pathsep)
+                               if p and not os.path.exists(os.path.join(p, "tandem-node")))
+        env = {"HOME": d, "PATH": path, "LANG": "C"}
+        r = subprocess.run(["sh", "-c", preflight.SCRIPT], capture_output=True, text=True,
+                           timeout=60, env=env)
+        f = preflight.parse(r.stdout)
+        assert f.get("home") == d and f["tandemllm"] == "", (f, r.stderr[-500:])
+        tv = next(x for x in preflight.checks(f, "0.15.0", time.time()) if x["id"] == "tandemllm")
+        assert tv["label"] == "TandemNode" and tv["state"] == "ok" and \
+            tv["value"] == "not installed · Install puts 0.15.0", tv
+        # a TandemNode in the install prefix's venv is what the row reads
+        venv = os.path.join(d, "prefix", "venv", "bin")
+        os.makedirs(venv)
+        with open(os.path.join(venv, "python"), "w") as fh:
+            fh.write("#!/bin/sh\necho 0.14.2\n")
+        os.chmod(os.path.join(venv, "python"), 0o755)
+        r = subprocess.run(["sh", "-c", preflight.SCRIPT], capture_output=True, text=True,
+                           timeout=60, env=dict(env, TANDEM_PF_PREFIX=os.path.join(d, "prefix")))
+        f = preflight.parse(r.stdout)
+        assert f["tandemllm"] == "0.14.2", f
+        rows = preflight.checks(f, "0.15.0", time.time(), engine_ref="v0.16.0")
+        tv = next(x for x in rows if x["id"] == "tandemllm")
+        assert tv["state"] == "fail" and tv["value"] == "0.14.2 · the fleet runs 0.15.0", tv
+        assert "update TandemNode on this box to 0.15.0" in tv["fix"] and \
+            "install.sh --ref v0.16.0" in tv["fix"] and "Install refuses 0.14.2" in tv["fix"], tv
+        assert preflight.verdict(rows, False)["install"] == "refused"
+        # without an engine ref the fix names no install.sh ref
+        tv = next(x for x in preflight.checks(f, "0.15.0", time.time()) if x["id"] == "tandemllm")
+        assert "--ref" not in tv["fix"], tv
+    finally:
         shutil.rmtree(d, ignore_errors=True)
 
 

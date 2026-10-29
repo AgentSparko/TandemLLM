@@ -20,10 +20,10 @@ THE CHECKS (concept §6 Check):
     cuda      the CUDA the driver offers               below 13.0 fails: the engine's torch is cu130
     disk      free space in the home directory         < 20 GiB fails, < 100 GiB warns (weights)
     memory    MemTotal                                 < 64 GiB warns
-    tandemllm TandemLLM on the box                     not installed: Install puts the fleet's;
-                                                       the fleet's release: Install is skipped;
-                                                       another release fails: Install refuses it
-                                                       (a local label, +build, is the same release)
+    tandemllm TandemNode on the box (its install       not installed: Install puts the fleet's;
+              prefix's venv, else tandem-node on       the fleet's release: Install is skipped;
+              PATH; an engine checkout's VERSION       another release fails: Install refuses it
+              is not read)                             (a local label, +build, is the same release)
     cx7       ConnectX ports and their link state     none warns (LAN only, no Split)
     sudo      sudo for the Link step                   none warns; asked per action, never stored
     clock     NTP synchronised, and the box's clock    off or > 5 s from the controller's fails
@@ -74,7 +74,6 @@ if [ -z "$v" ] && command -v tandem-node >/dev/null 2>&1; then
   py=$(head -n 1 "$(command -v tandem-node)" | sed 's/^#!//')
   v=$("$py" -c 'from proxy import _version; print(_version.release())' 2>/dev/null)
 fi
-[ -z "$v" ] && [ -r "$HOME/TandemLLM/src/VERSION" ] && v=$(cat "$HOME/TandemLLM/src/VERSION")
 pf tandemllm "$v"
 ports=""
 for dev in /sys/class/infiniband/*; do
@@ -147,9 +146,12 @@ def row(cid: str, label: str, state: str, value: str, fix: str = "") -> dict:
     return {"id": cid, "label": label, "state": state, "value": value, "fix": fix or None}
 
 
-def checks(f: dict, fleet_version: str, now: float, *, install: bool = True) -> list[dict]:
+def checks(f: dict, fleet_version: str, now: float, *, install: bool = True,
+           engine_ref: str | None = None) -> list[dict]:
     """One row per check. `install`: the box would get TandemNode over SSH here (a bare box),
-    so Python and the user's services are checked too."""
+    so Python and the user's services are checked too. `engine_ref`: the engine release Install
+    puts beside TandemNode (proxy/nodeinstall.py Package.engine_ref), named in the version row's
+    fix."""
     out = []
     linux = (f.get("system") or "Linux") == "Linux"
     os_name = f.get("dgx") or f.get("os") or f.get("system") or "unknown"
@@ -207,17 +209,20 @@ def checks(f: dict, fleet_version: str, now: float, *, install: bool = True) -> 
         out.append(row("memory", "Memory", "ok" if mem >= MEM_WARN_GIB else "warn",
                        f"{mem:.1f} GiB", "" if mem >= MEM_WARN_GIB else
                        "Less than a GB10's 128 GB: only small models fit here"))
-    have = (f.get("tandemllm") or "").strip()
+    have = (f.get("tandemllm") or "").strip()            # TandemNode's release there (SCRIPT)
     if not have:
-        out.append(row("tandemllm", "TandemLLM", "ok", f"not installed · Install puts "
+        out.append(row("tandemllm", "TandemNode", "ok", f"not installed · Install puts "
                        f"{fleet_version}"))
     elif same_release(have, fleet_version):
-        out.append(row("tandemllm", "TandemLLM", "ok", f"{have} · the fleet's version"))
+        out.append(row("tandemllm", "TandemNode", "ok", f"{have} · the fleet's version"))
     else:
-        out.append(row("tandemllm", "TandemLLM", "fail", f"{have} · the fleet runs "
+        eng = (f" and the engine's runtime with install.sh --ref {engine_ref}" if engine_ref
+               else "")
+        out.append(row("tandemllm", "TandemNode", "fail", f"{have} · the fleet runs "
                        f"{fleet_version}", f"Every node runs the fleet's version: update "
-                       f"TandemLLM on this box to {fleet_version} (bash install.sh --ref "
-                       f"v{fleet_version}), then check again. Install refuses {have}"))
+                       f"TandemNode on this box to {fleet_version} (or remove it: Install puts "
+                       f"TandemNode {fleet_version}{eng}), then check again. Install refuses "
+                       f"{have}"))
     cx = [p.split(":") for p in (f.get("cx7") or "").split(",") if p]
     if not cx:
         out.append(row("cx7", "ConnectX-7", "warn", "no ConnectX port", "LAN only: no fabric "
