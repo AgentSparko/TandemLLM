@@ -135,13 +135,20 @@ def module_constants(root: str, rel: str) -> dict:
     return out
 
 
+# TandemApp's top-level packages: their files are under app/ until the split, ENG-413
+APP_PACKAGES = ("tandemapp", "proxy", "chatd")
+
+
 def import_map(tree: ast.Module) -> dict:
     """alias -> module file, for `from pkg import mod as alias` lines."""
     out = {}
     for node in tree.body:
         if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            base = node.module.replace(".", "/")
+            if node.module.split(".")[0] in APP_PACKAGES:
+                base = "app/" + base
             for a in node.names:
-                out[a.asname or a.name] = node.module.replace(".", "/") + "/" + a.name + ".py"
+                out[a.asname or a.name] = base + "/" + a.name + ".py"
     return out
 
 
@@ -375,12 +382,12 @@ def gen_server_flags(root: str, knobs: dict) -> str:
 
 
 def gen_proxy_flags(root: str) -> str:
-    rows = argparse_rows(root, "proxy/__main__.py", "parser")
+    rows = argparse_rows(root, "app/proxy/__main__.py", "parser")
     return flags_table(rows, "tandem-app serve and python -m proxy", "tab:ref-proxy-flags")
 
 
 def gen_launch_flags(root: str) -> str:
-    rows = argparse_rows(root, "proxy/launch.py", "parser")
+    rows = argparse_rows(root, "app/proxy/launch.py", "parser")
     for r in rows:
         if r["flag"] == "engine":
             r["flag"] = "ENGINE"
@@ -394,7 +401,7 @@ def gen_launch_flags(root: str) -> str:
 
 
 def gen_hostcollect_flags(root: str) -> str:
-    rows = argparse_rows(root, "proxy/hostcollect.py", None)
+    rows = argparse_rows(root, "app/proxy/hostcollect.py", None)
     return flags_table(rows, "tandem-app hostcollect", "tab:ref-hostcollect-flags",
                        {"--host": "the address to bind; beyond loopback it needs a token",
                         "--port": "the collector's port",
@@ -491,6 +498,14 @@ def gen_serve_env(root: str, knobs: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+# The code the variable tables scan: the engine's and TandemApp's, which keeps its own tree under
+# app/ (proxy/, plugins/ and the parts of server/ and ops/ it took along) until the split, ENG-413
+QSE_DIRS = ("server", "ops", "install.sh", "engine", "app/proxy", "app/tandemapp", "app/ops",
+            "app/packaging")
+TANDEM_DIRS = ("app/proxy", "app/plugins", "server", "app/tandemapp", "ops", "app/ops", "app/packaging",
+               "install.sh")
+
+
 def scan_vars(root: str, prefix: str, dirs: tuple) -> dict:
     """Every PREFIX_NAME the code mentions, with the files that mention it."""
     pat = re.compile(r"\b" + prefix + r"_[A-Z0-9_<>]*[A-Z0-9>]\b")
@@ -516,7 +531,7 @@ def scan_vars(root: str, prefix: str, dirs: tuple) -> dict:
 
 
 def gen_qse_vars(root: str) -> str:
-    found = scan_vars(root, "QSE", ("server", "ops", "install.sh", "engine", "proxy"))
+    found = scan_vars(root, "QSE", QSE_DIRS)
     lines = [HEADER, r"\begin{reftabletwo}{QSE\_* variables: the server's settings from the environment or serve.env}{tab:ref-qse}{\hd{Variable} & \hd{Read in}}"]
     for name in sorted(found):
         files = sorted(found[name])
@@ -528,7 +543,7 @@ def gen_qse_vars(root: str) -> str:
 
 def gen_tandem_vars(root: str) -> str:
     """TANDEM_* variables: the proxy's documented list first, then every other one the code reads."""
-    with open(os.path.join(root, "proxy/config.py"), encoding="utf-8") as fh:
+    with open(os.path.join(root, "app/proxy/config.py"), encoding="utf-8") as fh:
         doc = ast.get_docstring(ast.parse(fh.read())) or ""
     documented = []
     cur = None
@@ -541,7 +556,7 @@ def gen_tandem_vars(root: str) -> str:
             cur[2] = (cur[2] + " " + line.strip()).strip()
         else:
             cur = None
-    found = scan_vars(root, "TANDEM", ("proxy", "plugins", "server", "ops", "install.sh"))
+    found = scan_vars(root, "TANDEM", TANDEM_DIRS)
     seen = {d[0] for d in documented}
     lines = [HEADER, r"\begin{reftable}{TANDEM\_* variables: the proxy, the collector, the plugins and the installer}{tab:ref-tandem}{\hd{Variable} & \hd{Example} & \hd{What it sets}}"]
     for name, example, desc in documented:
@@ -560,7 +575,8 @@ def gen_tandem_vars(root: str) -> str:
 
 def gen_metrics(root: str) -> str:
     rows = []
-    for rel in ("server/metrics.py", "proxy/service.py", "proxy/engines.py", "proxy/hostcollect.py"):
+    for rel in ("app/tandemapp/metrics.py", "app/proxy/service.py", "app/proxy/engines.py",
+                "app/proxy/hostcollect.py"):
         try:
             tree = parse(root, rel)
         except (OSError, SyntaxError):
@@ -653,7 +669,7 @@ LEDGER_NOTES = {
 
 def gen_ledger(root: str) -> str:
     consts = {}
-    tree = parse(root, "server/ledger.py")
+    tree = parse(root, "app/tandemapp/ledger.py")
     for node in tree.body:
         if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
             try:
@@ -759,8 +775,10 @@ ROUTE_NOTES = {".../versions": "a document's versions, one version, and the diff
 
 def gen_routes(root: str) -> str:
     groups = [
-        ("server/conductor/routes.py", "The conductor's routes, \\texttt{/v1/conductor/*}", "tab:ref-conductor-routes"),
-        ("proxy/config_api.py", "The proxy's configuration routes, \\texttt{/v1/config/*}", "tab:ref-config-routes"),
+        ("app/tandemapp/conductor/routes.py", "The conductor's routes, \\texttt{/v1/conductor/*}",
+         "tab:ref-conductor-routes"),
+        ("app/proxy/config_api.py", "The proxy's configuration routes, \\texttt{/v1/config/*}",
+         "tab:ref-config-routes"),
     ]
     out = [HEADER]
     for rel, caption, label in groups:

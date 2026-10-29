@@ -89,7 +89,7 @@ ENGINE_ROUTES = [
     ("GET", "/dashboard/", "open",
      "The dashboard's static files. They hold no data.", "", "the page"),
     ("GET", "/v1/dashboard/summary?from=&to=&tz=&model=&client=&backend=&user=&internal=", "dash",
-     "The Usage view's totals for a range.", "", "summary.schema.json in docs/contract/dashboard-v1"),
+     "The Usage view's totals for a range.", "", "summary.schema.json in app/contracts/dashboard-v1"),
     ("GET", "/v1/dashboard/usage?bucket=hour|day&from=&to=&tz=&model=&client=&backend=&user=&internal=", "dash",
      "Tokens, requests and cost per hour or day.", "", "usage.schema.json"),
     ("GET", "/v1/dashboard/requests?limit=&before=&finish=&model=&client=&backend=&user=&internal=", "dash",
@@ -183,7 +183,7 @@ PROXY_ROUTES = [
     ("POST", "/v1/dashboard/session", "open", "As on the engine.", "{token}", "the session"),
     ("*", "/v1/config/*", "admin", "The Backends and Setup screens (Table tab:ref-config-routes).", "", ""),
     ("GET", "/v1/fleet/*", "dash",
-     "TandemApp's fleet (Section sec:fleet): nodes, links, topology, deployments, per-node metrics, memory, logs, events, alerts, rules and a page's window layout, as docs/contract/fleet-v1 says.",
+     "TandemApp's fleet (Section sec:fleet): nodes, links, topology, deployments, per-node metrics, memory, logs, events, alerts, rules and a page's window layout, as app/contracts/fleet-v1 says.",
      "", "the contract's JSON"),
     ("*", "/v1/fleet/*", "admin",
      "The fleet's writes: PATCH /v1/fleet/nodes/{id} (alias, colour, icon, tags), PUT /v1/fleet/layouts/{page}, POST /v1/fleet/alerts/{id}/ack.",
@@ -308,10 +308,12 @@ ERRORS = [
 HANDLERS = {
     "server/app.py": ("do_GET", "do_POST", "do_PUT", "do_PATCH", "do_DELETE", "do_OPTIONS",
                       "_dashboard_get", "_conductor_write", "_strip_session"),
-    "proxy/app.py": ("do_GET", "do_POST", "do_PUT", "do_PATCH", "do_DELETE", "do_OPTIONS",
-                     "_dashboard_get", "_strip_session"),
+    "app/proxy/app.py": ("do_GET", "do_POST", "do_PUT", "do_PATCH", "do_DELETE", "do_OPTIONS",
+                         "_dashboard_get", "_strip_session"),
 }
-HEADER_DIRS = ("server", "proxy")
+# the engine's server/ and TandemApp's app/proxy and app/tandemapp (which held part of server/ before
+# the move; scanned by path until the split, ENG-413)
+HEADER_DIRS = ("server", "app/proxy", "app/tandemapp")
 _HEADER = re.compile(r"^(?:[Xx]-[A-Za-z0-9-]+|Retry-After|WWW-Authenticate|Set-Cookie|Last-Event-ID"
                      r"|OpenAI-[A-Za-z-]+|Access-Control-[A-Za-z-]+)$")
 # code that is not part of the served API: test doubles, and the kit the model copies into a project
@@ -350,13 +352,13 @@ def handler_paths(root: str) -> dict:
                                     and c.value.startswith("/") and " " not in c.value):
                                 found.add(c.value.rstrip("/") or "/")
         out[rel] = found
-    # the proxy's completion routes are a constant of proxy/service.py
-    tree = _parse(root, "proxy/service.py")
+    # the proxy's completion routes are a constant of app/proxy/service.py
+    tree = _parse(root, "app/proxy/service.py")
     if tree is not None:
         for node in ast.walk(tree):
             if (isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "PROXY_PATHS" for t in node.targets)
                     and isinstance(node.value, ast.Tuple)):
-                out["proxy/app.py"] |= {e.value for e in node.value.elts if isinstance(e, ast.Constant)}
+                out["app/proxy/app.py"] |= {e.value for e in node.value.elts if isinstance(e, ast.Constant)}
     return out
 
 
@@ -442,7 +444,7 @@ ALIASES = {"/healthz": "/health", "/v1/health": "/health", "/dashboard": "/dashb
 def problems(root: str) -> list:
     out = []
     lits = handler_paths(root)
-    for rel, rows in (("server/app.py", ENGINE_ROUTES), ("proxy/app.py", PROXY_ROUTES)):
+    for rel, rows in (("server/app.py", ENGINE_ROUTES), ("app/proxy/app.py", PROXY_ROUTES)):
         docs = [r[1] for r in rows]
         found = lits.get(rel, set())
         for lit in sorted(found):
