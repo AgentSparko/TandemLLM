@@ -1,15 +1,17 @@
 # The release's executable files (git mode 100755), one a line. tandem doctor (server/setup/doctor.py)
 # gives each its execute bit back when a copy or a deploy lost it; tests/test_doctor.py keeps this
 # list equal to git's. The scripts never need the bit themselves: they call each other through bash.
-dashboard/scripts/readme-shots.sh
+app/dashboard/scripts/readme-shots.sh
+app/ops/chatd.sh
+app/ops/sandbox/build.sh
+app/ops/sandbox/install.sh
+app/ops/sandbox/uninstall.sh
+app/tools/proxy_e2e.sh
+app/tools/proxy_engines_check.sh
 install.sh
-ops/chatd.sh
 ops/hold.sh
 ops/make-secrets.sh
 ops/roles.sh
-ops/sandbox/build.sh
-ops/sandbox/install.sh
-ops/sandbox/uninstall.sh
 ops/start.sh
 ops/stop.sh
 ops/use-profile.sh
@@ -26,8 +28,6 @@ tools/exl3/spark_check.sh
 tools/exl3/spend.py
 tools/exl3/summarize.py
 tools/gh_labels.sh
-tools/proxy_e2e.sh
-tools/proxy_engines_check.sh
 tools/release.sh
 tools/release_box_gate.sh
 tools/release_gate_setup.sh
