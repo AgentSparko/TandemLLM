@@ -44,7 +44,8 @@ Addresses are 192.0.2.x and 198.51.100.x; every name is invented.
  14  the engine step (SRV-747): TandemApp 1.0.0 with a stub installer (TANDEM_ENGINE_INSTALL_SH)
      whose VERSION says 0.16.0 runs it on the box with --ref v0.16.0; TANDEM_ENGINE_REF
      overrides that; without an installer the step fails and names the variable; a ref that is no
-     tag name is refused before any login          test_the_engine_step_takes_the_installer_and_ref
+     tag name, and a VERSION that names no release (empty, no digit first, not UTF-8), is refused
+     before any login                              test_the_engine_step_takes_the_installer_and_ref
  15  the version row reads TandemNode only (SRV-747): the preflight script in a real shell, HOME a
      box with ~/TandemLLM/src/VERSION 0.14.2 and no TandemNode, says nothing installed; a TandemNode
      in the install prefix is read; a red row's fix names TandemNode, the fleet's version and the
@@ -1035,15 +1036,30 @@ def test_the_engine_step_takes_the_installer_and_ref():
                     (bad, exc.message)
             assert not login.ran, bad
         assert not os.path.exists(os.path.join(home, "pwned")) and not os.path.exists(seen)
-        # the same for a VERSION beside the installer; without one, TandemApp's own release
-        with open(os.path.join(d, "engine", "VERSION"), "w") as f:
-            f.write("0.16.0 $(id)\n")
-        try:
-            nodeinstall.Package(d, env={"TANDEM_ENGINE_INSTALL_SH": stub}).engine_ref()
-            raise AssertionError("a VERSION that makes no tag was taken")
-        except nodeinstall.InstallError as exc:
-            assert exc.kind == "bad_engine_ref" and "VERSION" in exc.message, exc.message
-        os.remove(os.path.join(d, "engine", "VERSION"))
+        # the same for a VERSION beside the installer that names no release: one that makes no
+        # tag, an empty one (`v` alone is a tag name), a label alone, a tag, bytes that are not
+        # UTF-8; Check's and Install's labels read no ref then. Without one, TandemApp's release
+        vf = os.path.join(d, "engine", "VERSION")
+        for text in (b"0.16.0 $(id)\n", b"", b"\n", b"  \t\n", b"+b1\n", b"v0.16.0\n",
+                     b"\xff\xfe0.16.0\n"):
+            with open(vf, "wb") as f:
+                f.write(text)
+            pkg = nodeinstall.Package(d, env={"TANDEM_ENGINE_INSTALL_SH": stub})
+            try:
+                pkg.engine_ref()
+                raise AssertionError(f"a VERSION that names no release was taken: {text!r}")
+            except nodeinstall.InstallError as exc:
+                assert exc.kind == "bad_engine_ref" and vf in exc.message, (text, exc.message)
+            assert pkg.engine_ref_or_none() is None, text
+            j, login = job({"TANDEM_ENGINE_INSTALL_SH": stub})
+            assert engine_step(j)["label"] == "Install the engine's runtime", (text, engine_step(j))
+            try:
+                j._engine()
+                raise AssertionError(text)
+            except nodeinstall.InstallError as exc:
+                assert exc.kind == "bad_engine_ref", (text, exc.message)
+            assert not login.ran, text
+        os.remove(vf)
         assert nodeinstall.Package(d, env={"TANDEM_ENGINE_INSTALL_SH": stub}).engine_ref() == \
             "v1.0.0"
         # an installer path that cannot be read is an error that names it

@@ -265,7 +265,8 @@ class Package:
         """The engine release install.sh installs (--ref): TANDEM_ENGINE_REF; else `v` and the
         VERSION file beside TANDEM_ENGINE_INSTALL_SH, so that the ref names the installer sent;
         else `v` and this controller's release. A local label (`+build`) is its release's tag.
-        A value that makes no tag name (tag_ok) is an InstallError naming where it came from."""
+        A value that makes no tag name (tag_ok), and a VERSION that names no release (empty, or
+        no digit first), is an InstallError naming where it came from."""
         given = (self.env.get(ENGINE_REF_ENV) or "").strip()
         if given:
             if not tag_ok(given):
@@ -278,7 +279,7 @@ class Package:
         if sh is not None:
             vf = os.path.join(os.path.dirname(os.path.abspath(sh)), "VERSION")
             try:
-                with open(vf) as f:
+                with open(vf, encoding="utf-8", errors="replace") as f:
                     v = f.read().strip()
             except FileNotFoundError:
                 v = None                         # an installer alone: this controller's release
@@ -286,8 +287,9 @@ class Package:
                 raise InstallError("bad_engine_ref", f"{vf}: {exc.strerror or type(exc).__name__}",
                                    500)
             if v is not None:
-                ref = "v" + v.split("+", 1)[0]
-                if not tag_ok(ref):
+                rel = v.split("+", 1)[0]
+                ref = "v" + rel
+                if not rel[:1].isdigit() or not tag_ok(ref):
                     raise InstallError("bad_engine_ref", f"{vf} says {v[:80]!r}: no release name "
                                                          f"for install.sh's --ref", 500)
                 return ref
