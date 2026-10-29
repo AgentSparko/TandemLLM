@@ -49,15 +49,15 @@ Out of scope: `bench/`, the scripts under `tools/` (measurement, quantising, tra
 
 ## Where to test
 
-Every CPU test is a standalone script: `python tests/test_<name>.py`, exit 0 is a pass. They need the Python packages of install.sh's lock, with a CPU build of torch, and no GPU or Docker. `tests/gpu/` needs a DGX Spark, and `app/tests/test_sandbox_box.py` needs Docker with the sandbox image.
+Every CPU test is a standalone script: `python tests/test_<name>.py`, or `python app/tests/test_<name>.py` for TandemApp's, exit 0 is a pass. They need the Python packages of install.sh's lock, with a CPU build of torch, and no GPU or Docker. `tests/gpu/` needs a DGX Spark, and `app/tests/test_sandbox_box.py` needs Docker with the sandbox image.
 
 | area | run it | tests |
 |-|-|-|
 | server, auth, admin rule | `python server/app.py --fake-engine --port 8000 --served-model qwen38-spark-engine --usage-ledger /tmp/l.sqlite3`; set `QSE_ADMIN_TOKEN` to turn the rule on | `test_auth.py`, `test_fake_engine.py`, `test_server_model_card_auth.py` |
-| chat forward and chatd | `python -m chatd --port 8016 --data /tmp/chat`; the key is in `/tmp/chat/forward.key` | `test_chat_forward.py`, `test_chatd.py`, `test_chatd_agent.py` |
-| sandbox and egress without Docker | `FakeBoxes` in `app/tests/chatd_util.py`, `RelayBoxes` in `app/tests/test_chatd_agent.py` | `test_chatd_sandbox_scope.py`, `test_chatd_sandbox_lifecycle.py`, `test_sandbox_relay_fd.py`, `test_chatd_websearch.py` |
-| workspace paths and uploads | chatd as above | `test_chatd_symlinks.py`, `test_chatd_attach.py`, `test_chatd_preview.py` |
-| proxy and relay | `python -m proxy --help`; `app/tests/fake_backend.py` is a backend | `test_proxy_relay.py`, `test_proxy_http1_tls_fd.py`, `test_proxy_model_card_auth.py` |
+| chat forward and chatd | `cd app && python -m chatd --port 8016 --data /tmp/chat`; the key is in `/tmp/chat/forward.key` | `app/tests/test_chat_forward.py`, `app/tests/test_chatd.py`, `app/tests/test_chatd_agent.py` |
+| sandbox and egress without Docker | `FakeBoxes` in `app/tests/chatd_util.py`, `RelayBoxes` in `app/tests/test_chatd_agent.py` | `app/tests/test_chatd_sandbox_scope.py`, `app/tests/test_chatd_sandbox_lifecycle.py`, `app/tests/test_sandbox_relay_fd.py`, `app/tests/test_chatd_websearch.py` |
+| workspace paths and uploads | chatd as above | `app/tests/test_chatd_symlinks.py`, `app/tests/test_chatd_attach.py`, `app/tests/test_chatd_preview.py` |
+| proxy and relay | `cd app && python -m proxy --help`; `app/tests/fake_backend.py` is a backend | `app/tests/test_proxy_relay.py`, `app/tests/test_proxy_http1_tls_fd.py`, `app/tests/test_proxy_model_card_auth.py` |
 | setup API | the fake engine above | `test_setup_api.py`, `test_setup_remove.py`, `test_setup_apply.py` |
 | stage link | no server needed; `tools/linkrelay.py` cuts and stalls a link | `test_link.py`, `test_stages.py`, `test_stage_server.py` |
 | loaders and images | no server needed | `test_nemotron_h_gguf.py`, `test_exl3_standalone.py`, `test_images.py` |
