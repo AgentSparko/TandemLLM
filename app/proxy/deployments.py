@@ -7,6 +7,8 @@ the gateway's route of a request to the node that serves it.
     deps.place(model, body, headers)             the gateway's route of a request (proxy/route.py
                                                  Route with its deployment and the members in
                                                  order), or None for a model no record names
+                                                 (the table's route instead while an engine
+                                                 speaks another engine API major)
     deps.listing(created)                        /v1/models: each deployment once
     deps.locate(backend id, upstream model)      (node id, alias, deployment) for the ledger row
     deps.handle(method, parts, q, body, who, now)   /v1/fleet/deployments[/...]
@@ -46,7 +48,8 @@ on another release, or with other weights, than the first serving member: G15 fr
 what the controller reads; it takes no request), `off` (its node does not answer), `gone` (its node
 left the fleet). Only `serving` takes requests. A member whose engine speaks another engine API
 major (its agent's engine view, proxy/engineapi.py) is `down` with the agent's reason, which names
-the major this TandemApp needs.
+the major this TandemApp needs; the gateway sends such an engine no request, not as a fallback and
+not for a model no record names (a derived Single's or a routing rule's): 503 `no_member`.
 
 THE STATUS of a deployment: `serving` when every member serves, `degraded` when some do, `starting`
 while its start runs or a member starts, `down` when none serves, `stopped` when the record says
@@ -490,19 +493,21 @@ class Deployments:
         return out
 
     def place(self, model, body, headers):
-        """The route of a request for a record's model, or None (the table routes it)."""
+        """The route of a request for a record's model; for any other model the table's route
+        without the engines on another engine API major, or None (the table routes it)."""
         if not isinstance(model, str) or not model:
             return None
         rec = self._by_api().get(model)
         if rec is None:
-            return None
+            return self._table_route(model)
         if rec["type"] == "split":
             raise Refused(501, "not_built", f"{rec['name']} runs Split: the pipeline split "
                                             f"(ENG-307) is not built, so it serves no request yet")
         if rec["state"] == "stopped":
             raise Refused(503, "deployment_stopped", f"{rec['name']} is stopped: start it to "
                                                      f"serve requests")
-        ms = [m for m in self.members(rec, self._context(CTX_TTL_S)) if m["state"] != "leaving"]
+        ctx = self._context(CTX_TTL_S)
+        ms = [m for m in self.members(rec, ctx) if m["state"] != "leaving"]
         if not ms:
             raise Refused(503, "no_member", f"{rec['name']} has no member that takes requests")
         pin = _header(headers, PIN_HEADER)
@@ -551,13 +556,45 @@ class Deployments:
         r = self.svc.table._route(s, m0["backend"], row, model)
         r.model = m0["model"]
         mine = [(m["backend"], m["model"]) for m in cands[1:]]
+        bad = self._wrong_api(ctx)
         r.fallbacks = [] if pin else mine + [fb for fb in r.fallbacks
-                                             if fb not in mine and fb[0] != m0["backend"]]
+                                             if fb not in mine and fb[0] != m0["backend"]
+                                             and fb[0] not in bad]
         r.deployment = rec["id"]
         r.no_replay = constrained(body)
         if key is not None:
             r.on_served = lambda got, did=rec["id"], k=key: self._served(did, k, got)
         return r
+
+    def _table_route(self, model: str):
+        """The table's route for a model no record names, when an engine of the fleet speaks
+        another engine API major: refused when it lands on such an engine (a derived Single's
+        member reads `down` there), such an engine dropped from its fallbacks. None otherwise, and
+        always for a proxy without nodes: a plain proxy's requests never read a machine."""
+        if not self.cfg.nodes():
+            return None
+        bad = self._wrong_api(self._context(CTX_TTL_S))
+        if not bad:
+            return None
+        r = self.svc.table.resolve(model)            # route.NotFound as the table answers it
+        if r.backend in bad:
+            alias, why = bad[r.backend]
+            raise Refused(503, "no_member", f"{model} has no member that takes requests: "
+                                            f"{alias}: {why}")
+        r.fallbacks = [fb for fb in r.fallbacks if fb[0] not in bad]
+        return r
+
+    @staticmethod
+    def _wrong_api(ctx: dict) -> dict:
+        """{backend id: (node alias, reason)} of every engine whose agent says it speaks another
+        engine API major."""
+        out = {}
+        for n in ctx["nodes"].values():
+            for p in n["probes"]:
+                why = _api_why(n["agent"].get(getattr(p, "via", None)))
+                if why is not None:
+                    out[p.id] = (n["row"]["alias"], why)
+        return out
 
     def _sticky_of(self, did: str) -> affinity.Sticky:
         with self._lock:

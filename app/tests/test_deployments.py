@@ -41,7 +41,9 @@ test: tests/owned.py). The engine a box serves on :8000 is never addressed.
      a member that takes no request), the 30 d metrics range       test_fleet_ledger_gateway_pin
  12  the engine API version (SRV-747): a start on an engine that answers engine API 2.0 fails
      within seconds and names 1.x, its member is down with that text and takes no request; an
-     engine on 1.4 and one that does not say (1.0) start and serve   test_engine_api_versions
+     engine on 1.4 and one that does not say (1.0) start and serve; a 2.0 engine already up
+     without a record is a derived Single that is down and takes no request, and a record's
+     start over it fails before any warm-up                         test_engine_api_versions
 
     python tests/test_deployments.py
 """
@@ -669,14 +671,16 @@ def test_start_move_stop():
 
 
 def test_engine_api_versions():
-    ports = {"Old": free_port(), "New": free_port(), "Pre": free_port()}
+    ports = {"Old": free_port(), "New": free_port(), "Pre": free_port(), "Up": free_port()}
     assert 8000 not in ports.values()
     fx = Fleet({"Old": Node("API-2-0001", "o", ["fake-x"], managed_port=ports["Old"],
                             kind="tandemllm", engine_api="2.0"),
                 "New": Node("API-1-0001", "n", ["fake-y"], managed_port=ports["New"],
                             kind="tandemllm", engine_api="1.4"),
                 "Pre": Node("API-0-0001", "p", ["fake-z"], managed_port=ports["Pre"],
-                            kind="tandemllm")})
+                            kind="tandemllm"),
+                "Up": Node("API-2-0002", "u", ["fake-w"], managed_port=ports["Up"],
+                           kind="tandemllm", engine_api="2.0")})
     why = engineapi.read({"engine_api": "2.0"}, "tandemllm")["why"]
     assert why.endswith(" needs 1.x"), why
     try:
@@ -687,8 +691,8 @@ def test_engine_api_versions():
         t0 = time.time()
         st, res = tf.send(fx.px, "POST", "/v1/fleet/deployments/fake-x/actions/start", {})
         assert st == 200 and tf.ok(res, "deployment-job")["state"] == "running", res
-        def ended():
-            d = _dep(fx, "fake-x")
+        def ended(did="fake-x"):
+            d = _dep(fx, did)
             return d if d["job"] and d["job"]["state"] != "running" else None
         d = _until(ended, 30.0, 0.1)
         took = time.time() - t0
@@ -723,6 +727,45 @@ def test_engine_api_versions():
             e = fx.nodes[alias].run.client.json("GET", "/node/engines/e")[1]
             assert e["state"] == "up" and e["health"]["engine_api"] == api, e
             assert e["health"]["api_assumed"] is (api == "1.0"), e
+        # an engine already up on 2.0 that no record names (started through its agent, a backend
+        # made for it): its derived Single is down with the reason and takes no request
+        up = fx.nodes["Up"].run.client
+        st, job = up.json("POST", "/node/engines/e/start")
+        assert st == 202, job
+        def agent_done():
+            x = up.json("GET", "/node/engines/e")[1]
+            return x if (x.get("job") or {}).get("state") not in (None, "running") else None
+        e = _until(agent_done, 30.0, 0.1)
+        assert e and e["job"]["state"] == "done" and e["state"] == "unhealthy", e
+        assert e["health"]["api_why"] == why, e
+        fx.px.svc.cfg.create_backend({"id": "up-e", "kind": "generic",
+                                      "url": f"http://127.0.0.1:{ports['Up']}/v1"})
+        for _, src in fx.f.agents.values():
+            src.forget_engines()
+        def derived():
+            fx.sync()
+            deps = tf.ok(tf.get(fx.px, "/v1/fleet/deployments")[1], "deployments")["deployments"]
+            return next((x for x in deps if x["id"] == "fake-w"), None)
+        d = _until(derived, 20.0, 0.2)
+        assert d and not d["record"] and d["members"] == [fx.ids["Up"]], d
+        m = d["member_states"][0]
+        assert (m["state"], m["text"], m["routable"]) == ("down", why, False), m
+        assert (d["status"], d["status_text"]) == ("down", why), d
+        st, _, raw = fx.chat("fake-w")
+        err = json.loads(raw)["error"]
+        assert st == 503 and err["code"] == "no_member" and why in err["message"], (st, err)
+        assert fx.chat("fake-y")[0] == 200                  # the others still serve
+        # recorded over that engine: the start fails at the agent's answer, before any warm-up
+        fx.record({"model": "fake-w", "type": "single", "members": [fx.ids["Up"]]})
+        st, res = tf.send(fx.px, "POST", "/v1/fleet/deployments/fake-w/actions/start", {})
+        assert st == 200 and tf.ok(res, "deployment-job")["state"] == "running", res
+        d = _until(lambda: ended("fake-w"), 30.0, 0.1)
+        assert d and d["job"]["state"] == "failed", d
+        assert d["job"]["error"]["type"] == "start_failed" and why in d["job"]["error"]["message"], \
+            d["job"]
+        st, j = tf.get(fx.px, f"/v1/fleet/deployments/jobs/{d['job']['id']}")
+        job = tf.ok(j, "deployment-job")["job"]
+        assert [(s["phase"], s["text"]) for s in job["steps"]] == [("failed", why)], job["steps"]
     finally:
         fx.close()
 

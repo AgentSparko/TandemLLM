@@ -18,7 +18,7 @@ These files are the truth for what TandemApp (`app/`: the dashboard, the control
 - `engine_api` (MAJOR.MINOR, `server/engine_api.py` `VERSION`) is in the full `/health` answer, the setup-mode `/health` and the status responder's `/health`. The open answer, which a caller through a proxy gets, stays `{status}`.
 - MINOR is additive: a new route or a new optional field. MAJOR is a removed or renamed route or field, or a changed meaning.
 - An engine without the field speaks 1.0: every engine up to 0.15.x.
-- TandemApp's `proxy/engineapi.py` (`SPEAKS` 1.0) reads it for an engine of kind `tandemllm`. Another major is not ok: "this engine speaks engine API 2.0; TandemApp 0.15.0 needs 1.x". TandemNode's engine view then says `unhealthy` with that text in `health.api_why`; a deployment member on that engine is `down` with it and takes no request; a deployment's start fails at once with it (`start_failed`).
+- TandemApp's `proxy/engineapi.py` (`SPEAKS` 1.0) reads it for an engine of kind `tandemllm`. Another major is not ok: "this engine speaks engine API 2.0; TandemApp 0.15.0 needs 1.x". TandemNode's engine view then says `unhealthy` with that text in `health.api_why`; a deployment member on that engine is `down` with it and takes no request, not as a fallback and not for a model no record names (a derived Single's or a routing rule's: 503 `no_member`); a deployment's start fails at once with it (`start_failed`).
 - Not read here yet: chatd's own engine (SRV-735) and backends the controller reaches directly (SRV-749).
 
 ## Routes
