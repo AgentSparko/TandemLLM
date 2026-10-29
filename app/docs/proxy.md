@@ -36,15 +36,15 @@ Setting the kind and the URL in the environment locks them on the Backends scree
 
 Anyone without a GPU runs the same code as TandemApp, the `tandem-app` command. It needs Python 3.11 or newer, the standard library and `cryptography`, and never pulls torch. From a checkout:
 
-    pip install .                       # or '.[host]': adds psutil and NVML for the System view
+    pip install ./app                   # or './app[host]': adds psutil and NVML for the System view
     tandem-app                          # 127.0.0.1:8080, ~/.tandemllm/config.sqlite3
     open http://127.0.0.1:8080/dashboard/
 
-`python -m proxy` in the checkout does the same without installing anything but `cryptography`. The page opens on Setup while no backend exists. The engine-only panels (caches, speculation, the conductor, memory) say that this server has no engine.
+`python -m proxy` in the checkout's `app/` does the same without installing anything but `cryptography`. The page opens on Setup while no backend exists. The engine-only panels (caches, speculation, the conductor, memory) say that this server has no engine.
 
 From a DeepSeek key to a row in the Usage view takes five commands:
 
-    pip install '.[host]'
+    pip install './app[host]'
     printf 'TANDEM_BACKENDS=deepseek\nTANDEM_BACKEND_DEEPSEEK_KIND=deepseek\nTANDEM_BACKEND_DEEPSEEK_KEY=%s\n' "$DEEPSEEK_API_KEY" > app.env && chmod 600 app.env
     tandem-app check --env-file app.env
     tandem-app serve --env-file app.env &
@@ -54,10 +54,10 @@ Then open `http://127.0.0.1:8080/dashboard/#/usage`.
 
 ### In docker
 
-`ops/Dockerfile.app` builds an image of about 70 MB on `python:3.12-slim`, with the built page inside and no compiler or torch in it:
+`app/packaging/Dockerfile.app` builds an image of about 70 MB on `python:3.12-slim`, with the built page inside and no compiler or torch in it:
 
-    docker build -f ops/Dockerfile.app -t tandemllm-app .
-    cp ops/app.env.example app.env      # fill in; no quotes around values
+    docker build -f app/packaging/Dockerfile.app -t tandemllm-app app
+    cp app/packaging/app.env.example app.env      # fill in; no quotes around values
     docker run -d --name tandem-app -p 127.0.0.1:8080:8080 -v tandem-app:/data \
         --env-file app.env tandemllm-app
 
@@ -129,7 +129,7 @@ The System view shows the machine each backend runs on, down to the process behi
 
 The server's own process is always listed first, as `engine` in the engine's server and `proxy` in the standalone one. The Backends form sets the host per backend; `TANDEM_BACKEND_<ID>_HOST`, `_HOST_URL` and `_HOST_DCGM_URL` set it from the environment and lock it.
 
-The collector reads psutil and NVML when they are installed (`pip install 'tandemllm[host]'`), else `/proc` and `nvidia-smi`, and macOS without psutil gives the machine's total memory and load only. The process behind a port is found by its listening socket: psutil, then `/proc/net/tcp` and the processes' file descriptors, then `lsof` or `ss`. A process that belongs to another user stays unreadable without root, and the view says so. Command lines show the home as `~`, and the collector masks the value after any flag whose name holds `key`, `token`, `secret`, `passw` or `auth`.
+The collector reads psutil and NVML when they are installed (`pip install 'tandemapp[host]'`), else `/proc` and `nvidia-smi`, and macOS without psutil gives the machine's total memory and load only. The process behind a port is found by its listening socket: psutil, then `/proc/net/tcp` and the processes' file descriptors, then `lsof` or `ss`. A process that belongs to another user stays unreadable without root, and the view says so. Command lines show the home as `~`, and the collector masks the value after any flag whose name holds `key`, `token`, `secret`, `passw` or `auth`.
 
 On a GB10 (the DGX Spark) the CPU and the GPU share one memory pool. The driver reports no memory for the GPU itself, so the view shows "unified" there and `MemAvailable` is the figure to watch. The GPU memory of a process is still reported, and it comes out of the same pool as its RSS: the two overlap.
 
@@ -145,7 +145,7 @@ In docker the collector sees the container, not the machine. Run the container w
 
 ## The fleet: `/v1/fleet/*`
 
-TandemApp keeps the registry of the Sparks it manages and answers the fleet API (contract: [`docs/contract/fleet-v1`](contract/fleet-v1/README.md), code: `proxy/fleet.py`, `proxy/nodesource.py`, `proxy/fleetstore.py`, `proxy/fleetwatch.py`). The dashboard reads it for the shell's fleet readout, the scope bar, the charts and the windows; the browser talks to `tandem-app` only.
+TandemApp keeps the registry of the Sparks it manages and answers the fleet API (contract: [`app/contracts/fleet-v1`](../contracts/fleet-v1/README.md), code: `proxy/fleet.py`, `proxy/nodesource.py`, `proxy/fleetstore.py`, `proxy/fleetwatch.py`). The dashboard reads it for the shell's fleet readout, the scope bar, the charts and the windows; the browser talks to `tandem-app` only.
 
 On one box the fleet has one node: the machine `tandem-app` runs on, when it has an NVIDIA GPU or an engine of its own. The first start registers it with its hostname as the alias, the first identity colour and an id from the machine (the DMI serial, else `/etc/machine-id`), never its address. A new address keeps the node and is noted in the log. A machine in front of cloud APIs only is the controller's host and no node. When TandemNode runs on the same machine (below), the controller reads the machine through it, the same path as any other node's; while it does not answer, in-process as before. A node on another machine is read through its TandemNode agent once pairing has given the controller its trust, and is listed `off` until then.
 
@@ -356,7 +356,7 @@ A node and a controller trust each other through pinned certificates; no passwor
 
 ## Add Spark: the wizard
 
-Settings → Add Spark walks Find, Connect, Check, Install, Link, Name and Done (code: `proxy/addspark.py`, `dashboard/src/views/fleet/wizard.ts`; the routes in `docs/contract/fleet-v1`). Its session lives in the config database (`add_sessions`), one active at a time, so a reload, a restart of the controller, or another device opens it at its step. A step with nothing to do is skipped and says why: Install when every device runs the fleet's release already, Link with fewer than two new Sparks on the LAN.
+Settings → Add Spark walks Find, Connect, Check, Install, Link, Name and Done (code: `proxy/addspark.py`, `dashboard/src/views/fleet/wizard.ts`; the routes in `app/contracts/fleet-v1`). Its session lives in the config database (`add_sessions`), one active at a time, so a reload, a restart of the controller, or another device opens it at its step. A step with nothing to do is skipped and says why: Install when every device runs the fleet's release already, Link with fewer than two new Sparks on the LAN.
 
 - **Find** is discovery (above): the live list, the LAN scan after its question, Add by address, and a rented or remote node from its ssh line, with an optional key file, jump host, lease end and cost per hour.
 - **Connect** pairs by the node's code, or over SSH once with the host key shown and confirmed first. A box with nothing installed is `bare` and goes on to Install.
@@ -373,7 +373,7 @@ Settings → Add Spark walks Find, Connect, Check, Install, Link, Name and Done 
 
 ## TandemApp alone: install, the controller's host, the fleet update
 
-**Install.** TandemApp is the controller and its page, without an engine, torch or a GPU (OPS-234). On a Mac, `brew install ./packaging/homebrew/tandemapp.rb` (the formula is in the repository; no tap carries it yet) or, on macOS and Linux alike, `pip install '.[app]'` in a virtual environment (Python 3.11 or newer; the `app` extra adds psutil only). Then:
+**Install.** TandemApp is the controller and its page, without an engine, torch or a GPU (OPS-234). On a Mac, `brew install ./app/packaging/homebrew/tandemapp.rb` (the formula is in the repository; no tap carries it yet) or, on macOS and Linux alike, `pip install './app[app]'` in a virtual environment (Python 3.11 or newer; the `app` extra adds psutil only). Then:
 
     tandem-app service install --open     # launchd (macOS) or a systemd user unit (Linux); opens the page
     tandem-app service status             # installed, running, its pid, whether it answers /health
@@ -434,8 +434,8 @@ Two more facts from the v0.30.0 source matter for later layers. vLLM removed `gu
 
 The `/metrics` page gives totals. A single request's queue time, its prefill time and whether the scheduler preempted it are not on it. Two small packages in `plugins/` run inside the engine and send those numbers per request to the proxy (layer L2). Install one into the engine's own Python environment; neither has a dependency:
 
-    pip install plugins/vllm        # tandemllm-vllm-plugin: vLLM loads it from vllm.stat_logger_plugins
-    pip install plugins/sglang      # tandemllm-sglang-plugin: SGLang loads it from sglang.srt.plugins
+    pip install app/plugins/vllm    # tandemllm-vllm-plugin: vLLM loads it from vllm.stat_logger_plugins
+    pip install app/plugins/sglang  # tandemllm-sglang-plugin: SGLang loads it from sglang.srt.plugins
 
 The engine needs two variables, `TANDEM_COLLECT_URL` (the proxy's `/v1/collect/<backend id>`) and `TANDEM_COLLECT_TOKEN`. The plugin keeps the last 10,000 finished requests and 300 one-second scheduler samples in memory and posts what is new once a second, or an empty batch every 10 s when the engine is idle. `plugins/README.md` lists what each one reads, the versions it was checked against, and what happens when a release does not fit.
 
@@ -482,7 +482,7 @@ A request goes to, in this order: an explicit `<backend>/` prefix, the first ena
 
 A backend or a single model may name fallbacks. On a connect error, a 429, 502 or 503, before any byte reached the client, the proxy tries the next backend at once, or the same one again after 1 s, then 2 s (or its `Retry-After`, up to 30 s). At most 2 tries again in all. After the first byte a failure is an `error` frame and `[DONE]`. The ledger row records the backend that answered, `fallback_from`, `retries` and the upstream status.
 
-The proxy adds no limit of its own to how many requests a backend takes at once: a cloud API, vLLM or SGLang gets as many as clients send, and answers its own 429 or 503 when it is full (that answer goes to a fallback as any 429 or 503 does). A backend's `max_inflight` (a number from 1 to 4,096 on its form, or `TANDEM_BACKEND_<ID>_MAX_INFLIGHT`) is a cap you set yourself: past it a request goes to a fallback with room, else it gets 503 with `Retry-After: 1`. Empty, `null` or `none` is no limit, the default. Until 0.3.44-test every backend got 64 without asking; a stored 64 became none when the config file moved to schema 2. How many requests TandemLLM's own engine decodes at once is the engine's setting, not a backend's: `QSE_PARALLEL` in its serve.env ([parallel-requests.md](parallel-requests.md)), shown on the Backends screen under the engine's name. Timeouts per backend (local: connect 5 s, first byte 600 s, idle gap 120 s; cloud: 10, 120, 60 s) end a request with `finish_reason: timeout` and the kind in `error_type`. A client that leaves closes the upstream connection within a quarter second, so the backend stops generating. The standalone proxy (`python -m proxy`) closes a client's connection that sends nothing for 60 s while it reads a request, or sits idle that long between requests (`--idle-timeout`, `TANDEM_IDLE_TIMEOUT_S`; 0 for none). The timeout ends when the answer starts: a stream, the Chat tab's terminal included, is never cut by it.
+The proxy adds no limit of its own to how many requests a backend takes at once: a cloud API, vLLM or SGLang gets as many as clients send, and answers its own 429 or 503 when it is full (that answer goes to a fallback as any 429 or 503 does). A backend's `max_inflight` (a number from 1 to 4,096 on its form, or `TANDEM_BACKEND_<ID>_MAX_INFLIGHT`) is a cap you set yourself: past it a request goes to a fallback with room, else it gets 503 with `Retry-After: 1`. Empty, `null` or `none` is no limit, the default. Until 0.3.44-test every backend got 64 without asking; a stored 64 became none when the config file moved to schema 2. How many requests TandemLLM's own engine decodes at once is the engine's setting, not a backend's: `QSE_PARALLEL` in its serve.env ([docs/parallel-requests.md](../../docs/parallel-requests.md)), shown on the Backends screen under the engine's name. Timeouts per backend (local: connect 5 s, first byte 600 s, idle gap 120 s; cloud: 10, 120, 60 s) end a request with `finish_reason: timeout` and the kind in `error_type`. A client that leaves closes the upstream connection within a quarter second, so the backend stops generating. The standalone proxy (`python -m proxy`) closes a client's connection that sends nothing for 60 s while it reads a request, or sits idle that long between requests (`--idle-timeout`, `TANDEM_IDLE_TIMEOUT_S`; 0 for none). The timeout ends when the answer starts: a stream, the Chat tab's terminal included, is never cut by it.
 
 ## What the dashboard shows for a relayed request
 
@@ -532,7 +532,7 @@ Under Backends, Users, the admin makes a key per person or tool. The key is show
 
 ## Who may change the configuration
 
-Reading and writing `/v1/config` follow the admin rule ([server.md](server.md#the-admin-rule)). With no admin password (`TANDEM_ADMIN_TOKEN`) set, the default, anyone who reaches the port can change the configuration from the Backends and Setup screens, which ask for no password. With one set, a write needs it as a bearer header or a dashboard session, or comes from the machine itself. The default bind is 127.0.0.1; the page is meant for a trusted network. Never put it on the internet.
+Reading and writing `/v1/config` follow the admin rule ([docs/server.md](../../docs/server.md#the-admin-rule)). With no admin password (`TANDEM_ADMIN_TOKEN`) set, the default, anyone who reaches the port can change the configuration from the Backends and Setup screens, which ask for no password. With one set, a write needs it as a bearer header or a dashboard session, or comes from the machine itself. The default bind is 127.0.0.1; the page is meant for a trusted network. Never put it on the internet.
 
 ## Terms, in short
 

@@ -1,11 +1,11 @@
 # TandemApp: one dashboard, gateway and ledger in front of any OpenAI-compatible engine or cloud API
 # (docs/proxy.md). The controller (`tandem-app`: the gateway, the usage ledger, the fleet and the
 # page, proxy/), the conductor and the dashboard API (tandemapp/), Chat (chatd/) and TandemNode, the
-# agent on each machine of the fleet (`tandem-node`).
+# agent on each machine of the fleet (`tandem-node`). From the repository's root:
 #
-#   pip install .                  `tandem-app` and `tandem-node`; cryptography only
-#   pip install '.[host]'          plus psutil and NVML for the System view's hosts
-#   pip install '.[app]'           TandemApp alone on a Mac or a Linux PC (OPS-234): psutil for the
+#   pip install ./app              `tandem-app` and `tandem-node`; cryptography only
+#   pip install './app[host]'      plus psutil and NVML for the System view's hosts
+#   pip install './app[app]'       TandemApp alone on a Mac or a Linux PC (OPS-234): psutil for the
 #                                  host's figures, no GPU (`tandem-app service install` runs it in
 #                                  the background); the same as `brew install tandemapp`
 #

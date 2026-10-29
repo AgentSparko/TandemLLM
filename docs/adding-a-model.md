@@ -91,7 +91,7 @@ A new model needs its own block drafter. DFlash2 drafters are trained against on
 
 ### The tokenizer and the chat template
 
-The server renders prompts with the model's own chat template and reads the model's own tool-call and reasoning formats. For Qwen3.8 that means the `<think>` block, which the template opens in the prompt, and tool calls in the model's XML form (`server/toolcall.py`). A model with another format needs its own parser behind the same OpenAI output. `tests/fixtures/qwen38_chat_template.jinja` is the fixture the server tests render with.
+The server renders prompts with the model's own chat template and reads the model's own tool-call and reasoning formats. For Qwen3.8 that means the `<think>` block, which the template opens in the prompt, and tool calls in the model's XML form (`app/tandemapp/toolcall.py`). A model with another format needs its own parser behind the same OpenAI output. `tests/fixtures/qwen38_chat_template.jinja` is the fixture the server tests render with.
 
 ### What a family declares
 
@@ -99,12 +99,12 @@ A family's `arch.py` registers its entry; `engine/models/__init__.py` imports ev
 
 | field | what it says | read by |
 |-|-|-|
-| `spec` | `ServeSpec(tool_format, reasoning)`: the form the model writes tool calls in (a name in `server/toolformats/`) and `ReasoningSpec(opens_itself)`, a model that writes its own `<think>` | the request loop, the conductor's checks, the forced-call constraint |
+| `spec` | `ServeSpec(tool_format, reasoning)`: the form the model writes tool calls in (a name in `app/tandemapp/toolformats/`) and `ReasoningSpec(opens_itself)`, a model that writes its own `<think>` | the request loop, the conductor's checks, the forced-call constraint |
 | `shares`, `uses` | the package's files other families build on, and the other packages' files this family builds on | the guards: a manifest or an import across packages must be declared, and a change to a shared file moves exactly its dependents' fingerprints |
 | `hooks` | `EngineHooks(pdl, side_stream)`: launch options the family turns on in the shared kernels, which take them as plain arguments | the family's engine |
 | `default` | the family a server without a checkpoint directory serves (one family is) | the loader |
 
-A family's own knobs go in its package's `knobs.py` (a `KNOBS` table of the same shape as `engine/settings.py`'s), which joins the shared table at import and belongs in the family's manifest. A family's own C++ or CUDA kernel is a source file in its package: a module `engine/models/<family>/<name>.py` that compiles it keeps the sources in `engine/models/<family>/csrc/<name>/` and builds through `engine/native_build.py` ([kernels.md](kernels.md#where-the-source-lives)); the folder counts in the fingerprint with the module. A tool-call form the server does not know yet is a module in `server/toolformats/` behind the `ToolFormat` interface (rewrite to the JSON tier, a stream reader, the diagnosis of a broken block, the reminder's example line, the forced-call constraint); `tests/test_toolformats.py` runs the same contract on every form. A model that is the base of community packs says so in its `model.yaml` (`community_base`), and its package writes their weight profiles and checks their files (`community.py`, named by `community_base.hook`).
+A family's own knobs go in its package's `knobs.py` (a `KNOBS` table of the same shape as `engine/settings.py`'s), which joins the shared table at import and belongs in the family's manifest. A family's own C++ or CUDA kernel is a source file in its package: a module `engine/models/<family>/<name>.py` that compiles it keeps the sources in `engine/models/<family>/csrc/<name>/` and builds through `engine/native_build.py` ([kernels.md](kernels.md#where-the-source-lives)); the folder counts in the fingerprint with the module. A tool-call form the server does not know yet is a module in `app/tandemapp/toolformats/` behind the `ToolFormat` interface (rewrite to the JSON tier, a stream reader, the diagnosis of a broken block, the reminder's example line, the forced-call constraint); `tests/test_toolformats.py` runs the same contract on every form. A model that is the base of community packs says so in its `model.yaml` (`community_base`), and its package writes their weight profiles and checks their files (`community.py`, named by `community_base.hook`).
 
 ### The model layer: architecture registry and per-model state
 

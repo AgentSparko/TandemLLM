@@ -268,9 +268,9 @@ flowchart TB
 | structured outputs | `engine/grammar.py` | [server.md](server.md) |
 | caches | `engine/cache.py`, `engine/disk_cache.py`, `engine/spill.py`, `engine/kvpool.py` | [caches.md](caches.md) |
 | settings registry | `engine/settings.py` | [operations.md](operations.md) |
-| the server | `server/app.py`, `server/stream.py`, `server/toolcall.py` | [server.md](server.md) |
-| live activity, metrics, usage | `server/live.py`, `server/activity.py`, `server/metrics.py`, `server/ledger.py` | [dashboard.md](dashboard.md) |
-| the dashboard | `dashboard/`, `docs/contract/dashboard-v1/` | [dashboard.md](dashboard.md) |
+| the server | `server/app.py`, `server/stream.py`, `app/tandemapp/toolcall.py` | [server.md](server.md) |
+| live activity, metrics, usage | `app/tandemapp/live.py`, `app/tandemapp/activity.py`, `app/tandemapp/metrics.py`, `app/tandemapp/ledger.py` | [dashboard.md](dashboard.md) |
+| the dashboard | `app/dashboard/`, `app/contracts/dashboard-v1/` | [dashboard.md](dashboard.md) |
 | service scripts and gate | `ops/` | [operations.md](operations.md) |
 | measurement tools | `tools/row3.py`, `tools/block_ab.py`, `tools/verify_spec.py`; Flash-Next `tools/fn_*.py` | [measurement.md](measurement.md) |
 

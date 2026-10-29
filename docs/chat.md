@@ -5,7 +5,7 @@ The Chat tab and chatd are in beta.
 The dashboard's Chat tab (`#/chat`) is a chat with history whose runs live on the server: close the
 browser in the middle of an answer, open the chat on a phone, and it shows the answer at the token
 the engine is writing now and keeps streaming. The wire contract is
-`dashboard/src/chat/CONTRACT.md`; this page is how it runs on a box.
+`app/dashboard/src/chat/CONTRACT.md`; this page is how it runs on a box.
 
 ## What runs where
 
@@ -15,12 +15,12 @@ browser  --https-->  engine server :8000  --/v1/chat-app/* (auth checked, byte f
                                                                                            |  POST /v1/chat/completions --> :8000
 ```
 
-- **chatd** (`python -m chatd`, the `chatd/` package): a standard-library Python process. It holds
+- **chatd** (`python -m chatd`, the `app/chatd/` package): a standard-library Python process. It holds
   the stream to the engine, so a run does not end when a browser closes; it writes every change of
   a conversation to an event log with a sequence number, and a device attaches with a snapshot and
   then tails the log from the snapshot's `seq` (SSE, `Last-Event-ID` on a reconnect, `event: reset`
   for a device more than 2,000 events behind).
-- **The forward** (`server/chat_forward.py`): the engine server (and the standalone proxy,
+- **The forward** (`app/tandemapp/chat_forward.py`): the engine server (and the standalone proxy,
   `tandem-app`) passes `/v1/chat-app/*` to chatd after the dashboard's auth check. chatd answers
   only requests that carry the forward key.
 - **The model** is reached as any client reaches it, through `POST /v1/chat/completions` with
@@ -97,9 +97,9 @@ restarts the engine for it. A chatd that cannot start is a warning; the engine s
 `tandem status` has one chatd line. `QSE_CHATD=off` in `run/local.env` keeps the engine's start
 from starting chatd. A box in engine-only mode (`QSE_MODE=engine`, a new install's default, OPS-260)
 starts no chatd either and stops one this checkout started (`ops/chatd.sh stop --this-tree`), and its Chat tab says the chat is off and how to turn it on, without asking a
-chat route; `QSE_MODE=chat` (`install.sh --with-chat`, the Setup Guide's Chat (beta) switch) turns it on. The script behind these commands is `~/TandemLLM/src/ops/chatd.sh` (`bash
-ops/chatd.sh start|stop|restart|status` in a checkout); `start` exits 1 with the log's last lines
-when chatd does not answer `/health`. It runs chatd under the first of: `CHATD_PY`, serve.env's
+chat route; `QSE_MODE=chat` (`install.sh --with-chat`, the Setup Guide's Chat (beta) switch) turns it on. The script behind these commands is `~/TandemLLM/src/app/ops/chatd.sh`
+(`bash app/ops/chatd.sh start|stop|restart|status` in a checkout); `start` exits 1 with the log's
+last lines when chatd does not answer `/health`. It runs chatd under the first of: `CHATD_PY`, serve.env's
 `PY`, the install's venv (`~/TandemLLM/venv`), `./venv`, `$VIRTUAL_ENV`, `python3` (said so, with a
 warning below 3.11); chatd needs only the standard library, and the venv's `cryptography` for the
 MCP servers' stored secrets. chatd and the engine read one secrets file, `QSE_SECRETS`
@@ -108,11 +108,12 @@ there chatd makes `forward.key` in its data folder, which the engine reads too. 
 `QSE_CHAT_URL` (`http://127.0.0.1:8016`), its data `QSE_CHAT_DATA` (`~/.tandemllm/chat`).
 
 Under the `--systemd` unit `systemctl --user stop tandemllm` stops chatd too, and `systemctl
-restart` restarts it (runs end `interrupted`); `tandem restart` keeps runs. `ops/chatd.service` is
-a unit for chatd alone, for the installer's layout; with it set `QSE_CHATD=off`.
+restart` restarts it (runs end `interrupted`); `tandem restart` keeps runs.
+`app/ops/chatd.service` is a unit for chatd alone, for the installer's layout; with it set
+`QSE_CHATD=off`.
 
 The sandbox is optional: without a container runtime the chat answers and uses the file tools;
-`ops/sandbox/install.sh` adds the rest.
+`app/ops/sandbox/install.sh` adds the rest.
 
 ## When the Chat tab says the chat service is not running
 
@@ -139,9 +140,9 @@ permission prompt gives its slot back until the answer comes, and takes one agai
 cloud model takes no slot: its calls run at the provider, not on the box.
 
 **An engine without the forward.** An engine server from an older build (or another engine
-altogether) has no `/v1/chat-app` route. `bash ops/chatd.sh start --front 0.0.0.0:4180` also serves
-the built dashboard on :4180 from chatd's own process, forwarding `/v1/chat-app/*` to chatd and
-everything else to the engine (`chatd/front.py`). The front has no admin password, so it belongs on
+altogether) has no `/v1/chat-app` route. `bash app/ops/chatd.sh start --front 0.0.0.0:4180` also
+serves the built dashboard on :4180 from chatd's own process, forwarding `/v1/chat-app/*` to chatd and
+everything else to the engine (`app/chatd/front.py`). The front has no admin password, so it belongs on
 the trusted network only.
 
 ## Auth
@@ -163,9 +164,9 @@ setup guide's sign-in card. A write with `Sec-Fetch-Site: cross-site` is refused
 ## The sandbox (phase 2)
 
 Each chat's tools run in its own container, `tandem-chat-<id>` from the image `tandem-sandbox:1`
-(build it once: `bash ops/sandbox/build.sh`). chatd speaks the Docker Engine API over a unix socket,
+(build it once: `bash app/ops/sandbox/build.sh`). chatd speaks the Docker Engine API over a unix socket,
 `QSE_SANDBOX_SOCKET` (default `/var/run/docker.sock`); Podman serves the same API, and
-`ops/sandbox/install.sh` (root once) sets up rootless Podman under the user `tandem-sbx` with its
+`app/ops/sandbox/install.sh` (root once) sets up rootless Podman under the user `tandem-sbx` with its
 nftables rules. Every container is locked down whatever the runtime: uid 1000, no capabilities, a
 read-only root, `--network none`, 1 GiB of memory, 4 CPUs, 512 pids, no GPU. Its internet goes
 through chatd's per-chat proxy, which refuses the LAN and this box (`sandbox_network` per chat: on
@@ -214,11 +215,11 @@ Set them in `run/local.env` (chatd reads serve.env and local.env), then `tandem 
 `sandbox_unavailable`, bash, render_page and the terminals are not offered, and the file tools work
 on the chat's workspace folder.
 
-The unit tests (`tests/test_chatd*.py`, `tests/test_chat_forward.py`) never reach a container
-runtime: `tests/chatd_util.py` points `QSE_SANDBOX_SOCKET` at a path that does not exist, and a test
+The unit tests (`tests/test_chatd*.py`, `app/tests/test_chat_forward.py`) never reach a container
+runtime: `app/tests/chatd_util.py` points `QSE_SANDBOX_SOCKET` at a path that does not exist, and a test
 that needs a sandbox installs a fake one. On the Spark, Docker and the sandbox image are there, and
 before this the tests found them: `bash` was offered, the tools' order changed and the capabilities
-said the sandbox was installed. Only `tests/test_sandbox_box.py` (with `QSE_SANDBOX_BOX=1`) uses
+said the sandbox was installed. Only `app/tests/test_sandbox_box.py` (with `QSE_SANDBOX_BOX=1`) uses
 the real runtime.
 
 A deleted chat goes to the trash for 7 days, and its sandbox stops at once. `POST /conversations/{id}/restore` brings the chat back, and its sandbox starts again on its next tool call. When the 7 days end, or on `DELETE /conversations/{id}?forever=1`, chatd removes the container and the chat's folders under `workspaces/`, `homes/`, `egress/` and `snapshots/`. When chatd starts, it removes every container whose chat is gone or in the trash, and logs each one.
@@ -229,7 +230,7 @@ answer.
 
 chatd reads and writes the chat's workspace and the sandbox's home on the host (the file tools, the
 files pane, uploads, snapshots and undo, the Open WebUI runner's files), and the sandbox can change
-both at any moment. So no such access follows a symlink (`chatd/workspace.py`, SEC-1): it walks
+both at any moment. So no such access follows a symlink (`app/chatd/workspace.py`, SEC-1): it walks
 from the folder's root one directory at a time, each opened with O_NOFOLLOW from the one before,
 so a folder swapped for a symlink after a check cannot redirect it; a write goes to a new file
 (O_EXCL) in the verified folder and is renamed over the name; a read takes a regular file only (a
@@ -258,9 +259,9 @@ message and its tokens, or the largest part.
 | `searxng` | `GET <base>/search?format=json` with `categories=general`, `language`, `safesearch`, `time_range` | an instance URL with `json` in `search.formats`; an optional auth header |
 | `off` | the tool is not offered | |
 
-- Egress: `chatd/egress.py` `request()` with a host list. DuckDuckGo reaches `html.duckduckgo.com` on public addresses only. SearXNG reaches the configured host and port only, a private address included. chatd refuses a redirect to another host.
+- Egress: `app/chatd/egress.py` `request()` with a host list. DuckDuckGo reaches `html.duckduckgo.com` on public addresses only. SearXNG reaches the configured host and port only, a private address included. chatd refuses a redirect to another host.
 - Errors are tool results: DuckDuckGo's rate limit or bot check (HTTP 202), SearXNG's 403 (JSON format off), 401, 429 (limiter), a timeout, an unreachable instance, an answer that is not JSON. No results is not an error.
-- Settings (Chat settings, Web search): provider, `searxng_url`, `searxng_auth_header` and its value, `max_results` (1 to 20, default 8), `safe_search` (off, moderate, strict; default moderate), `language` (empty for any, or `de`, `de-DE`), `time_range` (empty, day, week, month, year), `timeout_s` (2 to 30, default 10). chatd seals the auth value with the secrets vault (`proxy/secrets.py`) and never answers it; answers carry `searxng_auth_set`.
+- Settings (Chat settings, Web search): provider, `searxng_url`, `searxng_auth_header` and its value, `max_results` (1 to 20, default 8), `safe_search` (off, moderate, strict; default moderate), `language` (empty for any, or `de`, `de-DE`), `time_range` (empty, day, week, month, year), `timeout_s` (2 to 30, default 10). chatd seals the auth value with the secrets vault (`app/proxy/secrets.py`) and never answers it; answers carry `searxng_auth_set`.
 - A chat's `web_search` setting overrides `provider`, `max_results`, `safe_search`, `language` and `time_range`; `null` follows the global settings.
 - The tool's default policy is always: the user picks the provider in the settings. Set it to ask in the tools list for a prompt per search. The Now line reads `Searching the web for "<query>"`.
 - A new chat gets `web_search` in its tools; an existing chat turns it on in the composer's tools menu.
@@ -304,7 +305,7 @@ A chat setting, `agents`, off by default (VIS-E15). With it on, the main agent t
 - The main agent has read_file (at most 200 lines or 12,000 characters a call), glob, grep, web_search, web_fetch, render_page, present, the library, todo_write, task and the chat's MCP tools; no bash, write_file or edit_file. Each of its results is cut at 12,000 characters, and a repeated read of an unchanged workspace answers with the earlier call's id.
 - A task is `{title, brief, expect}`. The brief has four lines, Goal, Files, Constraints and Check, and no code: a code fence, more than 4 HTML tags, a run of more than 8 lines that look like code, a line of minified code or a "CODE:" block. A brief that breaks this is refused before any worker starts; its length is free. The brief describes the job and the worker writes the code: on 2026-10-17 a main agent wrote a whole clock page in its thinking and sent it in a 7,968-character brief, the worker copied it with a bug it had found, and the main context reached 64,240 tokens. A cap on the brief's length made the main agent cut requirements to pass, so there is none. If a brief still holds code, the worker treats it as a suggestion and fixes the bugs it finds.
 - The worker's message holds the task's number and title, the brief, expect, the todo list and then the user's message that started the run, word for word (an attachment by its name and path), so the brief scopes the job and need not repeat the request.
-- A worker is a full run on a hidden task conversation: a fresh context (the worker's instructions from `packages/system/workers/`, its tools, the brief, the todo list and the user's message), the chat's sandbox, `/workspace`, permission mode and rules, the parent's run slot, at most 40 model calls (`task_max_steps`), its own compaction and the verify phase. Its engine session is `chat-<chat>-task-<n>`; its memory notes are off. One worker at a time, at most 8 a run (`task_max_per_run`).
+- A worker is a full run on a hidden task conversation: a fresh context (the worker's instructions from `app/packages/system/workers/`, its tools, the brief, the todo list and the user's message), the chat's sandbox, `/workspace`, permission mode and rules, the parent's run slot, at most 40 model calls (`task_max_steps`), its own compaction and the verify phase. Its engine session is `chat-<chat>-task-<n>`; its memory notes are off. One worker at a time, at most 8 a run (`task_max_per_run`).
 - The worker ends with a report in a fixed shape. chatd parses it, sends it back once when a field is missing, builds one from the record when it is missing twice, and at the step cap makes one report-only call whose tool calls never run. Below the report chatd adds its own check: the files the snapshot diff says changed, the calls that ran, and the checks the report claims with no call behind them. The main agent reads at most 8,000 characters of it; the whole is in `/workspace/.tandem/tasks/<n>/report.md`.
 - Stop stops both. A message sent while a worker runs reaches the main agent after the report, and the worker as a note on its next tool result. An interrupted worker leaves its parent interrupted; Continue resumes the worker, then the parent, and never runs a cut-off write or command again.
 
@@ -315,7 +316,7 @@ PATCH /v1/chat-app/conversations/{id}/settings           {agents} -> the setting
 PATCH /v1/chat-app/defaults                              {agents} -> the capabilities' defaults
 ```
 
-The events and types are in `dashboard/src/chat/CONTRACT.md`, section "Tasks (VIS-E15)". With Agents off, every request is the one the single loop sends (`tests/chatd_replay.py`).
+The events and types are in `app/dashboard/src/chat/CONTRACT.md`, section "Tasks (VIS-E15)". With Agents off, every request is the one the single loop sends (`app/tests/chatd_replay.py`).
 
 ## Chat tab (beta): known limitations
 

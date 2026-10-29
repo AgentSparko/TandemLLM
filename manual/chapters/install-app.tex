@@ -6,11 +6,11 @@ The dashboard\index{dashboard} also runs without the engine, as TandemApp\index{
 
 \begin{shell}
 git clone https://github.com/0xBakeer/TandemLLM.git && cd TandemLLM
-pip install '.[host]'      # the host extra adds psutil and NVML for the System view
+pip install './app[host]'  # the host extra adds psutil and NVML for the System view
 tandem-app                 # http://127.0.0.1:8080/dashboard/ opens on Setup
 \end{shell}
 
-The distribution is called \code{tandemllm}. Its \code{host} extra adds \code{psutil} and \code{nvidia-ml-py}, which the System view uses to read the machine; without them the collector falls back to \code{/proc} and \code{nvidia-smi}. The package is not on PyPI; install it from the checkout, or build the wheel with \code{python -m build --wheel}. \code{python -m proxy} in a checkout does the same as \code{tandem-app} without installing anything but \code{cryptography}.
+The distribution is called \code{tandemapp}. Its \code{host} extra adds \code{psutil} and \code{nvidia-ml-py}, which the System view uses to read the machine; without them the collector falls back to \code{/proc} and \code{nvidia-smi}. The package is not on PyPI; install it from the checkout, or build the wheel with \code{python -m build --wheel app}. \code{python -m proxy} in the checkout's \code{app/} does the same as \code{tandem-app} without installing anything but \code{cryptography}.
 
 The page opens on Setup\index{Setup screen} while no backend exists: add one, test the connection, save. The panels that only an engine fills (caches, speculation, the engine side of the conductor) say that this server has no engine.
 
@@ -62,16 +62,16 @@ Then open \code{http://127.0.0.1:8080/dashboard/#/usage}: the request is one row
 
 \section{In docker}\index{docker}
 
-\code{ops/Dockerfile.app} builds an image on \code{python:3.12-slim} from the same wheel, with the host extra and the built page inside, and no compiler or torch. It is configured by an env file; \code{ops/app.env.example} is one to start from.
+\code{app/packaging/Dockerfile.app} builds an image on \code{python:3.12-slim} from the same wheel, with the host extra and the built page inside, and no compiler or torch. It is configured by an env file; \code{app/packaging/app.env.example} is one to start from.
 
 \begin{shell}
-docker build -f ops/Dockerfile.app -t tandemllm-app .
-cp ops/app.env.example app.env            # fill in; no quotes around values
+docker build -f app/packaging/Dockerfile.app -t tandemllm-app app
+cp app/packaging/app.env.example app.env  # fill in; no quotes around values
 docker run -d --name tandem-app -p 127.0.0.1:8080:8080 -v tandem-app:/data \
     --env-file app.env tandemllm-app
 \end{shell}
 
-The config database, the usage ledger and the key file live in the \code{/data} volume. Inside the container the server binds \code{0.0.0.0}, so what the outside reaches is what \code{-p} publishes: \code{127.0.0.1:8080} for this machine only. Keep it that way: no admin password is set by default, and this release has no sign-in screen (Section~\ref{sec:access}). The image runs as an unprivileged user and answers its health check on \code{/health}. The release's tests build and install the wheel; they do not build the image. A volume from 0.15.0 or before keeps its old name; \code{docs/proxy.md} says how to mount or copy it.
+The config database, the usage ledger and the key file live in the \code{/data} volume. Inside the container the server binds \code{0.0.0.0}, so what the outside reaches is what \code{-p} publishes: \code{127.0.0.1:8080} for this machine only. Keep it that way: no admin password is set by default, and this release has no sign-in screen (Section~\ref{sec:access}). The image runs as an unprivileged user and answers its health check on \code{/health}. The release's tests build and install the wheel; they do not build the image. A volume from 0.15.0 or before keeps its old name; \code{app/docs/proxy.md} says how to mount or copy it.
 
 Inside a container the host collector sees the container, not the machine. Run it with \code{--pid=host} (and \code{--gpus all} for NVML) for the machine's view, or run \code{tandem-app hostcollect}\index{tandem-app hostcollect@\texttt{tandem-app hostcollect}} on the machine itself.
 

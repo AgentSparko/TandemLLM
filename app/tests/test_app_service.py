@@ -14,7 +14,7 @@ local build label (the fleet update's package).
   4  the command: `tandem-app service status` of a service that is not there exits 3 and says
      so, on this machine's real launchctl or systemctl, without touching any service
                                                                             test_command_status
-  5  pyproject's `app` extra: no engine, no torch; `pip install .[app]` gives tandem-app
+  5  pyproject's `app` extra: no engine, no torch; `pip install './app[app]'` gives tandem-app
                                                                             test_app_extra
   6  `tandem-app package --version 0.15.0+test`: the wheel's name and METADATA carry the label,
      wheel_version reads it, pep440 keeps it, same_release says it is 0.15.0's

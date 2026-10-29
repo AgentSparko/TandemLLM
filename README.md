@@ -340,15 +340,15 @@ All three run the same drafters and settings and are held to the same exactness 
 The dashboard also runs on its own as TandemApp (`tandem-app`), in front of any OpenAI-compatible engine or cloud API: vLLM, SGLang, llama.cpp, LM Studio, Ollama, OpenAI, DeepSeek, or another TandemLLM. Clients send their requests to one address, the proxy routes them by model id, and one ledger records tokens, time to first token, decode speed, cached tokens and cost for every backend. It needs no GPU and no torch:
 
 ```bash
-pip install '.[host]'          # Python 3.11 or newer; the host extra adds psutil and NVML
+pip install './app[host]'      # Python 3.11 or newer; the host extra adds psutil and NVML
 tandem-app                     # http://127.0.0.1:8080/dashboard/ opens on Setup
 ```
 
-`ops/Dockerfile.app` builds the same as an image of about 70 MB, configured by an env file (`ops/app.env.example`). The System view shows the machine behind each backend, down to the GPU memory of its processes, through a collector on the same machine or a small one on the backend's own.
+`app/packaging/Dockerfile.app` builds the same as an image of about 70 MB, configured by an env file (`app/packaging/app.env.example`). The System view shows the machine behind each backend, down to the GPU memory of its processes, through a collector on the same machine or a small one on the backend's own.
 
 ![The System view's panel for a vLLM backend on another machine, read through the remote collector (the dashboard's mock data)](docs/media/dashboard_hosts.png)
 
-[docs/proxy.md](docs/proxy.md) has the setup, every variable, the keys at rest and what each kind of backend can show.
+[app/docs/proxy.md](app/docs/proxy.md) has the setup, every variable, the keys at rest and what each kind of backend can show.
 
 ## Documentation
 
@@ -366,7 +366,7 @@ tandem-app                     # http://127.0.0.1:8080/dashboard/ opens on Setup
 - [Dashboard](docs/dashboard.md)
 - [The Chat tab](docs/chat.md), in beta: the sandbox, the permission modes, the known limitations
 - [Parallel requests](docs/parallel-requests.md), waiting for memory and chat priority among them
-- [The proxy](docs/proxy.md): the dashboard in front of other engines and cloud APIs (vLLM, SGLang, any OpenAI-compatible server, OpenAI, DeepSeek), routed by model id, with or without this engine (`pip install .` gives `tandem-app`, no GPU needed), the host collector, the docker image
+- [The proxy](app/docs/proxy.md): the dashboard in front of other engines and cloud APIs (vLLM, SGLang, any OpenAI-compatible server, OpenAI, DeepSeek), routed by model id, with or without this engine (`pip install ./app` gives `tandem-app`, no GPU needed), the host collector, the docker image
 - [Operations](docs/operations.md)
 - [Measurement](docs/measurement.md)
 - [Tool calling](docs/tool-eval-bench.md): tool-eval-bench results on the raw path and the conductor; [how to run it](docs/benchmarks.md)

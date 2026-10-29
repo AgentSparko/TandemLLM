@@ -330,7 +330,7 @@ Two alerts are worth having before any dashboard: `rate(qse_errors_total[5m]) > 
 
 - **Batch size, KV utilisation, preemptions, swaps.** A batching scheduler has them. This engine
   holds one sequence and has none of those states.
-  [docs/roadmap.md](../docs/roadmap.md) says what would have to be built first, and it adds the
+  [docs/roadmap.md](../../docs/roadmap.md) says what would have to be built first, and it adds the
   metrics it would need.
 - **Per-model and per-user labels.** One process serves one model, and a user label on a counter
   is personal data on a monitoring endpoint. The label set here has a fixed, small cardinality:
@@ -372,7 +372,7 @@ sees them without a scrape. Open WebUI prints the `usage` of a stream merged wit
 `timings` in its (i) tooltip, and adds the token counts of every chunk that carries `usage`,
 so exactly one chunk of a stream carries them (the finish chunk by default, the separate
 `choices: []` chunk when the client sent `include_usage: true`, none on `include_usage: false` or
-`--usage-default off`). `server/usage.py::RequestRecord` is the one source; the example below has
+`--usage-default off`). `app/tandemapp/usage.py::RequestRecord` is the one source; the example below has
 consistent numbers.
 
 ```json

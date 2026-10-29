@@ -49,13 +49,13 @@ Switch: `ops/use-profile.sh lfm25-exl3-3.5`, or the Setup Guide (`#/setup`).
 
 - Template: the checkpoint's `chat_template.jinja`. It opens `<think>` at the end of every prompt; the server splits reasoning from the answer as for Qwen ([server.md](server.md#reasoning)).
 - Thinking off (`chat_template_kwargs: {"enable_thinking": false}`, or the conductor's): the server closes the block right after the generation prompt.
-- Tool calls: a Python list between `<|tool_call_start|>` and `<|tool_call_end|>`, for example `<|tool_call_start|>[get_weather(city='Berlin', days=3)]<|tool_call_end|>`. `server/toolcall.py` (`PythonicCalls`) rewrites each block into the JSON tool tier as the text arrives; the client gets OpenAI `tool_calls`. Values are Python literals (and `true`, `false`, `null`), read with `ast.literal_eval`, never run. A block that is not a list of keyword calls stays text.
+- Tool calls: a Python list between `<|tool_call_start|>` and `<|tool_call_end|>`, for example `<|tool_call_start|>[get_weather(city='Berlin', days=3)]<|tool_call_end|>`. `app/tandemapp/toolcall.py` (`PythonicCalls`) rewrites each block into the JSON tool tier as the text arrives; the client gets OpenAI `tool_calls`. Values are Python literals (and `true`, `false`, `null`), read with `ast.literal_eval`, never run. A block that is not a list of keyword calls stays text.
 - Sampling default when a request names none: temperature 0.1, top_k 50, repetition penalty 1.05 (`TEMPERATURE`, `TOP_K`, `REP_PENALTY`).
 - Conductor: on by default, with the model fit below ([Conductor](#conductor)).
 
 ## Conductor
 
-The conductor (Laya's three decision models, the narrator, the session monitor) is on by default. The router's documents target Qwen3.8; LFM2.5's adapter declares how the router fits it (`Capabilities.conductor` in `engine/models/lfm2_moe/serving.py`, read by `server/conductor/modelfit.py`; [server.md](server.md#the-model-fit)):
+The conductor (Laya's three decision models, the narrator, the session monitor) is on by default. The router's documents target Qwen3.8; LFM2.5's adapter declares how the router fits it (`Capabilities.conductor` in `engine/models/lfm2_moe/serving.py`, read by `app/tandemapp/conductor/modelfit.py`; [server.md](server.md#the-model-fit)):
 
 | key | LFM2.5 | effect |
 |-|-|-|
@@ -172,7 +172,7 @@ Quality and speed against the exact cache: not measured.
 | verify rows against decode steps at every start | load-time self-check | 24 rows bit for bit |
 | pack reader, synthetic and real packs | `tests/test_lfm2_moe_pack.py`, `tests/test_lfm2_moe_packs_on_disk.py` | pass |
 | row kernels against torch twins; row invariance; one graph a decode step | `tests/test_lfm2_moe_kernels.py`, `tests/gpu/test_lfm2_moe_gpu.py` | pass |
-| Pythonic tool calls, parser and chat handler | `tests/test_toolcall_pythonic.py`, `tests/test_lfm25_api.py` | pass |
+| Pythonic tool calls, parser and chat handler | `app/tests/test_toolcall_pythonic.py`, `tests/test_lfm25_api.py` | pass |
 | half-integer rates against `LinearEXL3`; kernels against the reference | `tests/gpu/test_lfm2_moe_gpu.py` | bit for bit at 1.5 to 8 bits; kernels within 3e-3, rows invariant up to 32 |
 | shared kernels at whole rates against the previous tree | same random blocks through both trees | 51 of 51 outputs bit for bit |
 | a served profile over HTTP | `tools/lfm_live.py` | health, answer, reasoning, tool calls |

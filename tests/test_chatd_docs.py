@@ -4,7 +4,7 @@
      running, tandem chat start|stop|restart|status|logs, QSE_CHATD=off     test_the_normal_path
   2  docs/chat.md names the down states and the command for each, and that the mock loads only for
      ?chat=mock                                                              test_the_down_state
-  3  no doc names a qwen38-spark-engine path for chatd; chatd.sh lives in ~/TandemLLM/src/ops
+  3  no doc names a qwen38-spark-engine path for chatd; chatd.sh lives in ~/TandemLLM/src/app/ops
                                                                              test_paths_match_the_installer
   4  the manual's chapter and docs/operations.md say the same              test_the_manual_follows
   5  the CHANGELOG's newest entry: the section, the upgrade line, the credit, no aiohttp, no manual
@@ -58,8 +58,8 @@ def test_paths_match_the_installer():
         for ln in text.splitlines():
             if "chatd" in ln:
                 assert "qwen38-spark-engine" not in ln, (p, ln)
-    assert "~/TandemLLM/src/ops/chatd.sh" in _read("docs", "chat.md")
-    assert "bash ops/chatd.sh start             #" not in _read("docs", "chat.md")
+    assert "~/TandemLLM/src/app/ops/chatd.sh" in _read("docs", "chat.md")
+    assert "bash app/ops/chatd.sh start             #" not in _read("docs", "chat.md")
 
 
 def test_the_manual_follows():

@@ -113,7 +113,7 @@ The tool-argument loop guard stops a tool call whose arguments repeat. In one ca
 
 ### The Chat tab's run monitor
 
-chatd, the service behind the Chat tab (both in beta), runs its own agent loop and its own limits ([chat.md](chat.md)). A run ends `interrupted` after 100 model calls, and the same call with the same arguments three times in a row ends it too. The stall rule (SRV-677, [chatd/stall.py](../chatd/stall.py)) catches a run that edits the wrong place. A check is a `render_page` call or a shell command the run has already run once. A check makes progress when its target is new, when its text changed (numbers are masked), or when its screenshot changed in kind (a 32 × 18 thumbnail, correlation under 0.3). The rule fires on a streak of at least 4 checks with no progress, at least max(12, 3 × the run's median gap) steps long, with at least 3 edits and 60 % of them on three files or fewer.
+chatd, the service behind the Chat tab (both in beta), runs its own agent loop and its own limits ([chat.md](chat.md)). A run ends `interrupted` after 100 model calls, and the same call with the same arguments three times in a row ends it too. The stall rule (SRV-677, [app/chatd/stall.py](../app/chatd/stall.py)) catches a run that edits the wrong place. A check is a `render_page` call or a shell command the run has already run once. A check makes progress when its target is new, when its text changed (numbers are masked), or when its screenshot changed in kind (a 32 × 18 thumbnail, correlation under 0.3). The rule fires on a streak of at least 4 checks with no progress, at least max(12, 3 × the run's median gap) steps long, with at least 3 edits and 60 % of them on three files or fewer.
 
 It acts twice. First, a note in the tool result tells the model to step back, list its hypotheses and test the cheapest one with a minimal repro. If the streak goes on as long again, a second note follows and the run ends `interrupted`; Continue goes on from there. The note rides in the tool result, so the prompt prefix stays the same. In the case behind it, a three.js page rendered near black, and 37 steps changed the lighting and the exposure in three files and rendered the page seven times. The cause was the materials' colours, and the same-call guard never fired because no call repeated.
 
@@ -154,11 +154,11 @@ The configuration is a set of versioned JSON documents outside any repository: p
 | session addresses | [server.md](server.md#session-addresses-0323-test) |
 | the session monitor, safe points, policy | [server.md](server.md#the-conductors-session-monitor) |
 | tool-call checks, the claim check, the loop guard, session tasks | [server.md](server.md#tool-call-checks-srv-113), [the claim check](server.md#the-claim-check-e2-2026-10-02), [the loop guard](server.md#the-tool-argument-loop-guard-0326-test), [session tasks](server.md#session-level-tasks-srv-121) |
-| the journal and metrics | [server.md](server.md#observability-srv-115), [server/METRICS.md](../server/METRICS.md) |
+| the journal and metrics | [server.md](server.md#observability-srv-115), [app/tandemapp/METRICS.md](../app/tandemapp/METRICS.md) |
 | compaction as a continuation | [caches.md](caches.md#compaction-as-a-continuation) |
 | the Chat tab and chatd (beta) | [chat.md](chat.md) |
 | memory notes | [memory.md](memory.md) |
 | the dashboard's Conductor view | [dashboard.md](dashboard.md#views) |
-| the `/v1/conductor/*` API | [contract/conductor-v1](contract/conductor-v1/README.md) |
+| the `/v1/conductor/*` API | [app/contracts/conductor-v1](../app/contracts/conductor-v1/README.md) |
 | benchmarks, raw and conductor | [benchmarks.md](benchmarks.md), [tool-eval-bench.md](tool-eval-bench.md) |
 | the manual's chapters: profiles and the router, packages, the session monitor | [`tandemllm-manual.pdf`](../manual/tandemllm-manual.pdf) |

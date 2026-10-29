@@ -30,12 +30,12 @@ TandemLLM is an inference engine, and we measure its speed on raw `/v1/completio
 | [community-weights.md](community-weights.md) | packs other people published: running one, adding yours with one JSON file, how a maintainer verifies it |
 | [memory.md](memory.md) | memory notes: what the model keeps about the user and the work |
 | [shadow-reader.md](shadow-reader.md) | the small model that follows each session and answers questions about it |
-| [proxy.md](proxy.md) | the dashboard as a proxy in front of other engines and cloud APIs |
+| [app/docs/proxy.md](../app/docs/proxy.md) | the dashboard as a proxy in front of other engines and cloud APIs |
 | [threat-model.md](threat-model.md) | where untrusted input enters, the parts that matter most for security |
 | [roadmap.md](roadmap.md) | what Flash-Next still lacks, parallel requests, other GPUs |
 | [labels.md](labels.md) | the GitHub labels of issues and pull requests, by group |
 
-Two more references live next to the code. [server/METRICS.md](../server/METRICS.md) lists every Prometheus metric, and [contract/dashboard-v1/](contract/dashboard-v1/README.md) holds the dashboard API's schemas.
+Two more references live next to the code. [app/tandemapp/METRICS.md](../app/tandemapp/METRICS.md) lists every Prometheus metric, and [app/contracts/dashboard-v1/](../app/contracts/dashboard-v1/README.md) holds the dashboard API's schemas.
 
 Every number on these pages was measured on one DGX Spark, unless the page calls it arithmetic or an estimate. [measurement.md](measurement.md) says how.
 

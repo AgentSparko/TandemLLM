@@ -53,11 +53,11 @@ Runtime dependencies of the installable package (pyproject.toml: the proxy and t
 installed by pip, none of their code copied into this repository:
 
 - cryptography (https://github.com/pyca/cryptography), Apache License 2.0 or BSD 3-Clause, at
-  the user's choice: AES-256-GCM for the backends' keys at rest (proxy/secrets.py).
+  the user's choice: AES-256-GCM for the backends' keys at rest (app/proxy/secrets.py).
 - With the `host` extra: psutil (https://github.com/giampaolo/psutil), BSD 3-Clause, and
-  nvidia-ml-py (NVIDIA's NVML bindings), BSD 3-Clause: the host collector (proxy/hostcollect.py).
+  nvidia-ml-py (NVIDIA's NVML bindings), BSD 3-Clause: the host collector (app/proxy/hostcollect.py).
 
-The plugins in plugins/ (tandemllm-vllm-plugin, tandemllm-sglang-plugin) are part of TandemLLM under
+The plugins in app/plugins/ (tandemllm-vllm-plugin, tandemllm-sglang-plugin) are part of TandemLLM under
 the same license and have no dependencies. They run inside vLLM (https://github.com/vllm-project/vllm)
 and SGLang (https://github.com/sgl-project/sglang), both Apache License 2.0, and import them at run
 time; none of their code is copied into this repository.
