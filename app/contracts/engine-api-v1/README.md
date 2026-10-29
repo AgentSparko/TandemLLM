@@ -137,7 +137,7 @@ The same paths on the status responder's port, answered while the engine is away
 - `bin/tandem start|stop|restart`; exit 0 is done (`node/control.json`).
 - `install.sh --dir --ref --runtime-only --yes`. The controller holds the script and its ref: `TANDEM_ENGINE_INSTALL_SH` and `Package.engine_ref()` (`proxy/nodeinstall.py`).
 - A pack's `<weights dir>/_hub_manifest.json` (`node/hub_manifest.example.json`); `proxy/nodeweights.py` reads its sizes and sha256 for a content id.
-- The agent never imports engine code and never runs `python -m server.*`.
+- The agent never imports engine code and never runs `python -m server.*`. `app/tests/test_import_boundary.py` enforces this.
 
 ## TandemApp's routes the engine serves until ENG-413
 
