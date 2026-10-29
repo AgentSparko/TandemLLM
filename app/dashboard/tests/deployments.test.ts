@@ -11,7 +11,7 @@ import { COPY_GBPS, MOVE_S, START_S, STOP_S } from '../mock/deploy.ts';
 import { MockFleet } from '../mock/fleet.ts';
 import type { DeploymentJobView, DeploymentPlan, FleetDeployment, Placement, WeightsCopyJob, WeightsMatrix, WeightsPlan } from '../src/api/fleet.ts';
 
-const FDIR = join(__dirname, '..', '..', 'docs', 'contract', 'fleet-v1');
+const FDIR = join(__dirname, '..', '..', 'contracts', 'fleet-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const schema: Record<string, ReturnType<typeof ajv.compile>> = {};
 for (const f of readdirSync(FDIR)) if (f.endsWith('.schema.json')) schema[f.replace('.schema.json', '')] = ajv.compile(JSON.parse(readFileSync(join(FDIR, f), 'utf8')));

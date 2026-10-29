@@ -11,7 +11,7 @@ import type { ServerLive, LiveActivity, LiveRequest, LiveWindows } from '../src/
 import { MockLive, mostlyCached, prefillLive, WINDOWS } from '../mock/live.ts';
 import { makeRow, rng } from '../mock/generate.ts';
 
-const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'dashboard-v1');
+const DIR = join(__dirname, '..', '..', 'contracts', 'dashboard-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const schema = ajv.compile(JSON.parse(readFileSync(join(DIR, 'live.schema.json'), 'utf8')));
 function valid(l: ServerLive): ServerLive {

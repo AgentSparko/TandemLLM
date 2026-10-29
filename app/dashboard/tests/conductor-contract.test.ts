@@ -1,4 +1,4 @@
-// The conductor's contract (docs/contract/conductor-v1): every response schema compiles strictly,
+// The conductor's contract (contracts/conductor-v1): every response schema compiles strictly,
 // the built-in documents validate against the config schemas, and every mock response validates,
 // writes included. The server's own tests (tests/test_conductor_e2e.py) hold the real responses
 // to the same files.
@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import Ajv2020 from 'ajv/dist/2020.js';
 import { MockConductor } from '../mock/conductor.ts';
 
-const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'conductor-v1');
+const DIR = join(__dirname, '..', '..', 'contracts', 'conductor-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const schemas: Record<string, ReturnType<typeof ajv.compile>> = {};
 for (const f of readdirSync(DIR).filter((f) => f.endsWith('.schema.json'))) {
@@ -100,7 +100,7 @@ describe('mock responses validate', () => {
     check('write', w.body);
     check('write', m.handle('POST', '/v1/conductor/profiles/chat/mode', q(), { mode: 'shadow' }, 't').body);
     check('write', m.handle('POST', '/v1/conductor/profiles/chat/restore', q(), { version: 0 }, 't').body);
-    const ex = JSON.parse(readFileSync(join(__dirname, '..', '..', 'docs', 'contract', 'dashboard-v1', 'tandem-eval.example.json'), 'utf8'));
+    const ex = JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'dashboard-v1', 'tandem-eval.example.json'), 'utf8'));
     const kept = m.handle('POST', '/v1/conductor/evals', q(), { report: ex }, 't');
     expect(kept.status).toBe(201);
     check('eval-write', kept.body);

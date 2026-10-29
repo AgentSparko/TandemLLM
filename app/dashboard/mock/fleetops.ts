@@ -1,5 +1,5 @@
 // The fleet update and the controller's host in the mock (`/v1/fleet/update*`, `/v1/fleet/controller*`,
-// docs/contract/fleet-v1, OPS-234), as the controller answers them (proxy/fleetupdate.py,
+// contracts/fleet-v1, OPS-234), as the controller answers them (proxy/fleetupdate.py,
 // proxy/ctlmove.py). Both are jobs on the clock, a function of the time since they started, so every
 // request at one instant sees one state:
 //

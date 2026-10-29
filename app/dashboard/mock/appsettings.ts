@@ -1,4 +1,4 @@
-// App settings in the mock (`/v1/fleet/app*`, docs/contract/fleet-v1, 6.3b), as the controller answers
+// App settings in the mock (`/v1/fleet/app*`, contracts/fleet-v1, 6.3b), as the controller answers
 // them (proxy/appsettings.py): the permissions of the controller's machine (a Mac in gold3, a Spark
 // otherwise), the service it runs as, the configuration file and its import (plan, then apply with
 // the plan's confirm: 428 without, 409 spent or the fleet changed). The admin password

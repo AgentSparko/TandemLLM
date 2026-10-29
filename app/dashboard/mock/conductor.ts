@@ -1,4 +1,4 @@
-// The mock engine's conductor (/v1/conductor/*, contract docs/contract/conductor-v1): the server's
+// The mock engine's conductor (/v1/conductor/*, contracts/conductor-v1): the server's
 // own built-in documents (seeds.json, written by tools/conductor_contract.py), versions and writes
 // in memory with the server's validation (the same config schemas through ajv), a day of seeded
 // decisions over a handful of sessions -- the router's rows and the session monitor's events in
@@ -18,7 +18,7 @@ import { rng } from './generate.ts';
 import { diskRoute, diskSeed, longSession, memoryRoute, memorySeed, type MockDisk } from './memory.ts';
 import { notesRoute, notesSeed, proposalsRoute, proposalsSeed, type MockNotes, type MockProposal } from './notes.ts';
 
-const DIR = fileURLToPath(new URL('../../docs/contract/conductor-v1/', import.meta.url));
+const DIR = fileURLToPath(new URL('../../contracts/conductor-v1/', import.meta.url));
 const SEEDS = JSON.parse(readFileSync(join(DIR, 'seeds.json'), 'utf8'));
 const LOCKED: Record<string, string> = SEEDS.meta.locked;
 // the tokenizer hash the mock engine "records" (ENG-129); a role that shares token ids must have it
@@ -26,7 +26,7 @@ export const ENGINE_SHA = '5f0c'.repeat(16);
 // the classifier report measured on the Spark (tools/conductor_eval.py), per-prompt rows left out
 const REPORT = JSON.parse(readFileSync(fileURLToPath(new URL('../../tests/fixtures/conductor/classifier-report-2026-10-01.json', import.meta.url)), 'utf8'));
 // a night of the eval harness (tools/tandem_eval.py, OPS-43): the contract's example, made-up numbers
-const SUITE_REPORT = JSON.parse(readFileSync(fileURLToPath(new URL('../../docs/contract/dashboard-v1/tandem-eval.example.json', import.meta.url)), 'utf8'));
+const SUITE_REPORT = JSON.parse(readFileSync(fileURLToPath(new URL('../../contracts/dashboard-v1/tandem-eval.example.json', import.meta.url)), 'utf8'));
 export const ENGINE = { version: '0.3.1-test', code_sha: '4c1f0e9a7b2d' };
 // the three Laya checkpoints as the engine serves them (engine/decision/laya), with their limits
 const LAYA = [

@@ -1,7 +1,7 @@
 // SRV-134's vitest rows for the role contract (SRV-133): the roles form's rules (the window and
 // writes a kind allows, the forms of sharing its tokenizer hash allows, the defaults a stored
 // version was loaded with), the Deciders screen's contract line, and the mock engine's roles
-// route against docs/contract/conductor-v1 -- a complete role saves, a missing claim or window is
+// route against contracts/conductor-v1 -- a complete role saves, a missing claim or window is
 // refused naming the field, a clerk that writes client-visible tokens is refused. The server's
 // own tests (tests/test_role_contract.py) hold the real responses to the same files.
 import { readFileSync, readdirSync } from 'node:fs';
@@ -13,7 +13,7 @@ import type { RoleDoc } from '../src/api/conductor';
 import { defaultsByRole, ROLE_KINDS, sharingOptions, windowRefusal, writesRefusal } from '../src/lib/conductor';
 import { roleWords } from '../src/lib/deciders';
 
-const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'conductor-v1');
+const DIR = join(__dirname, '..', '..', 'contracts', 'conductor-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 for (const f of readdirSync(DIR).filter((f) => f.endsWith('.schema.json'))) ajv.addSchema(JSON.parse(readFileSync(join(DIR, f), 'utf8')), f);
 function check(name: string, data: unknown) {

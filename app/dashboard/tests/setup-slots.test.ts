@@ -19,9 +19,9 @@ const Q = qwen as unknown as SetupModel;
 const FN = flashNext as unknown as SetupModel;
 
 describe('the engine limit', () => {
-  it('is the server\'s ENGINE_MAX_SLOTS (server/setup/registry.py), 64', () => {
-    const py = readFileSync(new URL('../../server/setup/registry.py', import.meta.url), 'utf8');
-    expect(Number(/^ENGINE_MAX_SLOTS = (\d+)$/m.exec(py)?.[1])).toBe(ENGINE_MAX_SLOTS);
+  it('is the engine contract\'s engine_max_slots (contracts/engine-api-v1/setup/limits.json), 64', () => {
+    const limits = JSON.parse(readFileSync(new URL('../../contracts/engine-api-v1/setup/limits.json', import.meta.url), 'utf8'));
+    expect(limits.engine_max_slots).toBe(ENGINE_MAX_SLOTS);
     expect(ENGINE_MAX_SLOTS).toBe(64);
   });
   it('is the range, whatever the card measured; Wren\'s schema takes it too', () => {

@@ -1,8 +1,8 @@
 // VIS-49's vitest rows for the Memory screen (VIS-48): the block renderer over the server's own
-// golden blocks (tests/fixtures/transcripts/*.md, written by server/conductor/transcripts.py), the
-// runtime lines with the hidden notes and their journal rows, a session's one-line summary, the
+// golden blocks (tests/fixtures/transcripts/*.md, written by tandemapp/conductor/transcripts.py),
+// the runtime lines with the hidden notes and their journal rows, a session's one-line summary, the
 // transcript settings over their defaults, and the mock engine's memory routes against
-// docs/contract/conductor-v1 (the list, a page of 200, keep, the exports). C1: the disk tier's
+// contracts/conductor-v1 (the list, a page of 200, keep, the exports). C1: the disk tier's
 // settings, their limits and words, and its two routes on the mock against the contract.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -12,7 +12,7 @@ import { MockConductor } from '../mock/conductor.ts';
 import { longSession } from '../mock/memory.ts';
 import { DISK_DEFAULTS, diskEventLine, diskHitWords, diskReach, diskSettingErrors, diskSettings, parseBlock, runtimeLines, sessionLine, shortKey, TRANSCRIPT_DEFAULTS, transcriptSettings } from '../src/lib/memory';
 
-const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'conductor-v1');
+const DIR = join(__dirname, '..', '..', 'contracts', 'conductor-v1');
 const GOLDEN = join(__dirname, '..', '..', 'tests', 'fixtures', 'transcripts');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 for (const f of readdirSync(DIR).filter((f) => f.endsWith('.schema.json'))) ajv.addSchema(JSON.parse(readFileSync(join(DIR, f), 'utf8')), f);

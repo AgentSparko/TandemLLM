@@ -13,7 +13,7 @@ import { MOCK_PAIR, MockFleet } from '../mock/fleet.ts';
 import type { AddSession, FleetNode } from '../src/api/fleet.ts';
 import { gate, installPercent, installWords, nameDraft, nameErrors, namesBody, nextStep, permissionRows, prevStep, rentedLine, rentedTerms, resumeStep, skipped, skippedBetween, versionMismatch } from '../src/lib/addspark.ts';
 
-const FDIR = join(__dirname, '..', '..', 'docs', 'contract', 'fleet-v1');
+const FDIR = join(__dirname, '..', '..', 'contracts', 'fleet-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const schema: Record<string, ReturnType<typeof ajv.compile>> = {};
 for (const f of readdirSync(FDIR)) if (f.endsWith('.schema.json')) schema[f.replace('.schema.json', '')] = ajv.compile(JSON.parse(readFileSync(join(FDIR, f), 'utf8')));

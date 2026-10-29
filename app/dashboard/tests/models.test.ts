@@ -17,7 +17,7 @@ import type { FleetDeployment, Placement, PlacementNode, SetupConfirm, WeightsCo
 import { copyWords, countWords, depActions, depCounts, managedWords, membersFor, newDeployment, pickType, placeBar, scoped, shortId, sizeWords, weightsCell } from '../src/lib/models.ts';
 import { isCancelled, setConfirmer, setSetupNode, setupApi, setupBase } from '../src/setup/api.ts';
 
-const FDIR = join(__dirname, '..', '..', 'docs', 'contract', 'fleet-v1');
+const FDIR = join(__dirname, '..', '..', 'contracts', 'fleet-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const schema: Record<string, ReturnType<typeof ajv.compile>> = {};
 for (const f of readdirSync(FDIR)) if (f.endsWith('.schema.json')) schema[f.replace('.schema.json', '')] = ajv.compile(JSON.parse(readFileSync(join(FDIR, f), 'utf8')));

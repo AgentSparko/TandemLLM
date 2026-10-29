@@ -1,5 +1,5 @@
 // Each Spark's Setup Guide through the controller in the mock (`/v1/fleet/nodes/{id}/setup/*` and
-// `/v1/fleet/nodes/{id}/setup-confirm/*`, docs/contract/fleet-v1, VIS-252), as proxy/fleetsetup.py
+// `/v1/fleet/nodes/{id}/setup-confirm/*`, contracts/fleet-v1, VIS-252), as proxy/fleetsetup.py
 // answers: every node of the mock fleet has a Setup Guide of its own (a MockSetup each, made at its
 // first call), an off node answers 503 `unreachable`, and a write (apply, remove, reset, a retry,
 // waking Wren) goes only with the confirm of its plan, bound to the node, the route and the choice the

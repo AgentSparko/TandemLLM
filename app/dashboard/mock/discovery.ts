@@ -1,4 +1,4 @@
-// Discovery in the mock (`/v1/fleet/discovery*`, docs/contract/fleet-v1, SRV-727), as the controller
+// Discovery in the mock (`/v1/fleet/discovery*`, contracts/fleet-v1, SRV-727), as the controller
 // answers it (proxy/discovery.py): a run browses mDNS for 3 s and reads ~/.ssh/config, the scan asks
 // "Scan 192.0.2.0/24 for SSH?" and runs only after the consent, at 50 addresses a second, and each
 // device says what it is. Rows appear on the clock: poll with the cursor (here tenths of a second,

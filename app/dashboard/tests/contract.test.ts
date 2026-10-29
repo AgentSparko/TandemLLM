@@ -1,5 +1,5 @@
 // npm run test:contract — every example file and every mock response validates against its
-// schema in docs/contract/dashboard-v1/. The backend validates its real responses
+// schema in contracts/dashboard-v1/. The backend validates its real responses
 // against the same files.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,7 +15,7 @@ import { FLEET_SCENARIOS, MOCK_PAIR, MockFleet } from '../mock/fleet.ts';
 import { METRIC_KEYS, NODE_ACTIONS, RANGE_KEYS, WINDOW_KINDS } from '../src/api/fleet.ts';
 import { addDays, dayKey } from '../src/lib/time.ts';
 
-const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'dashboard-v1');
+const DIR = join(__dirname, '..', '..', 'contracts', 'dashboard-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const schemas: Record<string, ReturnType<typeof ajv.compile>> = {};
 for (const f of readdirSync(DIR)) {
@@ -261,10 +261,10 @@ describe('mock responses validate', () => {
   });
 });
 
-// The fleet API (docs/contract/fleet-v1, VIS-244): every route of the mock fleet in every scenario,
+// The fleet API (contracts/fleet-v1, VIS-244): every route of the mock fleet in every scenario,
 // at the start, after R-3 went off (node-down) and after the thermal alert fired (alert-thermal).
 describe('fleet contract', () => {
-  const FDIR = join(__dirname, '..', '..', 'docs', 'contract', 'fleet-v1');
+  const FDIR = join(__dirname, '..', '..', 'contracts', 'fleet-v1');
   const fajv = new Ajv2020({ allErrors: true, strict: true });
   const fleet: Record<string, ReturnType<typeof fajv.compile>> = {};
   for (const f of readdirSync(FDIR)) {

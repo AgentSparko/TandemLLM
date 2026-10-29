@@ -1,4 +1,4 @@
-// The fleet in the mock (`/v1/fleet/*`, docs/contract/fleet-v1, VIS-244): Sparks, links, deployments,
+// The fleet in the mock (`/v1/fleet/*`, contracts/fleet-v1, VIS-244): Sparks, links, deployments,
 // per-node metric series, memory, events, alerts, rules, each node's log and window layouts, as TandemApp's
 // controller will answer them. Every metric is a function of (seed, node, time): the same seed gives
 // the same answer at the same instant, and the values move as the clock moves. Ranges are what a

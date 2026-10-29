@@ -1,4 +1,4 @@
-// The Add Spark wizard's session in the mock (`/v1/fleet/add*`, docs/contract/fleet-v1, VIS-246), as the
+// The Add Spark wizard's session in the mock (`/v1/fleet/add*`, contracts/fleet-v1, VIS-246), as the
 // controller answers it (proxy/addspark.py): one active session, targets from discovery's rows or an ssh
 // line, Connect through the mock's own pairing routes (mock/fleet.ts), Check with the controller's
 // checks (proxy/preflight.py, ported below) over canned facts per device, Install as jobs on the clock,

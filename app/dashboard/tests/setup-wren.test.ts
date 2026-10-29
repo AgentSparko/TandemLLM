@@ -240,9 +240,11 @@ describe('the figure\'s CSS and source (VIS-89)', async () => {
     const src = strip(readFileSync(here('../src/setup/figure.ts'), 'utf8')) + strip(fig);
     expect(gzipSync(src).length).toBeLessThan(6 * 1024);
   });
-  it('nothing in the current code, mock or docs calls the figure a bird', () => {
+  it('nothing in the current code, mock, docs or contracts calls the figure a bird', () => {
     const bad = /\b(bird|beak|feathers?|wings?|perch\w*|chirp\w*|preen\w*|ruffle\w*)\b/i;
-    const roots = ['../src', '../mock', '../README.md', '../../docs'].map(here);
+    // '../../docs' is TandemApp's own docs (app/docs in the repository) and '../../contracts' its
+    // contracts; the engine's docs/ keeps the same word check in its own tests.
+    const roots = ['../src', '../mock', '../README.md', '../../docs', '../../contracts'].map(here);
     const hits: string[] = [];
     const walk = (p: string) => {
       if (statSync(p).isDirectory()) for (const f of readdirSync(p)) walk(join(p, f));

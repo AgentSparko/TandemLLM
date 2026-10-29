@@ -49,7 +49,7 @@ describe('eval tables', () => {
     expect(indicative([{ ...raw, n: 12, indicative: true }])).toBe(true);
   });
   it('the contract example is a report the screen can show', () => {
-    const ex = JSON.parse(readFileSync(join(__dirname, '..', '..', 'docs', 'contract', 'dashboard-v1', 'tandem-eval.example.json'), 'utf8'));
+    const ex = JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'dashboard-v1', 'tandem-eval.example.json'), 'utf8'));
     const p = suitePairs(ex.rows);
     expect(p.map((x) => [x.suite, x.cmp.ok, x.raw?.n, x.tandem?.n])).toEqual([
       ['minicalc (short coding)', true, 2, 2],
@@ -175,7 +175,7 @@ describe('series', () => {
 // SRV-113/115 in the view: the monitor's rules render from the policy's own schema, and its
 // decisions read the same in every list.
 describe('the session monitor', () => {
-  const seeds = JSON.parse(readFileSync(join(__dirname, '..', '..', 'docs', 'contract', 'conductor-v1', 'seeds.json'), 'utf8'));
+  const seeds = JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'conductor-v1', 'seeds.json'), 'utf8'));
   const mon = seeds.monitor as MonitorDoc;
   const schema = seeds.meta.schemas.monitor;
   it('finds each rule\'s parameters in the policy schema, rule and mode left out', () => {
@@ -229,7 +229,7 @@ describe('the session tasks\' watch', () => {
 // SRV-157 / SRV-153 in the view: what the size did on a turn, the class's levels under its
 // ceiling, the built-in thresholds equal the server's seed, and the report columns.
 describe('task size and the classifier digest', () => {
-  const seeds = JSON.parse(readFileSync(join(__dirname, '..', '..', 'docs', 'contract', 'conductor-v1', 'seeds.json'), 'utf8'));
+  const seeds = JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'conductor-v1', 'seeds.json'), 'utf8'));
   it('says what the size did', () => {
     const on = { mode: 'on', size: 'small', score: 0, now: 'small', signals: { session_tokens: { value: 12000, size: 'small' }, files: { value: 2, size: 'small' } }, ceiling: 'xhigh', effort: 'high', applied: true } as SizeDecision;
     expect(sizeLine(on)).toBe('small (12,000 tokens, 2 files): thinks at high under xhigh');
@@ -266,7 +266,7 @@ describe('task size and the classifier digest', () => {
 // level and an empty field gives it back to Routing, and the schema bounds are the view's.
 // F2: a tool-result turn's effort, the profile's over the router's, inherit by default
 describe('tool-turn effort', () => {
-  const seeds = JSON.parse(readFileSync(join(__dirname, '..', '..', 'docs', 'contract', 'conductor-v1', 'seeds.json'), 'utf8'));
+  const seeds = JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'conductor-v1', 'seeds.json'), 'utf8'));
   const router = seeds.router as RouterDoc;
   const coding = seeds.profiles.coding as ProfileDoc;
   it('holds the levels to the server and leaves the seeds at inherit', () => {
@@ -295,7 +295,7 @@ describe('tool-turn effort', () => {
 });
 
 describe('thinking budgets', () => {
-  const seeds = JSON.parse(readFileSync(join(__dirname, '..', '..', 'docs', 'contract', 'conductor-v1', 'seeds.json'), 'utf8'));
+  const seeds = JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'conductor-v1', 'seeds.json'), 'utf8'));
   const router = seeds.router as RouterDoc;
   const coding = seeds.profiles.coding as ProfileDoc;
   it('holds the level caps to the server seed', () => {
@@ -360,7 +360,7 @@ describe('superseded suite reports', () => {
 
 // 2026-10-02: Qwen in the conversation (the in-context stage) and the state lines
 describe('the in-context stage and the state lines', () => {
-  const seeds = JSON.parse(readFileSync(join(__dirname, '..', '..', 'docs', 'contract', 'conductor-v1', 'seeds.json'), 'utf8'));
+  const seeds = JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'conductor-v1', 'seeds.json'), 'utf8'));
   it('holds the stage defaults to the server seed, and a router without the key is off', () => {
     const { question, ...seed } = seeds.router.classifier.context_stage;
     expect(seed).toEqual(CONTEXT_STAGE_SEED);
@@ -390,7 +390,7 @@ describe('the in-context stage and the state lines', () => {
     expect(seeds.meta.schemas.profiles.properties.ui.properties.progress.properties.prefill_every_s.minimum).toBe(2);
   });
   it('S1: the side-request shapes are the server\'s built-in ones, and a router without the switch has it on', () => {
-    const py = readFileSync(join(__dirname, '..', '..', 'server', 'conductor', 'signals.py'), 'utf8');
+    const py = readFileSync(join(__dirname, '..', '..', 'tandemapp', 'conductor', 'signals.py'), 'utf8');
     for (const x of SIDE_SHAPES) {
       expect(py).toContain(`"id": "${x.id}", "client": "${x.client}", "kind": "${x.kind}", "max_tokens": ${x.max_tokens}`);
       expect(py.replace(/"\s*\n\s*"/g, '')).toContain(x.match);

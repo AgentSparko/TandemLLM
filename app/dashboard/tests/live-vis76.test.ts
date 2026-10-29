@@ -16,7 +16,7 @@ import { MockLive, WINDOWS } from '../mock/live.ts';
 import { MockParallel } from '../mock/parallel.ts';
 import { makeRow, rng } from '../mock/generate.ts';
 
-const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'dashboard-v1');
+const DIR = join(__dirname, '..', '..', 'contracts', 'dashboard-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const liveSchema = ajv.compile(JSON.parse(readFileSync(join(DIR, 'live.schema.json'), 'utf8')));
 const parSchema = ajv.compile(JSON.parse(readFileSync(join(DIR, 'parallel.schema.json'), 'utf8')));

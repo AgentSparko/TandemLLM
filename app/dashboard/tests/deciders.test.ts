@@ -10,7 +10,7 @@ import { MockConductor } from '../mock/conductor.ts';
 import { choiceQuestion, loadWho, picksWords, plannerValue, plannerWarn, plannerWords, probsOf, refusalWords, stateBadge } from '../src/lib/deciders';
 import { splitSegments } from '../src/lib/residency';
 
-const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'conductor-v1');
+const DIR = join(__dirname, '..', '..', 'contracts', 'conductor-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 for (const f of readdirSync(DIR).filter((f) => f.endsWith('.schema.json'))) ajv.addSchema(JSON.parse(readFileSync(join(DIR, f), 'utf8')), f);
 function check(name: string, data: unknown) {

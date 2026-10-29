@@ -1,5 +1,5 @@
 // The deployments, the placement planner and the weights in the mock (`/v1/fleet/deployments/*`,
-// `/v1/fleet/placement`, `/v1/fleet/weights*`, docs/contract/fleet-v1, SRV-731), as the controller
+// `/v1/fleet/placement`, `/v1/fleet/weights*`, contracts/fleet-v1, SRV-731), as the controller
 // answers them (proxy/deployments.py, proxy/placement.py, proxy/fleetweights.py), over the mock fleet's
 // own deployments (Qwen3.8-27B Replicas on Desk + R-3, DeepSeek-V4.1-Flash Split over R-1 + R-2, Wren
 // a Role on Desk; fleet4 starts with a copy of DeepSeek's pack R-1 → Desk running). Jobs run on the clock, a function of the time since they started:

@@ -12,7 +12,7 @@ import { MockFleet } from '../mock/fleet.ts';
 import type { AppPermission, AppView, FleetConfigFile, ImportPlan, ImportResult, PasswordState } from '../src/api/fleet.ts';
 import { applyLabel, browserNotify, exportName, importGroups, passwordBlocked, passwordError, passwordStatus, permRows, planSummary, readConfig, resultWords, updateLine } from '../src/lib/app-settings.ts';
 
-const FDIR = join(__dirname, '..', '..', 'docs', 'contract', 'fleet-v1');
+const FDIR = join(__dirname, '..', '..', 'contracts', 'fleet-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const schema: Record<string, ReturnType<typeof ajv.compile>> = {};
 for (const f of readdirSync(FDIR)) if (f.endsWith('.schema.json')) schema[f.replace('.schema.json', '')] = ajv.compile(JSON.parse(readFileSync(join(FDIR, f), 'utf8')));

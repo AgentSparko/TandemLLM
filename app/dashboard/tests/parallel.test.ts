@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { MockParallel } from '../mock/parallel';
 import { backendOrder, barScale, Colors, jointWords, mergeSeries, Slots, slotWord, stack, stateLine, stateTone, tokenBar, windowWord, type Lane, type Parallel } from '../src/lib/parallel';
 
-const DIR = join(__dirname, '..', '..', 'docs', 'contract', 'dashboard-v1');
+const DIR = join(__dirname, '..', '..', 'contracts', 'dashboard-v1');
 const schema = JSON.parse(readFileSync(join(DIR, 'parallel.schema.json'), 'utf8'));
 const validate = new Ajv2020({ allErrors: true, strict: true }).compile(schema);
 const example = JSON.parse(readFileSync(join(DIR, 'parallel.example.json'), 'utf8')) as Parallel;

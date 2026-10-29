@@ -12,7 +12,7 @@ import type { ControllerView, FleetNode, MoveJob, MovePlan, UpdatePlan, UpdateVi
 import { apiOf, followUrl, hostChoices, landing, moveFormError, moveWords, newPassword, planGroups, takeFormError } from '../src/lib/controller-host.ts';
 import { jobProgress, mixedTitle, mixedVersions, needsUpdate, normVersion, order, releaseOf, type PlanNode } from '../src/lib/fleet-update.ts';
 
-const FDIR = join(__dirname, '..', '..', 'docs', 'contract', 'fleet-v1');
+const FDIR = join(__dirname, '..', '..', 'contracts', 'fleet-v1');
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const schema: Record<string, ReturnType<typeof ajv.compile>> = {};
 for (const f of readdirSync(FDIR)) if (f.endsWith('.schema.json')) schema[f.replace('.schema.json', '')] = ajv.compile(JSON.parse(readFileSync(join(FDIR, f), 'utf8')));

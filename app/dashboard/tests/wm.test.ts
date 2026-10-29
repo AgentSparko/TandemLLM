@@ -37,7 +37,7 @@ import {
 } from '../src/lib/wm';
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
-const schema = ajv.compile(JSON.parse(readFileSync(join(__dirname, '..', '..', 'docs', 'contract', 'fleet-v1', 'layout.schema.json'), 'utf8')));
+const schema = ajv.compile(JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'fleet-v1', 'layout.schema.json'), 'utf8')));
 const valid = (l: Layout) => {
   if (!schema(l)) throw new Error(ajv.errorsText(schema.errors));
   return true;
