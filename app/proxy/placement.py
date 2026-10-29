@@ -16,11 +16,11 @@ without an agent asks its own engine's `POST /v1/setup/estimate` (the fleet's lo
 backend, proxy/fleetsetup.py local_engine). `source` is engine (or what an older agent that
 computed the estimate itself says); neither the planner nor TandemNode computes one. A node that
 serves nothing has the engine's whole budget (device memory less the floor): it fits when the
-estimate does. A node that serves something keeps it: the new
-engine's own parts (the estimate's total less the OS) and the floor must fit in what is free now,
-else `needs 98 GiB, Gold has 61 free`. An off node, one without an estimate (no engine there
-serves the Setup Guide, its engine does not answer, a model its registry lacks), says why and fits
-nothing.
+estimate does. A node that serves something keeps it: the new engine's own parts (the estimate's
+total less the OS) and the floor must fit in what is free now, else
+`needs 98 GiB, Gold has 61 free`. An off node, one without an estimate (no engine there serves
+the Setup Guide, its engine does not answer, a model its registry lacks, an answer the plan cannot
+read), says why and fits nothing.
 
 THE TYPES:
 
@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import math
 import threading
 import time
 
@@ -63,6 +64,44 @@ def _part(est: dict, pid: str) -> float:
     return sum(p["gb"] for p in est.get("parts") or [] if p.get("id") == pid)
 
 
+def _num(v) -> bool:
+    """A finite JSON number: an int or a float, not a bool."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    try:
+        return math.isfinite(v)
+    except OverflowError:                           # an int past a float's range
+        return False
+
+
+def _unusable(doc) -> str | None:
+    """Why an estimate answer cannot be planned from, None when it can: each field the plan reads
+    as the engine's `POST /v1/setup/estimate` gives it (total_gb, budget_gb and floor_gb numbers,
+    available_gb a number or null, fits a bool, parts a list of {id, label, gb})."""
+    if not isinstance(doc, dict):
+        return "is not a JSON object"
+    for k in ("total_gb", "budget_gb", "floor_gb"):
+        if not _num(doc.get(k)):
+            return f"has no valid {k}"
+    if doc.get("available_gb") is not None and not _num(doc["available_gb"]):
+        return "has no valid available_gb"
+    if not isinstance(doc.get("fits"), bool):
+        return "has no valid fits"
+    parts = doc.get("parts")
+    if not isinstance(parts, list) or not all(
+            isinstance(p, dict) and isinstance(p.get("id"), str)
+            and isinstance(p.get("label"), str) and _num(p.get("gb")) for p in parts):
+        return "has no valid parts"
+    return None
+
+
+def _message(doc) -> str | None:
+    """An error answer's message, {"error": {"message": ...}}; None without one."""
+    err = doc.get("error") if isinstance(doc, dict) else None
+    msg = err.get("message") if isinstance(err, dict) else None
+    return msg if isinstance(msg, str) and msg else None
+
+
 class Planner:
     def __init__(self, fleet):
         self.fleet = fleet
@@ -75,10 +114,12 @@ class Planner:
         if isinstance(src, nodesource.AgentNode):
             st, doc = src.post("/node/setup/estimate", {"selection": sel},
                                timeout=ESTIMATE_TIMEOUT_S)
-            if st == 200 and isinstance(doc, dict) and "total_gb" in doc:
-                return doc, None, doc.get("source") or "engine"
-            err = (doc or {}).get("error") or {}
-            return None, err.get("message") or f"its agent answered HTTP {st}", "none"
+            if st != 200:
+                return None, _message(doc) or f"its agent answered HTTP {st}", "none"
+            bad = _unusable(doc)
+            if bad is not None:
+                return None, f"its agent's answer {bad}", "none"
+            return doc, None, doc.get("source") or "engine"
         if isinstance(src, nodesource.LocalNode):
             return self._local_estimate(sel)
         return None, src.status()[1], "none"
@@ -90,6 +131,8 @@ class Planner:
             host, port = fleetsetup.local_engine(self.fleet)
         except FleetError as exc:
             return None, exc.message, "none"
+        except ValueError:                          # the URL's port: out of range, not a number
+            return None, "this machine's engine URL has no valid port", "none"
         conn = http.client.HTTPConnection(host, port, timeout=ESTIMATE_TIMEOUT_S)
         try:
             conn.request("POST", "/v1/setup/estimate", body=json.dumps({"selection": sel}).encode(),
@@ -103,13 +146,14 @@ class Planner:
             conn.close()
         try:
             doc = json.loads(raw)
-        except ValueError:
+        except (ValueError, RecursionError):        # not JSON, or nested past the parser's depth
             doc = None
-        if st == 200 and isinstance(doc, dict) and "total_gb" in doc:
-            return doc, None, "engine"
-        err = doc.get("error") if isinstance(doc, dict) else None
-        msg = err.get("message") if isinstance(err, dict) else None
-        return None, msg or f"its engine answered HTTP {st}", "none"
+        if st != 200:
+            return None, _message(doc) or f"its engine answered HTTP {st}", "none"
+        bad = _unusable(doc)
+        if bad is not None:
+            return None, f"its engine's answer {bad}", "none"
+        return doc, None, "engine"
 
     def _node(self, row: dict, src, sel: dict, busy: set) -> dict:
         a = row["alias"]

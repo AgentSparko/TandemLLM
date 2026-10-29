@@ -21,8 +21,9 @@ test: tests/owned.py). The engine a box serves on :8000 is never addressed.
      link it is allowed but not built; its record is stopped, its start and its requests 501;
      a node that serves something: "needs 98 GiB, Gold has 61 free"; each estimate is its
      engine's Setup Guide's as the agent relays it (source engine), a node whose engine does not
-     answer has none and fits nothing; this machine without an agent asks its own engine
-                                                                          test_placement_and_split
+     answer has none and fits nothing, nor does one whose answer the plan cannot read (the plan
+     still answers); this machine without an agent asks its own engine, and a local backend URL
+     whose port does not parse gives no estimate                          test_placement_and_split
   5  jobs through the agents: start (engine started, health, one token), move (the API id stays,
      the old engine stopped), stop (confirm, 503 deployment_stopped)      test_start_move_stop
   6  weights: a pack copied node to node through the controller, verified by content id; a
@@ -64,7 +65,7 @@ import owned  # noqa: E402
 import test_fleet as tf  # noqa: E402
 import test_node_agent as tna  # noqa: E402
 from ports import free_port  # noqa: E402
-from proxy import affinity, config as config_mod, deployments, fleetupdate  # noqa: E402
+from proxy import affinity, config as config_mod, deployments, fleetupdate, placement  # noqa: E402
 from proxy_util import Proxy, run  # noqa: E402
 from tools import contract_check  # noqa: E402
 
@@ -492,6 +493,17 @@ def test_placement_and_split():
         assert single["allowed"] and single["nodes"] == [r2], single
         rep = next(t for t in p["types"] if t["type"] == "replicas")
         assert not rep["allowed"] and rep["reason"] == "needs two nodes that fit: only R-2 fits"
+        # an answer the plan cannot read is no estimate either, and the plan still answers
+        fake1 = fx.nodes["R-1"].srv.fake
+        for answer, why in (({"total_gb": 108.0}, "has no valid budget_gb"),
+                            (dict(EST, fits="no"), "has no valid fits")):
+            fake1.estimate = answer
+            st, p = tf.send(fx.px, "POST", "/v1/fleet/placement", dict(body, nodes=[g, r1]))
+            assert st == 200, p
+            n1 = tf.ok(p, "placement")["nodes"][1]
+            assert (n1["fits"], n1["source"], n1["need_gib"]) == (False, "none", None), n1
+            assert n1["reason"] == f"R-1 has no estimate: its agent's answer {why}", n1
+        fake1.estimate = dict(EST)
         # a node whose engine does not answer has no estimate and fits nothing
         down = fx.nodes["R-2"]
         down.srv.shutdown()
@@ -535,6 +547,15 @@ def test_placement_and_split():
             last = srv.fake.last
             assert (last["path"], last["body"]) == ("/v1/setup/estimate", {"selection": sel})
             assert last["headers"].get("Content-Type") == "application/json", last["headers"]
+            # an answer the plan cannot read is no estimate, and the plan still answers
+            for answer, why in (({"total_gb": 1}, "has no valid budget_gb"),
+                                (dict(EST, fits="no"), "has no valid fits"),
+                                (dict(EST, parts=[{"id": "os", "gb": 4.0}]), "has no valid parts"),
+                                (b"[" * 100000, "is not a JSON object")):
+                srv.fake.estimate = answer
+                n = here()
+                assert (n["fits"], n["source"], n["need_gib"]) == (False, "none", None), n
+                assert n["reason"] == f"{n['alias']} has no estimate: its engine's answer {why}", n
             srv.shutdown()
             srv.server_close()
             n = here()
@@ -544,6 +565,18 @@ def test_placement_and_split():
     finally:
         srv.shutdown()
         srv.server_close()
+
+    # a local backend URL whose port does not parse (the config's URL pattern lets one through):
+    # no estimate, no exception
+    class Local:
+        def __init__(self, url):
+            self.url = url
+
+        def engine_backends(self):
+            return [{"kind": "tandemllm", "url": self.url}]
+    for url in ("http://127.0.0.1:99999/v1", "http://127.0.0.1:x/v1"):
+        got = placement.Planner(Local(url))._local_estimate(dict(sel))
+        assert got == (None, "this machine's engine URL has no valid port", "none"), (url, got)
 
 
 # ---------------------------------------------------------------------------- 5. jobs

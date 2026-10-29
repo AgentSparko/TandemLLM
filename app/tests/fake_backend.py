@@ -84,8 +84,9 @@ engine's 400 for a prompt past the context window (`fake.windowed` counts them);
 OpenAI-compatible backend's ("maximum context length is n tokens", a relay's backend). `tokenize` (in a test) answers `POST
 /v1/tokenize` (server/tokenize_api.py) with the prompt's tokens, or this number when it is an int;
 None: 404, a server without the route (`fake.counted` counts the calls). `estimate` (in a test)
-answers `POST /v1/setup/estimate` (our engine's Setup Guide estimate) with this dict; None: 404, a
-server without the Setup Guide. `--key` makes every route need `Authorization: Bearer <key>`.
+answers `POST /v1/setup/estimate` (our engine's Setup Guide estimate) with this dict, or with
+these bytes as they are; None: 404, a server without the Setup Guide. `--key` makes every route
+need `Authorization: Bearer <key>`.
 
 Our engine's side of a relay (SRV-733): `board = True` answers `GET /v1/dashboard/parallel` with a
 lane per request in flight that carries `X-Tandem-Relay-Id` (None: 404, a server without the
@@ -172,7 +173,7 @@ class Fake:
         self.strict = False             # the window holds the prompt and max_tokens (strict)
         self.tokenize = None            # POST /v1/tokenize: True (count) or an int; None: 404
         self.counted = 0
-        self.estimate: dict | None = None   # POST /v1/setup/estimate's answer; None: 404
+        self.estimate: dict | bytes | None = None   # POST /v1/setup/estimate's answer; None: 404
         self.key = key
         self.tps = float(tps)
         self.dialect = dialect
@@ -354,6 +355,13 @@ def make_handler(fake: Fake):
             if p == "/v1/setup/estimate":
                 if fake.estimate is None:
                     return self._json(404, {"error": {"message": "no route", "type": "not_found"}})
+                if isinstance(fake.estimate, bytes):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(fake.estimate)))
+                    self.end_headers()
+                    self.wfile.write(fake.estimate)
+                    return
                 return self._json(200, fake.estimate)
             text = _last_user(body)
             if text.startswith("Memory pass."):
