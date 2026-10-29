@@ -1,4 +1,4 @@
-"""OPS-43 / OPS-44: the eval harness, tools/tandem_eval.py.
+"""OPS-43 / OPS-44: the eval harness, app/tools/tandem_eval.py.
 
 The test matrix is OPS-43's Gherkin plus the schema check:
 
@@ -6,7 +6,7 @@ The test matrix is OPS-43's Gherkin plus the schema check:
   2  alternation and isolation                    test_the_schedule_*, test_the_store_is_cleared_*
   3  checkers stay pristine                       test_pristine_*
   4  the indicative label                         test_n_below_ten_is_indicative (and the Compare
-                                                  view's fixture in dashboard/tests/conductor.test.ts)
+                                                  view's fixture in app/dashboard/tests/conductor.test.ts)
   5  the raw row                                  test_the_raw_row_*
   -  report.json validates                        test_the_report_validates_*, the example file,
                                                   and POST/GET /v1/conductor/evals over HTTP

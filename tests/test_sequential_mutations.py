@@ -20,7 +20,7 @@ tests/test_toolcheck.py:
      required) is shadow                                        test_5_*
   6  profiles: tools acts, coding, chat-app, hermes and chat journal, general and overnight off;
      a profile stored before C5 gets it once (migration), a stored monitor document by
-     tools/monitor_migrate.py                                   test_6_*
+     app/tools/monitor_migrate.py                               test_6_*
 
 Run: python tests/test_sequential_mutations.py
 """
@@ -385,7 +385,7 @@ def test_6_a_profile_stored_before_c5_loads_and_is_migrated_once():
 
 
 def test_6_a_stored_monitor_document_gets_c5_by_the_migrate_tool():
-    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "app", "tools"))
     import monitor_migrate
     p = policy_mod.load()
     old = json.loads(json.dumps(p.data))

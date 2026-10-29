@@ -1,5 +1,5 @@
-"""Conversation affinity (SRV-467, proxy/affinity.py; a Replicas deployment's since SRV-731): the key,
-the hash, the table, the policies, and the requests never replayed on another member.
+"""Conversation affinity (SRV-467, app/proxy/affinity.py; a Replicas deployment's since SRV-731): the
+key, the hash, the table, the policies, and the requests never replayed on another member.
 
 The key order is pinned against the engine's own functions, read out of server/app.py (no torch:
 the two functions are compiled from the source alone), over a matrix of bodies and headers.
@@ -19,6 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(ROOT, "app", "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
 
 from proxy import affinity  # noqa: E402
 from proxy import deployments  # noqa: E402

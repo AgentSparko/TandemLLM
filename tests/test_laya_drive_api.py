@@ -231,7 +231,7 @@ def test_7_kit():
                               raw=True)
         assert st == 200 and hdr["Content-Type"].startswith(ctype), hdr
         assert hdr["Access-Control-Allow-Origin"] == "*"
-        with open(os.path.join(ROOT, "server", "laya_kit", name), "rb") as f:
+        with open(os.path.join(ROOT, "app", "tandemapp", "laya_kit", name), "rb") as f:
             assert body == f.read()
     assert _call(PORT, "GET", "/v1/laya/kit/../app.py", headers=PROXY, token=None, raw=True)[0] == 404
     assert _call(PORT, "GET", "/v1/laya/kit/nothing.py", headers=PROXY, token=None, raw=True)[0] == 404

@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
 
 from tandemapp import activity, live, metrics, usage  # noqa: E402
 from test_live import Clock, _rec, _reg, _row, _valid  # noqa: E402
@@ -549,7 +550,7 @@ def test_the_prefill_live_rate_with_no_warm_up_starts_at_the_loop():
 def test_the_chunk_hook_appends_one_tuple_and_nothing_runs_per_token():
     """The chunk hook gained no work: one tuple a chunk, as it built before (a chunk of a
     prefill window replaces its window's mark instead, `activity.pf_mark`, 2026-10-09). The
-    token path (`RequestRecord.track`) is unchanged (tests/test_live.py holds it)."""
+    token path (`RequestRecord.track`) is unchanged (app/tests/test_live.py holds it)."""
     src = open(os.path.join(ROOT, "server", "app.py")).read()
     watch = src.split("        def watch(done: int, total: int) -> None:")[1].split(
         "        watch.info = {}")[0]
@@ -557,7 +558,7 @@ def test_the_chunk_hook_appends_one_tuple_and_nothing_runs_per_token():
     mark = 'activity_mod.pf_mark(rec.pf_marks, done, total, now, watch.info.get("window"))'
     assert code.count(mark) == 1, code
     assert code.count("(") - code.count("()") <= 13 and ".pf =" not in code, code
-    track = open(os.path.join(ROOT, "server", "usage.py")).read().split(
+    track = open(os.path.join(ROOT, "app", "tandemapp", "usage.py")).read().split(
         "def track(self, source):")[1].split("def lock_acquired")[0]
     assert "anchor" not in track and "pf_marks" not in track
 

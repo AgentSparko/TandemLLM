@@ -1,6 +1,7 @@
 """The conductor end to end over HTTP: the real server with the fake engine (server/fake_engine.py),
-a fake decider process (server/conductor/fake_decider.py, the Jev HTTP API) as both classifier roles, and a second
-server without the conductor for the raw byte check. SRV-129/130, SRV-117/118, SRV-119/120.
+a fake decider process (app/tandemapp/conductor/fake_decider.py, the Jev HTTP API) as both
+classifier roles, and a second server without the conductor for the raw byte check. SRV-129/130,
+SRV-117/118, SRV-119/120.
 
 What a client sees and what the model saw are both checked. The fake engine answers from the last
 user turn it is given, and its reasoning line counts that turn's characters, so a note injected
@@ -83,7 +84,7 @@ def _server(port, conductor_dir=None, extra=()):
 
 
 def _decider(port, *extra):
-    return subprocess.Popen([sys.executable, os.path.join(ROOT, "server", "conductor",
+    return subprocess.Popen([sys.executable, os.path.join(ROOT, "app", "tandemapp", "conductor",
                                                           "fake_decider.py"),
                              "--port", str(port), *extra], cwd=ROOT, env=_env(),
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)

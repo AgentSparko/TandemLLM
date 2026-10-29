@@ -368,7 +368,7 @@ def _switch_box() -> tuple[str, dict]:
     shutil.copytree(os.path.join(ROOT, "ops", "profiles"), os.path.join(ops, "profiles"))
     for f in ("use-profile.sh", "fetch_weights.py", "engines.sh"):
         shutil.copy2(os.path.join(ROOT, "ops", f), os.path.join(ops, f))
-    for d in ("server", "models", "engine", "packages"):          # read only: the registry's code
+    for d in ("server", "models", "engine", "app"):               # read only: the registry's code
         os.symlink(os.path.join(ROOT, d), os.path.join(repo, d))
     import socket
     with socket.socket() as s:

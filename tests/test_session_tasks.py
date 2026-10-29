@@ -71,7 +71,7 @@ class CharTok:
 
 
 def policy(only=("S2", "S1", "S4"), **changes) -> Policy:
-    """ops/supervisor.yaml with only the session tasks (or `only`), each changed by
+    """app/ops/supervisor.yaml with only the session tasks (or `only`), each changed by
     `changes[task]` (a dict merged into it)."""
     d = yaml.safe_load(open(policy_mod.DEFAULT_PATH))
     d["tasks"] = {k: v for k, v in d["tasks"].items() if k in only}

@@ -248,7 +248,7 @@ def test_the_fake_engine_refuses_the_production_ledger():
 # one test rule, a tool-call check that passes everything, so a policy can hold calls.
 
 LAUNCH_RULES = ("import sys, runpy; sys.modules['triton'] = None; sys.modules['triton.language'] = None;"
-                "sys.path.insert(0, '.'); from server.conductor.monitor import tier0;"
+                "sys.path.insert(0, '.'); import server; from tandemapp.conductor.monitor import tier0;"
                 "tier0.register('t_pass', 'SP3', {})(lambda ev, task, sup: None);"
                 "sys.argv = ['server/app.py'] + sys.argv[1:]; runpy.run_path('server/app.py', "
                 "run_name='__main__')")
@@ -258,7 +258,7 @@ GIVE_UP = "No tool call after two tries. Stopping this turn."
 
 def _policy_file(tasks_extra: dict | None = None, only: dict | None = None) -> str:
     import yaml
-    with open(os.path.join(ROOT, "ops", "supervisor.yaml")) as f:
+    with open(os.path.join(ROOT, "app", "ops", "supervisor.yaml")) as f:
         d = yaml.safe_load(f)
     if only is not None:
         d["tasks"] = only

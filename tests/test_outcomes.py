@@ -23,7 +23,7 @@ The test matrix:
      request (the prompt up to it is the previous turn's), counts as an act (the monitor adopts
      it), and the caps drop the note but keep the effort
                                                         test_act_note_replay_and_caps
-  7  the eval counts the outcomes per session (tools/tandem_eval.py)
+  7  the eval counts the outcomes per session (app/tools/tandem_eval.py)
                                                         test_the_eval_counts_outcomes
   8  the schemas: the profile's switches and the router's section validate; anything else is
      refused                                            test_the_schemas
@@ -347,7 +347,7 @@ def test_the_mario_sessions():
 # ------------------------------------------------------------------ 7
 
 def test_the_eval_counts_outcomes():
-    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "app", "tools"))
     import tandem_eval as te
 
     class Api:

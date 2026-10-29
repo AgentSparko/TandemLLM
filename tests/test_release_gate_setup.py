@@ -47,12 +47,12 @@ def test_both_runs():
     assert "mcr.microsoft.com/playwright:v1.63.0-noble" in t and "playwright.gate.config.ts" in t
     assert '/v1/setup/remove \'{"profiles": ["exl3-3.0"], "confirm": true}\'' in t
     assert "printf '\\nif then fi (\\n' >> \"$DIR/run/ops/stop.sh\"" in t and 'echo fixed > "$OUT/shots/fixed.txt"' in t
-    spec = open(os.path.join(ROOT, "dashboard", "e2e", "setup-gate.spec.ts")).read()
+    spec = open(os.path.join(ROOT, "app", "dashboard", "e2e", "setup-gate.spec.ts")).read()
     assert "[data-restart-card]" in spec and "[data-start-chatting]" in spec and "timeout: 10_000" in spec
     for sel in ("[data-job-failed-end]", "[data-copy-diagnostics]", "[data-diagnostics-text]", "[data-job-retry]",
                 "[data-remove-confirm]", "[data-remove-yes]", "retry_of"):
         assert sel in spec, sel
-    cfg = open(os.path.join(ROOT, "dashboard", "playwright.gate.config.ts")).read()
+    cfg = open(os.path.join(ROOT, "app", "dashboard", "playwright.gate.config.ts")).read()
     assert "width: 390" in cfg
 
 
@@ -60,7 +60,7 @@ def test_the_checklist():
     ops = open(os.path.join(ROOT, "docs", "operations.md")).read()
     sec = ops[ops.index("## Release checklist"):ops.index("## Deploying a new version")]
     assert "`bash tools/release_gate_setup.sh` (OPS-177), mandatory" in sec, sec
-    main = open(os.path.join(ROOT, "dashboard", "playwright.config.ts")).read()
+    main = open(os.path.join(ROOT, "app", "dashboard", "playwright.config.ts")).read()
     assert main.count("testIgnore: /(shots|setup-gate)\\.spec\\.ts/") == 3
 
 

@@ -73,11 +73,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def _skill(name: str) -> str:
     """A shipped everyday package's text, its frontmatter left out."""
-    with open(os.path.join(ROOT, "packages", "everyday", name, "SKILL.md")) as f:
+    with open(os.path.join(ROOT, "app", "packages", "everyday", name, "SKILL.md")) as f:
         return packages_mod.split_frontmatter(f.read())[1].strip()
 
 
-# the shipped texts and fields of the packages under test (packages/seed.json)
+# the shipped texts and fields of the packages under test (app/packages/seed.json)
 PKGS = {
     "everyday-core": {"general": True},
     "write-message": {"deliverable": "send"},
@@ -129,7 +129,7 @@ WRITE_MESSAGE_LINE = "so it can be copied and sent as it is"
 
 def test_1_the_deliverable_field_and_the_capabilities():
     with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                           "packages", "seed.json")) as f:
+                           "app", "packages", "seed.json")) as f:
         seed = json.load(f)["packages"]
     got = {n: p["deliverable"] for n, p in seed.items() if "deliverable" in p}
     assert got == {"write-message": "send", "formal-letter": "send", "event-plan": "schedule",

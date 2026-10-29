@@ -1,5 +1,5 @@
-"""SRV-179 / SRV-181 (QA: SRV-180, SRV-182): S5, the turn budget (server/conductor/monitor/
-sessiontasks.py `turn_budget`), on a fake clock with no torch.
+"""SRV-179 / SRV-181 (QA: SRV-180, SRV-182): S5, the turn budget (app/tandemapp/conductor/
+monitor/sessiontasks.py `turn_budget`), on a fake clock with no torch.
 
 The test matrix, from the two tickets' Gherkin:
 
@@ -33,8 +33,8 @@ The test matrix, from the two tickets' Gherkin:
        get no S5 note; edits to the product reset the count; a debug turn (not a build) gets none
                                                 test_clean_runs_and_progress_get_no_verify_note
   the policy and the box
-    8  ops/supervisor.yaml validates with S5, the JSON copy matches, the box's stored document
-       gains S5 through tools/monitor_migrate.py and keeps its own tasks; a box whose S5 lacks
+    8  app/ops/supervisor.yaml validates with S5, the JSON copy matches, the box's stored document
+       gains S5 through app/tools/monitor_migrate.py and keeps its own tasks; a box whose S5 lacks
        the verify parameters (0.3.43, policy 6) gains them and keeps its own values
                                                   test_policy_and_migration
 
@@ -374,8 +374,8 @@ def test_policy_and_migration():
     assert p.tasks["S5"].rule == "turn_budget" and p.tasks["S5"].mode == "act"
     assert p.version == 8
     with open(policy_mod.DEFAULT_JSON) as f:
-        assert json.load(f) == p.data, "policy.default.json is stale: tools/conductor_policy.py --json"
-    sys.path.insert(0, os.path.join(ROOT, "tools"))
+        assert json.load(f) == p.data, "policy.default.json is stale: app/tools/conductor_policy.py --json"
+    sys.path.insert(0, os.path.join(ROOT, "app", "tools"))
     import monitor_migrate
     old = json.loads(json.dumps(p.data))
     del old["tasks"]["S5"]
