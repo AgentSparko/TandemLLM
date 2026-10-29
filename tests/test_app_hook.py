@@ -3,9 +3,9 @@
   1  after `import server`, in a process whose path holds the repository and not app/,
      tandemapp, proxy and chatd load from app/, app/ is still not on sys.path, and a second
      import of server/__init__.py adds no second finder      test_server_serves_the_app_packages
-  2  nothing else of app/ comes along: tools.package_check (only app/tools has it) and the
-     test helper proxy_util (only app/tests) are not found, tools.contract_check is the
-     engine's own                                           test_nothing_else_of_app_is_found
+  2  nothing else of app/ comes along: tools.tandem_eval (only app/tools has it) and the test
+     helper proxy_util (only app/tests) are not found, tools.contract_check is the engine's own
+                                                             test_nothing_else_of_app_is_found
   3  in a tree without app/, `import server` installs nothing  test_no_app_no_finder
 
 CPU, standard library only. Run: python tests/test_app_hook.py
@@ -62,12 +62,12 @@ def test_server_serves_the_app_packages():
 
 
 def test_nothing_else_of_app_is_found():
-    assert os.path.isfile(os.path.join(APP, "tools", "package_check.py"))
-    assert not os.path.exists(os.path.join(ROOT, "tools", "package_check.py"))
+    assert os.path.isfile(os.path.join(APP, "tools", "tandem_eval.py"))
+    assert not os.path.exists(os.path.join(ROOT, "tools", "tandem_eval.py"))
     assert os.path.isfile(os.path.join(APP, "tests", "proxy_util.py"))
     out = _child(PREAMBLE +
                  "import server\n"
-                 "print(importlib.util.find_spec('tools.package_check'))\n"
+                 "print(importlib.util.find_spec('tools.tandem_eval'))\n"
                  "print(importlib.util.find_spec('proxy_util'))\n"
                  "print(os.path.realpath(importlib.util.find_spec('tools.contract_check').origin))\n")
     engine = os.path.realpath(os.path.join(ROOT, "tools", "contract_check.py"))
