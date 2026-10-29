@@ -11,15 +11,15 @@ task, and up to `--turns` streamed turns. A turn that ends in tool calls gets a 
 and goes on; a turn that ends in text gets the next instruction. Sessions run at once (one thread
 each) and start `--stagger` seconds apart.
 
-A model whose id starts with `fake` is the fake backend (tests/fake_backend.py): its user turns
+A model whose id starts with `fake` is the fake backend (app/tests/fake_backend.py): its user turns
 carry the words that steer it (a speed between 25 and 120 tokens a second, an answer length, a
 tool call every other turn, some reasoning, a TTFT), so its lanes look like real ones.
 
 MEASURED HERE, per turn, off the stream the client got: TTFT (send to the first token frame),
 token frames, the decode rate ((completion tokens - 1) / (last frame - first frame), the engine's
 formula), `usage` (prompt, cached, completion), the cost at the price list's rates
-(proxy/prices.seed.json, DeepSeek's off-peak half by the UTC hour). Totals: completion tokens over
-the run's wall time per backend and in all; the most turns in flight at once.
+(app/proxy/prices.seed.json, DeepSeek's off-peak half by the UTC hour). Totals: completion tokens
+over the run's wall time per backend and in all; the most turns in flight at once.
 
 BUDGET: `--budget-usd` stops new turns once the cost so far plus the worst case of the turns in
 flight (max_tokens at the output price, the prompt at the input price) would pass it.
@@ -393,7 +393,7 @@ class Run:
             plan += [model.strip()] * int(n or 1)
         for model in dict.fromkeys(plan):
             # two short answers per model first: the board checks that a backend's frames are
-            # tokens before it counts them live (server/parallel.py)
+            # tokens before it counts them live (app/tandemapp/parallel.py)
             for k in range(2 * a.warmup):
                 tool = k >= a.warmup          # then two that call a tool (checked on their own)
                 fake = model.startswith("fake")
@@ -530,7 +530,7 @@ def main(argv=None) -> int:
                     help="seconds: sessions start new conversations until then (0: one each)")
     ap.add_argument("--stagger", type=float, default=0.15)
     ap.add_argument("--budget-usd", type=float, default=None)
-    ap.add_argument("--prices", default=os.path.join(ROOT, "proxy", "prices.seed.json"))
+    ap.add_argument("--prices", default=os.path.join(ROOT, "app", "proxy", "prices.seed.json"))
     ap.add_argument("--no-think", default="", help="models sent thinking disabled (comma list)")
     ap.add_argument("--key-env", default=None, help="an environment variable with a bearer key")
     ap.add_argument("--board", action="store_true", help="read /v1/dashboard/parallel meanwhile")

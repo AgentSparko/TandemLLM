@@ -1205,7 +1205,7 @@ if [ "$MODE_NOW" = chat ]; then
     CHAT_LINE="$(cat <<EOF
 Chat:      http://$API_HOST:$PORT/dashboard/#/chat  chatd starts and stops with the engine
              ($DIR/bin/tandem chat status). The sandbox is optional: without a container runtime
-             the chat answers and uses the file tools; bash $SRC/ops/sandbox/install.sh adds the rest
+             the chat answers and uses the file tools; bash $SRC/app/ops/sandbox/install.sh adds the rest
 EOF
 )"
 else

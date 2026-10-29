@@ -109,7 +109,7 @@ listing() {
     fi
 }
 ( cd "$SRC_TREE" && listing \
-    | grep -vE '^(run|logs|train|results|dashboard/node_modules)/' | tar -cf - -T - ) | tar -xf - -C "$REL"
+    | grep -vE '^(run|logs|train|results|app/dashboard/node_modules)/' | tar -cf - -T - ) | tar -xf - -C "$REL"
 git -C "$REL" init -q && git -C "$REL" add -A && \
     git -C "$REL" -c user.name=gate -c user.email=gate@example.invalid commit -qm "release under test" || exit 2
 REF="$(git -C "$REL" rev-parse HEAD)"
@@ -282,7 +282,7 @@ if install_box a "$PORT" && start_setup_mode; then
     if [ "$BROWSER" = 1 ]; then
         PW="$HOME/.cache/tandem-gate-pw"
         mkdir -p "$PW" "$OUT/shots"
-        cp "$SRC_TREE/dashboard/e2e/setup-gate.spec.ts" "$SRC_TREE/dashboard/playwright.gate.config.ts" "$PW/"
+        cp "$SRC_TREE/app/dashboard/e2e/setup-gate.spec.ts" "$SRC_TREE/app/dashboard/playwright.gate.config.ts" "$PW/"
         # as this user, so every file it writes is this user's (the report, the cache), HOME a scratch
         DU=(--user "$(id -u):$(id -g)" -e HOME=/tmp)
         [ -d "$PW/node_modules/@playwright/test" ] || cmd docker run --rm "${DU[@]}" --network host -v "$PW:/work" -w /work \

@@ -331,7 +331,7 @@ def test_the_install_says_what_it_did():
     chat = text[text.index('if [ "$MODE_NOW" = chat ]; then'):text.index("${B}Done.${N}")]
     assert re.search(r"Chat: +http://\$API_HOST:\$PORT/dashboard/#/chat +chatd starts and stops with the engine", chat)
     assert "($DIR/bin/tandem chat status)" in chat and "The sandbox is optional" in chat
-    assert "the chat answers and uses the file tools; bash $SRC/ops/sandbox/install.sh adds the rest" in chat
+    assert "the chat answers and uses the file tools; bash $SRC/app/ops/sandbox/install.sh adds the rest" in chat
     assert "Mode:      engine only (the default)" in chat and "--with-chat" in chat
     assert "  $CHAT_LINE\n" in done
     setup = text[text.index("no model is loaded yet. Open the Setup Guide"):text.index('if [ "$START" != 1 ]; then\n    info "skipped (--no-start). Start it with')]
