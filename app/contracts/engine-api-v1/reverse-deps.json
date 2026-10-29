@@ -658,11 +658,12 @@
   },
   "tests/test_effort_by_size.py": {
    "imports": [
-    "tandemapp.conductor.schema",
-    "tools.tandem_eval"
+    "app/tools/tandem_eval.py",
+    "tandemapp.conductor.schema"
    ],
    "reads": [
-    "app/"
+    "app/",
+    "app/tools"
    ]
   },
   "tests/test_end_anchor.py": {
@@ -1541,28 +1542,31 @@
   },
   "tests/test_tandem_eval.py": {
    "imports": [
-    "tandemapp.conductor.routes",
-    "tools.tandem_eval"
+    "app/tools/tandem_eval.py",
+    "tandemapp.conductor.routes"
    ],
    "reads": [
     "app/",
-    "app/contracts"
+    "app/contracts",
+    "app/tools"
    ]
   },
   "tests/test_tandem_eval_clock.py": {
    "imports": [
-    "tools.tandem_eval"
+    "app/tools/tandem_eval.py"
    ],
    "reads": [
-    "app/"
+    "app/",
+    "app/tools"
    ]
   },
   "tests/test_tandem_eval_resume.py": {
    "imports": [
-    "tools.tandem_eval"
+    "app/tools/tandem_eval.py"
    ],
    "reads": [
-    "app/"
+    "app/",
+    "app/tools"
    ]
   },
   "tests/test_think.py": {
