@@ -6,22 +6,24 @@
 # A user unit dies with the login session unless linger is enabled (sudo loginctl enable-linger).
 #
 # Install with (another --dir: replace %h/TandemLLM below):
-#   mkdir -p ~/.config/systemd/user && cp ~/TandemLLM/src/ops/chatd.service ~/.config/systemd/user/
+#   mkdir -p ~/.config/systemd/user && cp ~/TandemLLM/src/app/ops/chatd.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload && systemctl --user enable --now chatd
 #
 # Its own unit, never the engine's: restarting the engine leaves chatd and its runs alone (a run
 # waits for the engine and retries for 10 minutes). SIGTERM ends open runs `interrupted`. The forward
 # key comes from the engine's secrets.env; the admin and metrics tokens there never reach chatd.
+# chatd runs from TandemApp's tree, src/app; its log stays src/logs/chatd.log, the file
+# app/ops/chatd.sh writes and `tandem chat logs` reads.
 [Unit]
 Description=TandemLLM chatd, the Chat tab's service on 127.0.0.1:8016
 After=network-online.target
 
 [Service]
 Type=exec
-WorkingDirectory=%h/TandemLLM/src
+WorkingDirectory=%h/TandemLLM/src/app
 EnvironmentFile=-%h/TandemLLM/state/secrets.env
 UnsetEnvironment=QSE_ADMIN_TOKEN QSE_METRICS_TOKEN
-Environment=PYTHONPATH=%h/TandemLLM/src
+Environment=PYTHONPATH=%h/TandemLLM/src/app
 ExecStart=%h/TandemLLM/venv/bin/python -u -m chatd --host 127.0.0.1 --port 8016 --data %h/.tandemllm/chat
 KillSignal=SIGTERM
 TimeoutStopSec=30

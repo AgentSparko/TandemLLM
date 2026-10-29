@@ -1,46 +1,54 @@
 #!/bin/bash
 # chatd, the Chat tab's service (python -m chatd, chatd/__init__.py):
 #
-#   bash ops/chatd.sh start [--front 0.0.0.0:4180]   start it in the background (QSE_CHAT_URL)
-#   bash ops/chatd.sh stop [--this-tree]            SIGTERM: open runs end `interrupted` (Continue);
+#   bash app/ops/chatd.sh start [--front 0.0.0.0:4180]   start it in the background (QSE_CHAT_URL)
+#   bash app/ops/chatd.sh stop [--this-tree]            SIGTERM: open runs end `interrupted` (Continue);
 #                                                   --this-tree: only a chatd this checkout started
-#   bash ops/chatd.sh restart                       stop, then start
-#   bash ops/chatd.sh status                        pid, interpreter, data, URL and GET /health
+#   bash app/ops/chatd.sh restart                       stop, then start
+#   bash app/ops/chatd.sh status                        pid, interpreter, data, URL and GET /health
 #
-# ops/start.sh starts it once the engine answers /health, `tandem stop` stops it first and
-# `tandem chat start|stop|restart|status|logs` calls this script (OPS-155). Its own process, never
-# the engine's: ops/stop.sh, an engine restart and a hold leave it alone, and it does not touch the
-# engine (ops/engines.sh does not count it). It stays in the checkout (DIR/src/ops in an install):
-# the `chatd` package is found from here.
+# From TandemApp's own root the path is ops/chatd.sh. The engine's ops/start.sh starts it once the
+# engine answers /health, `tandem stop` stops it first and `tandem chat start|stop|restart|status|logs`
+# calls this script (OPS-155), until ENG-413. Its own process, never the engine's: ops/stop.sh, an
+# engine restart and a hold leave it alone, and it does not touch the engine (ops/engines.sh does
+# not count it). It stays in the checkout (DIR/src/app/ops in an install): the `chatd` package is
+# found from here.
+#
+# Paths: HERE is TandemApp's root, this file's ../ (the chatd package, dashboard/dist). TOP holds
+# run/, logs/ and venv/: the repository's root when HERE is its app/ (../server/app.py, the engine,
+# is there: a checkout, or DIR/src in an install), else HERE. UP is TOP's parent: an install's DIR.
 #
 # The interpreter, first match: CHATD_PY; PY (serve.env's, exported by start.sh and bin/tandem);
-# the install's venv beside this checkout (../venv/bin/python); ./venv/bin/python;
-# $VIRTUAL_ENV/bin/python; python3, said so with its version. chatd needs only the standard library;
-# the MCP servers' stored secrets need the venv's `cryptography`, and pyproject.toml asks for 3.11.
+# the install's venv beside the checkout ($UP/venv/bin/python); $TOP/venv/bin/python;
+# $HERE/venv/bin/python; $VIRTUAL_ENV/bin/python; python3, said so with its version. chatd needs
+# only the standard library; the MCP servers' stored secrets need the venv's `cryptography`, and
+# pyproject.toml asks for 3.11.
 #
 # The environment: run by hand in an installed tree (no serve.env in the environment, REPO unset),
 # DIR/run/ops/serve.env and its local.env are read as start.sh reads them; then QSE_CHATD_ENV, else
-# run/chatd.env of the install or of this checkout, when there is one. The forward key,
+# run/chatd.env of the install or of TOP, when there is one. The forward key,
 # QSE_CHAT_FORWARD_KEY, comes from the secrets file the engine reads (QSE_SECRETS, else
 # $QSE_STATE_DIR/secrets.env, else ~/.qwen38-spark-engine/secrets.env, start.sh's order); with no
 # key there chatd makes <data>/forward.key, which the engine reads too. The admin and metrics
 # tokens never reach chatd. Address from QSE_CHAT_URL (http://127.0.0.1:8016), the engine from
 # QSE_CHAT_ENGINE (else http://127.0.0.1:$PORT), data in QSE_CHAT_DATA (~/.tandemllm/chat, the pid
-# file there too), the log in logs/chatd.log (ids and counts, never message text).
+# file there too), the log in $TOP/logs/chatd.log (ids and counts, never message text).
 # `--front HOST:PORT` also serves the dashboard and the Chat tab from this process, for an engine
 # whose server has no /v1/chat-app forward yet (chatd/front.py).
 set -eu
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-UP="$(cd "$HERE/.." && pwd)"                 # an install's DIR when this is DIR/src
+TOP="$HERE"
+if [ -f "$HERE/../server/app.py" ]; then TOP="$(cd "$HERE/.." && pwd)"; fi
+UP="$(cd "$TOP/.." && pwd)"                  # an install's DIR when TOP is DIR/src
 if [ -z "${REPO:-}" ] && [ -f "$UP/.tandemllm-install" ] && [ -f "$UP/run/ops/serve.env" ]; then
     set +u; set -a; . "$UP/run/ops/serve.env"; set +a; set -u
 fi
-CHATD_ENV="${QSE_CHATD_ENV:-$HERE/run/chatd.env}"
+CHATD_ENV="${QSE_CHATD_ENV:-$TOP/run/chatd.env}"
 [ -n "${QSE_CHATD_ENV:-}" ] || [ ! -f "$UP/.tandemllm-install" ] || CHATD_ENV="$UP/run/chatd.env"
 if [ -f "$CHATD_ENV" ]; then set +u; set -a; . "$CHATD_ENV"; set +a; set -u; fi
 DATA="${QSE_CHAT_DATA:-$HOME/.tandemllm/chat}"
 PIDF="$DATA/chatd.pid"
-LOG="$HERE/logs/chatd.log"
+LOG="$TOP/logs/chatd.log"
 URL="${QSE_CHAT_URL:-http://127.0.0.1:8016}"
 ADDR="${URL#*://}"; ADDR="${ADDR%%/*}"
 case "$ADDR" in *:*) CHOST="${ADDR%:*}"; CPORT="${ADDR##*:}" ;; *) CHOST="$ADDR"; CPORT=8016 ;; esac
@@ -68,12 +76,13 @@ version_of() { "$1" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>
 
 # PYBIN and PYVER: the interpreter that runs chatd, in the order above
 pick_python() {
-    local c v
+    local c v here_venv=""
     if [ -n "${CHATD_PY:-}" ]; then
         v="$(version_of "$CHATD_PY")" || { echo "[chatd] CHATD_PY=$CHATD_PY does not run"; return 1; }
         PYBIN="$CHATD_PY"; PYVER="$v"; return 0
     fi
-    for c in "${PY:-}" "$UP/venv/bin/python" "$HERE/venv/bin/python" \
+    [ "$HERE" = "$TOP" ] || here_venv="$HERE/venv/bin/python"     # the same venv when HERE is TOP
+    for c in "${PY:-}" "$UP/venv/bin/python" "$TOP/venv/bin/python" "$here_venv" \
              "${VIRTUAL_ENV:+$VIRTUAL_ENV/bin/python}"; do
         [ -n "$c" ] && [ -e "$c" ] || continue
         if [ -f "$c" ] && [ -x "$c" ] && v="$(version_of "$c")"; then
@@ -121,7 +130,7 @@ start() {
         fi
         return 1
     fi
-    mkdir -p "$DATA" "$HERE/logs" 2>/dev/null && [ -w "$DATA" ] \
+    mkdir -p "$DATA" "$TOP/logs" 2>/dev/null && [ -w "$DATA" ] \
         || { echo "[chatd] cannot write the data folder $DATA (QSE_CHAT_DATA)"; return 1; }
     pick_python || return 1
     forward_key

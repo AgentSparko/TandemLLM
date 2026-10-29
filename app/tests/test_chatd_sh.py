@@ -1,10 +1,11 @@
 """ops/chatd.sh and ops/chatd.service follow the install (OPS-153, QA OPS-154; GitHub issue #3).
 
 `ops/chatd.sh` runs for real against a temporary tree laid out as install.sh lays one out
-(DIR/src with the `chatd` package and the script, DIR/venv/bin/python, DIR/run/ops/serve.env,
-DIR/state/secrets.env, the .tandemllm-install marker). The interpreters are stubs that write their
-argument vector to a file and then exec this Python, so a test can tell which one ran chatd. Every
-chatd here runs on a free port with a data folder of its own; none is left running.
+(DIR/src with TandemApp's tree in DIR/src/app: the `chatd` package and the script, beside the
+engine's server/app.py; DIR/venv/bin/python, DIR/run/ops/serve.env, DIR/state/secrets.env, the
+.tandemllm-install marker). The interpreters are stubs that write their argument vector to a file
+and then exec this Python, so a test can tell which one ran chatd. Every chatd here runs on a free
+port with a data folder of its own; none is left running.
 
 The test matrix, the Gherkin of OPS-153:
 
@@ -24,7 +25,10 @@ The test matrix, the Gherkin of OPS-153:
   7  a reused pid is not a running chatd: start replaces the pid file, stop signals nothing
                                                                      test_a_reused_pid_is_not_a_running_chatd
   8  the port follows QSE_CHAT_URL                                   test_the_port_follows_qse_chat_url
-  9  ops/chatd.service runs from the installer's layout              test_the_unit_file_matches_the_installer_layout
+  9  ops/chatd.service runs from the installer's layout (src/app)    test_the_unit_file_matches_the_installer_layout
+  10 run/chatd.env, logs/ and the venv are the install's, the repository checkout's root (SRV-747:
+     TandemApp in app/ beside the engine) or TandemApp's own root; chatd runs in TandemApp's tree
+                                                                     test_run_logs_and_the_venv_follow_the_tree
 
 Edge cases: a port another program holds fails visibly and names the port, status and restart
 (test_a_taken_port_status_and_restart); the syntax check of chatd.sh is in
@@ -77,25 +81,39 @@ def _stub(path: str, name: str, log: str, body: str | None = None) -> str:
 
 
 class Tree:
-    """DIR as install.sh makes it, with this checkout's chatd package and ops/chatd.sh in DIR/src."""
+    """DIR as install.sh makes it, with this checkout's chatd package and ops/chatd.sh in DIR/src/app
+    and a stand-in DIR/src/server/app.py (layout "install"). Without an install around it: layout
+    "checkout", the repository (TandemApp in repo/app beside the engine's server/app.py), and "app",
+    TandemApp's own tree; their TOP is that root, and the venv goes there."""
 
-    def __init__(self, venv: bool = True, serve_env: bool = True):
+    def __init__(self, venv: bool = True, serve_env: bool = True, layout: str = "install"):
         self.tmp = tempfile.mkdtemp(prefix="chatdsh-")
         self.dir = os.path.join(self.tmp, "TandemLLM")
-        self.src = os.path.join(self.dir, "src")
         self.home = os.path.join(self.tmp, "home")
-        os.makedirs(os.path.join(self.src, "ops"))
+        #: the checkout's root (serve.env's REPO), which is chatd.sh's TOP (run/, logs/), and
+        #: TandemApp's root in it (the chatd package, ops/chatd.sh)
+        self.src = self.top = {"install": os.path.join(self.dir, "src"), "checkout": os.path.join(self.tmp, "repo"),
+                               "app": os.path.join(self.tmp, "tandemapp")}[layout]
+        self.app = self.top if layout == "app" else os.path.join(self.top, "app")
+        os.makedirs(os.path.join(self.app, "ops"))
         os.makedirs(self.home)
-        shutil.copytree(os.path.join(ROOT, "chatd"), os.path.join(self.src, "chatd"),
+        if layout != "app":
+            os.makedirs(os.path.join(self.top, "server"))
+            open(os.path.join(self.top, "server", "app.py"), "w").close()
+        shutil.copytree(os.path.join(ROOT, "chatd"), os.path.join(self.app, "chatd"),
                         ignore=shutil.ignore_patterns("__pycache__"))
-        shutil.copy(os.path.join(ROOT, "ops", "chatd.sh"), os.path.join(self.src, "ops"))
-        open(os.path.join(self.dir, ".tandemllm-install"), "w").close()
+        shutil.copy(os.path.join(ROOT, "ops", "chatd.sh"), os.path.join(self.app, "ops"))
+        if layout == "install":
+            os.makedirs(self.dir, exist_ok=True)
+            open(os.path.join(self.dir, ".tandemllm-install"), "w").close()
         self.argv = os.path.join(self.tmp, "argv.log")
         self.port = _free_port()
         self.data = os.path.join(self.home, ".tandemllm", "chat")
         self.secrets = os.path.join(self.dir, "state", "secrets.env")
+        #: the venv chatd.sh finds when nothing names an interpreter: DIR/venv, else TOP/venv
+        self.venv = os.path.join(self.dir if layout == "install" else self.top, "venv", "bin", "python")
         if venv:
-            _stub(os.path.join(self.dir, "venv", "bin", "python"), "venv", self.argv)
+            _stub(self.venv, "venv", self.argv)
         if serve_env:
             os.makedirs(os.path.join(self.dir, "run", "ops"))
             with open(os.path.join(self.dir, "run", "ops", "serve.env"), "w") as fh:
@@ -120,7 +138,7 @@ class Tree:
         return e
 
     def sh(self, *args, **env) -> subprocess.CompletedProcess:
-        return subprocess.run(["bash", os.path.join(self.src, "ops", "chatd.sh"), *args],
+        return subprocess.run(["bash", os.path.join(self.app, "ops", "chatd.sh"), *args],
                               capture_output=True, text=True, env=self.env(**env), timeout=60,
                               stdin=subprocess.DEVNULL)
 
@@ -447,11 +465,40 @@ def test_the_unit_file_matches_the_installer_layout():
     unit = open(os.path.join(ROOT, "ops", "chatd.service")).read()
     assert "qwen38-spark-engine" not in unit and "/usr/bin/python3" not in unit, unit
     lines = dict(ln.split("=", 1) for ln in unit.splitlines() if "=" in ln and not ln.startswith("#"))
-    assert lines["WorkingDirectory"] == "%h/TandemLLM/src"
+    # `-m chatd` from TandemApp's tree, src/app (SRV-747); the log where chatd.sh writes it (TOP/logs)
+    assert lines["WorkingDirectory"] == "%h/TandemLLM/src/app"
+    assert lines["Environment"] == "PYTHONPATH=%h/TandemLLM/src/app"
     assert lines["ExecStart"].startswith("%h/TandemLLM/venv/bin/python -u -m chatd ")
     assert lines["EnvironmentFile"] == "-%h/TandemLLM/state/secrets.env"
     assert lines["StandardOutput"] == "append:%h/TandemLLM/src/logs/chatd.log"
     assert lines["StandardError"] == "append:%h/TandemLLM/src/logs/chatd.log"
+    assert "cp ~/TandemLLM/src/app/ops/chatd.service ~/.config/systemd/user/" in unit
+
+
+def test_run_logs_and_the_venv_follow_the_tree():
+    for layout in ("install", "checkout", "app"):
+        t = Tree(serve_env=False, layout=layout)
+        try:
+            # run/chatd.env of the install, else of TOP; its data folder shows that it was read
+            run = os.path.join(t.dir if layout == "install" else t.top, "run")
+            t.data = os.path.join(t.tmp, "data-" + layout)          # close() finds the pid file there
+            os.makedirs(run, exist_ok=True)
+            with open(os.path.join(run, "chatd.env"), "w") as fh:
+                fh.write(f"QSE_CHAT_DATA={t.data}\n")
+            r = t.sh("start")
+            assert r.returncode == 0 and f"[chatd] started with {t.venv} (" in r.stdout, (layout, _out(r))
+            st = t.sh("status")
+            assert st.returncode == 0 and f"data {t.data}" in st.stdout, (layout, _out(st))
+            if os.path.isdir("/proc"):                                # its cwd: TandemApp's tree
+                assert f", tree {os.path.realpath(t.app)}" in st.stdout, (layout, st.stdout)
+            assert os.path.isfile(os.path.join(t.top, "logs", "chatd.log")), layout
+            if t.app != t.top:                                        # nothing written into app/
+                assert not os.path.exists(os.path.join(t.app, "logs")), layout
+                assert not os.path.exists(os.path.join(t.app, "run")), layout
+            stop = t.sh("stop")
+            assert stop.returncode == 0 and t.pid() is None, (layout, _out(stop))
+        finally:
+            t.close()
 
 
 if __name__ == "__main__":
