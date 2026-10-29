@@ -182,7 +182,7 @@ These `/v1/conductor/*` screens read or load the engine's own models and memory.
 
 ## ENG-413: what the engine still takes from TandemApp
 
-Until the headless engine, `server/__init__.py` puts `app/` on the path for every entry point (server/app.py, `python -m server.setup.*`, the tools and the tests), and these engine modules import TandemApp's (`reverse-deps.json` `imports` has each imported name):
+Until the headless engine, a finder in `server/__init__.py` serves only `tandemapp`, `proxy` and `chatd` from `app/` to every entry point (server/app.py, `python -m server.setup.*`, the tools and the tests; `tests/test_app_hook.py` holds this), and these engine modules import TandemApp's (`reverse-deps.json` `imports` has each imported name):
 
 | engine file | app modules |
 |-|-|

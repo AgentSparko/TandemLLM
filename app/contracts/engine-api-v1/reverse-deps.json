@@ -329,6 +329,12 @@
     "app/"
    ]
   },
+  "tests/test_app_hook.py": {
+   "imports": [],
+   "reads": [
+    "app/"
+   ]
+  },
   "tests/test_argkey_calls.py": {
    "imports": [
     "tandemapp.toolcall:ToolCallBuffer",
