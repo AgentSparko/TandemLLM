@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qwen38-spark-engine/contract/engine-api-v1/health.schema.json",
+  "title": "GET /health (aliases /healthz, /v1/health): the engine's and its status responder's",
+  "description": "The open answer (a proxied caller without the token) is {status} alone. The full answer (a loopback caller without proxy headers, or the token) adds the configuration; the setup-mode answer says mode setup; the status responder (QSE_STATUS_PORT) answers 503 with its state and the facts under engine. engine_api is MAJOR.MINOR; a missing one means 1.0. Further fields may appear: additionalProperties is true.",
+  "type": "object",
+  "required": [
+    "status"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "busy",
+        "draining",
+        "failed",
+        "starting",
+        "up",
+        "held",
+        "stopping",
+        "down",
+        "not_answering"
+      ],
+      "description": "the engine: ok, busy, draining (503) or failed (500, a GPU context that no longer answers); the status responder: the engine's state from the status file"
+    },
+    "engine_api": {
+      "type": "string",
+      "description": "the engine API version, MAJOR.MINOR (server/engine_api.py VERSION); absent: 1.0"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "setup"
+      ],
+      "description": "setup mode (--setup) only"
+    },
+    "assistant": {
+      "type": "string",
+      "description": "setup mode: Wren's state"
+    },
+    "status_port": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "the status responder's port (QSE_STATUS_PORT), null when off"
+    },
+    "version": {
+      "type": "string",
+      "description": "the engine's release"
+    },
+    "model": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "the served name"
+    },
+    "base_model": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "weights": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true,
+      "description": "the weight profile; name is what TandemNode shows"
+    },
+    "uptime_s": {
+      "type": "number",
+      "minimum": 0
+    },
+    "max_len": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "default_max_tokens": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "memory": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "parallel": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "--parallel N: the slots"
+    },
+    "engine_busy": {
+      "type": "boolean"
+    },
+    "failed": {
+      "type": "string",
+      "description": "status failed: the GPU's error"
+    },
+    "error": {
+      "type": [
+        "string",
+        "object"
+      ],
+      "description": "status failed: in words; the status responder: the OpenAI error object"
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "the status responder: the engine's facts (state, since, reason, expected_s)"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "about": "How TandemNode controls a TandemLLM install without importing it: bin/tandem's verbs (exit 0 means done) and the install.sh flags the controller's installer runs. TandemNode never runs python -m server.* and never imports engine code.",
+  "control": "bin/tandem",
+  "verbs": [
+    "start",
+    "stop",
+    "restart"
+  ],
+  "install": {
+    "script": "install.sh",
+    "flags": [
+      "--dir",
+      "--ref",
+      "--runtime-only",
+      "--yes"
+    ],
+    "source": "the controller: TANDEM_ENGINE_INSTALL_SH, its ref Package.engine_ref() (proxy/nodeinstall.py)"
+  }
+}

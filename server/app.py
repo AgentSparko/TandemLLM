@@ -88,6 +88,7 @@ from tandemapp import static  # noqa: E402
 from server import images as images_mod  # noqa: E402
 from server import memlimits  # noqa: E402
 from server import gpu_health  # noqa: E402
+from server import engine_api  # noqa: E402  (SRV-747 the engine API's version in /health)
 from server import memsplit  # noqa: E402
 from server import rolemem  # noqa: E402
 from server import refwatch as refwatch_mod  # noqa: E402
@@ -619,6 +620,8 @@ def _health_body(part) -> dict:
     roles = part("roles", _safe, roles_report)
     return {
         "status_port": _status_port(),
+        # SRV-747: the engine API's version (app/contracts/engine-api-v1); TandemNode reads it
+        "engine_api": engine_api.VERSION,
         "model": served_name(), "base_model": STATE.get("model"),
         "version": STATE.get("version", ""), "weights": part("weights", weights_profile),
         "max_queue": STATE.get("max_queue"),
@@ -14824,7 +14827,8 @@ class SetupHandler(Handler):
                 "status": "draining" if STATE.get("draining") else "ok", "mode": "setup",
                 "version": STATE.get("version", ""), "status_port": _status_port(),
                 "uptime_s": round(time.time() - STATE.get("started", time.time()), 1),
-                "assistant": w.state if w is not None else "off"})
+                "assistant": w.state if w is not None else "off",
+                "engine_api": engine_api.VERSION})
         if path == "/v1/models":
             return self._json(200, {"object": "list", "data": []})
         return self._setup_only(path)
