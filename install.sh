@@ -354,6 +354,12 @@ hf_repo_dir() { printf '%s/models--%s' "$HF_HUB_DIR" "${1//\//--}"; }
 sha_of() {
     if command -v sha256sum >/dev/null 2>&1; then sha256sum | cut -c1-16; else shasum -a 256 | cut -c1-16; fi
 }
+# chatd_sh: the checkout's chatd launcher, TandemApp's app/ops/chatd.sh, else ops/chatd.sh (a ref
+# from before SRV-747); it may not exist. Looked up at each use: the update below can move the
+# checkout from one layout to the other, and an old ref is installed with this script too
+chatd_sh() {
+    if [ -f "$SRC/app/ops/chatd.sh" ]; then echo "$SRC/app/ops/chatd.sh"; else echo "$SRC/ops/chatd.sh"; fi
+}
 
 # ---------------------------------------------------------------------------------------------
 # --uninstall
@@ -374,7 +380,7 @@ if [ "$UNINSTALL" = 1 ]; then
     fi
     if [ -f "$DIR/bin/tandem" ]; then run bash "$DIR/bin/tandem" stop 120 || warn "the stop reported an error"; fi
     # chatd too, should this tandem predate its stop (OPS-155)
-    if [ -f "$SRC/ops/chatd.sh" ]; then run bash "$SRC/ops/chatd.sh" stop || true; fi
+    if [ -f "$(chatd_sh)" ]; then run bash "$(chatd_sh)" stop || true; fi
     # the status responder of this install (OPS-175), which outlives an engine stop on purpose
     SPORT="$(sed -n "s/^QSE_STATUS_PORT=//p" "$RUN/ops/serve.env" 2>/dev/null | tail -1 | tr -dc 0-9)"
     if [ -n "$SPORT" ] && [ -f "$RUN/ops/engine_status.py" ]; then
@@ -560,11 +566,11 @@ EOF
 confirm "Go ahead?" || die "cancelled"
 # a chatd running now keeps the code it started with: the last message says how to restart it
 CHATD_WAS_UP=0
-if [ "$DRY" != 1 ] && [ -f "$SRC/ops/chatd.sh" ] && bash "$SRC/ops/chatd.sh" status >/dev/null 2>&1; then
+if [ "$DRY" != 1 ] && [ -f "$(chatd_sh)" ] && bash "$(chatd_sh)" status >/dev/null 2>&1; then
     CHATD_WAS_UP=1
 fi
 chat_note() {
-    if [ "$CHATD_WAS_UP" = 1 ] && bash "$SRC/ops/chatd.sh" status >/dev/null 2>&1; then
+    if [ "$CHATD_WAS_UP" = 1 ] && bash "$(chatd_sh)" status >/dev/null 2>&1; then
         printf '\n  chatd was running before this update and keeps the old code until: %s/bin/tandem chat restart\n' "$DIR"
     fi
 }
@@ -905,10 +911,10 @@ else
         # the release's own service scripts, next to this env file (they source ./serve.env)
         # and what the setup guide's apply job runs beside them (server/setup/apply.py); roles.sh is
         # what start.sh runs after /health, watchdog.sh the cron line of docs/operations.md, hold.sh
-        # a box-alone command (OPS-161). Not copied: chatd.sh runs from the checkout (it finds the
-        # chatd package there and this file through DIR), gate.sh is the release gate of a
-        # development checkout. tests/test_install_ops_copy.py keeps this list and their "$HERE/"
-        # calls in step.
+        # a box-alone command (OPS-161). Not copied: chatd.sh runs from the checkout's app/ops
+        # (ops/ in a ref from before SRV-747; it finds the chatd package beside it and this file
+        # through DIR), gate.sh is the release gate of a development checkout.
+        # tests/test_install_ops_copy.py keeps this list and their "$HERE/" calls in step.
         for s in start.sh stop.sh engines.sh use-profile.sh make-secrets.sh engine_status.py \
                  fetch_weights.py roles.sh watchdog.sh hold.sh; do install -m 755 "$SRC/ops/$s" "$RUN/ops/$s"; done
         if [ "$SETUP" = 1 ]; then
@@ -943,12 +949,15 @@ doctor() {
 }
 if [ "${1:-}" = doctor ]; then shift; doctor "$@"; exit $?; fi
 # tandem node (SRV-725): TandemNode, the agent TandemApp's controller talks to, with this install's
-# engine as its engine (tandem node unit prints a systemd user unit for it)
+# engine as its engine (tandem node unit prints a systemd user unit for it). It runs from
+# TandemApp's tree, src/app (src in a checkout from before SRV-747), until ENG-413
 if [ "${1:-}" = node ]; then
     shift
     py="$TANDEM_DIR/venv/bin/python"
     [ -x "$py" ] || py=python3
-    cd "$TANDEM_DIR/src" && PYTHONPATH="$TANDEM_DIR/src" exec "$py" -m proxy.nodeagent "$@" --tandem-dir "$TANDEM_DIR"
+    app="$TANDEM_DIR/src"
+    if [ -d "$app/app/proxy" ]; then app="$app/app"; fi
+    cd "$app" && PYTHONPATH="$app" exec "$py" -m proxy.nodeagent "$@" --tandem-dir "$TANDEM_DIR"
 fi
 [ -f "$ENV_FILE" ] || { echo "[tandem] no $ENV_FILE; re-run install.sh" >&2; exit 1; }
 # a command that fails in the config (or a file it sources) names its file and line instead of
@@ -962,10 +971,13 @@ trap - ERR
 URL="http://127.0.0.1:$PORT"
 healthy() { curl -sf -m 3 "$URL/health" >/dev/null 2>&1; }
 engine_alive() { [ -f "$REPO/logs/engine.pid" ] && kill -0 "$(cat "$REPO/logs/engine.pid")" 2>/dev/null; }
-# chatd, the Chat tab's service (OPS-155): its own process, from the checkout's ops/chatd.sh. start
-# starts it once the engine answers, stop stops it first (open runs end `interrupted`, Continue
-# resumes them), restart leaves it running; QSE_CHATD=off (local.env) keeps start from starting it.
-CHATD="$REPO/ops/chatd.sh"
+# chatd, the Chat tab's service (OPS-155): its own process, from the checkout's app/ops/chatd.sh
+# (ops/chatd.sh in a checkout from before SRV-747; TandemApp's launcher, run from here until
+# ENG-413). start starts it once the engine answers, stop stops it first (open runs end
+# `interrupted`, Continue resumes them), restart leaves it running; QSE_CHATD=off (local.env) keeps
+# start from starting it.
+CHATD="$REPO/app/ops/chatd.sh"
+[ -f "$CHATD" ] || CHATD="$REPO/ops/chatd.sh"
 chat_up() { bash "$CHATD" status >/dev/null 2>&1; }
 chat_auto() {
     [ "${QSE_CHATD:-on}" = off ] && return 0
@@ -1196,6 +1208,10 @@ else
 fi
 
 API_HOST="$HOST"; [ "$HOST" = 0.0.0.0 ] && API_HOST="$(hostname -I 2>/dev/null | awk '{print $1}')"; API_HOST="${API_HOST:-127.0.0.1}"
+# the Chat tab's sandbox installer in this checkout: TandemApp's app/ops/sandbox, else ops/sandbox
+# (a ref from before SRV-747)
+SBX=app/ops/sandbox/install.sh
+[ -f "$SRC/$SBX" ] || SBX=ops/sandbox/install.sh
 # OPS-260: the mode the config resolves to (run/setup.env and run/local.env included)
 MODE_NOW="${MODE_ARG:-engine}"
 if [ "$DRY" != 1 ] && [ -f "$RUN/ops/serve.env" ]; then
@@ -1205,7 +1221,7 @@ if [ "$MODE_NOW" = chat ]; then
     CHAT_LINE="$(cat <<EOF
 Chat:      http://$API_HOST:$PORT/dashboard/#/chat  chatd starts and stops with the engine
              ($DIR/bin/tandem chat status). The sandbox is optional: without a container runtime
-             the chat answers and uses the file tools; bash $SRC/app/ops/sandbox/install.sh adds the rest
+             the chat answers and uses the file tools; bash $SRC/$SBX adds the rest
 EOF
 )"
 else

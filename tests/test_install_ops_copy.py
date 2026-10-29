@@ -91,7 +91,9 @@ def test_the_docs_name_the_installed_paths():
     text = open(os.path.join(ROOT, "install.sh")).read()
     done = text[text.index("${B}Done.${N}"):]
     assert "Watchdog:  bash $RUN/ops/watchdog.sh" in done
-    assert "chatd.sh runs from the checkout" in text and "gate.sh is the release gate" in text
+    # chatd.sh is TandemApp's launcher, in the checkout's app/ops (SRV-747), and never copied
+    assert "chatd.sh runs from the checkout's app/ops" in text and "gate.sh is the release gate" in text
+    assert os.path.isfile(os.path.join(ROOT, "app", "ops", "chatd.sh"))
 
 
 # ---------------------------------------------------------------- an installed box (Linux)

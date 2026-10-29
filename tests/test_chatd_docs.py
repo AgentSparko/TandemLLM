@@ -53,7 +53,7 @@ def test_the_down_state():
 
 def test_paths_match_the_installer():
     for p in (("docs", "chat.md"), ("docs", "operations.md"), ("docs", "setup.md"), ("manual", "chapters", "chat.tex"),
-              ("ops", "chatd.service")):
+              ("app", "ops", "chatd.service")):
         text = _read(*p)
         for ln in text.splitlines():
             if "chatd" in ln:

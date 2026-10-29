@@ -877,6 +877,11 @@ def test_the_watchdog_leaves_the_board_to_whoever_holds_the_box_lock():
         print("    (skipped: needs flock -- run it on the box)")
         return
     repo = _box(["watchdog.sh"])
+    # chatd's launcher, a stand-in that says it runs: a healthy minute has nothing to say about chatd
+    # either (with no launcher at all it says so once an hour: tests/test_chatd_lifecycle.py)
+    os.makedirs(os.path.join(repo, "app", "ops"))
+    with open(os.path.join(repo, "app", "ops", "chatd.sh"), "w") as fh:
+        fh.write("#!/bin/bash\nexit 0\n")
     lock = os.path.join(repo, "box.flock")
     holder = _hold_lock(lock)
     try:
@@ -1271,10 +1276,14 @@ def test_peers_in_the_process_table():
 
 
 def test_the_scripts_parse():
-    for name in ("watchdog.sh", "start.sh", "stop.sh", "hold.sh", "engines.sh", "gate.sh",
-                 "roles.sh", "chatd.sh", "make-secrets.sh"):
-        r = subprocess.run(["bash", "-n", os.path.join(OPS, name)], capture_output=True, text=True)
-        assert r.returncode == 0, f"{name}: {r.stderr}"
+    # chatd.sh is TandemApp's, in app/ops (SRV-747); start.sh and the watchdog run it
+    app_ops = os.path.join(os.path.dirname(OPS), "app", "ops")
+    for path in [os.path.join(OPS, name) for name in ("watchdog.sh", "start.sh", "stop.sh", "hold.sh",
+                                                      "engines.sh", "gate.sh", "roles.sh", "make-secrets.sh")] \
+            + [os.path.join(app_ops, "chatd.sh")]:
+        assert os.path.isfile(path), path
+        r = subprocess.run(["bash", "-n", path], capture_output=True, text=True)
+        assert r.returncode == 0, f"{path}: {r.stderr}"
 
 
 if __name__ == "__main__":

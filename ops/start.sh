@@ -58,11 +58,12 @@ LOGLINK="$LOGS/engine.log"
 [ -z "$PEER" ] || { PIDFILE="$LOGS/peer-$PEER.pid"; LOG="$LOGS/peer-$PEER-${LOG##*/engine-}"; LOGLINK="$LOGS/peer-$PEER.log"; }
 
 # OPS-155: chatd, the Chat tab's service, once the engine answers /health: started if it is not
-# running, by the checkout's ops/chatd.sh (its own session, nothing inherited above stdio, serve.env,
-# local.env and secrets.env exported, the admin token held back). Not in setup mode, not for a
-# hold's restart (HOLD_RESTART=1), not with QSE_CHATD=off. A chatd that does not start is a warning:
-# the engine is up either way. ops/stop.sh never stops it, so an engine restart, the watchdog's
-# included, never ends a chat run; `tandem stop` does.
+# running, by the checkout's app/ops/chatd.sh, TandemApp's launcher (ops/chatd.sh in a checkout from
+# before SRV-747; with neither, one line says so), in its own session, nothing inherited above
+# stdio, serve.env, local.env and secrets.env exported, the admin token held back. Not in setup
+# mode, not for a hold's restart (HOLD_RESTART=1), not with QSE_CHATD=off. A chatd that does not
+# start is a warning: the engine is up either way. ops/stop.sh never stops it, so an engine
+# restart, the watchdog's included, never ends a chat run; `tandem stop` does. Until ENG-413.
 # Engine mode (OPS-260) stops a chatd this checkout started, so the Chat (beta) switch's off ends it.
 load_secrets() {
     SECRETS="${QSE_SECRETS:-${QSE_STATE_DIR:+$QSE_STATE_DIR/secrets.env}}"
@@ -71,21 +72,27 @@ load_secrets() {
 }
 start_chatd() {
     [ -z "$PEER" ] || return 0                     # a peer starts no chatd
+    local sh="$REPO/app/ops/chatd.sh"
+    [ -f "$sh" ] || sh="$REPO/ops/chatd.sh"
     if [ "${QSE_CHATD:-on}" = "off" ]; then
         if [ "${QSE_MODE:-}" = engine ]; then
             echo "[start] chatd: off (engine only; QSE_MODE=chat turns the chat on)"
             # OPS-260: the switch to engine ends the chat's chatd too (this tree's only; not for a hold)
-            if [ "${HOLD_RESTART:-0}" != "1" ] && [ -f "$REPO/ops/chatd.sh" ] && \
-                    bash "$REPO/ops/chatd.sh" status >/dev/null 2>&1; then
-                bash "$REPO/ops/chatd.sh" stop --this-tree || true
+            if [ "${HOLD_RESTART:-0}" != "1" ] && [ -f "$sh" ] && \
+                    bash "$sh" status >/dev/null 2>&1; then
+                bash "$sh" stop --this-tree || true
             fi
         else echo "[start] chatd: off (QSE_CHATD=off)"; fi
         return 0
     fi
     [ "${HOLD_RESTART:-0}" = "1" ] && return 0
-    [ -f "$REPO/ops/chatd.sh" ] || return 0
-    bash "$REPO/ops/chatd.sh" status >/dev/null 2>&1 && return 0
-    bash "$REPO/ops/chatd.sh" start \
+    if [ ! -f "$sh" ]; then
+        echo "[start] WARNING: chatd: $REPO has no app/ops/chatd.sh or ops/chatd.sh; the engine serves" \
+             "without the Chat tab"
+        return 0
+    fi
+    bash "$sh" status >/dev/null 2>&1 && return 0
+    bash "$sh" start \
         || echo "[start] WARNING: chatd did not start (above, log $REPO/logs/chatd.log); the engine" \
                 "serves without the Chat tab. tandem chat start tries again"
 }

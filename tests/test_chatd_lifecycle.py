@@ -1,10 +1,11 @@
 """chatd starts and stops with the engine (OPS-155, QA OPS-156; GitHub issue #3).
 
 ops/start.sh, ops/stop.sh and ops/watchdog.sh run for real in tests/test_ops_scripts.py's sandbox
-(fake curl, a fake process table, a fake engine), with a stand-in ops/chatd.sh that keeps its state
-in a file and writes every call to the markers. bin/tandem is the one install.sh writes: its
+(fake curl, a fake process table, a fake engine), with a stand-in chatd.sh that keeps its state in a
+file and writes every call to the markers: at app/ops/chatd.sh, TandemApp's launcher (SRV-747), or
+at ops/chatd.sh, a checkout from before it. bin/tandem is the one install.sh writes: its
 `write_control` is taken from install.sh and run against stand-in start.sh, stop.sh and chatd.sh.
-No process of the box is seen or signalled; ops/chatd.sh itself is tests/test_chatd_sh.py's.
+No process of the box is seen or signalled; chatd.sh itself is app/tests/test_chatd_sh.py's.
 
 The test matrix, the Gherkin of OPS-155 (the scratch install on the Spark covers the rest: a fresh
 install's 200, the run that ends `interrupted`, the cron boot, the apply job, systemd, uninstall):
@@ -25,6 +26,16 @@ install's 200, the run that ends `interrupted`, the cron boot, the apply job, sy
   10 the install's last message, the setup message and the re-run message
                                                          test_the_install_says_what_it_did
 
+SRV-747 moved chatd.sh to app/ops and TandemNode's code to app/; the launchers find either layout:
+
+  11 start.sh and the watchdog run app/ops/chatd.sh, else ops/chatd.sh; with neither, start.sh
+     says so in one line and the watchdog once an hour, and the engine is served
+                                                         test_start_and_the_watchdog_find_the_launcher
+  12 bin/tandem in a checkout from before SRV-747: chat from src/ops/chatd.sh; tandem node runs
+     from src/app, else src                              test_bin_tandem_finds_the_layout
+  13 install.sh's chatd_sh and the last message's sandbox installer, with app/ and without
+                                                         test_the_installer_finds_the_layout
+
 Run: python tests/test_chatd_lifecycle.py
 """
 
@@ -42,8 +53,8 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 import test_ops_scripts as T  # noqa: E402
 
-# ops/chatd.sh's stand-in: state in $CHAT_STATE (a file), every call in the markers, with whether
-# the engine answered at that moment (the fake engine touches <repo>/up)
+# chatd.sh's stand-in: state in $CHAT_STATE (a file), every call in the markers, with whether the
+# engine answered at that moment (the fake engine touches <repo>/up)
 FAKE_CHATD = """#!/bin/bash
 up=no; [ -f "{repo}/up" ] && up=yes
 echo "chatd.sh $1 engine-up=$up" >> "$MARKERS"
@@ -71,9 +82,15 @@ def _write(path: str, text: str, mode: int = 0o755) -> None:
     os.chmod(path, mode)
 
 
-def _chat_box(scripts: list[str]) -> str:
+#: where a checkout keeps chatd's launcher: app/ops since SRV-747 ("app"), ops/ before it ("old")
+LAUNCHER = {"app": ("app", "ops", "chatd.sh"), "old": ("ops", "chatd.sh")}
+
+
+def _chat_box(scripts: list[str], layout: str | None = "app") -> str:
+    """tests/test_ops_scripts.py's box with chatd.sh's stand-in where `layout` keeps it (None: none)."""
     repo = T._box(scripts)
-    _write(os.path.join(repo, "ops", "chatd.sh"), FAKE_CHATD.format(repo=repo))
+    if layout:
+        _write(os.path.join(repo, *LAUNCHER[layout]), FAKE_CHATD.format(repo=repo))
     if not shutil.which("setsid"):                 # macOS has none; start.sh launches with it
         _write(os.path.join(repo, "bin", "setsid"), '#!/bin/bash\nexec "$@"\n')
     return repo
@@ -219,9 +236,43 @@ def test_the_watchdog_starts_a_dead_chatd():
     assert len(_chat_calls(repo)) == n
 
 
+def test_start_and_the_watchdog_find_the_launcher():
+    # a checkout from before SRV-747: ops/chatd.sh is the launcher
+    repo = _chat_box(["start.sh"], layout="old")
+    r = _start(repo)
+    assert r.returncode == 0 and "[chatd] started" in r.stdout, r.stdout + r.stderr
+    assert _chat_calls(repo) == ["chatd.sh status engine-up=yes", "chatd.sh start engine-up=yes"], _marks(repo)
+    # both files (a tree copied over an older one): TandemApp's app/ops/chatd.sh
+    repo = _chat_box(["start.sh"])
+    _write(os.path.join(repo, *LAUNCHER["old"]), '#!/bin/bash\necho "old-chatd.sh $1" >> "$MARKERS"\n')
+    r = _start(repo)
+    assert r.returncode == 0 and _chat_calls(repo)[-1] == "chatd.sh start engine-up=yes", _marks(repo)
+    assert not [m for m in _marks(repo) if m.startswith("old-")], _marks(repo)
+    # neither: one line says so, and the engine is served
+    repo = _chat_box(["start.sh"], layout=None)
+    r = _start(repo)
+    assert r.returncode == 0 and "healthy after" in r.stdout, r.stdout + r.stderr
+    said = [ln for ln in r.stdout.splitlines() if "chatd" in ln]
+    assert said == [f"[start] WARNING: chatd: {repo} has no app/ops/chatd.sh or ops/chatd.sh; the engine "
+                    "serves without the Chat tab"], r.stdout
+    # the watchdog: the older launcher starts a dead chatd; with neither, one line an hour
+    repo = _chat_box(["watchdog.sh"], layout="old")
+    state = os.path.join(repo, "chat-up")
+    assert T._run(repo, "watchdog.sh", FAKE_HTTP_CODE="200", CHAT_STATE=state).returncode == 0
+    assert [c.split()[1] for c in _chat_calls(repo)] == ["status", "start"], _marks(repo)
+    assert "chatd was not running; started it (1/3 this hour)" in T._wd_log(repo), T._wd_log(repo)
+    os.remove(os.path.join(repo, *LAUNCHER["old"]))
+    for _ in range(2):
+        assert T._run(repo, "watchdog.sh", FAKE_HTTP_CODE="200", CHAT_STATE=state).returncode == 0
+    log = T._wd_log(repo)
+    assert log.count(f"chatd: {repo} has no app/ops/chatd.sh or ops/chatd.sh, so it is not started") == 1, log
+    assert not [m for m in _marks(repo) if m.startswith(("stop.sh", "start.sh"))], _marks(repo)
+
+
 # ------------------------------------------------------------------ bin/tandem (install.sh's write_control)
-def _tandem() -> tuple[str, str, dict]:
-    """A TANDEM_DIR with bin/tandem as install.sh writes it, stand-in scripts beside it."""
+def _tandem(layout: str = "app") -> tuple[str, str, dict]:
+    """A TANDEM_DIR with bin/tandem as install.sh writes it, stand-in scripts beside it; chatd.sh's
+    in the checkout where `layout` keeps it (src/app/ops, or src/ops before SRV-747)."""
     d = tempfile.mkdtemp(prefix="tandem-ctl-")
     src, run = os.path.join(d, "src"), os.path.join(d, "run")
     marks = os.path.join(d, "markers")
@@ -229,7 +280,8 @@ def _tandem() -> tuple[str, str, dict]:
         _write(os.path.join(run, "ops", name),
                f'#!/bin/bash\necho "{name} $*" >> "$MARKERS"\n'
                + (f"touch {d}/up\n" if name == "start.sh" else f"rm -f {d}/up\n"))
-    _write(os.path.join(src, "ops", "chatd.sh"), FAKE_CHATD.format(repo=d))
+    _write(os.path.join(src, *LAUNCHER[layout]), FAKE_CHATD.format(repo=d))
+    os.makedirs(os.path.join(src, "ops"), exist_ok=True)      # the engine's ops/, in every checkout
     _write(os.path.join(d, "py"), f'#!/bin/bash\necho "py $*" >> "$MARKERS"\n')
     _write(os.path.join(d, "fakebin", "curl"), f"#!/bin/bash\n[ -f {d}/up ] || exit 7\necho '{{}}'\n")
     _write(os.path.join(run, "ops", "serve.env"),
@@ -312,15 +364,45 @@ def test_tandem_start_stop_restart_status_and_chat():
     assert r.returncode == 0 and "WARNING: chatd did not start" in r.stderr, r.stdout + r.stderr
 
 
+# TandemNode's stand-in: says where it ran (a module of the checkout's proxy package)
+FAKE_NODEAGENT = 'import os, sys\nprint("nodeagent", os.getcwd(), os.environ.get("PYTHONPATH"), *sys.argv[1:])\n'
+
+
+def test_bin_tandem_finds_the_layout():
+    # a checkout from before SRV-747: tandem start, chat and stop reach src/ops/chatd.sh
+    d, marks, env = _tandem(layout="old")
+    r = _ctl(d, env, "start")
+    assert r.returncode == 0 and "[chatd] started" in r.stdout, r.stdout + r.stderr
+    assert _lines(marks) == ["start.sh ", "chatd.sh status engine-up=yes", "chatd.sh start engine-up=yes"]
+    r = _ctl(d, env, "chat", "status")
+    assert r.returncode == 0 and r.stdout.startswith("[chatd] running: pid 4242"), r.stdout + r.stderr
+    r = _ctl(d, env, "stop")
+    assert r.returncode == 0 and _lines(marks)[-2:] == ["chatd.sh stop engine-up=yes", "stop.sh 60"], r.stdout
+    # tandem node: TandemApp's code from src/app, from src in a checkout from before SRV-747 (src/app
+    # without proxy/ is not TandemApp's tree); the real agent: test_engine_scripts.py's
+    for trees in (["src/app"], ["src"], ["src/app", "src"]):
+        d, marks, env = _tandem()                  # src/app/ops/chatd.sh is there in each
+        for tree in trees:
+            _write(os.path.join(d, tree, "proxy", "__init__.py"), "", 0o644)
+            _write(os.path.join(d, tree, "proxy", "nodeagent.py"), FAKE_NODEAGENT, 0o644)
+        r = _ctl(d, env, "node", "check", "--state-dir", os.path.join(d, "node"))
+        code = os.path.join(d, trees[0])
+        assert r.returncode == 0, (trees, r.stdout + r.stderr)
+        ran = r.stdout.split()
+        assert ran[:3] == ["nodeagent", os.path.realpath(code), code], (trees, r.stdout)
+        assert ran[3:] == ["check", "--state-dir", os.path.join(d, "node"), "--tandem-dir", d], (trees, ran)
+
+
 def test_the_systemd_unit_stops_both():
     text = open(os.path.join(ROOT, "install.sh")).read()
     unit = text[text.index('cat > "$UNIT" <<EOF'):]
     unit = unit[:unit.index("\nEOF\n")]
     assert "ExecStart=/bin/bash $DIR/bin/tandem start" in unit and "ExecStop=/bin/bash $DIR/bin/tandem stop 120" in unit
     assert "systemctl restart restarts chatd" in unit
-    # bin/tandem stop stops chatd (test_tandem_...); --uninstall runs it and chatd.sh stop as well
+    # bin/tandem stop stops chatd (test_tandem_...); --uninstall runs it and chatd.sh stop as well,
+    # the checkout's launcher by chatd_sh (test_the_installer_finds_the_layout)
     un = text[text.index('if [ "$UNINSTALL" = 1 ]; then'):text.index("printf '%sTandemLLM installer%s")]
-    assert '"$DIR/bin/tandem" stop 120' in un and 'bash "$SRC/ops/chatd.sh" stop' in un
+    assert '"$DIR/bin/tandem" stop 120' in un and 'if [ -f "$(chatd_sh)" ]; then run bash "$(chatd_sh)" stop' in un
 
 
 def test_the_install_says_what_it_did():
@@ -331,13 +413,39 @@ def test_the_install_says_what_it_did():
     chat = text[text.index('if [ "$MODE_NOW" = chat ]; then'):text.index("${B}Done.${N}")]
     assert re.search(r"Chat: +http://\$API_HOST:\$PORT/dashboard/#/chat +chatd starts and stops with the engine", chat)
     assert "($DIR/bin/tandem chat status)" in chat and "The sandbox is optional" in chat
-    assert "the chat answers and uses the file tools; bash $SRC/app/ops/sandbox/install.sh adds the rest" in chat
+    assert "the chat answers and uses the file tools; bash $SRC/$SBX adds the rest" in chat
     assert "Mode:      engine only (the default)" in chat and "--with-chat" in chat
     assert "  $CHAT_LINE\n" in done
     setup = text[text.index("no model is loaded yet. Open the Setup Guide"):text.index('if [ "$START" != 1 ]; then\n    info "skipped (--no-start). Start it with')]
     assert "The Chat tab starts with the engine once the setup is done (%s/bin/tandem chat status)" in setup
     assert "chat_note" in setup and done.rstrip().endswith("chat_note")
     assert "chatd was running before this update and keeps the old code until: %s/bin/tandem chat restart" in text
+
+
+def test_the_installer_finds_the_layout():
+    text = open(os.path.join(ROOT, "install.sh")).read()
+    start = text.index("\nchatd_sh() {\n")
+    fn = text[start:text.index("\n}\n", start) + 3]
+    sbx = '\nSBX=app/ops/sandbox/install.sh\n[ -f "$SRC/$SBX" ] || SBX=ops/sandbox/install.sh\n'
+    assert sbx in text and text.index(sbx) < text.index("${B}Done.${N}")
+    # the checkout's own files, looked up where they are used: before the update (a chatd that runs
+    # keeps its code), at the last message and at --uninstall; never a fixed ops/chatd.sh
+    assert 'if [ "$DRY" != 1 ] && [ -f "$(chatd_sh)" ] && bash "$(chatd_sh)" status' in text
+    assert text.count('bash "$(chatd_sh)" status') == 2, "the check before the update and chat_note"
+    assert text.count('"$SRC/ops/chatd.sh"') == 1, "only chatd_sh names the older launcher"
+    # a checkout with app/ (SRV-747), one from before it, one with both, one with neither
+    for have, chatd, sandbox in ((["app"], "app/ops/chatd.sh", "app/ops/sandbox/install.sh"),
+                                 (["old"], "ops/chatd.sh", "ops/sandbox/install.sh"),
+                                 (["app", "old"], "app/ops/chatd.sh", "app/ops/sandbox/install.sh"),
+                                 ([], "ops/chatd.sh", "ops/sandbox/install.sh")):
+        src = tempfile.mkdtemp(prefix="install-layout-")
+        for layout in have:
+            _write(os.path.join(src, *LAUNCHER[layout]), "#!/bin/bash\n")
+            _write(os.path.join(src, *LAUNCHER[layout][:-1], "sandbox", "install.sh"), "#!/bin/bash\n")
+        r = subprocess.run(["bash", "-c", "set -euo pipefail" + fn + sbx + 'chatd_sh; echo "$SBX"'],
+                           capture_output=True, text=True, env=dict(os.environ, SRC=src), timeout=30)
+        assert r.returncode == 0 and r.stdout.split() == [os.path.join(src, chatd), sandbox], (have, r.stdout + r.stderr)
+        shutil.rmtree(src)
 
 
 if __name__ == "__main__":

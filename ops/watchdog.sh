@@ -23,12 +23,22 @@ say() { echo "$(date -Is) $*" >> "$WD"; }
 # OPS-155: the engine answers and chatd does not: start chatd, never the engine's restart for it. At
 # most 3 starts in an hour (logs/watchdog.chatd: the hour and the count), then one "giving up"
 # line until the next hour; a chatd found running clears the count. QSE_CHATD=off or setup mode
-# (run/setup-pending): nothing.
+# (run/setup-pending): nothing. The launcher is the checkout's app/ops/chatd.sh, TandemApp's (until
+# ENG-413), else ops/chatd.sh (a checkout from before SRV-747); with neither, one line an hour says
+# so (logs/watchdog.nochatd: that hour).
 chatd_check() {
-    local f="$LOGS/watchdog.chatd" hour h n
+    local f="$LOGS/watchdog.chatd" sh="$REPO/app/ops/chatd.sh" hour h n
     [ "${QSE_CHATD:-on}" = "off" ] && return 0
-    [ -f "$REPO/ops/chatd.sh" ] && [ ! -f "$REPO/run/setup-pending" ] || return 0
-    if bash "$REPO/ops/chatd.sh" status >/dev/null 2>&1; then rm -f "$f"; return 0; fi
+    [ ! -f "$REPO/run/setup-pending" ] || return 0
+    [ -f "$sh" ] || sh="$REPO/ops/chatd.sh"
+    if [ ! -f "$sh" ]; then
+        hour="$(date +%Y%m%d%H)"
+        [ "$(cat "$LOGS/watchdog.nochatd" 2>/dev/null)" = "$hour" ] && return 0
+        echo "$hour" > "$LOGS/watchdog.nochatd"
+        say "chatd: $REPO has no app/ops/chatd.sh or ops/chatd.sh, so it is not started (said once an hour)"
+        return 0
+    fi
+    if bash "$sh" status >/dev/null 2>&1; then rm -f "$f"; return 0; fi
     hour="$(date +%Y%m%d%H)"
     h=""; n=0; [ -f "$f" ] && read -r h n < "$f"
     [ "${h:-}" = "$hour" ] || n=0
@@ -38,7 +48,7 @@ chatd_check() {
         return 0
     fi
     echo "$hour $((n + 1))" > "$f"
-    if bash "$REPO/ops/chatd.sh" start >> "$WD" 2>&1; then
+    if bash "$sh" start >> "$WD" 2>&1; then
         say "chatd was not running; started it ($((n + 1))/3 this hour)"
     else
         say "chatd was not running and did not start ($((n + 1))/3 this hour); log: $REPO/logs/chatd.log"
