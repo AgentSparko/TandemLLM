@@ -390,7 +390,7 @@ class Auth:
 
 # ---------------------------------------------------------------------- a write from the page itself
 # Copied from server/setup_api.py (SRV-747: TandemApp does not import the engine; the engine keeps
-# its own for the Setup Guide's routes, and tests/test_engine_api.py holds the two equal).
+# its own for the Setup Guide's routes, and tests/test_engine_api_contract.py holds the two equal).
 
 def same_origin_json(headers) -> tuple[int, str, str] | None:
     """None for a POST the page itself sent, else (status, code, message): the body must be

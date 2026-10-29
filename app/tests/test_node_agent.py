@@ -37,6 +37,9 @@ the engine a box serves on :8000 is never addressed. Time is injected where the 
  12  the controller's node actions through the agent: an engine's restart with its plan's
      confirm, refused for an engine TandemNode did not start; reboot refused when not set up and
      simulated on a virtual node; a LAN link's test                  test_actions_through_the_agent
+ 13  the engine API version (SRV-747): an engine on engine API 2.0 is `unhealthy` and its health
+     names 1.x; 1.4 and an engine that does not say (1.0) are up; another kind of engine is not
+     read; the relay passes /health as the engine sent it         test_engine_api_versions
 
     python tests/test_node_agent.py
 """
@@ -63,7 +66,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import test_fleet as tf  # noqa: E402
 from ports import free_port  # noqa: E402
 from proxy import nodeagent, nodeclient, nodeengines, nodemaint, nodemetrics  # noqa: E402
-from proxy import nodesource, nodetrust  # noqa: E402
+from proxy import engineapi, nodesource, nodetrust  # noqa: E402
 from proxy_util import Proxy, run  # noqa: E402
 from tandemapp import logbuf  # noqa: E402
 
@@ -241,10 +244,11 @@ class SetupEngine:
     """An engine's Setup Guide and dashboard routes as the agent relays them; it records what
     reached it."""
 
-    def __init__(self, weights_dir=None):
+    def __init__(self, weights_dir=None, engine_api=None):
         self.seen = []
         self.weights_dir = weights_dir
         self.status_port = None
+        self.engine_api = engine_api        # SRV-747: /health's `engine_api`; None: not sent
         eng = self
 
         class H(BaseHTTPRequestHandler):
@@ -287,10 +291,11 @@ class SetupEngine:
                 q = dict(urllib.parse.parse_qsl(u.query))
                 eng.seen.append(("GET", self.path, dict(self.headers)))
                 if u.path == "/health":
+                    api = {"engine_api": eng.engine_api} if eng.engine_api is not None else {}
                     return self._send(200, {"status": "ok", "version": "0.15.0-fake",
                                             "model": "TandemLLM", "uptime_s": 12.5,
                                             "status_port": eng.status_port,
-                                            "weights": {"name": "pack-4.0"}})
+                                            "weights": {"name": "pack-4.0"}, **api})
                 if u.path == "/v1/setup/device":
                     return self._send(200, b'{"mode": "serve",  "gpu": "GB10"}',
                                       extra=(("Cache-Control", "no-store"),))
@@ -1170,6 +1175,44 @@ def test_actions_through_the_agent():
         assert st == 200 and "a virtual node" in res["link"]["test"]["note"], res
         for src in [a for _, a in f.agents.values()]:
             src.close()
+
+
+def test_engine_api_versions():
+    engs = {v: SetupEngine(engine_api=v) for v in (None, "1.4", "2.0")}
+    docs = [engine_doc("unsaid", engs[None].port), engine_doc("v14", engs["1.4"].port),
+            engine_doc("v20", engs["2.0"].port),
+            engine_doc("other", engs["2.0"].port, kind="generic")]
+    why = engineapi.read({"engine_api": "2.0"}, "tandemllm")["why"]
+    assert why.startswith("this engine speaks engine API 2.0; TandemApp ") and \
+        why.endswith(" needs 1.x"), why
+    try:
+        with Running(agent_on(engines=docs)) as r:
+            st, doc = r.client.json("GET", "/node/engines")
+            assert st == 200, doc
+            by = {e["id"]: e for e in doc["engines"]}
+            h = by["unsaid"]["health"]
+            assert by["unsaid"]["state"] == "up", by["unsaid"]
+            assert (h["engine_api"], h["api_assumed"], h["api_ok"], h["api_why"]) == \
+                ("1.0", True, True, None), h
+            h = by["v14"]["health"]
+            assert by["v14"]["state"] == "up", by["v14"]
+            assert (h["engine_api"], h["api_assumed"], h["api_ok"], h["api_why"]) == \
+                ("1.4", False, True, None), h
+            h = by["v20"]["health"]
+            assert by["v20"]["state"] == "unhealthy", by["v20"]
+            assert (h["engine_api"], h["api_assumed"], h["api_ok"], h["api_why"]) == \
+                ("2.0", False, False, why), h
+            assert h["status"] == "ok" and h["http"] == 200       # its own status says ok
+            h = by["other"]["health"]
+            assert by["other"]["state"] == "up", by["other"]          # not a TandemLLM engine
+            assert (h["engine_api"], h["api_assumed"], h["api_ok"], h["api_why"]) == \
+                (None, None, None, None), h
+            st, _, body = raw(r.port, "GET", "/node/engines/v20/health",
+                              {"Authorization": f"Bearer {r.agent.secret}"})
+            assert st == 200 and json.loads(body)["engine_api"] == "2.0", body
+    finally:
+        for e in engs.values():
+            e.close()
 
 
 # ---------------------------------------------------------------------------- the fake engine's

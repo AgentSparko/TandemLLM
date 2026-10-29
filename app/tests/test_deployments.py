@@ -39,6 +39,9 @@ test: tests/owned.py). The engine a box serves on :8000 is never addressed.
      /v1/fleet/gateway/chat/completions (a page's own JSON POST only), a Replicas member pinned
      with X-Tandem-Pin (no fallback, the conversation's home kept, 409 for a stranger, 503 for
      a member that takes no request), the 30 d metrics range       test_fleet_ledger_gateway_pin
+ 12  the engine API version (SRV-747): a start on an engine that answers engine API 2.0 fails
+     within seconds and names 1.x, its member is down with that text and takes no request; an
+     engine on 1.4 and one that does not say (1.0) start and serve   test_engine_api_versions
 
     python tests/test_deployments.py
 """
@@ -65,7 +68,8 @@ import owned  # noqa: E402
 import test_fleet as tf  # noqa: E402
 import test_node_agent as tna  # noqa: E402
 from ports import free_port  # noqa: E402
-from proxy import affinity, config as config_mod, deployments, fleetupdate, placement  # noqa: E402
+from proxy import affinity, config as config_mod, deployments, engineapi, fleetupdate  # noqa: E402
+from proxy import placement  # noqa: E402
 from proxy_util import Proxy, run  # noqa: E402
 from tools import contract_check  # noqa: E402
 
@@ -86,16 +90,17 @@ class Node:
     Guide to a `tandemllm` engine only."""
 
     def __init__(self, serial: str, name: str, models=None, managed_port=None, addrs=None,
-                 secret=None, kind="generic"):
+                 secret=None, kind="generic", engine_api=None):
         self.srv = None
         if managed_port is None:
             self.srv, self.eport = fake_backend.start(models=models)
             doc = tna.engine_doc("e", self.eport, kind=kind)
         else:
             self.eport = managed_port
+            api = ["--engine-api", engine_api] if engine_api is not None else []
             doc = tna.engine_doc("e", managed_port, kind=kind, start_timeout_s=20,
                                  start=[sys.executable, FAKE, "--port", str(managed_port),
-                                        "--models", ",".join(models)])
+                                        "--models", ",".join(models), *api])
         self.agent = tna.agent_on(tna.machine(serial), engines=[doc], address="127.0.0.1",
                                   virtual=name, addrs=addrs, secret=secret)
         self.run = tna.Running(self.agent)
@@ -659,6 +664,65 @@ def test_start_move_stop():
                        "id": "theirs-x"})
         plan = tf.get(fx.px, "/v1/fleet/deployments/theirs-x/actions/start")[1]
         assert not plan["allowed"], plan
+    finally:
+        fx.close()
+
+
+def test_engine_api_versions():
+    ports = {"Old": free_port(), "New": free_port(), "Pre": free_port()}
+    assert 8000 not in ports.values()
+    fx = Fleet({"Old": Node("API-2-0001", "o", ["fake-x"], managed_port=ports["Old"],
+                            kind="tandemllm", engine_api="2.0"),
+                "New": Node("API-1-0001", "n", ["fake-y"], managed_port=ports["New"],
+                            kind="tandemllm", engine_api="1.4"),
+                "Pre": Node("API-0-0001", "p", ["fake-z"], managed_port=ports["Pre"],
+                            kind="tandemllm")})
+    why = engineapi.read({"engine_api": "2.0"}, "tandemllm")["why"]
+    assert why.endswith(" needs 1.x"), why
+    try:
+        for alias, model in (("Old", "fake-x"), ("New", "fake-y"), ("Pre", "fake-z")):
+            d = fx.record({"model": model, "type": "single", "members": [fx.ids[alias]]})
+            assert d["managed"] and d["status"] in ("down", "starting"), d
+        # 2.0: the start fails at the agent's first answer, not after START_WAIT_S
+        t0 = time.time()
+        st, res = tf.send(fx.px, "POST", "/v1/fleet/deployments/fake-x/actions/start", {})
+        assert st == 200 and tf.ok(res, "deployment-job")["state"] == "running", res
+        def ended():
+            d = _dep(fx, "fake-x")
+            return d if d["job"] and d["job"]["state"] != "running" else None
+        d = _until(ended, 30.0, 0.1)
+        took = time.time() - t0
+        assert d and d["job"]["state"] == "failed", d
+        assert took < 20.0 < deployments.START_WAIT_S, took
+        assert d["job"]["error"]["type"] == "start_failed" and why in d["job"]["error"]["message"], \
+            d["job"]
+        st, j = tf.get(fx.px, f"/v1/fleet/deployments/jobs/{d['job']['id']}")
+        job = tf.ok(j, "deployment-job")["job"]
+        assert [(s["phase"], s["text"]) for s in job["steps"]] == [("failed", why)], job["steps"]
+        # its member is down with that text and takes no request
+        fx.sync()
+        d = _dep(fx, "fake-x")
+        m = d["member_states"][0]
+        assert (m["state"], m["text"], m["routable"]) == ("down", why, False), m
+        assert d["status"] == "down" and why in d["status_text"], d
+        st, _, raw = fx.chat("fake-x")
+        err = json.loads(raw)["error"]
+        assert st == 503 and err["code"] == "no_member" and why in err["message"], (st, err)
+        e = fx.nodes["Old"].run.client.json("GET", "/node/engines/e")[1]
+        assert e["state"] == "unhealthy" and e["health"]["api_why"] == why, e
+        # 1.4 and an engine that does not say: started, warm, serving
+        for model, alias, api in (("fake-y", "New", "1.4"), ("fake-z", "Pre", "1.0")):
+            st, res = tf.send(fx.px, "POST", f"/v1/fleet/deployments/{model}/actions/start", {})
+            assert st == 200, res
+            _job_done(fx, model)
+            fx.sync()
+            d = _dep(fx, model)
+            assert d["status"] == "serving" and d["member_states"][0]["routable"], d
+            st, h, _ = fx.chat(model)
+            assert st == 200 and h["X-Tandem-Node"] == alias, (st, h)
+            e = fx.nodes[alias].run.client.json("GET", "/node/engines/e")[1]
+            assert e["state"] == "up" and e["health"]["engine_api"] == api, e
+            assert e["health"]["api_assumed"] is (api == "1.0"), e
     finally:
         fx.close()
 

@@ -122,7 +122,8 @@ ENGINE_ROUTES = "conductor_engine_routes"
 #: no shipped report
 SHIPPED_GUARD_KEY = "conductor_shipped_guard"
 ENGINE_ONLY = "an engine screen: this server runs no TandemLLM engine in its process"
-# the engine's own words when it serves no such model (server/decider_api.py, server/conductor/shadow.py)
+# the engine's own words when it serves no such model (server/decider_api.py, server/conductor/shadow.py;
+# tests/test_engine_api_contract.py holds the copies equal)
 DECIDERS_OFF_WHY = ("this engine serves no decision model: QWEN38_DECIDER_MODELS is empty (set it in "
                     "ops/serve.env, e.g. laya-english,laya-multilingual,laya-typed-decisions, and restart)")
 SHADOW_OFF_WHY = ("this engine serves no shadow reader: QWEN38_SHADOW_MODEL is empty (set it in "

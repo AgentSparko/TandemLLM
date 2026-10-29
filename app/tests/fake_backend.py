@@ -927,12 +927,16 @@ def main(argv=None):
     ap.add_argument("--tps", type=float, default=400.0)
     ap.add_argument("--dialect", choices=("vllm", "sglang", "sglang-off"), default=None)
     ap.add_argument("--name", default="fake")
+    # SRV-747: the engine API version /health says (a TandemLLM engine's `engine_api`); none: unsaid
+    ap.add_argument("--engine-api", default=None)
     a = ap.parse_args(argv)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import owned
     owned.watch()              # started by a test: it ends with that test (SRV-732)
     srv, port = start(a.port, a.host, models=[m for m in a.models.split(",") if m], key=a.key,
                       tps=a.tps, dialect=a.dialect, name=a.name)
+    if a.engine_api is not None:
+        srv.fake.health = {"engine_api": a.engine_api}
     print(f"[fake-backend] {a.name} on {a.host}:{port}, models {a.models}", flush=True)
     try:
         while True:

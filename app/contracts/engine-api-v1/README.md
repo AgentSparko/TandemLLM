@@ -1,6 +1,6 @@
 # Engine API contract v1
 
-These files are the truth for what TandemApp (`app/`: the dashboard, the controller, the conductor, chatd and TandemNode) may use of a TandemLLM engine (`engine/`, `server/`): the HTTP routes, the extensions to the OpenAI shapes, and how TandemNode controls an install without importing it.Its version is `1.0`, independent of either release.
+These files are the truth for what TandemApp (`app/`: the dashboard, the controller, the conductor, chatd and TandemNode) may use of a TandemLLM engine (`engine/`, `server/`): the HTTP routes, the extensions to the OpenAI shapes, and how TandemNode controls an install without importing it.The engine's tests hold its code to them (`tests/test_engine_api_contract.py`, `tests/test_engine_api_live.py`); TandemApp's tests hold its callers to them (`app/tests/test_engine_api_contract.py`). Its version is `1.0`, independent of either release.
 
 | file | what |
 |-|-|
@@ -11,6 +11,7 @@ These files are the truth for what TandemApp (`app/`: the dashboard, the control
 | `node/serve.env.example` | the `PORT=` and `QSE_STATUS_PORT=` lines install.sh writes to `run/ops/serve.env` from `ops/serve.env` |
 | `node/hub_manifest.example.json` | the `_hub_manifest.json` `ops/fetch_weights.py` writes beside a pack (here each file is `size` zero bytes) |
 | `node/control.json` | bin/tandem's verbs and the install.sh flags TandemNode and the controller use |
+| `reverse-deps.json` | what the engine's tree still takes from TandemApp's: the engine->app imports, the engine test files that reach app code, the reads across the boundary, and the copies both keep equal |
 
 ## The version
 
@@ -181,7 +182,7 @@ These `/v1/conductor/*` screens read or load the engine's own models and memory.
 
 ## ENG-413: what the engine still takes from TandemApp
 
-Until the headless engine, `server/__init__.py` puts `app/` on the path for every entry point (server/app.py, `python -m server.setup.*`, the tools and the tests), and these engine modules import TandemApp's:
+Until the headless engine, `server/__init__.py` puts `app/` on the path for every entry point (server/app.py, `python -m server.setup.*`, the tools and the tests), and these engine modules import TandemApp's (`reverse-deps.json` `imports` has each imported name):
 
 | engine file | app modules |
 |-|-|
@@ -219,6 +220,16 @@ Until the headless engine, `server/__init__.py` puts `app/` on the path for ever
 | `tools/stall_replay.py` | `tandemapp.conductor.monitor.policy` |
 | `tools/thought_narrator_measure.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.schema`, `tandemapp.conductor.states`, `tandemapp.conductor.store` |
 | `tools/voice_replay.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.states`, `tandemapp.conductor.voice` |
+
+`reverse-deps.json` also lists the engine's reads of app files (`reads`: the knob rows, the manual's generators, the setup knowledge index, the contracts), the engine test files that reach app code (`tests`), the reads the AST cannot see (`not_ast`: install.sh, ops/start.sh and ops/watchdog.sh starting chatd and TandemNode from `app/`, the models' docs links, the Grafana panels, the manual's tables) and the copies both trees keep equal until the split (`copies`: `same_origin`, `TIER_OF`, the `OFF_WHY` texts, the test helpers, `contract_check`, the licenses, the setup fixtures). At the split the engine takes byte copies of what it reads here, its own `/metrics` document and registry, and its own helpers; the app-only tools and tests move to `app/`.
+
+## Tests
+
+- `app/tests/test_engine_api_contract.py` (TandemApp, standard library): routes.json is well formed and its version is `proxy.engineapi.SPEAKS`; every engine path literal in the Python callers and in `dashboard/src` falls in exactly one list (a `${...}` is `{param}`, the query is dropped, a base matches as a prefix); every route is used by a file or a relay; `nodeengines.RELAY` is in the routes; the version cases, `nodeengines.health` against fake engines, the health example against its schema, and the node fixtures read by `nodeengines.default_engine` and `nodeweights`.
+- `app/tests/test_node_agent.py` and `app/tests/test_deployments.py`: an engine on engine API 2.0 is `unhealthy` and names 1.x, its member is `down` and takes no request, a start fails within seconds; 1.4 and a missing field work.
+- `tests/test_engine_api_contract.py` (the engine, no torch): every route is dispatched, the version is one, `reverse-deps.json` is the AST inventory, the copies hold equal, the fixtures match the engine's files.
+- `tests/test_engine_api_live.py` (CPU torch): `server/app.py --fake-engine` without a built dashboard answers `/health` with `engine_api` and every live GET route with 200; once more from a copy of the tree without `app/dashboard`.
+
 ## Changes
 
 - v1.0, first version (SRV-747).

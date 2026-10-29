@@ -44,7 +44,7 @@ LLAMA_KEYS = ("cache_n", "prompt_n", "prompt_ms", "prompt_per_token_ms", "prompt
 REPLAY = ("response", "prepared")
 #: cache sources (`cache_source` of the usage frame) -> tiers; a source not here is its own name.
 #: Copied from server/cache_peek.py (SRV-747: the app does not import the engine; the engine's
-#: tests/test_cache_peek.py holds the two equal)
+#: tests/test_engine_api_contract.py holds the two equal)
 TIER_OF = {"resident": "resident", "end": "resident", "side": "resident",
            "park": "ram_park", "pin": "ram_park", "prefix": "ram_snapshot",
            "spill": "nvme_spill", "disk": "disk_tier", "none": "none"}
