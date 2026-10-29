@@ -4,12 +4,15 @@ dashboard/node_modules, dashboard/dist and __pycache__ left out) and the dashboa
   1  no import at any depth (lazy, in a try, under TYPE_CHECKING) whose top name is server,
      engine, models, bench or manual; no tools.X or tests.X that app/tools or app/tests does
      not hold; no literal importlib.import_module, __import__, runpy.run_module/run_path or
-     importlib.util.spec_from_file_location naming a server./engine. module or a path under
-     server/ or engine/                                          test_no_engine_import
-  2  no argv list or command string given to subprocess.*, os.exec*, os.spawn*, os.system or
-     asyncio's subprocesses with '-m' and a server.* or engine.* module, a path under server/ or
-     engine/ (server/app.py among them), or a '-c' code that imports server or engine; a '-m'
-     server.*/engine.* pair in any list or tuple counts too   test_no_engine_exec
+     importlib.util.spec_from_file_location (positional or keyword) naming a server./engine.
+     module or a path under server/ or engine/                  test_no_engine_import
+  2  no argv (a list, or the separate arguments of os.execl*, os.spawnl* and
+     create_subprocess_exec) or command string given to subprocess.*, os.exec*, os.spawn*,
+     os.system or asyncio's subprocesses, under any import alias, with '-m' and a server.* or
+     engine.* module, a '-c' code that imports server or engine, or a path that starts with
+     server/ or engine/ (after ./, ../, a joined root or --opt=) or a .py file under one; URLs
+     and words with spaces are no paths; a '-m' server.*/engine.* pair in any list or tuple
+     counts too                                                  test_no_engine_exec
   3  no torch, numpy or triton import at module level outside a try that catches ImportError
                                                                   test_no_bare_heavy_import
   4  torch, numpy and triton are imported only at the sites in HOOKS, each an engine-process hook
@@ -21,9 +24,11 @@ dashboard/node_modules, dashboard/dist and __pycache__ left out) and the dashboa
      proxy, chatd and tandemapp with server, engine, torch, numpy, triton, models and bench
      blocked; none fails, and none binds, listens, forks or starts a process while it imports
                                                          test_every_module_imports_alone
-  7  the checks above find a lazy 'from server import app', an argv ['python', '-m',
-     'server.app'] and a '-c' 'import engine.cache' in a made-up tree and name each x.py:N
-                                                                  test_the_checks_find_planted_hits
+  7  the checks above find, in a made-up tree, a lazy 'from server import app', an
+     import_module(name='engine.cache'), an argv ['python', '-m', 'server.app'], a '-c'
+     'import engine.cache', a shell string through `import subprocess as _sp`, an os.execl and a
+     create_subprocess_exec with '-m' server.app, name each x.py:N, and pass a curl URL and a
+     log text that hold engine/                                test_the_checks_find_planted_hits
      and four reads out of a made-up dashboard        test_the_dashboard_check_finds_planted_reads
 
 Each hit is one line: app/<file>:<line>: <source> -- TandemApp reaches the engine; use the engine
@@ -37,6 +42,7 @@ from __future__ import annotations
 import ast
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -68,6 +74,11 @@ EXEC_MODULES = {
     "asyncio": {"create_subprocess_exec", "create_subprocess_shell"},
 }
 ENGINE_PATH = re.compile(r"(?:^|[\s/'\"=*])(?:server|engine)/")
+#: exec functions that take the argv as separate arguments
+VARARGS = {"execl", "execle", "execlp", "execlpe", "spawnl", "spawnle", "spawnlp", "spawnlpe",
+           "create_subprocess_exec"}
+#: an argv word that starts with server/ or engine/, after ./, ../, a joined root ('*/') or --opt=
+ARGV_PATH = re.compile(r"(?:[\w-]+=)?(?:(?:\*|\.\.?)/)*(?:server|engine)/")
 ENGINE_M = re.compile(r"(?:^|\s)-m\s+(?:server|engine)(?:\.|\s|$)")
 
 
@@ -127,6 +138,11 @@ def _str_path(node) -> str | None:
     return None
 
 
+#: call -> (position, keyword) of the module name or path it loads
+NAME_ARG = {"import_module": (0, "name"), "__import__": (0, "name"), "run_module": (0, "mod_name"),
+            "run_path": (0, "path_name"), "spec_from_file_location": (1, "location")}
+
+
 def _imports(tree) -> list[tuple[int, str]]:
     """(line, module) for every import of an engine module in `tree`, at any depth."""
     out = []
@@ -137,13 +153,19 @@ def _imports(tree) -> list[tuple[int, str]]:
             out.append((n.lineno, n.module))
             if n.module in ("tools", "tests"):
                 out += [(n.lineno, f"{n.module}.{a.name}") for a in n.names]
-        elif isinstance(n, ast.Call) and n.args:
+        elif isinstance(n, ast.Call):
             fn = getattr(n.func, "attr", getattr(n.func, "id", ""))
-            arg = n.args[0] if fn != "spec_from_file_location" or len(n.args) < 2 else n.args[1]
-            if fn in ("import_module", "__import__", "run_module") and \
-                    isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str):
-                out.append((n.lineno, n.args[0].value))
-            elif fn in ("run_path", "spec_from_file_location"):
+            if fn not in NAME_ARG:
+                continue
+            pos, kw = NAME_ARG[fn]
+            kws = {k.arg: k.value for k in n.keywords if k.arg}
+            arg = n.args[pos] if len(n.args) > pos else kws.get(kw)
+            if arg is None:
+                continue
+            if fn in ("import_module", "__import__", "run_module"):
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    out.append((n.lineno, arg.value))
+            else:
                 path = _str_path(arg)
                 if path is not None and ENGINE_PATH.search(path):
                     out.append((n.lineno, "server" if "server/" in path else "engine"))
@@ -161,20 +183,26 @@ def import_hits(app: str = APP) -> list[str]:
 
 # ------------------------------------------------------------------------------ 2 execution
 
-def _exec_names(tree) -> set:
-    """Names bound to exec functions by `from subprocess import run` and the like."""
-    out = set()
+def _exec_names(tree) -> tuple[dict, dict]:
+    """({name: exec function} bound by `from subprocess import run [as x]` and the like,
+    {name: module} for subprocess, os and asyncio and every `import subprocess as x`)."""
+    funcs, mods = {}, {m: m for m in EXEC_MODULES}
     for n in ast.walk(tree):
         if isinstance(n, ast.ImportFrom) and n.module in EXEC_MODULES:
-            out |= {a.asname or a.name for a in n.names if a.name in EXEC_MODULES[n.module]}
-    return out
+            funcs.update({a.asname or a.name: a.name for a in n.names
+                          if a.name in EXEC_MODULES[n.module]})
+        elif isinstance(n, ast.Import):
+            mods.update({a.asname: a.name for a in n.names if a.asname and a.name in EXEC_MODULES})
+    return funcs, mods
 
 
-def _is_exec(call: ast.Call, names: set) -> bool:
+def _exec_func(call: ast.Call, funcs: dict, mods: dict) -> str | None:
+    """The exec function `call` calls, or None."""
     f = call.func
-    if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
-        return f.attr in EXEC_MODULES.get(f.value.id, ())
-    return isinstance(f, ast.Name) and f.id in names
+    if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and \
+            f.attr in EXEC_MODULES.get(mods.get(f.value.id, ""), ()):
+        return f.attr
+    return funcs.get(f.id) if isinstance(f, ast.Name) else None
 
 
 def _module_strings(tree) -> dict:
@@ -195,6 +223,14 @@ def _code_imports_engine(code: str) -> bool:
     return any(m.split(".")[0] in ("server", "engine") for _, m in _imports(tree))
 
 
+def _engine_path(word: str) -> bool:
+    """`word` is a path into the engine's tree: no URL and no text with spaces."""
+    if "://" in word or re.search(r"\s", word):
+        return False
+    return bool(ARGV_PATH.match(word) or
+                (re.search(r"/(?:server|engine)/", word) and word.endswith(".py")))
+
+
 def _bad_argv(elts: list, consts: dict, paths: bool) -> bool:
     texts = []
     for e in elts:
@@ -209,15 +245,17 @@ def _bad_argv(elts: list, consts: dict, paths: bool) -> bool:
             return True
         if t == "-c" and nxt and _code_imports_engine(nxt):
             return True
-        if paths and t and t != "-c" and (i == 0 or texts[i - 1] != "-c") and \
-                (ENGINE_PATH.search(t) or t.startswith(("server/", "engine/"))):
+        if paths and t and t != "-c" and (i == 0 or texts[i - 1] != "-c") and _engine_path(t):
             return True
     return False
 
 
 def _bad_command(text: str) -> bool:
-    return bool(ENGINE_M.search(text) or ENGINE_PATH.search(text) or
-                text.startswith(("server/", "engine/")) or
+    try:
+        words = shlex.split(text)
+    except ValueError:
+        words = text.split()
+    return bool(ENGINE_M.search(text) or any(_engine_path(w) for w in words) or
                 re.search(r"-c\s+['\"][^'\"]*\b(?:import|from)\s+(?:server|engine)\b", text))
 
 
@@ -225,9 +263,12 @@ def exec_hits(app: str = APP) -> list[str]:
     hits = set()
     for rel in py_files(app):
         src, tree = _parse(app, rel)
-        names, consts = _exec_names(tree), _module_strings(tree)
+        (funcs, mods), consts = _exec_names(tree), _module_strings(tree)
         for n in ast.walk(tree):
-            if isinstance(n, ast.Call) and _is_exec(n, names):
+            func = _exec_func(n, funcs, mods) if isinstance(n, ast.Call) else None
+            if func:
+                if func in VARARGS and _bad_argv(n.args, consts, paths=True):
+                    hits.add((rel, n.lineno))
                 for a in list(n.args) + [k.value for k in n.keywords if k.arg == "args"]:
                     if isinstance(a, (ast.List, ast.Tuple)):
                         bad = _bad_argv(a.elts, consts, paths=True)
@@ -436,11 +477,20 @@ def test_every_module_imports_alone():
 
 
 PLANTED = {
-    "x.py": ("import subprocess\nimport sys\n\n\ndef lazy():\n    from server import app\n"
-             "    return app\n\n\ndef run():\n    subprocess.run(['python', '-m', 'server.app'])\n"
-             "    subprocess.run([sys.executable, '-c', 'import engine.cache'])\n"),
+    "x.py": ("import asyncio\nimport importlib\nimport os\nimport subprocess as _sp\nimport sys\n"
+             "\n\ndef lazy():\n    from server import app\n"
+             "    return app, importlib.import_module(name='engine.cache')\n"
+             "\n\ndef run():\n    _sp.run(['python', '-m', 'server.app'])\n"
+             "    _sp.run([sys.executable, '-c', 'import engine.cache'])\n"
+             "    _sp.run('python -m server.app', shell=True)\n"
+             "    os.execl(sys.executable, sys.executable, '-m', 'server.app')\n"
+             "\n\nasync def spawn():\n"
+             "    await asyncio.create_subprocess_exec(sys.executable, '-m', 'server.app')\n"),
     "ok.py": ("import subprocess\nimport sys\n\nHELP = 'python -m server.app runs the engine'\n\n\n"
-              "def run():\n    subprocess.run([sys.executable, '-m', 'proxy', 'version'])\n"),
+              "def run():\n    subprocess.run([sys.executable, '-m', 'proxy', 'version'])\n"
+              "    subprocess.run(['curl', '-s', 'http://localhost:8000/engine/health'])\n"
+              "    subprocess.run('curl -s http://localhost:8000/engine/health', shell=True)\n"
+              "    subprocess.run(['logger', '-t', 'tandem', 'engine/server restarted'])\n"),
 }
 
 
@@ -452,8 +502,13 @@ def test_the_checks_find_planted_hits():
             with open(os.path.join(app, name), "w") as f:
                 f.write(body)
         got = import_hits(app) + exec_hits(app)
-    want = ["app/x.py:6: from server import app", "app/x.py:11: subprocess.run(['python', '-m",
-            "app/x.py:12: subprocess.run([sys.executable, '-c', 'import engine.cache'])"]
+    want = ["app/x.py:9: from server import app",
+            "app/x.py:10: return app, importlib.import_module(name='engine.cache')",
+            "app/x.py:14: _sp.run(['python', '-m', 'server.app'])",
+            "app/x.py:15: _sp.run([sys.executable, '-c', 'import engine.cache'])",
+            "app/x.py:16: _sp.run('python -m server.app', shell=True)",
+            "app/x.py:17: os.execl(sys.executable, sys.executable, '-m', 'server.app')",
+            "app/x.py:21: await asyncio.create_subprocess_exec(sys.executable, '-m', 'server.app')"]
     assert len(got) == len(want) and all(g.startswith(w) and g.endswith(WHY)
                                          for g, w in zip(got, want)), got
     return f"{len(got)} planted hits named"
