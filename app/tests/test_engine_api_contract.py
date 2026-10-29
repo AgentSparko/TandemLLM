@@ -9,9 +9,10 @@ callers. The engine's side is the repository's tests/test_engine_api_contract.py
      tandemapp/parallel, conductor/classify, chatd engine/agent/service/skills/tools,
      tools/tandem_eval) and in every string or template literal of dashboard/src that starts
      with /v1/, /health, /metrics, /readyz, /_tandem, /s/ or /dashboard/ (`${...}` is {param},
-     the query is dropped, a base matches as a prefix), each falls in exactly one of routes,
-     engine_screens_until_eng413, app_routes_via_engine and app_families, or the test names
-     file:line                                                    test_every_literal_is_classified
+     the query is dropped, a base matches as a prefix, all of it when text follows a {param}),
+     each falls in exactly one of routes, engine_screens_until_eng413, app_routes_via_engine
+     and app_families, or the test names file:line; planted unknown paths are caught
+                                                                  test_every_literal_is_classified
   3  every route is used: a file of its used_by holds a literal for it, or a relay prefix
      covers it; nodeengines.RELAY is in the routes               test_every_route_is_used
   4  the version: a missing field reads 1.0 (assumed, ok), 1.4 is ok, 2.0 is not and names 1.x,
@@ -255,13 +256,19 @@ def entries(doc: dict) -> list[tuple[str, str, list[str]]]:
 
 
 def classify(path: str, ents) -> tuple[set, bool]:
-    """The lists a literal's path falls in, and whether it matched as a prefix (a base)."""
+    """The lists a literal's path falls in, and whether it matched as a prefix (a base). A base
+    with text after a {param} counts only where all of it, each {param} one segment, starts a
+    pattern's own text."""
     sample = path.replace("{param}", SAMPLE)
     exact = {k for k, p, exc in ents if _rx(p).fullmatch(sample) and
              not any(_rx(x).fullmatch(sample) for x in exc)}
     if exact:
         return exact, False
-    base = path.split("{param}")[0]
+    base, _, rest = path.partition("{param}")
+    if rest.strip("/"):
+        rx = re.compile("[^/]+".join(re.escape(x) for x in path.split("{param}")))
+        return {k for k, p, _exc in ents
+                if rx.match(re.sub(r"\{[^}]+\}", SAMPLE, p).replace("*", SAMPLE))}, True
     return {k for k, p, _exc in ents if _text(p).startswith(base) or
             (p.endswith("*") and base.startswith(_text(p)))}, True
 
@@ -323,6 +330,14 @@ def test_every_literal_is_classified():
             bad.append(f"{rel}:{ln} {p} -> {sorted(got) or 'unclassified'}")
     assert not bad, f"{len(bad)} literals: " + "; ".join(bad[:20])
     assert seen > 100, seen
+    # the scan's own check: unknown paths, text after a {param} included, are caught
+    for p in ("/v1/bogus/route", "/v1/setup/jobs/{param}/bogus", "/v1/models/{param}/nope/deep",
+              "/v1/setup/models/{param}/steps/{param}/more"):
+        assert classify(p, ents)[0] == set(), (p, classify(p, ents))
+    for p, key in (("/v1/setup/jobs/{param}/retry", "routes"),
+                   ("/v1/setup/models/{param}/", "routes"),
+                   ("/s/{param}/x", "app_routes_via_engine")):
+        assert classify(p, ents)[0] == {key}, (p, classify(p, ents))
     out = f"{seen} literals in {len(files)} files, 0 unclassified"
     print(f"[engine-api] {out}", flush=True)
     return out
