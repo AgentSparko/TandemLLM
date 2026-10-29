@@ -171,7 +171,7 @@ test.describe('Add Spark', () => {
     const inst = page.locator('.wz-inst-row[data-target="t1"]');
     await expect(inst).toHaveAttribute('data-install', 'running');
     await inst.locator('[data-act="log"]').click();
-    await expect(inst.locator('[data-log]')).toContainText('uploaded tandemllm-0.15.0', { timeout: 10_000 });
+    await expect(inst.locator('[data-log]')).toContainText('uploaded tandemapp-0.15.0', { timeout: 10_000 });
     await expect(inst).toHaveAttribute('data-install', 'done', { timeout: 40_000 });
     await expect(inst.locator('[data-step="engine"]')).toHaveClass(/is-done/);
     const s = await (await page.request.get('/v1/fleet/add')).json();

@@ -7,7 +7,7 @@
 // The devices (mock/discovery.ts, MOCK_PAIR):
 //   192.0.2.60  code 482913 → paired, TandemLLM 0.15.0: Check passes, Install is skipped
 //   192.0.2.61  SSH spark / spark-pass → paired (TandemNode was there): the same
-//   192.0.2.62  owned by another TandemApp → take over over SSH → it runs 0.14.2: Check's TandemLLM
+//   192.0.2.62  owned by another TandemApp → take over over SSH → it runs 0.14.2: Check's TandemNode
 //               row is red, Install refuses it
 //   192.0.2.63  bare GX10, SSH spark / spark-pass → 409 not_installed → bare; the first Check finds its
 //               clock off (red, its fix named), Check again finds it fixed; Install about 20 s
@@ -24,6 +24,8 @@ const bad = (status: number, type: string, message: string): Reply => ({ status,
 const STEPS = ['find', 'connect', 'check', 'install', 'link', 'name', 'done'] as const;
 const SECRET_TTL_S = 1800;
 const VERSION = '0.15.0';
+/** the node wheel's distribution name (proxy/_version.py DIST) */
+const DIST = 'tandemapp';
 
 /** each install step and how long it takes here, ms */
 const INSTALL: [InstallStep['id'], string, number][] = [
@@ -35,9 +37,9 @@ const INSTALL: [InstallStep['id'], string, number][] = [
   ['pair', 'Pair and pin its certificate', 1200],
 ];
 const INSTALL_LOG: Record<InstallStep['id'], string[]> = {
-  check: ['DGX OS 7.2.1 · TandemLLM not installed'],
-  upload: [`uploaded tandemllm-${VERSION}-py3-none-any.whl (9.4 MB, sha256 3f9c1d2e7a40b815)`],
-  agent: ['Collecting cryptography>=42', `Successfully installed cffi-1.17.1 cryptography-44.0.2 pycparser-2.22 tandemllm-${VERSION}`],
+  check: ['DGX OS 7.2.1 · TandemNode not installed'],
+  upload: [`uploaded ${DIST}-${VERSION}-py3-none-any.whl (9.4 MB, sha256 3f9c1d2e7a40b815)`],
+  agent: ['Collecting cryptography>=42', `Successfully installed cffi-1.17.1 cryptography-44.0.2 pycparser-2.22 ${DIST}-${VERSION}`],
   engine: [`==> [1/3] Checking this machine`, 'ok NVIDIA GB10 (sm_121), driver 580.95.05, CUDA 13.0', `==> [2/3] Engine source: v${VERSION}`, `==> [3/3] Python environment`, 'installing 41 pinned packages (torch 2.13.0+cu130, ...)', 'ok torch 2.13.0+cu130 (CUDA 13.0)'],
   unit: ['Created symlink default.target.wants/tandemnode.service', 'tandemnode.service is up on 127.0.0.1:7700'],
   pair: ['TandemNode adopted this controller; certificate pinned'],
@@ -81,9 +83,9 @@ export function checks(f: Facts, fleetVersion: string, now: number, install = tr
   const mem = gib(f.mem_kb);
   out.push(mem == null ? row('memory', 'Memory', 'warn', 'not read', '/proc/meminfo said nothing') : row('memory', 'Memory', mem >= 64 ? 'ok' : 'warn', `${mem.toFixed(1)} GiB`, mem >= 64 ? '' : 'Less than a GB10’s 128 GB: only small models fit here'));
   const have = (f.tandemllm || '').trim();
-  if (!have) out.push(row('tandemllm', 'TandemLLM', 'ok', `not installed · Install puts ${fleetVersion}`));
-  else if (have.split('+')[0] === fleetVersion.split('+')[0]) out.push(row('tandemllm', 'TandemLLM', 'ok', `${have} · the fleet’s version`));
-  else out.push(row('tandemllm', 'TandemLLM', 'fail', `${have} · the fleet runs ${fleetVersion}`, `Every node runs the fleet’s version: update TandemLLM on this box to ${fleetVersion} (bash install.sh --ref v${fleetVersion}), then check again. Install refuses ${have}`));
+  if (!have) out.push(row('tandemllm', 'TandemNode', 'ok', `not installed · Install puts ${fleetVersion}`));
+  else if (have.split('+')[0] === fleetVersion.split('+')[0]) out.push(row('tandemllm', 'TandemNode', 'ok', `${have} · the fleet’s version`));
+  else out.push(row('tandemllm', 'TandemNode', 'fail', `${have} · the fleet runs ${fleetVersion}`, `Every node runs the fleet’s version: update TandemNode on this box to ${fleetVersion} (or remove it: Install puts TandemNode ${fleetVersion} and the engine’s runtime with install.sh --ref v${fleetVersion}), then check again. Install refuses ${have}`));
   const cx = (f.cx7 || '').split(',').filter(Boolean).map((p) => p.split(':'));
   if (!cx.length) out.push(row('cx7', 'ConnectX-7', 'warn', 'no ConnectX port', 'LAN only: no fabric link, so no Split across this box; Single and Replicas work'));
   else {
