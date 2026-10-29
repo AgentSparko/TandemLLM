@@ -416,6 +416,8 @@ def test_more_models():
     with tempfile.TemporaryDirectory() as root:
         md = os.path.join(root, "models")
         shutil.copytree(os.path.join(ROOT, "docs"), os.path.join(root, "docs"))
+        # the proxy tool's docs link, TandemApp's document (app/ until ENG-413)
+        shutil.copytree(os.path.join(ROOT, "app", "docs"), os.path.join(root, "app", "docs"))
         os.makedirs(os.path.join(md, "qwen3.8-27b"))
         shutil.copy(SEED, os.path.join(md, "qwen3.8-27b", "model.yaml"))
         for sub in ("measurements", "community"):          # SPD-245: a speed row's raw file and its pack
