@@ -1,5 +1,6 @@
 """TandemApp never imports or runs the engine (SRV-748): every .py under app/ (plugins/ included;
-dashboard/node_modules, dashboard/dist and __pycache__ left out) and the dashboard's own reads.
+the package's build output build/, dist/ and *.egg-info, dashboard/node_modules, dashboard/dist
+and __pycache__ left out) and the dashboard's own reads.
 
   1  no import at any depth (lazy, in a try, under TYPE_CHECKING) whose top name is server,
      engine, models, bench or manual; no tools.X or tests.X that app/tools or app/tests does
@@ -31,7 +32,8 @@ dashboard/node_modules, dashboard/dist and __pycache__ left out) and the dashboa
      import_module(name='engine.cache'), an argv ['python', '-m', 'server.app'], a '-c'
      'import engine.cache', a shell string through `import subprocess as _sp`, an os.execl and a
      create_subprocess_exec with '-m' server.app, name each x.py:N, and pass a curl URL and a
-     log text that hold engine/                                test_the_checks_find_planted_hits
+     log text that hold engine/, and skip a copy of x.py under build/lib
+                                                                  test_the_checks_find_planted_hits
      and eight reads out of a made-up dashboard     test_the_dashboard_check_finds_planted_reads
 
 Each hit is one line: app/<file>:<line>: <source> -- TandemApp reaches the engine; use the engine
@@ -67,7 +69,8 @@ HOOKS = {
     ("tandemapp/dashboard_api.py", "<module>"):
         "engine-process hook until ENG-413: numpy percentiles, sorted() without it",
 }
-SKIP = ("dashboard/node_modules", "dashboard/dist")
+#: what a local build (pip install ./app) writes into app/: copies, not sources
+SKIP = ("build", "dist", "dashboard/node_modules", "dashboard/dist")
 EXEC_MODULES = {
     "subprocess": {"run", "call", "check_call", "check_output", "Popen", "getoutput",
                    "getstatusoutput"},
@@ -94,8 +97,8 @@ def py_files(app: str = APP) -> list[str]:
     out = []
     for base, dirs, names in os.walk(app):
         rel_base = os.path.relpath(base, app).replace(os.sep, "/")
-        dirs[:] = sorted(d for d in dirs if d != "__pycache__" and
-                         (d if rel_base == "." else f"{rel_base}/{d}") not in SKIP)
+        dirs[:] = sorted(d for d in dirs if d != "__pycache__" and not d.endswith(".egg-info")
+                         and (d if rel_base == "." else f"{rel_base}/{d}") not in SKIP)
         out += [os.path.normpath(os.path.join(rel_base, n)).replace(os.sep, "/")
                 for n in sorted(names) if n.endswith(".py")]
     return out
@@ -543,6 +546,9 @@ def test_the_checks_find_planted_hits():
         for name, body in PLANTED.items():
             with open(os.path.join(app, name), "w") as f:
                 f.write(body)
+        os.makedirs(os.path.join(app, "build", "lib"))
+        with open(os.path.join(app, "build", "lib", "x.py"), "w") as f:
+            f.write(PLANTED["x.py"])
         got = import_hits(app) + exec_hits(app)
     want = ["app/x.py:9: from server import app",
             "app/x.py:10: return app, importlib.import_module(name='engine.cache')",
