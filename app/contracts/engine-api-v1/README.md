@@ -1,6 +1,6 @@
 # Engine API contract v1
 
-These files are the truth for what TandemApp (`app/`: the dashboard, the controller, the conductor, chatd and TandemNode) may use of a TandemLLM engine (`engine/`, `server/`): the HTTP routes, the extensions to the OpenAI shapes, and how TandemNode controls an install without importing it.The engine's tests hold its code to them (`tests/test_engine_api_contract.py`, `tests/test_engine_api_live.py`); TandemApp's tests hold its callers to them (`app/tests/test_engine_api_contract.py`). Its version is `1.0`, independent of either release.
+These files are the truth for what TandemApp (`app/`: the dashboard, the controller, the conductor, chatd and TandemNode) may use of a TandemLLM engine (`engine/`, `server/`): the HTTP routes, the extensions to the OpenAI shapes, and how TandemNode controls an install without importing it. The engine's tests hold its code to them (`tests/test_engine_api_contract.py`, `tests/test_engine_api_live.py`); TandemApp's tests hold its callers to them (`app/tests/test_engine_api_contract.py`). Its version is `1.0`, independent of either release.
 
 | file | what |
 |-|-|

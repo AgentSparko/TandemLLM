@@ -80,7 +80,8 @@ def _exists(*parts: str) -> bool:
 def _app_module(name: str, path: str) -> str | None:
     """`name` as the reverse-deps entry when the engine file `path` imports it from TandemApp's
     tree: a package of APP_PACKAGES, a `tools.X` only app/tools has (the namespace `tools` spans
-    both trees once app/ is on the path), or a test helper only app/tests has."""
+    both trees once app/ is on the path), or, in a test, a bare name only app/tests or app/tools
+    has (a test that puts that directory on the path)."""
     top = name.split(".")[0]
     if top in APP_PACKAGES:
         return name
@@ -88,9 +89,10 @@ def _app_module(name: str, path: str) -> str | None:
         mod = name.split(".")[1]
         if _exists("app", "tools", mod + ".py") and not _exists("tools", mod + ".py"):
             return name
-    if "." not in name and path.startswith("tests/") and \
-            _exists("app", "tests", name + ".py") and not _exists("tests", name + ".py"):
-        return f"app/tests/{name}.py"
+    if "." not in name and path.startswith("tests/"):
+        for d in ("tests", "tools"):
+            if _exists("app", d, name + ".py") and not _exists(d, name + ".py"):
+                return f"app/{d}/{name}.py"
     return None
 
 

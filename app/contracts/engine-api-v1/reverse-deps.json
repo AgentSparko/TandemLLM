@@ -685,7 +685,6 @@
     "app/contracts",
     "app/proxy",
     "app/tandemapp",
-    "app/tests",
     "app/tools"
    ]
   },
@@ -1066,6 +1065,7 @@
   },
   "tests/test_outcomes.py": {
    "imports": [
+    "app/tools/tandem_eval.py",
     "tandemapp.conductor.monitor.observe:RequestEvent",
     "tandemapp.conductor.monitor.session:SessionState",
     "tandemapp.conductor.monitor:Monitor",
@@ -1237,6 +1237,7 @@
   },
   "tests/test_round2_fixes.py": {
    "imports": [
+    "app/tools/packages_migrate.py",
     "tandemapp.conductor.classify:Answer",
     "tandemapp.conductor.classify:distribution",
     "tandemapp.conductor.router:_code_guard",
@@ -1281,6 +1282,7 @@
   },
   "tests/test_sequential_mutations.py": {
    "imports": [
+    "app/tools/monitor_migrate.py",
     "tandemapp.conductor.hook:Conductor",
     "tandemapp.conductor.migrations",
     "tandemapp.conductor.monitor.policy",
@@ -1686,6 +1688,7 @@
   },
   "tests/test_turn_budget.py": {
    "imports": [
+    "app/tools/monitor_migrate.py",
     "tandemapp.conductor.monitor.policy",
     "tandemapp.conductor.monitor.policy:PROMPT_TAIL_NOTE",
     "tandemapp.conductor.monitor.sessiontasks",
@@ -1909,6 +1912,18 @@
     "ctl = [\"bash\", os.path.join(d, \"bin\", \"tandem\"), \"node\"]"
    ],
    "why": "`tandem node` in the bin/tandem install.sh writes runs TandemNode from the checkout's app/"
+  },
+  {
+   "files": [
+    "tests/test_fake_engine.py"
+   ],
+   "names": [
+    "app/tandemapp/conductor/monitor/tier0.py"
+   ],
+   "marks": [
+    "from tandemapp.conductor.monitor import tier0;"
+   ],
+   "why": "the fake engine's launch code string registers a tier0 rule in the child engine"
   }
  ],
  "copies": [
