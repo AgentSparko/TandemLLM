@@ -95,9 +95,12 @@ jobs:
 
       - name: Install TandemApp (no torch)
         run: |
+          # build from a copy: a local build writes app/build and app/*.egg-info in place
+          cp -R app "$RUNNER_TEMP/app-src"
           python -m pip install --upgrade pip
-          python -m pip install './app[host]' pytest jsonschema pyyaml
+          python -m pip install "$RUNNER_TEMP/app-src[host]" pytest jsonschema pyyaml
           python -c "import importlib.util as u, sys; sys.exit('torch is installed' if u.find_spec('torch') else 0)"
+          test -z "$(git status --porcelain --ignored app)"
 
       - name: Run the app suite
         run: |
