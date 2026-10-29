@@ -17,7 +17,9 @@ only; the update compares the whole version, so a build of the release (`0.15.0+
 The engine's runtime goes with it as Add Spark installs it (proxy/nodeinstall.py THE ENGINE): the
 installer TANDEM_ENGINE_INSTALL_SH names, at `engine_ref()` (TANDEM_ENGINE_REF, else the
 installer's VERSION, and only without both this controller's release). Without that variable a
-node's agent skips its engine step and says so.
+node's agent skips its engine step and says so. An installer the controller cannot read, or a ref
+that is no tag name, blocks the plan (`_engine_inputs`), so no node drains for an update whose
+send would fail.
 
 THE ORDER (`order`, the same rules as the dashboard's lib/fleet-update.ts):
 
@@ -248,7 +250,21 @@ class Updater:
         only = [x for x in (q.get("nodes") or "").split(",") if x] or None
         return self._plan(only, now)[0]
 
-    def _plan(self, only, now: float, mint: bool = True) -> tuple[dict, list[dict]]:
+    def _engine_inputs(self) -> str | None:
+        """Why the engine's installer or its ref cannot go to the nodes (proxy/nodeinstall.py
+        Package.install_sh, engine_ref): a TANDEM_ENGINE_INSTALL_SH that cannot be read, or a
+        TANDEM_ENGINE_REF or VERSION beside the installer that gives no tag; None when both read.
+        It blocks the plan, so no node drains for an update whose send would fail."""
+        pkg = self.package()
+        try:
+            pkg.engine_ref()
+            pkg.install_sh()
+        except nodeinstall.InstallError as exc:
+            return f"the nodes' engine step cannot run: {exc.message}"
+        return None
+
+    def _plan(self, only, now: float, mint: bool = True) -> tuple[dict, list[dict], str]:
+        """(the plan, the nodes, the error type a blocked plan's POST answers)."""
         target = self.target()
         nodes = self._nodes()
         deps = self.fleet.deployments()
@@ -266,7 +282,8 @@ class Updater:
         running = self.running()
         blocked = got["blocked"] or ("an update runs" if running else None) or \
             (None if got["steps"] else f"every node runs {target} already" if not got["refused"]
-             and not got["skipped"] else "no node can be updated now")
+             and not got["skipped"] else "no node can be updated now") or self._engine_inputs()
+        kind = "partial_split" if got["blocked"] and "Split" in got["blocked"] else "conflict"
         p = {"contract_version": CONTRACT, "target": target,
              "controller": _version.release() or None, "allowed": blocked is None,
              "blocked": blocked, "steps": got["steps"], "skipped": got["skipped"],
@@ -279,7 +296,7 @@ class Updater:
                 self._tokens = {k: v for k, v in self._tokens.items() if v[2] > now}
                 self._tokens[token] = (target, ",".join(only or []), now + CONFIRM_S)
             p["confirm"], p["expires_at"] = token, round(now + CONFIRM_S, 3)
-        return p, nodes
+        return p, nodes, kind
 
     # ------------------------------------------------------------------ start, stop
     def start(self, body, who: str, now: float) -> dict:
@@ -289,10 +306,9 @@ class Updater:
         if only is not None and (not isinstance(only, list) or
                                  not all(isinstance(x, str) for x in only)):
             raise UpdateError(400, "bad_request", "nodes is a list of node ids")
-        p, nodes = self._plan(only or None, now, mint=False)
+        p, nodes, kind = self._plan(only or None, now, mint=False)
         if not p["allowed"]:
-            raise UpdateError(409, "partial_split" if "Split" in (p["blocked"] or "") else
-                              "conflict", p["blocked"])
+            raise UpdateError(409, kind, p["blocked"])
         tok = body.get("confirm")
         if not tok:
             raise UpdateError(428, "confirm_required", "the fleet update needs its plan's "
@@ -507,8 +523,9 @@ class Updater:
             return
         pkg = self.package()
         # the engine's installer and the release it installs (TANDEM_ENGINE_INSTALL_SH,
-        # Package.engine_ref), read before anything is sent; given no installer, the node's agent
-        # skips its engine step
+        # Package.engine_ref): the plan checked both before any drain; read again here, before
+        # anything is sent, for a step that starts later (a resumed job, a file changed since).
+        # Given no installer, the node's agent skips its engine step
         try:
             ref, script = pkg.engine_ref(), pkg.install_sh()
         except nodeinstall.InstallError as exc:

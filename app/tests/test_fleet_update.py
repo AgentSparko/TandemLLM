@@ -34,8 +34,11 @@ and come back on it (the real ones run in test 7, on a real venv, where one is t
                                                                             test_real_venv_update
   9  the engine's installer and release are the controller's inputs (SRV-747): TandemApp 1.0.0 with
      an installer whose VERSION says 0.16.0 sends ref v0.16.0, and a node with an install.sh install
-     runs that installer at v0.16.0; TANDEM_ENGINE_REF overrides the ref, and a node that gets no
-     installer skips its engine step and says why          test_the_engine_installer_and_its_ref
+     runs that installer at v0.16.0; TANDEM_ENGINE_REF overrides the installer's VERSION and sets
+     the ref without an installer too; a node that gets no installer skips its engine step and
+     says why; an installer that cannot be read, a ref that is no tag name or a VERSION that names
+     no release blocks the plan, its POST is 409 and no node drains
+                                                            test_the_engine_installer_and_its_ref
 
     python tests/test_fleet_update.py
 """
@@ -545,6 +548,14 @@ def _update_to_the_end(px) -> dict:
     return job
 
 
+def _wheel(fx, target: str) -> str:
+    """A fake wheel of `target` beside the fixture's own."""
+    w = os.path.join(os.path.dirname(fx.wheel), f"tandemapp-{target}-py3-none-any.whl")
+    with open(w, "wb") as f:
+        f.write(f"PK fake wheel {target} ".encode() * 64)
+    return w
+
+
 def test_the_engine_installer_and_its_ref():
     d = tempfile.mkdtemp(prefix="upd-engine-")
     sh = os.path.join(d, "install.sh")
@@ -573,22 +584,62 @@ def test_the_engine_installer_and_its_ref():
         with open(os.path.join(a.agent.state_dir, "install.sh"), "rb") as f, open(sh, "rb") as g:
             assert f.read() == g.read(), "the node ran another installer"
         assert jb["steps"][1]["detail"].startswith("simulated"), jb["steps"][1]
-        # TANDEM_ENGINE_REF overrides the installer's VERSION; with no installer sent, the node
-        # with an install.sh install skips its engine step and says why
-        target2 = "0.15.0+test2"
-        wheel2 = os.path.join(os.path.dirname(fx.wheel), f"tandemapp-{target2}-py3-none-any.whl")
-        with open(wheel2, "wb") as f:
-            f.write(b"PK fake wheel two " * 64)
-        fx.up._package = nodeinstall.Package(d, env={"TANDEM_NODE_WHEEL": wheel2,
+        # TANDEM_ENGINE_REF overrides the installer's VERSION: node a runs that installer at it
+        w2 = _wheel(fx, "0.15.0+test2")
+        fx.up._package = nodeinstall.Package(d, env={"TANDEM_NODE_WHEEL": w2,
+                                                     "TANDEM_ENGINE_INSTALL_SH": sh,
+                                                     "TANDEM_ENGINE_REF": "v0.16.1"})
+        _update_to_the_end(fx.px)
+        ja, jb = a.agent.updater.job, b.agent.updater.job
+        assert ja["ref"] == "v0.16.1" and jb["ref"] == "v0.16.1", (ja["ref"], jb["ref"])
+        assert ja["steps"][1]["label"] == "Engine runtime v0.16.1" and \
+            ja["steps"][1]["state"] == "done", ja["steps"][1]
+        assert len(a.engine_runs) == 2 and a.engine_runs[-1][4:6] == ["--ref", "v0.16.1"], \
+            a.engine_runs
+        # TANDEM_ENGINE_REF sets the ref without an installer too; with no installer sent, the
+        # node with an install.sh install skips its engine step and says why
+        target3 = "0.15.0+test3"
+        fx.up._package = nodeinstall.Package(d, env={"TANDEM_NODE_WHEEL": _wheel(fx, target3),
                                                      "TANDEM_ENGINE_REF": "v0.16.1"})
         job = _update_to_the_end(fx.px)
-        assert job["target"] == target2
+        assert job["target"] == target3
         ja, jb = a.agent.updater.job, b.agent.updater.job
         assert ja["ref"] == "v0.16.1" and jb["ref"] == "v0.16.1", (ja["ref"], jb["ref"])
         assert ja["steps"][1]["state"] == "skip" and \
             ja["steps"][1]["detail"] == nodeupdate.NO_INSTALLER, ja["steps"][1]
         assert "TANDEM_ENGINE_INSTALL_SH" in nodeupdate.NO_INSTALLER
-        assert len(a.engine_runs) == 1, a.engine_runs
+        assert len(a.engine_runs) == 2, a.engine_runs
+        # an installer that cannot be read, a ref that is no tag name, a VERSION beside the
+        # installer that names no release: the plan is blocked and its POST refused (409
+        # conflict) before any node drains; no agent gets a job
+        empty = os.path.join(d, "empty")
+        os.makedirs(empty)
+        shutil.copy(sh, os.path.join(empty, "install.sh"))
+        open(os.path.join(empty, "VERSION"), "w").close()
+        jobs = (ja["id"], jb["id"])
+        w4 = _wheel(fx, "0.15.0+test4")
+        for env, word in (({"TANDEM_ENGINE_INSTALL_SH": os.path.join(d, "gone", "install.sh")},
+                           os.path.join(d, "gone", "install.sh")),
+                          ({"TANDEM_ENGINE_INSTALL_SH": sh, "TANDEM_ENGINE_REF": "v1;id"},
+                           "TANDEM_ENGINE_REF"),
+                          ({"TANDEM_ENGINE_INSTALL_SH": os.path.join(empty, "install.sh")},
+                           os.path.join(empty, "VERSION") + " says ''")):
+            fx.up._package = nodeinstall.Package(d, env={"TANDEM_NODE_WHEEL": w4, **env})
+            p = tf.ok(tf.get(fx.px, "/v1/fleet/update/plan")[1], "update-plan")
+            assert not p["allowed"] and p["confirm"] is None and len(p["steps"]) == 2, p
+            assert p["blocked"].startswith("the nodes' engine step cannot run: ") and \
+                word in p["blocked"], (word, p["blocked"])
+            st, err = tf.send(fx.px, "POST", "/v1/fleet/update", {"confirm": "any"})
+            assert st == 409 and tf.ok(err, "error")["error"] == {"type": "conflict",
+                                                                 "message": p["blocked"]}, err
+            assert all(r["drain"] is None for r in fx.px.svc.cfg.nodes()), word
+            assert tf.get(fx.px, "/v1/fleet/update")[1]["job"]["target"] == target3, word
+        assert (a.agent.updater.job["id"], b.agent.updater.job["id"]) == jobs
+        assert len(a.engine_runs) == 2, a.engine_runs
+        fx.up._package = nodeinstall.Package(d, env={"TANDEM_NODE_WHEEL": w4,
+                                                     "TANDEM_ENGINE_INSTALL_SH": sh})
+        p = tf.ok(tf.get(fx.px, "/v1/fleet/update/plan")[1], "update-plan")
+        assert p["allowed"] and p["blocked"] is None and p["confirm"], p
     finally:
         _version.release = real
         fx.close()
