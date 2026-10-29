@@ -1,7 +1,8 @@
 """/124: every QWEN38_* knob the engine reads goes through engine/settings.py.
 
 Pins the seam, not a behaviour: (1) no module of the engine's scope (engine/, server/, the kernel
-and linear modules of tools/) reads a QWEN38_* variable any other way than `SETTINGS.get`; (2) every
+and linear modules of tools/, and until ENG-413 app/tandemapp/ and app/proxy/, which the engine runs
+in its process) reads a QWEN38_* variable any other way than `SETTINGS.get`; (2) every
 name read is in the registry and every registry entry is read somewhere; (3) `SETTINGS` views the
 live environment (so a value set before an import, or before a per-call read, is seen exactly as the
 old `os.environ.get` saw it); (4) a second EngineSettings over another mapping or another prefix is
@@ -25,10 +26,19 @@ KERNEL = re.compile(r"_kernels|fp8_linear|nvfp4_linear|exl3_linear|nvfp4_skinny|
 ALLOWED = {("tools/gdn_wy_kernels.py", "QWEN38_WY_GRID"), ("tools/gdn_wy_kernels.py", "QWEN38_WY_SIZES")}
 
 
+#: the engine's trees, and until ENG-413 TandemApp's, whose conductor and proxy run in its process
+TREES = (("engine",), ("server",), ("app", "tandemapp"), ("app", "proxy"))
+
+
 def scope() -> list[str]:
-    fs = glob.glob(os.path.join(ROOT, "engine", "**", "*.py"), recursive=True)
-    fs += glob.glob(os.path.join(ROOT, "server", "**", "*.py"), recursive=True)
-    fs += [f for f in glob.glob(os.path.join(ROOT, "tools", "*.py")) if KERNEL.search(os.path.basename(f))]
+    fs = []
+    for parts in TREES:
+        found = glob.glob(os.path.join(ROOT, *parts, "**", "*.py"), recursive=True)
+        assert found, f"{os.path.join(*parts)}/ has no module: the scans would read nothing there"
+        fs += found
+    kernels = [f for f in glob.glob(os.path.join(ROOT, "tools", "*.py")) if KERNEL.search(os.path.basename(f))]
+    assert kernels, "tools/ has no kernel or linear module: the scans would read none"
+    fs += kernels
     fs += glob.glob(os.path.join(ROOT, "tools", "gpu", "*.py"))         # the GPU adapters' own knobs
     return sorted(f for f in fs if not f.endswith("engine/settings.py"))
 

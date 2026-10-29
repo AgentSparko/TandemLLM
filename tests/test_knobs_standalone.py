@@ -1,10 +1,11 @@
-"""#108: the standalone proxy (`tandem-app`, its image) ships `proxy` and `server` without the engine, so
-neither may need the engine to import.
+"""#108: the standalone proxy (`tandem-app`, its image) ships `proxy` and `tandemapp` without the
+engine, so neither may need the engine to import.
 
-  1  server/knobs.py's defaults are engine/settings.py's for every knob the conductor and the proxy read,
-     and every such read is one of them                      test_the_defaults_are_the_registry
-  2  with `engine` and `torch` missing, every module of proxy/, server/conductor/ and its monitor imports,
-     and the knobs read the environment with those defaults   test_every_module_imports_without_the_engine
+  1  app/tandemapp/knobs.py's defaults are engine/settings.py's for every knob the conductor and the
+     proxy read, and every such read is one of them          test_the_defaults_are_the_registry
+  2  with `engine`, `torch` and `server` missing and app/ on the path, every module of app/proxy/,
+     app/tandemapp/conductor/ and its monitor imports, and the knobs read the environment with
+     those defaults                                          test_every_module_imports_without_the_engine
   3  no module of theirs imports the engine at its top but inside a guard   test_no_bare_engine_import
 
 CPU. Run: python tests/test_knobs_standalone.py
@@ -23,12 +24,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+APP = os.path.join(ROOT, "app")
 
-DIRS = ("proxy", "server/conductor", "server/conductor/monitor")
+DIRS = ("app/proxy", "app/tandemapp/conductor", "app/tandemapp/conductor/monitor")
 
 
 def _files():
-    return sorted(p for d in DIRS for p in glob.glob(os.path.join(ROOT, d, "*.py")))
+    found = {d: glob.glob(os.path.join(ROOT, d, "*.py")) for d in DIRS}
+    assert all(found.values()), f"no module under {[d for d, fs in found.items() if not fs]}"
+    return sorted(p for fs in found.values() for p in fs)
 
 
 def test_the_defaults_are_the_registry():
@@ -48,14 +52,14 @@ import importlib, os, pkgutil, sys
 class Block:
     def find_spec(self, name, path=None, target=None):
         top = name.split(".")[0]
-        if top in ("engine", "torch"):
+        if top in ("engine", "torch", "server"):
             raise ModuleNotFoundError(f"No module named {name!r}", name=name)
         return None
 sys.meta_path.insert(0, Block())
 sys.path.insert(0, sys.argv[1])
-import proxy, server.conductor, server.conductor.monitor
+import proxy, tandemapp.conductor, tandemapp.conductor.monitor
 bad = []
-mods = [(p.__name__, m.name) for p in (proxy, server.conductor, server.conductor.monitor)
+mods = [(p.__name__, m.name) for p in (proxy, tandemapp.conductor, tandemapp.conductor.monitor)
         for m in pkgutil.iter_modules(p.__path__) if m.name != "__main__"]
 for pkg, name in mods:
     try:
@@ -79,9 +83,9 @@ sys.exit(1 if bad else 0)
 
 
 def test_every_module_imports_without_the_engine():
-    env = {k: v for k, v in os.environ.items() if not k.startswith("QWEN38_")}
-    p = subprocess.run([sys.executable, "-c", BLOCKED, ROOT], capture_output=True, text=True, timeout=300,
-                       env=env, cwd=ROOT)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("QWEN38_") and k != "PYTHONPATH"}
+    p = subprocess.run([sys.executable, "-c", BLOCKED, APP], capture_output=True, text=True, timeout=300,
+                       env=env, cwd=APP)
     assert p.returncode == 0, (p.stdout[-3000:], p.stderr[-3000:])
     return p.stdout.splitlines()[0]
 

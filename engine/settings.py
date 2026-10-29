@@ -155,12 +155,12 @@ KNOBS: dict[str, tuple] = {
     'LOWER_RIGHT_FROM': ('64', 'engine/model.py'),
     'MEMORY_WRITER_TEXT': ('', 'server/app.py'),                # a test engine's file of the memory writer's turns
     'MODEL': (None, 'engine/config.py'),
-    'NARRATOR_DEVICE': ('auto', 'server/conductor/narrator.py'),
+    'NARRATOR_DEVICE': ('auto', 'server/conductor/inproc.py'),
     # empty: ~/.qwen38-spark-engine/models/<QWEN38_NARRATOR_MODEL> (N2)
-    'NARRATOR_DIR': ('', 'server/conductor/narrator.py'),
-    'NARRATOR_MODEL': ('', 'server/conductor/narrator.py'),
+    'NARRATOR_DIR': ('', 'server/conductor/inproc.py'),
+    'NARRATOR_MODEL': ('', 'app/tandemapp/conductor/narrator.py'),
     # SRV-191: the served model's name in the identity note and /v1/models ('' = Qwen3.8-27B)
-    'MODEL_NAME': ('', 'server/conductor/schema.py'),
+    'MODEL_NAME': ('', 'app/tandemapp/conductor/schema.py'),
     # SRV-193: where the reasoning goes for a client kind that names no reasoning_format, when the
     # server's format is `tags` (kind=format,...; `*` any other kind; '' = tags for every client).
     # SRV-245 (2026-10-07): every client kind under a conductor profile gets `reasoning_content`
@@ -170,7 +170,7 @@ KNOBS: dict[str, tuple] = {
     # SRV-237/249: the client kinds whose state lines before the first generated token (the
     # router's, the waiting and reading lines) go out as Open WebUI `status` events, outside the
     # reasoning it times as "Thought for N seconds" ('' = in the profile's channel, as before)
-    'STATUS_CLIENTS': ('open-webui', 'server/conductor/states.py'),
+    'STATUS_CLIENTS': ('open-webui', 'app/tandemapp/conductor/states.py'),
     # SRV-197: which test says a request continues slot 0's conversation with --parallel N:
     # `view` (the client's rendered tokens, then the resident rows) or `resident` (the rows alone,
     # the old rule, for an A/B)
@@ -259,7 +259,7 @@ KNOBS: dict[str, tuple] = {
     'END_ALIGN_MOVED': ('on', 'server/endalign.py'),
     'END_ALIGN_CALLS': ('on', 'server/endalign.py'),
     # FX17: a router note stays live when its user message still ends with the same tokens
-    'NOTE_ANCHOR': ('on', 'server/conductor/router.py'),
+    'NOTE_ANCHOR': ('on', 'app/tandemapp/conductor/router.py'),
     # FX17: a short new chat waits this long for a busy side slot before it takes slot 0 and
     # evicts a long resident conversation
     'SIDE_NEW_WAIT_S': ('20', 'server/app.py'),
@@ -278,21 +278,22 @@ KNOBS: dict[str, tuple] = {
     'MM_END': ('on', 'server/app.py'),
     # SRV-225: a client that sends no conversation id (Open WebUI): chats that open
     # with the same message are separate conductor sessions (`on`); `off`: one session per head
-    'SESSION_GENERATIONS': ('on', 'server/conductor/router.py'),
+    'SESSION_GENERATIONS': ('on', 'app/tandemapp/conductor/router.py'),
     # FX5: Open WebUI's live working directory moves from run_command's description (the system
     # prompt) into a router note (`note`), so a `cd` no longer re-reads the conversation; `off`
-    'CLIENT_CWD': ('note', 'server/conductor/router.py'),
+    'CLIENT_CWD': ('note', 'app/tandemapp/conductor/router.py'),
     # FX5b (2026-10-06): a class's note carries only the parts (effort sentence, packages, rules)
     # no live note of the session holds with the same text (`parts`); `block`: the whole note
     # whenever any part changed, as before (the general packages went in again at every
     # user message whose task skill differed, and the replay budget then cut the oldest note)
-    'NOTE_DEDUP': ('parts', 'server/conductor/router.py'),
+    'NOTE_DEDUP': ('parts', 'app/tandemapp/conductor/router.py'),
     # SRV-243 (2026-10-07): a class's packages whose steps need a tool the request does not offer
     # (a shell, a file write) stay out of the turn, their `fallback` goes in, and the note says
     # which tools the chat has (`on`); `off` keeps the packages whatever the tools
-    'TOOL_FIT': ('on', 'server/conductor/router.py'),
-    # ENG-E10: the router's fit to the served model (server/conductor/modelfit.py): model, off, k=v,...
-    'CONDUCTOR_FIT': ('model', 'server/conductor/modelfit.py'),
+    'TOOL_FIT': ('on', 'app/tandemapp/conductor/router.py'),
+    # ENG-E10: the router's fit to the served model (app/tandemapp/conductor/modelfit.py): model, off,
+    # k=v,...
+    'CONDUCTOR_FIT': ('model', 'app/tandemapp/conductor/modelfit.py'),
     # SRV-239 (2026-10-07): the end alignment's second pass, for a copy that left an answer's
     # reasoning out (Open WebUI sends none back): `on` serves the rows' reasoning and resumes at
     # the end anchor; `off` re-reads from the grid line below the answer
@@ -396,10 +397,10 @@ KNOBS: dict[str, tuple] = {
     # request reads and writes (comma-separated; '' = loopback only)
     'MEMORY_PROXIES': ('', 'server/app.py'),
     # SRV-163: the address `{tandem_url}` in a package becomes ('' = the request's own address)
-    'TANDEM_URL': ('', 'server/conductor/packages.py'),
+    'TANDEM_URL': ('', 'app/tandemapp/conductor/packages.py'),
     # SRV-171: the session's scratch directory the notes name (`{token}` = the session token;
     # '' = `.tandem` in the project)
-    'TANDEM_SCRATCH': ('', 'server/conductor/packages.py'),
+    'TANDEM_SCRATCH': ('', 'app/tandemapp/conductor/packages.py'),
     # ENG-E7: Qwen3.8-Flash-Next on turboderp's EXL3 packs (engine/models/flashnext/). The 27B's
     # disk-tier fingerprint leaves knobs owned under engine/models/ and tools/fn_ out (engine/disk_cache.py).
     # The hyper-connection mixers' served width: int8 rows with an fp32 scale, or the pack's fp16

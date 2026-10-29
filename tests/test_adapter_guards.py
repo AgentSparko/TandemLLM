@@ -343,21 +343,27 @@ WORDS = re.compile(r"flint|lfm|liquid|nemotron|flashnext|flash_next|ornith|qwen3
                    r"|argkey|pythonic|self_think", re.I)
 #: the product's own namespace, which is not a model: QWEN38_* settings, ~/.qwen38-spark-engine
 NAMESPACE = re.compile(r"qwen38", re.I)
-SHARED_GLOBS = ("server/**/*.py", "proxy/**/*.py", "engine/*.py", "engine/methods/*.py", "engine/drafters/*.py")
+#: SRV-747: TandemApp's proxy and tandemapp, which the engine runs in its process until ENG-413
+SHARED_GLOBS = ("server/**/*.py", "app/proxy/**/*.py", "app/tandemapp/**/*.py", "engine/*.py",
+                "engine/methods/*.py", "engine/drafters/*.py")
 #: the format modules and the model packages are where those names belong
-OWN_PLACES = ("server/toolformats/",)
+OWN_PLACES = ("app/tandemapp/toolformats/",)
 
 #: the ratchet: v0.14.0's counts a file may keep (ENG-E17 lowers them; a count may only go down, and a file
 #: at 0 leaves the table). Each line says why the rest stays.
 BASELINE = {
     # the conductor's router stage that asks the served model ("qwen" kind) and its prompts: a stored
     # document's key, not a model check
-    "server/conductor/classify.py": 6, "server/conductor/decisions.py": 2, "server/conductor/fake_decider.py": 1,
-    "server/conductor/hook.py": 3, "server/conductor/libsearch.py": 1, "server/conductor/memory.py": 3,
-    "server/conductor/memwriter.py": 1, "server/conductor/narrator.py": 2, "server/conductor/notes.py": 2,
-    "server/conductor/proposals.py": 1, "server/conductor/router.py": 15, "server/conductor/schema.py": 18,
-    "server/conductor/shadow.py": 5, "server/metrics.py": 2, "proxy/harness.py": 5, "engine/shadow.py": 1,
-    "server/setup/wren.py": 17,
+    "app/tandemapp/conductor/classify.py": 6, "app/tandemapp/conductor/decisions.py": 2,
+    "app/tandemapp/conductor/fake_decider.py": 1, "app/tandemapp/conductor/hook.py": 3,
+    "app/tandemapp/conductor/libsearch.py": 1, "app/tandemapp/conductor/memory.py": 3,
+    "app/tandemapp/conductor/memwriter.py": 1, "app/tandemapp/conductor/narrator.py": 2,
+    "app/tandemapp/conductor/notes.py": 2, "app/tandemapp/conductor/proposals.py": 1,
+    "app/tandemapp/conductor/router.py": 15, "app/tandemapp/conductor/schema.py": 18,
+    "server/conductor/shadow.py": 5, "app/tandemapp/metrics.py": 2, "app/proxy/harness.py": 5,
+    "engine/shadow.py": 1, "server/setup/wren.py": 17,
+    # SRV-747: shadow.py's off text (it names the 0.8B), copied for a server that runs no engine
+    "app/tandemapp/conductor/routes.py": 1,
     # the 27B's own config and drafters (engine/*.py is its package by history, ENG-221)
     "engine/config.py": 2, "engine/drafters/dflash2.py": 1, "engine/drafters/dspark.py": 1,
     # SAME_ROWS names files by path; the legacy FN_*/Q35M_* knob owners (frozen, nothing new). The FN_* knobs of the
@@ -375,7 +381,9 @@ BASELINE = {
 def _shared_files() -> list[str]:
     out = set()
     for p in SHARED_GLOBS:
-        out |= set(glob.glob(os.path.join(ROOT, p), recursive=True))
+        found = glob.glob(os.path.join(ROOT, p), recursive=True)
+        assert found, f"{p} matches no file: the lint would read nothing there"
+        out |= set(found)
     return sorted(os.path.relpath(p, ROOT) for p in out
                   if not os.path.relpath(p, ROOT).startswith(OWN_PLACES))
 
@@ -408,6 +416,8 @@ def lint_hits(src: str) -> list[tuple[int, str]]:
 
 
 def test_lint_shared_modules_name_no_model():
+    gone = sorted(f for f in BASELINE if not os.path.isfile(os.path.join(ROOT, f)))
+    assert not gone, f"BASELINE names files that do not exist: {gone}"
     counts, bad = {}, []
     for rel in _shared_files():
         with open(os.path.join(ROOT, rel), encoding="utf-8") as f:

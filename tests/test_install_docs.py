@@ -14,6 +14,9 @@ The test matrix (the Gherkin of OPS-149):
      --host 0.0.0.0 (tests/test_fresh_install.py runs it on Linux)   test_the_installer_says_where
   5  no README, docs, manual or dashboard text counts the models ("five models", "three models")
                                                              test_no_model_count
+  6  nothing under docs/ calls the Setup Guide's figure a bird (app/dashboard/tests/setup-wren.test.ts
+     holds the dashboard's code and mock and app/docs/ to the same words)
+                                                             test_no_doc_calls_the_figure_a_bird
 
 Run: python tests/test_install_docs.py
 """
@@ -106,10 +109,18 @@ COUNT = re.compile(r"(?<![\w.])(?:two|three|four|five|six|seven|eight|nine|ten|[
 ALLOWED = ("two models working in tandem",)
 
 
+#: where a count is looked for besides README.md: the engine's docs and manual, TandemApp's docs and
+#: dashboard
+COUNT_GLOBS = (("docs", "**", "*.md"), ("app", "docs", "**", "*.md"), ("manual", "chapters", "*.tex"),
+               ("app", "dashboard", "src", "**", "*.ts"))
+
+
 def test_no_model_count():
-    files = (["README.md"] + glob.glob(os.path.join(ROOT, "docs", "**", "*.md"), recursive=True)
-             + glob.glob(os.path.join(ROOT, "manual", "chapters", "*.tex"))
-             + glob.glob(os.path.join(ROOT, "dashboard", "src", "**", "*.ts"), recursive=True))
+    files = ["README.md"]
+    for parts in COUNT_GLOBS:
+        found = glob.glob(os.path.join(ROOT, *parts), recursive=True)
+        assert found, f"{'/'.join(parts)} matches no file: the check would read nothing there"
+        files += found
     hits = []
     for f in files:
         text = _read(f)
@@ -117,6 +128,22 @@ def test_no_model_count():
             line = text[text.rfind("\n", 0, m.start()) + 1:text.find("\n", m.end())]
             if not any(a in line for a in ALLOWED):
                 hits.append(f"{os.path.relpath(os.path.join(ROOT, f), ROOT)}: {m.group(0)!r}")
+    assert not hits, hits
+
+
+# the words app/dashboard/tests/setup-wren.test.ts keeps out of the dashboard and app/docs/
+BIRD = re.compile(r"\b(bird|beak|feathers?|wings?|perch\w*|chirp\w*|preen\w*|ruffle\w*)\b", re.I)
+
+
+def test_no_doc_calls_the_figure_a_bird():
+    files = sorted(os.path.join(d, f) for d, _, fs in os.walk(os.path.join(ROOT, "docs")) for f in fs
+                   if re.search(r"\.(ts|css|md|html|json)$", f))
+    assert files, "docs/ holds no file the check reads"
+    hits = []
+    for f in files:
+        for n, line in enumerate(_read(f).split("\n"), 1):
+            if BIRD.search(line):
+                hits.append(f"{os.path.relpath(f, ROOT)}:{n}: {line.strip()[:80]}")
     assert not hits, hits
 
 

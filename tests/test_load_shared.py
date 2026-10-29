@@ -11,7 +11,8 @@ Everything after it is the shared loader, run for real on the server's argument 
     request-path state has the keys it had before the loaders were one (pinned);
   * a third architecture registered in a test, with no edit under server/, starts on CPU and answers
     /v1/chat/completions;
-  * no model branch in the server: no `hasattr(eng` / `isinstance(eng`, no other model's name.
+  * no model branch in the server: no `hasattr(eng` / `isinstance(eng`, no other model's name (under
+    server/, and until ENG-413 app/tandemapp/ and app/proxy/, which the engine runs in its process).
 """
 
 from __future__ import annotations
@@ -235,15 +236,25 @@ def test_a_third_architecture_starts_and_answers_with_no_server_edit():
     return "registered in the test, started through _load on CPU, 12 tokens through /v1/chat/completions"
 
 
+#: the code the server runs: its own, and until ENG-413 TandemApp's tandemapp and proxy
+SERVER_CODE = (("server",), ("app", "tandemapp"), ("app", "proxy"))
+#: a line that names a model and branches on none: a recipe's local version label in a docstring
+NAMED_ONLY = (("app/proxy/preflight.py", "`0.15.0+flashnext-3.05`"),)
+
+
 def test_no_model_branch_in_the_server():
     bad = re.compile(r"hasattr\(\s*eng\b|isinstance\(\s*eng\b|flashnext|flash-next|qwen4_exp", re.I)
     hits = []
-    for p in sorted(glob.glob(os.path.join(ROOT, "server", "**", "*.py"), recursive=True)):
-        for n, line in enumerate(open(p, encoding="utf-8"), 1):
-            if bad.search(line):
-                hits.append(f"{os.path.relpath(p, ROOT)}:{n}: {line.strip()}")
+    for parts in SERVER_CODE:
+        files = sorted(glob.glob(os.path.join(ROOT, *parts, "**", "*.py"), recursive=True))
+        assert files, f"{os.path.join(*parts)}/ has no module: the scan would read nothing there"
+        for p in files:
+            rel = os.path.relpath(p, ROOT)
+            for n, line in enumerate(open(p, encoding="utf-8"), 1):
+                if bad.search(line) and not any(rel == f and s in line for f, s in NAMED_ONLY):
+                    hits.append(f"{rel}:{n}: {line.strip()}")
     assert not hits, hits
-    return "no hasattr(eng / isinstance(eng, no other model's name under server/"
+    return "no hasattr(eng / isinstance(eng, no other model's name under server/, app/tandemapp/, app/proxy/"
 
 
 if __name__ == "__main__":
