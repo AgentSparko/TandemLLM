@@ -1,7 +1,7 @@
 """A fake decider for the conductor's tests: the Jev HTTP API with no model, stdlib only.
 
-    python server/conductor/fake_decider.py --port 8710 [--model other-decider --context 256
-        --question 96] [--delay-ms 0]
+    python tandemapp/conductor/fake_decider.py --port 8710 [--model other-decider --context 256
+        --question 96] [--delay-ms 0]                      (from app/)
 
 It answers the Jev contract the decider uses (`GET /readyz`, `GET /v1/models` with `limits`,
 `POST /v1/systemone` with `choice` questions) and, for the Qwen stage, `POST /v1/chat/completions`

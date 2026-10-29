@@ -8,7 +8,7 @@
 #                                               an admin password already there stays one
 #
 # QSE_CHAT_FORWARD_KEY (OPS-103) is the key the engine server's /v1/chat-app forward sends to chatd
-# (server/chat_forward.py); both read it from here. A file made before it gets the line added.
+# (app/tandemapp/chat_forward.py); both read it from here. A file made before it gets the line added.
 #
 # QSE_METRICS_TOKEN is for Prometheus (the k8s Secret `qse-metrics-token`). QSE_ADMIN_TOKEN is the
 # admin password: with it set, every admin route (the conductor's writes, the memory, the cache

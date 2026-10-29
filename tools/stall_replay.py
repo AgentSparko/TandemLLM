@@ -1,7 +1,7 @@
 """Replay the reasoning-loop detector's arms over real reasoning, offline.
 
 The arms are `engine/spec.py`'s `StallArms`, with the parameters of the policy's reasoning-loop
-task (ops/supervisor.yaml), so what this prints is what the served monitor would have seen.
+task (app/ops/supervisor.yaml), so what this prints is what the served monitor would have seen.
 Three sets, as the calibration of 2026-09-30 defined them:
 
     failed   turns that ended with no tool call and no text (an empty stop, or `length`)
@@ -152,7 +152,8 @@ def main() -> int:
     ap.add_argument("--failed-keep", type=int, default=4096)
     ap.add_argument("--fixture", help="replay this fixture instead of a database")
     ap.add_argument("--write-fixture", help="write the relabelled sets here (.bin.xz)")
-    ap.add_argument("--policy", default=None, help="the policy file (default ops/supervisor.yaml)")
+    ap.add_argument("--policy", default=None,
+                    help="the policy file (default app/ops/supervisor.yaml)")
     ap.add_argument("--json", action="store_true", help="print the result as JSON")
     a = ap.parse_args()
     from tandemapp.conductor.monitor import policy

@@ -7,7 +7,7 @@ Legit: every `write` content and `edit` newString in the opencode database (any 
 status but the guard's own kind of failure). Loops: the `invalid` tool parts whose text is a
 call cut by the token limit, and the text parts of assistant messages that ended on `length` with
 an open `<tool_call>`. Each text is tokenized with the served tokenizer and streamed through
-`server.argloop.ArgLoopGuard` token by token, exactly as the server feeds it.
+`tandemapp.argloop.ArgLoopGuard` token by token, exactly as the server feeds it.
 
 Prints counts and numbers only, never a file's text: per set, how many fire under the defaults,
 and for the legit set the largest periodic stretch (tokens, repeats) and window ratio any check

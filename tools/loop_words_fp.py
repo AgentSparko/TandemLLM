@@ -11,7 +11,7 @@ The sets, from the reasoning parts of at least 200 words in the opencode databas
              reasoning that compresses 8 times or more
     unclear  the rest (reported, not counted)
 
-Each text is streamed through `server.conductor.monitor.tier0_words.WordLoop` in pieces of a few
+Each text is streamed through `tandemapp.conductor.monitor.tier0_words.WordLoop` in pieces of a few
 words, as the proxy feeds it from a stream. The legit set is not clean by construction: the
 engine's own D1 acted on that traffic, so a reasoning part that looped and was closed by it reads
 as finished. A fire on the legit set is therefore a false alarm or a loop the engine closed, and

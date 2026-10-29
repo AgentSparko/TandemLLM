@@ -1810,7 +1810,7 @@ def _par_side_need(body, client, left_out, max_new, plan, images, lane_kind,
 
 def _queue_why(pool, why: dict, side_need, waited: float, me: dict) -> str:
     """0.8.2: why a queued request waits, in words, for the Lanes view's queued line
-    (server/parallel.py; it said only "Queued" for 6 min 25 s while two side slots were free):
+    (app/tandemapp/parallel.py; it said only "Queued" for 6 min 25 s while two side slots were free):
     the slot it waits for and for how long, or what holds slot 0 (`_wait_reason`)."""
     if pool is None:
         return _wait_reason(me)[0]
@@ -2942,7 +2942,7 @@ def _generate_stream(prompt: torch.Tensor, max_new: int, eos: set[int], think=No
     caches key on `mm.key_ids`. None for text, and set (to None) on every request, so a request
     never inherits the previous one's images.
 
-    `sup` (server/conductor/monitor/): the request's supervisor, None when it runs raw -- and
+    `sup` (app/tandemapp/conductor/monitor/): the request's supervisor, None when it runs raw -- and
     then every line below runs as it did without one. SP1 is after a block's `think.observe`:
     the supervisor may close the reasoning with a hidden phrase (`_force_close` with its
     action). SP2 is where an end token is decided, before anything commits it: a hidden continue
@@ -2960,7 +2960,7 @@ def _generate_stream(prompt: torch.Tensor, max_new: int, eos: set[int], think=No
     -- its client, the notes spliced into its prompt, where its last user message starts. The
     tier itself is `STATE["disk_cache"]`; None (`--disk-cache off`) is the prefill without it.
 
-    `pos_delta`, `end_mm` (server/compaction.py): a text prompt that continues a
+    `pos_delta`, `end_mm` (app/tandemapp/compaction.py): a text prompt that continues a
     conversation with images: the rotary offset its rows take and leave to the end anchor kept
     after those images. `scratch`: a summary prepared in the background, whose rows are nobody's.
 
@@ -3624,7 +3624,7 @@ def _generate_stream(prompt: torch.Tensor, max_new: int, eos: set[int], think=No
 
 def context_choice(ids: list[int], letters: list[int], at: int, conv_id: str | None = None,
                    on_chunk=None, images: list | None = None) -> tuple[list[float], dict]:
-    """The in-context stage's forward (server/conductor/incontext.py): `ids` prefilled through
+    """The in-context stage's forward (app/tandemapp/conductor/incontext.py): `ids` prefilled through
     the caches as a turn's prompt is -- the resident prefix's anchors, the store's entries and
     its prefix snapshots (only at lines up to `at`, where the turn's own prompt parts from it),
     the memory gate -- and the logits of its last row at `letters` with how many tokens it
@@ -4005,7 +4005,7 @@ def _sp2_block(sup, think, ctx, start: int, n_out: int, new: list, eos, max_new:
 
 
 def _argloop_fired(v, tbuf, sup, rec, cid: str) -> bool:
-    """The loop guard fired on the open call (server/argloop.py). True: the generation stops
+    """The loop guard fired on the open call (app/tandemapp/argloop.py). True: the generation stops
     here, the open block is dropped and `v.text` is the sentence the client gets after it; the
     session's next request carries the hidden note (Supervisor.at_request). A held call never
     reaches the client. A call that streamed live (the coding profile's tool gate off: nothing is
@@ -4204,7 +4204,7 @@ def _remember_turn(prompt_ids: list[int], out_ids: list[int], conv_id: str | Non
     (`ResidentPrefix.keep_end`): `hidden` are the spans of the served prompt the client did not
     send (the end anchor's replay, SP4's note), with the generation's own (`_force_close`). For a
     request with images the end is kept with its rotary offset and offered only to a
-    compaction served as the conversation's continuation (server/compaction.py); `delta` is that
+    compaction served as the conversation's continuation (app/tandemapp/compaction.py); `delta` is that
     offset for a continuation's own generation, which wrote its rows after the images.
 
     The loop's invariant at the end of a generation is `kv.length == len(ctx) - 1` -- the last
@@ -5010,7 +5010,7 @@ def _session_header(headers) -> str | None:
 
 
 #: ENG-371: the sessions an agent's worker names as its parent (`X-Tandem-Parent-Session`,
-#: chatd/render.py `headers`), each with the time of its worker's last request. The parent comes
+#: app/chatd/render.py `headers`), each with the time of its worker's last request. The parent comes
 #: back when its worker ends, so while it waits its rows go to the NVMe rather than being dropped:
 #: from a side slot another session's prefill takes (`_keep_parent`), and from slot 0's park when
 #: the memory policy gives the park back (`_shed_park`). An entry lasts PARENT_KEEP_S past its
@@ -5280,7 +5280,7 @@ def _gate_record(res, r, ids: list[int]) -> None:
 def _compaction_plan(body: dict, conv_id: str | None, kind: str | None, n_client: int,
                      row: dict | None) -> dict | None:
     """A compaction request served as the continuation of the conversation the engine
-    holds for its session (server/compaction.py), or None to serve it as the client sent it. Under
+    holds for its session (app/tandemapp/compaction.py), or None to serve it as the client sent it. Under
     the engine lock: the record is the rows in place or an entry on the NVMe."""
     cfg, prep = STATE.get("compaction"), STATE.get("prepared")
     if cfg is None or prep is None:
@@ -5443,7 +5443,7 @@ def _box_unlock(fd) -> None:
 
 
 def prepare_once() -> str:
-    """One look of the preparer (server/compaction.py): when the engine has been idle for
+    """One look of the preparer (app/tandemapp/compaction.py): when the engine has been idle for
     `idle_s`, no hold or box lock is on, and the resident conversation is an opencode session's of
     at least `min_tokens` whose summary at its end anchor is not written yet, write it now as the
     conversation's continuation, in scratch rows, and stop at the first request that waits.
@@ -5748,7 +5748,7 @@ def _writer_look(got: str) -> None:
                   flush=True)
 
 
-# P-M2 (2026-10-05): the memory writer's hidden turn (server/conductor/memwriter.py), behind the
+# P-M2 (2026-10-05): the memory writer's hidden turn (app/tandemapp/conductor/memwriter.py), behind the
 # summary written ahead
 RANK_MEMORY = 3
 
@@ -7027,7 +7027,7 @@ def _kv_reclaim_idle(d: dict, owner) -> int:
 
 def _memory_release(want: int, why: str = "sandbox") -> dict:
     """SRV-483, `POST /v1/cache/release`: room on the unified memory for something beside the
-    engine, a chat's sandbox (chatd/sandbox.py), which has priority over what the engine holds
+    engine, a chat's sandbox (app/chatd/sandbox.py), which has priority over what the engine holds
     idle (ruling of 2026-10-15). The KV pool's own order, cheapest first: the caches and the
     allocator's free blocks (under the engine lock, only while it is idle), then the small models,
     the idle side slots' conversations, slot 0's idle conversation (to the NVMe first when the
@@ -7468,7 +7468,7 @@ def build_prompt(body: dict, client: "thinking_mod.Client | None" = None, *, cou
     Whoever renders the prompt is the only code that can know this, so it is answered here and the
     server puts the tag back.
 
-    `client`: the request's thinking (server/thinking.py), read from the body when not given. Its
+    `client`: the request's thinking (app/tandemapp/thinking.py), read from the body when not given. Its
     off forms render the template's own thinking off, and its effort word the template's sentence.
 
     `count`: the prompt's length only, as an int, with no tensor on the device: the router asks
@@ -7814,7 +7814,7 @@ def _chunk(cid: str, model: str, created: int, delta: dict, finish=None, usage=N
         body["usage"] = usage
     if extra:
         # `usage`, `timings` and `metrics` of the whole request, on the ONE chunk of the
-        # stream that carries them -- see server/usage.py's `placement`.
+        # stream that carries them -- see app/tandemapp/usage.py's `placement`.
         body.update(extra)
     if error is not None:
         # Not in the OpenAI schema, and deliberately alongside a real `finish_reason` rather than
@@ -8205,7 +8205,7 @@ def _system() -> dict:
 
 def _hosts() -> list | None:
     """P1.5: this machine (the engine's process and every backend on it) and the backends'
-    remote hosts (proxy/hostcollect.py); sampled when the System view asks, at most every 5 s,
+    remote hosts (app/proxy/hostcollect.py); sampled when the System view asks, at most every 5 s,
     the process scan every 15 s. `--host-collector off` leaves it out."""
     if (STATE.get("args") or {}).get("host_collector", "on") == "off":
         return None
@@ -8359,7 +8359,7 @@ def _par_brief() -> dict:
 
 
 def start_proxy(a) -> None:
-    """`--backends PATH`: the proxy in this process (proxy/service.py). Imported only then, so a
+    """`--backends PATH`: the proxy in this process (app/proxy/service.py). Imported only then, so a
     server without it loads and serves exactly as before."""
     path = getattr(a, "backends", "off") or "off"
     if path == "off":
@@ -8464,7 +8464,7 @@ class Handler(BaseHTTPRequestHandler):
     # 2026-10-05: no Nagle, as uvicorn's servers. The headers and the first frame
     # go out as two writes; on a keep-alive connection (the proxy's pool, an SDK's) Linux holds
     # the second for the reader's delayed ACK, up to 40 ms (the night pass measured that stall
-    # on tests/fake_backend.py)
+    # on app/tests/fake_backend.py)
     disable_nagle_algorithm = True
     _status: int | None = None
     _tandem: str | None = None          # the conductor mode of the completion in hand
@@ -8643,7 +8643,7 @@ class Handler(BaseHTTPRequestHandler):
         return (self.client_address or ("",))[0]
 
     def _allowed(self, route: str) -> bool:
-        """The route's policy (server/auth.py); on a refusal the answer is already written."""
+        """The route's policy (app/tandemapp/auth.py); on a refusal the answer is already written."""
         verdict = _auth().decide(route, self._peer(), self.headers)
         if verdict == "ok":
             return True
@@ -8738,7 +8738,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _chat(self, method: str) -> bool:
         """`/v1/chat-app/*`: the Chat tab's service, chatd, behind the dashboard's auth
-        (server/chat_forward.py, SRV-343); False for every other path."""
+        (app/tandemapp/chat_forward.py, SRV-343); False for every other path."""
         return chat_forward.route(self, method, _auth())
 
     def _send_empty(self, code: int, headers: tuple = ()) -> None:
@@ -8772,7 +8772,7 @@ class Handler(BaseHTTPRequestHandler):
             except dashboard_api.ApiError as exc:
                 return self._json(exc.status, exc.body())
         if path == "/v1/dashboard/parallel":
-            # every request in flight, the engine's and the relayed ones (server/parallel.py)
+            # every request in flight, the engine's and the relayed ones (app/tandemapp/parallel.py)
             live_registry()
             try:
                 since = float(q["since"]) if q.get("since") else None
@@ -9527,7 +9527,7 @@ class Handler(BaseHTTPRequestHandler):
     # -------------------------------------------------------------- routes
     def _strip_session(self) -> bool:
         """`/s/<token>/v1/library...` and `/s/<token>/v1/laya...`, the addresses the
-        runtime notes give the model (server/session_tokens.py): the prefix off, the session the
+        runtime notes give the model (app/tandemapp/session_tokens.py): the prefix off, the session the
         token names on the handler (`_sess`, None for an unknown token). True when the request is
         answered here (a session address of any other route is a 404)."""
         self._sess = self._stok = None
@@ -9569,7 +9569,7 @@ class Handler(BaseHTTPRequestHandler):
         if (path == "/v1/library" or path.startswith("/v1/library/")) and \
                 STATE.get("conductor") is not None:
             # R1: the package library for the model's own scripts, open like the chat API
-            # (server/library_api.py)
+            # (app/tandemapp/library_api.py)
             return library_api.handle_get(self, STATE["conductor"])
         if (path == "/v1/memory" or path.startswith("/v1/memory/")) and \
                 STATE.get("conductor") is not None:
@@ -9620,7 +9620,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/metrics":
             # Prometheus, in its own text format. Everything it reports is collected in
-            # server/metrics.py, which wraps this module rather than editing it; see its header.
+            # app/tandemapp/metrics.py, which wraps this module rather than editing it; see its header.
             if not self._allowed("metrics"):
                 return
             return metrics.serve(self)
@@ -9650,7 +9650,7 @@ class Handler(BaseHTTPRequestHandler):
                 [{"id": STATE["model"], "object": "model", "created": STATE["started"],
                   "owned_by": "local"}])}
             if STATE.get("proxy") is not None:
-                # the backends' real models after the engine's own (proxy/route.py)
+                # the backends' real models after the engine's own (app/proxy/route.py)
                 if not STATE["proxy"].authorize(self)[0]:
                     return
                 out["data"] = out["data"] + STATE["proxy"].models(STATE["started"])
@@ -9664,7 +9664,7 @@ class Handler(BaseHTTPRequestHandler):
             out.update(_models_mode())
             return self._json(200, out)
         if path == "/v1/laya" and STATE.get("deciders") is not None:
-            # L1: Laya for the model's scripts, what the route takes (server/laya_api.py)
+            # L1: Laya for the model's scripts, what the route takes (app/tandemapp/laya_api.py)
             return laya_api.handle_get(self, STATE["deciders"], STATE)
         if path.startswith("/v1/laya/kit/") and STATE.get("deciders") is not None:
             # X1: the playtest kit the model copies into a project
@@ -9675,7 +9675,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(code, out)
         if path.startswith("/v1/models/"):
             # the key the list asks for, before any lookup: a 404-vs-401 difference would
-            # name the models to a stranger (proxy/app.py does the same)
+            # name the models to a stranger (app/proxy/app.py does the same)
             if STATE.get("proxy") is not None and not STATE["proxy"].authorize(self)[0]:
                 return
             from urllib.parse import unquote
@@ -9717,7 +9717,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/v1/dashboard/session":
             return self._session("DELETE")
         if path.startswith("/v1/conductor/memory/notes"):
-            # 2026-10-05: a note, or a user's whole memory (server/conductor/routes.py)
+            # 2026-10-05: a note, or a user's whole memory (app/tandemapp/conductor/routes.py)
             return self._conductor_write("DELETE")
         if path == "/v1/config" or path.startswith("/v1/config/"):
             return self._config("DELETE", path, None)
@@ -9734,7 +9734,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._conductor_write("PATCH")       # VIS-48: a session's keep
 
     def _config(self, method: str, path: str, body) -> None:
-        """`/v1/config/*`: the Backends and Setup screens (proxy/config_api.py); 404 without
+        """`/v1/config/*`: the Backends and Setup screens (app/proxy/config_api.py); 404 without
         `--backends`."""
         px = STATE.get("proxy")
         if px is None:
@@ -9768,7 +9768,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._conductor(method, body)
 
     def _conductor(self, method: str, body: dict | None = None) -> None:
-        """`/v1/conductor/*` (server/conductor/routes.py); 404 when the server runs without it."""
+        """`/v1/conductor/*` (app/tandemapp/conductor/routes.py); 404 when the server runs without it."""
         cond = STATE.get("conductor")
         if cond is None:
             return self._json(404, {"error": {"type": "not_found",
@@ -9872,10 +9872,10 @@ class Handler(BaseHTTPRequestHandler):
             # 2026-10-05: a note from the model's own script (server/memory_api.py)
             return memory_api.handle(self, STATE["conductor"], "POST", body)
         if path == "/v1/laya/ask" and STATE.get("deciders") is not None:
-            # L1: Laya for the model's scripts, open like the chat API (server/laya_api.py)
+            # L1: Laya for the model's scripts, open like the chat API (app/tandemapp/laya_api.py)
             return laya_api.handle_post(self, STATE["deciders"], STATE, body)
         if path == "/v1/laya/drive/end" and STATE.get("deciders") is not None:
-            # X1: a driver session's end: its journal row (server/laya_api.py DRIVER SESSIONS)
+            # X1: a driver session's end: its journal row (app/tandemapp/laya_api.py DRIVER SESSIONS)
             return laya_api.handle_drive_end(self, STATE, body)
         if path in ("/v1/systemone", "/v1/predict") and STATE.get("deciders") is not None:
             # typed decisions (SRV-131): the Jev contract, answered in the idle window
@@ -10099,11 +10099,11 @@ class Handler(BaseHTTPRequestHandler):
             rec.model_served = served_name()       # from the start: the Live view shows it in flight
         rec.client_id, rec.client_kind = ledger_mod.client_of(self.headers, body)
         if rec.client_kind == "internal":
-            # VIS-60: the turn this question served (server/conductor/classify.py PARENT)
+            # VIS-60: the turn this question served (app/tandemapp/conductor/classify.py PARENT)
             par = self.headers.get(ledger_mod.PARENT_HEADER)
             rec.parent_request = par[:80] if isinstance(par, str) and par else None
         rec.user = getattr(self, "_proxy_user", None)       # the proxy key's label (--backends)
-        # a proxy in front of this engine names its own lane for the request (server/parallel.py)
+        # a proxy in front of this engine names its own lane for the request (app/tandemapp/parallel.py)
         rid = self.headers.get("X-Tandem-Relay-Id")
         rec.relay_id = rid[:64] if isinstance(rid, str) and rid else None
         # what the live view links and watches -- the conversation (opencode sends its
@@ -10174,7 +10174,7 @@ class Handler(BaseHTTPRequestHandler):
         if chat and STATE.get("thinking_default") == "off":
             body = thinking_mod.server_default_off(body)
         # TandemLLM's state lines that a client sends back in its earlier reasoning are taken out
-        # before anything reads the messages (server/conductor/states.py): Qwen never sees them,
+        # before anything reads the messages (app/tandemapp/conductor/states.py): Qwen never sees them,
         # and the prompt is the one the request would have without them
         stripped = 0
         if chat and STATE.get("conductor") is not None and isinstance(body.get("messages"), list):
@@ -10183,7 +10183,7 @@ class Handler(BaseHTTPRequestHandler):
         # (Open WebUI's tool loop replays its arguments: 2026-10-06, five byte-identical retries,
         # the prompt 17k -> 46k), is cut down to its head and one marker before anything reads the
         # messages: the model never copies its own loop again, and the router and the monitor read
-        # the retry streak from the markers (server/argloop.py `collapse_history`)
+        # the retry streak from the markers (app/tandemapp/argloop.py `collapse_history`)
         if chat and STATE.get("argloop", "on") == "on" and isinstance(body.get("messages"), list):
             body["messages"], cut = argloop_mod.collapse_history(body["messages"])
             if cut:
@@ -10197,7 +10197,7 @@ class Handler(BaseHTTPRequestHandler):
         structured = bool(STATE.get("structured_outputs", True))
         try:
             compat.check(body, chat, structured=structured)
-            # the client's thinking budget, whichever shape it came in (server/thinking.py)
+            # the client's thinking budget, whichever shape it came in (app/tandemapp/thinking.py)
             client = thinking_mod.read(body, _effort_caps())
             # the document a request asks for (response_format, structured_outputs); tool_choice
             # required or named is enforced with the same machinery -- the answer as calls to the
@@ -10280,7 +10280,7 @@ class Handler(BaseHTTPRequestHandler):
             word is a ceiling (the owner, 2026-10-03 12:30): the router's level, never above the
             word's cap (0 is no cap); under a profile whose `thinking.client_word` is `ignore`
             (opencode, which sends `medium` every turn) the router's level alone. A client's
-            number always wins (server/thinking.py)."""
+            number always wins (app/tandemapp/thinking.py)."""
             if client.asked and client.kind != "number" and plan.decides_effort:
                 rb = plan.think_budget(server_budget)
                 if plan.client_word == "ignore":
@@ -10420,7 +10420,7 @@ class Handler(BaseHTTPRequestHandler):
                          f"top_k {sampler.top_k} seed {sampler.seed}" if rd.sample
                          else "the client's sampling, as sent"), flush=True)
         # SRV-475: the loop escape and the profile's `sampling.agentic_default`
-        # (server/conductor/loopescape.py), on a turn that offers tools under an active plan;
+        # (app/tandemapp/conductor/loopescape.py), on a turn that offers tools under an active plan;
         # raw, bench, side requests, compactions and a regenerate are never looked at
         if (STATE.get("escapes") is not None and chat and plan is not None and plan.active
                 and plan.side is None and not getattr(plan, "compaction", False)
@@ -10503,7 +10503,7 @@ class Handler(BaseHTTPRequestHandler):
             STATE["prepared"].seen(conv_id, rec.client_kind)   # the preparer's client kinds
         # SRV-137: keep a reference to the output for the session transcript (never on raw)
         transcribe = plan is not None and plan.active and plan.transcript == "full"
-        # The session monitor (server/conductor/monitor/) runs under the profile: never above its
+        # The session monitor (app/tandemapp/conductor/monitor/) runs under the profile: never above its
         # mode (the raw model name runs it raw), with its task modes, caps and thresholds. With a
         # profile resolved, X-Tandem says the profile's mode, the router's as much as the monitor's.
         mon_mode, mon_policy = self._tandem, None
@@ -10588,7 +10588,7 @@ class Handler(BaseHTTPRequestHandler):
             narr = STATE.get("narrator")
             lines = (narr.for_request()
                      if narr is not None and ui_doc.get("narrator") == "on" else None)
-            # v3 (`ui.narrator: live`, server/conductor/voice.py): the harness's lines in plain
+            # v3 (`ui.narrator: live`, app/tandemapp/conductor/voice.py): the harness's lines in plain
             # words and the user's language, the live lines beside them
             vlang = (voice_mod.lang_of(body.get("messages"))
                      if ui_doc.get("narrator") == "live" else None)
@@ -10708,7 +10708,7 @@ class Handler(BaseHTTPRequestHandler):
         side = None
         me = {"rank": rank, "t": time.monotonic(),
               "side": plan.side if plan is not None and plan.side is not None else None,
-              # the conductor's own question to Qwen (server/conductor/classify.py's agent): the
+              # the conductor's own question to Qwen (app/tandemapp/conductor/classify.py's agent): the
               # waiting line of a turn behind it says so
               "own": own_q,
               # SPD-249: its prompt rows, for the router's `own_eta` behind it
@@ -10798,7 +10798,7 @@ class Handler(BaseHTTPRequestHandler):
             if not got and par is not None and par.burst is not None:
                 par.burst.settle(getattr(self, "_burst_tok", None))   # SPD-245: queued, not on its way
             while not got and not micro:
-                # 0.8.2: the Lanes view's queued line says why (server/parallel.py)
+                # 0.8.2: the Lanes view's queued line says why (app/tandemapp/parallel.py)
                 rec.queue_why = _queue_why(par, par_why, side_need, time.monotonic() - t_wait, me)
                 if new_wait:
                     # FX17: the side slot first, for SIDE_NEW_WAIT_S; then slot 0 as before
@@ -11011,7 +11011,7 @@ class Handler(BaseHTTPRequestHandler):
             clean_ids = None
             plan_hidden = 0                        # SRV-165: the router's tokens in the prompt
             if plan is not None and plan.context is not None and not micro:
-                # Qwen decides the class inside the conversation (server/conductor/incontext.py):
+                # Qwen decides the class inside the conversation (app/tandemapp/conductor/incontext.py):
                 # one prefill of the prompt up to its last message plus a hidden question, right
                 # before this turn's own prefill, which then resumes from the anchors it left
                 prompt_n = int(prompt.numel())
@@ -11142,7 +11142,7 @@ class Handler(BaseHTTPRequestHandler):
             # SP4: the conductor's session monitor sees the request before anything is prefilled,
             # and may add a hidden note at the prompt's tail or set the thinking budget
             sup, client_ids = None, None
-            final_ids = None                       # A1's give-up answer (server/argloop.py)
+            final_ids = None                       # A1's give-up answer (app/tandemapp/argloop.py)
             # what the replay added to the client's copy, net of the whitespace it aligned
             hidden_prompt = plan_hidden + (int(prompt.numel()) - len(before)
                                            if replayed or aligned else 0)
@@ -11183,7 +11183,7 @@ class Handler(BaseHTTPRequestHandler):
                     sup.memo["loop_escape"] = rec.loop_escape       # SRV-475: the escape note
                 acts = sup.at_request(req_ev)
                 if sup.final_answer:
-                    # A1's give-up after the retries (server/argloop.py): this answer is the
+                    # A1's give-up after the retries (app/tandemapp/argloop.py): this answer is the
                     # sentence, served as a replay is, never generated; the client's tool loop
                     # ends on a plain answer
                     eos_t = tok.eos_token_id if isinstance(tok.eos_token_id, int) \
@@ -11823,7 +11823,7 @@ class Handler(BaseHTTPRequestHandler):
             pyc = _tool_format().stream_rewriter() if tbuf is not None else None
             rec.live_refs = (think, tbuf)
             # 2026-10-05: the model's memory blocks held back from the client and written
-            # (server/memblock.py, server/conductor/memory.py); None with the profile's memory off
+            # (app/tandemapp/memblock.py, app/tandemapp/conductor/memory.py); None with the profile's memory off
             mf = [_memory_filter(plan, chat, n_choices, ui, tool_names)]
             # SRV-187: a bare `</think>` line the model writes in its answer never reaches the
             # client (a conductor plan only: the raw path is the release's, byte for byte)
@@ -12040,7 +12040,7 @@ class Handler(BaseHTTPRequestHandler):
                          "n": int(prog["thinking_every_tokens"])}
                         if live_lines and in_think and not use_voice else None)
             # N2: `ui.narrator: thoughts` -- the narrator sums up each stretch of thinking from
-            # Qwen's own ids (server/conductor/narrator.py Thoughts)
+            # Qwen's own ids (app/tandemapp/conductor/narrator.py Thoughts)
             narr = STATE.get("narrator")
             # SR1: `shadow.narrator: on` -- the summary is read from the session's shadow
             reader = (shadow_svc.thought_slot(shadow_key)
@@ -12731,7 +12731,7 @@ def _memory_takes(plan, chat: bool, n_choices: int, tool_names=()) -> bool | Non
 
 
 def _memory_filter(plan, chat: bool, n_choices: int, ui, tool_names=()):
-    """The stream's memory filter (server/memblock.py) for a plan whose memory is not off: one
+    """The stream's memory filter (app/tandemapp/memblock.py) for a plan whose memory is not off: one
     choice of a chat request; None otherwise (the stream is the release's)."""
     takes = _memory_takes(plan, chat, n_choices, tool_names)
     if takes is None:
@@ -12740,7 +12740,7 @@ def _memory_filter(plan, chat: bool, n_choices: int, ui, tool_names=()):
 
 
 def _answer_mask(plan, chat: bool, body: dict):
-    """SRV-625: the secret echo mask (server/conductor/redact.py AnswerMask) for a chat request
+    """SRV-625: the secret echo mask (app/tandemapp/conductor/redact.py AnswerMask) for a chat request
     whose plan's profile has `secret_mask` on or shadow and whose conversation's tool results hold
     a secret span; None otherwise (the raw path, and every answer with nothing to mask, stays the
     release's byte for byte)."""
@@ -12954,9 +12954,9 @@ def parser() -> argparse.ArgumentParser:
                          "generation with finish_reason stop). The backstop for a greedy loop the "
                          "penalties cannot break; empty = off")
     ap.add_argument("--argloop", default="on", choices=("on", "log", "off"),
-                    help="the tool-argument loop guard (server/argloop.py): `on` stops a held "
-                         "tool call whose arguments loop and tells the model on its next turn; "
-                         "`log` only logs where it would have; `off`")
+                    help="the tool-argument loop guard (app/tandemapp/argloop.py): `on` stops a "
+                         "held tool call whose arguments loop and tells the model on its next "
+                         "turn; `log` only logs where it would have; `off`")
     ap.add_argument("--default-max-tokens", type=int, default=8192,
                     help="what a request that does not send max_tokens gets. It used to be 256 "
                          "and a long answer stopped in the middle of a line")
@@ -13079,14 +13079,14 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--no-think-stall", dest="think_stall", action="store_false",
                     help="never run the reasoning-loop arms (the budget still applies)")
     ap.add_argument("--conductor", default="raw", choices=("raw", "off", "shadow", "on"),
-                    help="the second-level harness (server/conductor/monitor/). raw, the "
-                         "default (off is the same): nothing of it runs and the output is the "
-                         "raw engine's. shadow: every rule runs and journals, nothing is done. "
-                         "on: each task acts in its policy mode. A request's X-Tandem header "
-                         "may lower it, never raise it")
+                    help="the second-level harness (app/tandemapp/conductor/monitor/). raw, the "
+                         "default (off is the same): nothing of it runs and the output is the raw "
+                         "engine's. shadow: every rule runs and journals, nothing is done. on: "
+                         "each task acts in its policy mode. A request's X-Tandem header may "
+                         "lower it, never raise it")
     ap.add_argument("--conductor-policy", default="",
-                    help="the monitor's policy file (default ops/supervisor.yaml), validated at "
-                         "start against ops/supervisor.schema.json")
+                    help="the monitor's policy file (default app/ops/supervisor.yaml), validated "
+                         "at start against app/ops/supervisor.schema.json")
     ap.add_argument("--conductor-watch-s", type=float, default=30.0,
                     help="with --conductor shadow or on, how often the stall watchdog's watch "
                          "looks for sessions whose client has gone (S4: client_gone, and NOTIFY "
@@ -13097,8 +13097,8 @@ def parser() -> argparse.ArgumentParser:
                          "engine closes the reasoning block itself -- see engine/spec.py's "
                          "ThinkBudget -- which CHANGES THE ANSWER and is not a speed trick")
     ap.add_argument("--answer-reserve", default=os.environ.get("QSE_ANSWER_RESERVE", "auto"),
-                    help="tokens of the output limit kept for the answer when a client asks for "
-                         "a thinking budget in any shape (server/thinking.py): its reasoning "
+                    help="tokens of the output limit kept for the answer when a client asks for a "
+                         "thinking budget in any shape (app/tandemapp/thinking.py): its reasoning "
                          "closes early enough to leave them. auto = min(2048, a quarter of the "
                          "limit), 0 = none (QSE_ANSWER_RESERVE). A request that asks for no "
                          "budget is never touched")
@@ -13163,10 +13163,10 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--compaction", default=os.environ.get("QSE_COMPACTION", "continue"),
                     choices=("continue", "client"),
                     help="a client's compaction request (QSE_COMPACTION, 0.3.23-test, "
-                         "server/compaction.py): continue = served as the continuation of the "
-                         "conversation the engine holds for its session (the prefill reads only "
-                         "the instructions); client = as the client sent it (its text history "
-                         "read cold)")
+                         "app/tandemapp/compaction.py): continue = served as the continuation of "
+                         "the conversation the engine holds for its session (the prefill reads "
+                         "only the instructions); client = as the client sent it (its text "
+                         "history read cold)")
     ap.add_argument("--compaction-prepare", default=os.environ.get("QSE_COMPACTION_PREPARE", "on"),
                     choices=("on", "off"),
                     help="write an idle opencode session's summary ahead, so its /compact is "
@@ -13263,10 +13263,10 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--disk-cache-min-tokens", type=int, default=4096,
                     help="the shortest prefix the disk tier writes an anchor for")
     ap.add_argument("--conductor-defaults", default="builtin", choices=("builtin", "shipped"),
-                    help="0.3.22-test (server/conductor/shipped.py): shipped, the live documents "
-                         "of 2026-10-03 are stored as version 1 for every document the "
-                         "conductor's directory has no version of (ops/start.sh passes it to "
-                         "the :8000 service); builtin, the minimal built-ins stay version 0")
+                    help="0.3.22-test (app/tandemapp/conductor/shipped.py): shipped, the live "
+                         "documents of 2026-10-03 are stored as version 1 for every document the "
+                         "conductor's directory has no version of (ops/start.sh passes it to the "
+                         ":8000 service); builtin, the minimal built-ins stay version 0")
     ap.add_argument("--session-spill", default="on", choices=("on", "off"),
                     help="0.3.22-test (engine/spill.py): a live conversation on the NVMe, under the "
                          "disk tier's directory: written whole at a planned stop and read back at "
@@ -13465,26 +13465,26 @@ def parser() -> argparse.ArgumentParser:
                          "and every benchmark server stays off")
     ap.add_argument("--conductor-config", default="off",
                     help="the conductor's config directory (versioned profiles, router, roles, "
-                         "packages and its journal, server/conductor/), or off (the default). On, "
-                         "/v1/models lists `TandemLLM` alone (the raw name is a hidden alias; "
-                         "`X-Tandem: raw` serves the raw path) and /v1/conductor/* "
+                         "packages and its journal, app/tandemapp/conductor/), or off (the "
+                         "default). On, /v1/models lists `TandemLLM` alone (the raw name is a "
+                         "hidden alias; `X-Tandem: raw` serves the raw path) and /v1/conductor/* "
                          "exists; the raw model name is served as before. NOT read from the "
                          "environment: ops/start.sh passes serve.env's QSE_CONDUCTOR_CONFIG for "
                          "the :8000 service, and every benchmark server stays off")
     ap.add_argument("--backends", default="off",
-                    help="the proxy's config database (proxy/, docs/proxy.md), or off (the "
-                         "default). On, a request whose model routes to a configured backend "
-                         "(vLLM, SGLang, any OpenAI-compatible server, OpenAI, DeepSeek) is relayed "
-                         "on its handler's thread, never touching the engine's lock or queue; "
-                         "/v1/models adds the backends' models and /v1/config/* serves the "
+                    help="the proxy's config database (app/proxy/, app/docs/proxy.md), or off "
+                         "(the default). On, a request whose model routes to a configured backend "
+                         "(vLLM, SGLang, any OpenAI-compatible server, OpenAI, DeepSeek) is "
+                         "relayed on its handler's thread, never touching the engine's lock or "
+                         "queue; /v1/models adds the backends' models and /v1/config/* serves the "
                          "Backends screen. TandemLLM and the raw name stay the engine's. The "
-                         "TANDEM_* variables overlay the database (the environment wins). NOT read "
-                         "from the environment: ops/start.sh passes serve.env's QSE_BACKENDS")
+                         "TANDEM_* variables overlay the database (the environment wins). NOT "
+                         "read from the environment: ops/start.sh passes serve.env's QSE_BACKENDS")
     ap.add_argument("--host-collector", default="on", choices=("on", "off"),
-                    help="the System view's hosts (proxy/hostcollect.py): this machine's memory, "
-                         "GPU, CPU, disks and network, and the process behind each backend on it. "
-                         "Sampled only when the view asks, at most every 5 s (the process scan "
-                         "every 15 s); off leaves system.hosts out")
+                    help="the System view's hosts (app/proxy/hostcollect.py): this machine's "
+                         "memory, GPU, CPU, disks and network, and the process behind each "
+                         "backend on it. Sampled only when the view asks, at most every 5 s (the "
+                         "process scan every 15 s); off leaves system.hosts out")
     ap.add_argument("--usage-retention-days", type=int, default=ledger_mod.MIN_RETENTION_DAYS,
                     help="rows older than this are pruned daily at 04:00; below 400 only with "
                          "QSE_TEST=1")
@@ -13503,8 +13503,8 @@ def parser() -> argparse.ArgumentParser:
                          "token. With no admin password set every admin route is open and this "
                          "flag changes nothing. Default from QSE_DASHBOARD_LOGIN")
     ap.add_argument("--dashboard-dir", default=None,
-                    help="where the dashboard's built files are (default: dashboard/dist in this "
-                         "repository); /dashboard/ serves them, or a placeholder when missing")
+                    help="where the dashboard's built files are (default: app/dashboard/dist in "
+                         "this repository); /dashboard/ serves them, or a placeholder when missing")
     ap.add_argument("--setup", action="store_true",
                     help="setup mode (docs/setup.md, `ops/start.sh --setup`): no served model "
                          "is loaded; the dashboard, /v1/setup/* and Wren, the setup guide's "
@@ -14897,7 +14897,7 @@ def identity() -> dict:
 
 
 def _identity_name() -> str | None:
-    """0.8.2: the served model's name for the identity note (server/conductor/schema.py
+    """0.8.2: the served model's name for the identity note (app/tandemapp/conductor/schema.py
     `model_name`): the label of the model card whose packs match the weight profile
     (models/<model>/card.json; "Qwen3.8-27B" for exl3-4.5 or nvfp4, the second model's label for its
     packs); None when no card matches (the note's default name)."""
