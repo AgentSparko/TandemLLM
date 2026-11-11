@@ -3,7 +3,7 @@
 `_read_raw` trusted the client's `Content-Length`: `-1` became `rfile.read(-1)` --
 read-until-EOF, a permanently hung handler thread per keep-alive connection -- and any
 client-sized number buffered that much before any auth would answer. The shared module
-`server/http_body.py` validates the header first: a number, not negative, within the
+`app/tandemapp/http_body.py` validates the header first: a number, not negative, within the
 body cap, else a 400/413 and a closed connection. And the throttle key follows
 `Auth.login_key`: from loopback, or a peer named in TANDEM_TRUSTED_PROXY, `X-Real-IP` is
 the key when it is set; from any other peer the header is ignored (it is the client's to

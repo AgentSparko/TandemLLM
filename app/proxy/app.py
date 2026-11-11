@@ -82,9 +82,9 @@ FLEET_BODY_MAX = 4 * 1024 * 1024
 IDLE_TIMEOUT_S = 60.0
 
 # The body framing -- BodyError, the cap, the Content-Length spine, the chunked parser --
-# is server/http_body.py, the same code the standalone server calls: the two servers
+# is tandemapp/http_body.py, the same code the standalone server calls: the two servers
 # carried it line for line and a fix had to land twice.
-from server import http_body  # noqa: E402
+from tandemapp import http_body  # noqa: E402
 
 BodyError = http_body.BodyError
 
@@ -193,7 +193,7 @@ class Handler(BaseHTTPRequestHandler):
         # RFC 9112 section 6.1: a request with BOTH Transfer-Encoding: chunked and
         # Content-Length is answered and then the connection is closed -- the two
         # framings disagree about where the body ends. The rule is the engine server's
-        # (server/http_body.py), so both servers answer such a request the same way.
+        # (tandemapp/http_body.py), so both servers answer such a request the same way.
         if not self.close_connection and http_body.conflicting_framing(self.headers):
             self.close_connection = True
 
@@ -240,7 +240,7 @@ class Handler(BaseHTTPRequestHandler):
     _body_done = False               # the request in hand has had its body read to the end
 
     def _read_raw(self) -> bytes:
-        """The request's body, consumed whole or not at all -- server/http_body.py owns
+        """The request's body, consumed whole or not at all -- tandemapp/http_body.py owns
         the framing, the same module the standalone server calls. An answer written with
         the body still unread is a desync one request away: every path out of here has
         read to the end of the framing, and BodyError (or handle_one_request) closes the

@@ -23,7 +23,7 @@ from email.message import Message
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.http_body import BodyError, conflicting_framing, read_body  # noqa: E402
+from tandemapp.http_body import BodyError, conflicting_framing, read_body  # noqa: E402
 
 
 def _headers(**kw):

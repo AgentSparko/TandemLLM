@@ -43,6 +43,7 @@
    "tandemapp.conductor.store:Store",
    "tandemapp.conductor.voice",
    "tandemapp.dashboard_api",
+   "tandemapp.http_body",
    "tandemapp.laya_api",
    "tandemapp.ledger",
    "tandemapp.library_api",
@@ -420,12 +421,51 @@
     "app/ops"
    ]
   },
+  "tests/test_chatd_egress_splice.py": {
+   "imports": [
+    "chatd.egress:_splice"
+   ],
+   "reads": []
+  },
   "tests/test_chatd_lifecycle.py": {
    "imports": [],
    "reads": [
     "app/",
     "app/ops"
    ]
+  },
+  "tests/test_chatd_mcp_stdio_kill.py": {
+   "imports": [
+    "chatd.mcp"
+   ],
+   "reads": []
+  },
+  "tests/test_chatd_memory_wait.py": {
+   "imports": [
+    "chatd.engine",
+    "chatd.runs"
+   ],
+   "reads": []
+  },
+  "tests/test_chatd_runs_error_frames.py": {
+   "imports": [
+    "chatd.runs:Run"
+   ],
+   "reads": []
+  },
+  "tests/test_chatd_stop_pending.py": {
+   "imports": [
+    "chatd.engine",
+    "chatd.runs:Run"
+   ],
+   "reads": []
+  },
+  "tests/test_chatd_workspace_grep.py": {
+   "imports": [
+    "chatd.workspace",
+    "chatd.workspace:Workspace"
+   ],
+   "reads": []
   },
   "tests/test_claim_check.py": {
    "imports": [
@@ -650,6 +690,12 @@
     "app/",
     "app/packages"
    ]
+  },
+  "tests/test_demux_first_timeout.py": {
+   "imports": [
+    "chatd.sandbox:demux"
+   ],
+   "reads": []
   },
   "tests/test_disk_cache_server.py": {
    "imports": [
@@ -1183,6 +1229,13 @@
     "app/tests"
    ]
   },
+  "tests/test_proxy_http_hardening.py": {
+   "imports": [
+    "app/tests/proxy_util.py",
+    "proxy.app"
+   ],
+   "reads": []
+  },
   "tests/test_queue_wait.py": {
    "imports": [
     "tandemapp.conductor.classify",
@@ -1272,6 +1325,12 @@
     "app/packages",
     "app/tools"
    ]
+  },
+  "tests/test_router_questions_serial.py": {
+   "imports": [
+    "app/tests/test_libsearch.py"
+   ],
+   "reads": []
   },
   "tests/test_sampling_defaults.py": {
    "imports": [
@@ -1741,6 +1800,14 @@
    "reads": [
     "app/"
    ]
+  },
+  "tests/test_usage_context.py": {
+   "imports": [
+    "chatd.context",
+    "chatd.runs:Run",
+    "chatd.runs:client_prompt_of"
+   ],
+   "reads": []
   },
   "tests/test_voice.py": {
    "imports": [

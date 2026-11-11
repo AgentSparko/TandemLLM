@@ -8432,11 +8432,11 @@ def _proxy_backends() -> list | None:
 
 
 # The framing -- BodyError, the body cap, the Content-Length spine, the chunked parser --
-# lives in server/http_body.py, stdlib-only, shared with proxy/app.py: the two servers
+# lives in app/tandemapp/http_body.py, stdlib-only, shared with app/proxy/app.py: the two servers
 # carried it line for line and a fix had to land twice. The cap stays a per-request
 # lookup through the module global (QSE_MAX_BODY_MB at import), and the answer is
 # written with the body either read to its end or the connection closed.
-from server import http_body                                   # noqa: E402
+from tandemapp import http_body  # noqa: E402  (SRV-747: shared with TandemApp's proxy)
 
 BodyError = http_body.BodyError
 
@@ -8618,7 +8618,7 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
 
     def _read_body(self) -> bytes:
-        """The request's body, consumed whole or not at all -- server/http_body.py owns
+        """The request's body, consumed whole or not at all -- app/tandemapp/http_body.py owns
         the framing, shared with proxy/app.py. An answer written with the body still
         unread is a desync one request away: every path out of here has read to the end
         of the framing, and BodyError (or handle_one_request) closes the connection."""
