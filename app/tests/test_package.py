@@ -103,8 +103,9 @@ def test_the_built_page_is_in_the_wheel():
 
 
 def test_the_dash_image_copies_every_package():
-    """ops/Dockerfile.dash builds the wheel: every source folder of pyproject.toml's packages must
-    be COPYed and allowed by its .dockerignore (2026-10-20: chatd/ and packages/ were missing)."""
+    """packaging/Dockerfile.app builds the wheel: every source folder of pyproject.toml's packages
+    must be COPYed and allowed by its .dockerignore (2026-10-20: chatd/ and packages/ were missing
+    from the image's first form, ops/Dockerfile.dash)."""
     st = _toml()["tool"]["setuptools"]
     dirs = st.get("package-dir", {})
     srcs = {dirs[p] if p in dirs else p.split(".")[0] for p in st["packages"]}
@@ -112,14 +113,14 @@ def test_the_dash_image_copies_every_package():
     def under(d, roots):
         return any(d == r or d.startswith(r + "/") for r in roots)
 
-    with open(os.path.join(ROOT, "ops", "Dockerfile.dash")) as f:
+    with open(os.path.join(ROOT, "packaging", "Dockerfile.app")) as f:
         copied = [w[1].rstrip("/") for w in (ln.split() for ln in f)
                   if len(w) == 3 and w[0] == "COPY"]
-    with open(os.path.join(ROOT, "ops", "Dockerfile.dash.dockerignore")) as f:
+    with open(os.path.join(ROOT, "packaging", "Dockerfile.app.dockerignore")) as f:
         allowed = [ln.strip()[1:].rstrip("/") for ln in f if ln.strip().startswith("!")]
     for d in sorted(srcs):
-        assert under(d, copied), f"{d} is not COPYed in ops/Dockerfile.dash"
-        assert under(d, allowed), f"{d} is not allowed in ops/Dockerfile.dash.dockerignore"
+        assert under(d, copied), f"{d} is not COPYed in packaging/Dockerfile.app"
+        assert under(d, allowed), f"{d} is not allowed in packaging/Dockerfile.app.dockerignore"
 
 
 def test_the_shipped_texts_are_in_the_wheel():
