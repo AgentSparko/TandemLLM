@@ -66,8 +66,8 @@ from server import sampling_defaults  # noqa: E402  (SPD-245 a request's filters
 from server import prefill_burst  # noqa: E402  (SPD-245 the prefills of requests that arrive together)
 from server import roundlog as _roundlog  # noqa: E402  (SPD-187 the round logger, QWEN38_ROUND_LOG)
 from server import round_runner as _round_runner  # noqa: E402  (SPD-201 the runner-owned round)
-from tandemapp import health_cache  # noqa: E402  (SPD-249 /health's parts and reuse)
-from server import thinking as thinking_mod  # noqa: E402
+from server import health_cache  # noqa: E402  (SPD-249 /health's parts and reuse)
+from tandemapp import thinking as thinking_mod  # noqa: E402
 from engine import grammar as grammar_mod  # noqa: E402
 from engine.models.adapter import ServeSpec  # noqa: E402  (ENG-406 what the family says about its model)
 from server import logprobs as lp_mod  # noqa: E402
@@ -102,8 +102,8 @@ from tandemapp import library_api  # noqa: E402
 from server import cache_peek, model_card, tokenize_api  # noqa: E402
 from tandemapp import chat_forward  # noqa: E402
 from server import memory_api  # noqa: E402
-from tandemapp import mode as mode_mod  # noqa: E402  (OPS-260 engine or chat, and what runs beside the engine)
-from server import memblock  # noqa: E402
+from server import mode as mode_mod  # noqa: E402  (OPS-260 engine or chat, and what runs beside the engine)
+from tandemapp import memblock  # noqa: E402
 from tandemapp import compaction as compaction_mod  # noqa: E402
 from tandemapp import session_tokens as session_tokens_mod  # noqa: E402
 from server import preempt  # noqa: E402
