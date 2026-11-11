@@ -95,10 +95,9 @@ from tandemapp import activity as act
 from tandemapp.activity import REPLAY
 from tandemapp.usage import client_cached_of
 
-try:
-    from engine.methods import busy          # SPD-249: the round runner's GPU-wait windows
-except ImportError:                          # the standalone proxy ships `server` without the engine (#108)
-    busy = None
+#: SPD-249: the round runner's GPU-wait windows (engine/methods/busy.py). The engine's process sets it
+#: (server/app.py); TandemApp never imports the engine (SRV-747), so it stays None there.
+busy = None
 
 
 def _own_blocks(rec, bs, slot_blocks=None):

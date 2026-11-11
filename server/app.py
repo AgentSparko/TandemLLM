@@ -80,6 +80,7 @@ from server import regenerate as regenerate_mod  # noqa: E402
 from server import skillcanon as skillcanon_mod  # noqa: E402
 from tandemapp import dashboard_api  # noqa: E402
 from tandemapp import live as live_mod  # noqa: E402
+from engine.methods import busy as _busy  # noqa: E402  (SPD-249 the round runner's GPU-wait windows)
 from tandemapp import parallel as parallel_mod  # noqa: E402
 from tandemapp import activity as activity_mod  # noqa: E402
 from tandemapp import logbuf  # noqa: E402
@@ -130,6 +131,12 @@ from tandemapp.conductor.router import COMPOSITE as COMPOSITE_NAME  # noqa: E402
 from tandemapp.conductor.schema import SIDE_FIRST_MAX_TOKENS  # noqa: E402
 
 from server import slots as slots_mod  # noqa: E402
+
+# SRV-747: TandemApp's live view and GPU gauges run in this process until ENG-413 but never import
+# the engine; the engine hands them the round runner's GPU-wait windows, the allocator's counters
+# and the capture guard
+live_mod.busy = _busy
+metrics.ENGINE_HOOKS.update(cuda_stats=cache.cuda_stats, capture_lock=capture_lock)
 
 
 class SlotState(dict):

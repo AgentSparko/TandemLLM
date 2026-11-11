@@ -36,6 +36,7 @@ name and they are seconds and bytes, never milliseconds, because that is what th
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 
@@ -497,18 +498,43 @@ def _own_work_field(kind: str, field: str):
     return read
 
 
+#: What the engine's process hands the GPU gauges (server/app.py sets both; TandemApp never imports
+#: the engine, SRV-747): `cuda_stats`, the allocator's counters read off torch's nested dict
+#: (engine/cache.py), and `capture_lock`, the guard for a driver call off the engine's thread
+#: (engine/capture_lock.py). Without them a gauge reads torch directly, as before.
+ENGINE_HOOKS: dict = {"cuda_stats": None, "capture_lock": None}
+
+
+class _NoGuard:
+    """The capture guard's stand-in when the engine handed none (TandemApp on its own)."""
+
+    @staticmethod
+    def off_thread(site: str):
+        return contextlib.nullcontext()
+
+    @staticmethod
+    def check(site: str) -> None:
+        return None
+
+
 def _gpu_memory():
     try:
-        from engine.cache import cuda_stats
-        return float(cuda_stats("allocated_bytes.all.current")[0])
+        stats = ENGINE_HOOKS["cuda_stats"]
+        if stats is not None:
+            return float(stats("allocated_bytes.all.current")[0])
+        import torch
+        return float(torch.cuda.memory_allocated())
     except Exception:                                              # noqa: BLE001
         return {}
 
 
 def _gpu_reserved():
     try:
-        from engine.cache import cuda_stats
-        return float(cuda_stats("reserved_bytes.all.current")[0])
+        stats = ENGINE_HOOKS["cuda_stats"]
+        if stats is not None:
+            return float(stats("reserved_bytes.all.current")[0])
+        import torch
+        return float(torch.cuda.memory_reserved())
     except Exception:                                              # noqa: BLE001
         return {}
 
@@ -523,7 +549,7 @@ def _unified_free():
     """
     try:
         import torch
-        from engine import capture_lock
+        capture_lock = ENGINE_HOOKS["capture_lock"] or _NoGuard
         # SPD-249: a scrape runs on its own thread, and its driver call landed inside idle captures
         with capture_lock.off_thread("metrics.unified_free"):
             capture_lock.check("metrics.unified_free")

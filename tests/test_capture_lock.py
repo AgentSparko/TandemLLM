@@ -46,6 +46,7 @@ import torch  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
+sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from engine import cache, capture_lock, disk_cache  # noqa: E402
 from test_cache import DEV, fresh, tokens  # noqa: E402
@@ -210,7 +211,7 @@ def test_the_debug_check_fails_off_thread_without_the_guard():
 #: `off_thread(site)` around its CUDA call. A spy over the served engine (every CUDA entry point called from another
 #: thread while a capture was open, 561 captures under a 5 Hz /health and 1 Hz /metrics poll) found these.
 OFF_THREAD_SITES = [
-    ("server/metrics.py", "_unified_free", "metrics.unified_free"),
+    ("app/tandemapp/metrics.py", "_unified_free", "metrics.unified_free"),
 ]
 
 
@@ -239,8 +240,10 @@ def test_a_metrics_scrape_waits_for_an_open_capture():
     """/metrics' free-memory reading (`_unified_free`, a driver call) runs only after a capture let go."""
     import threading
     import time
-    from server import metrics
+    from tandemapp import metrics
     order, opened = [], threading.Event()
+    hooks = dict(metrics.ENGINE_HOOKS)
+    metrics.ENGINE_HOOKS["capture_lock"] = capture_lock      # what server/app.py hands it (SRV-747)
     real = torch.cuda.mem_get_info
     torch.cuda.mem_get_info = lambda *a: (order.append("driver call"), (7.0, 9.0))[1]
 
@@ -257,6 +260,7 @@ def test_a_metrics_scrape_waits_for_an_open_capture():
         t.join()
     finally:
         torch.cuda.mem_get_info = real
+        metrics.ENGINE_HOOKS.update(hooks)
     assert got == 7.0 and order == ["capture done", "driver call"], (got, order)
     return "the scrape's driver call came after the capture"
 
