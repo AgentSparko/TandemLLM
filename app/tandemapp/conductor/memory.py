@@ -79,7 +79,7 @@ from tandemapp.conductor import modelfit, schema, signals
 from tandemapp.conductor.transcripts import WORKDIR
 from tandemapp import memblock
 from tandemapp.conductor.libsearch import words as signals_words
-from server.knobs import SETTINGS as _S
+from tandemapp.knobs import SETTINGS as _S
 
 CARD = "tandem-memory"
 SKILL = "memory"
@@ -510,7 +510,7 @@ def routes_layout(plan, sess, cfg) -> str:
     else `auto` serves the prompt as before."""
     if MEMORY_ROUTES in ("note", "index"):
         return MEMORY_ROUTES
-    from server.conductor import router as router_mod
+    from tandemapp.conductor import router as router_mod
     if router_mod.NOTES_HEAD != "on" or cfg.get("index_order") == "ranked" or \
             getattr(plan, "caps", None) is not None:
         return "index"

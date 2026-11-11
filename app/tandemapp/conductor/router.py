@@ -52,7 +52,7 @@ import time
 from tandemapp import argloop, thinking
 from tandemapp.conductor import incontext, inject, libsearch, modelfit, outcomes, schema, signals, transcripts
 from tandemapp.conductor import deferred as deferred_mod
-from server.conductor import memory as memory_mod
+from tandemapp.conductor import memory as memory_mod
 from tandemapp.conductor import packages as packages_mod
 from tandemapp import session_tokens as session_tokens_mod
 from tandemapp.conductor.classify import ASKING, PARENT, Answer, Qwen, decider_for
@@ -442,7 +442,7 @@ class Plan:
         # carries it is that session's alone, named in the row's `extra.head_session`
         self.session_token: str | None = None
         # VIS-119: how long the class's package answer holds (`schema.package_sticky`), and the
-        # shadow questions asked after the turn (server/conductor/deferred.py), each a job
+        # shadow questions asked after the turn (app/tandemapp/conductor/deferred.py), each a job
         self.sticky = "message"
         self.deferred: list[dict] = []
         self.t0 = time.perf_counter()
@@ -860,7 +860,7 @@ class Router:
         self.own_eta = None
         # VIS-119: the seconds the server has been idle (nothing running, queued or in the
         # router), None while it is busy; set by the server. The shadow questions asked after the
-        # turn wait for it (server/conductor/deferred.py)
+        # turn wait for it (app/tandemapp/conductor/deferred.py)
         self.own_idle = None
         self.deferred = deferred_mod.Deferred(signal=lambda: self.own_idle)
 

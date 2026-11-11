@@ -5,8 +5,8 @@ TandemApp never imports the engine (SRV-747). The engine's registry (engine/sett
 same live environment with the same prefix, so in an engine that runs the conductor in its process
 a name reads the same here as there: tests/test_knobs_standalone.py holds these defaults equal to
 the registry's, and app/tests/test_knobs.py reads them without the engine. The shadow reader's and
-the narrator's slot knobs (SHADOW_*, NARRATOR_DEVICE, NARRATOR_DIR) are the engine's own, read from
-engine/settings.py.
+the narrator's slot knobs (SHADOW_* but the deferred questions' SHADOW_ASK and SHADOW_ASK_IDLE_S,
+NARRATOR_DEVICE, NARRATOR_DIR) are the engine's own, read from engine/settings.py.
 """
 
 from __future__ import annotations

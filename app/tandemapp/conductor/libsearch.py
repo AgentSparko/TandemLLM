@@ -29,7 +29,7 @@ once per message (or outcome signature) and session; with `LIBRARY_HOLD=class`, 
 package answer holds for the class, once per class (VIS-119). A plan decided under the engine lock
 (the in-context stage) cannot ask Qwen through the server's own port, so it asks the decider stages
 only, and journals `locked` when there is none. A shadow question bound for Qwen on the server's
-own port is asked after the turn, when the server is idle (server/conductor/deferred.py); the
+own port is asked after the turn, when the server is idle (app/tandemapp/conductor/deferred.py); the
 proxy's stage override (`--backends`) leaves this server's own requests on that port.
 
 The row's `extra.library`: the trigger, the query's size, the candidates with their scores, the
@@ -48,8 +48,8 @@ import types
 
 from tandemapp.conductor import deferred, schema, signals
 from tandemapp.conductor.classify import PARENT
-from server.conductor.packages import SHIPPED_ROOT, split_frontmatter, split_reference
-from server.knobs import SETTINGS as _S
+from tandemapp.conductor.packages import SHIPPED_ROOT, split_frontmatter, split_reference
+from tandemapp.knobs import SETTINGS as _S
 
 #: VIS-119: `message` (the default): a library question on every new user message, as before;
 #: `class`: on a class whose package answer holds for the session's class (`package_sticky:
@@ -326,7 +326,7 @@ _AFTER_TURN = types.SimpleNamespace(locked=False)
 
 def _deferred_job(router, hits, text, line, cfg, router_doc, roles, about, sess, key, row, info,
                   trigger) -> dict:
-    """VIS-119: the shadow library question as a job for server/conductor/deferred.py: asked with
+    """VIS-119: the shadow library question as a job for app/tandemapp/conductor/deferred.py: asked with
     the candidates the plan found; its answer goes into the session's picks for the message (not
     the class's: a shadow question asked off the path holds nothing for the class) and, as a new
     `extra.library` (and `shadow.library` for a pick), into the request's journal row. The job
@@ -427,7 +427,7 @@ def attach(router, plan, body, router_doc, prof, packages, roles, sh, sess, cls,
     elif later:
         info.update(chosen=[], how="deferred" if want == "idle" else "shadow_off")
         if want == "idle":
-            from server.conductor.router import _about
+            from tandemapp.conductor.router import _about
             plan.deferred.append(_deferred_job(
                 router, hits, sh.user_text or "", line, cfg, router_doc, roles,
                 _about(cls, {c["id"]: c for c in router_doc["classes"]}), sess, key, row, info,

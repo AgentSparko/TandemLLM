@@ -1492,7 +1492,7 @@ def _own_idle_s() -> float | None:
     """VIS-119 (the router's `own_idle`): the seconds since the last request or side-lane job
     ended while nothing runs, waits, plans in the router or holds the engine lock; None while
     something does. The router's shadow questions after their turn wait for it
-    (server/conductor/deferred.py)."""
+    (app/tandemapp/conductor/deferred.py)."""
     with QUEUE:
         if INFLIGHT["waiting"] or INFLIGHT["running"] or INFLIGHT["lane"] or WAITERS or \
                 PLANNING["n"]:

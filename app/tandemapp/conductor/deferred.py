@@ -30,7 +30,7 @@ import queue
 import threading
 import time
 
-from server.knobs import SETTINGS as _S
+from tandemapp.knobs import SETTINGS as _S
 
 #: `idle`, `inline` or `off` (the module's header)
 SHADOW_ASK = (_S.get("SHADOW_ASK") or "idle").strip().lower()
