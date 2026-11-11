@@ -16,7 +16,7 @@ import socket
 import threading
 import time
 
-from server import chat_forward
+from tandemapp import chat_forward
 
 CHATD_TTL_S = 5.0
 CHATD_CONNECT_S = 0.25

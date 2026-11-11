@@ -1,6 +1,6 @@
 """A rule about the user from a tool turn is kept at session scope (2026-11-04).
 
-The store's guard (`rule_from_tool`, server/conductor/notes.py): a `rule` or `ruling` about the
+The store's guard (`rule_from_tool`, app/tandemapp/conductor/notes.py): a `rule` or `ruling` about the
 user needs the user's own message in the turn. In a chat with no working directory every project
 note is a user note, so the guard refused most rules the model wrote during a tool run. Now such a
 rule is kept for its conversation only: session scope, provisional, the same writer and kind, and
@@ -30,8 +30,8 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server.conductor import memory as memory_mod  # noqa: E402
-from server.conductor.notes import CAPS, NoteStore, Refused  # noqa: E402
+from tandemapp.conductor import memory as memory_mod  # noqa: E402
+from tandemapp.conductor.notes import CAPS, NoteStore, Refused  # noqa: E402
 
 PROJ = "/home/user/pagoda"
 SESS = "c:chat-test-1"

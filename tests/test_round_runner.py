@@ -652,8 +652,8 @@ def test_spd249_sp1_closes_the_reasoning_at_a_block():
 
 def test_spd249_give_up_at_sp1_ends_the_stream():
     import test_supervisor_frame as F
-    from server.conductor.monitor.policy import GIVE_UP
-    from server.conductor.monitor import Action
+    from tandemapp.conductor.monitor.policy import GIVE_UP
+    from tandemapp.conductor.monitor import Action
 
     def give_up(ev, task, sup):
         return Action(GIVE_UP, reason="t") if ev.reasoning_tokens >= 7 else None
@@ -698,8 +698,8 @@ def test_spd249_a_spent_budget_is_closed_on_the_slots_thread():
 
 def test_spd249_sp3_regenerate_records_the_same_cuts():
     import test_supervisor_frame as F
-    from server.conductor.monitor import Action
-    from server.conductor.monitor.policy import REGENERATE_CALL
+    from tandemapp.conductor.monitor import Action
+    from tandemapp.conductor.monitor.policy import REGENERATE_CALL
 
     def regen(ev, task, sup):
         if sup.memo.get("regen"):

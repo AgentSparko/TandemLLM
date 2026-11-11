@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import test_forward_tree as T  # noqa: E402,F401  (the CPU environment before the engine imports)
 
 from server import app  # noqa: E402
-from server.conductor.router import Plan, Session  # noqa: E402
+from tandemapp.conductor.router import Plan, Session  # noqa: E402
 
 
 def _plan(active=True, side=None, key="h:abc"):

@@ -1,7 +1,7 @@
 """Shadow questions after the turn (VIS-119).
 
 A decision type in shadow journals what it would do and changes nothing in the request. The
-library's package question in shadow (R1, server/conductor/libsearch.py) still asked Qwen through
+library's package question in shadow (R1, app/tandemapp/conductor/libsearch.py) still asked Qwen through
 this server's own port before the request queued: on an idle box a Chat-tab message waited 1.41 s
 in the queue, 1.32 s of it that question (2026-10-31), for an answer the request never reads. Two
 questions asked at once do not hide each other's time either: the GPU serves their prefills one

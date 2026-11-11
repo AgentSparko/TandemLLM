@@ -80,8 +80,9 @@ def refusal(root: str, memory: str, force: bool) -> str | None:
 def seed(a) -> int:
     root = os.path.abspath(os.path.expanduser(a.conductor))
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from server.conductor.notes import NoteStore
-    from server.conductor.transcripts import memory_root
+    sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
+    from tandemapp.conductor.notes import NoteStore
+    from tandemapp.conductor.transcripts import memory_root
     why = refusal(root, memory_root(root), a.force)
     if why is not None:
         print(f"refused: {why}")

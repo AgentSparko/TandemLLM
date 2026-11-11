@@ -893,7 +893,7 @@ def test_qwen_free_or_unknown_or_remote_is_asked():
 
 
 def test_qwen_busy_is_a_failure_not_a_call():
-    from server.conductor import decisions
+    from tandemapp.conductor import decisions
     now = 1_790_000_000_000
     rows = [{"ts_ms": now, "class_id": "code_edit", "source": "default",
              "stages": [{"stage": "qwen", "error": "qwen_busy", "ms": 0.0, "skipped": True}]},
@@ -1087,7 +1087,7 @@ class _NotesHead:
     """`QWEN38_NOTES_HEAD` on for one test."""
 
     def __enter__(self):
-        from server.conductor import router as R
+        from tandemapp.conductor import router as R
         self.R, self.was = R, R.NOTES_HEAD
         R.NOTES_HEAD = "on"
 
@@ -1096,7 +1096,7 @@ class _NotesHead:
 
 
 def test_notes_head_off_leaves_every_note_at_the_tail():
-    from server.conductor import router as R
+    from tandemapp.conductor import router as R
     assert R.NOTES_HEAD == "off", "default off until the quality gate passes"
     cond, _ = setup(decider=by_label("code_edit", 0.91))
     plan, ids, _ = turn(cond, body([{"role": "system", "content": SYSTEM}, {"role": "user", "content": CODE}]))

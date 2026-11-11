@@ -41,7 +41,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_conductor_router import setup  # noqa: E402
 
-from server import app, cache_peek, usage  # noqa: E402
+from server import app, cache_peek  # noqa: E402
+from tandemapp import usage  # noqa: E402
 from server import round_runner as RR  # noqa: E402
 from server import slots as S  # noqa: E402
 

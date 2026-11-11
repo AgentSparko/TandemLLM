@@ -533,7 +533,7 @@ def _index_store(n_user=40):
     is written first of all: in the index's own order it is the last line."""
     import tempfile
     import time as _t
-    from server.conductor.notes import NoteStore
+    from tandemapp.conductor.notes import NoteStore
     st = NoteStore(tempfile.mkdtemp(prefix="mem-"), settings=lambda: {"dedupe_threshold": 0.95})
     clock = [1_790_000_000.0]
     st.clock = lambda: clock[0]
@@ -560,7 +560,7 @@ def _index_store(n_user=40):
 
 
 def _cfg(**kw):
-    from server.conductor import schema
+    from tandemapp.conductor import schema
     return dict(schema.notes(None), **kw)
 
 
@@ -572,8 +572,8 @@ def _lines(text):
 def test_spd249_the_index_default_is_unchanged():
     """The shipped default stays the index as it was: 1,500 tokens, the scopes in turn, newest first; a
     message changes nothing in it."""
-    from server.conductor import memory as M
-    from server.conductor import schema
+    from tandemapp.conductor import memory as M
+    from tandemapp.conductor import schema
     assert schema.NOTES["index_tokens"] == 1500 and schema.NOTES["index_order"] == "recent"
     st, proj, gate, others = _index_store()
     cfg = _cfg()
@@ -591,7 +591,7 @@ def test_spd249_the_ranked_index_keeps_the_notes_the_message_is_about():
     """`index_order: ranked`, 400 tokens: the cap holds, the note the message is about comes first even
     as the oldest note of another scope, a pinned note before it, the rest said once; without a message the
     rank is the index's own order."""
-    from server.conductor import memory as M
+    from tandemapp.conductor import memory as M
     st, proj, gate, others = _index_store()
     cfg = _cfg(index_order="ranked", index_tokens=400)
     text, ids = M.index_text(st, "owner", proj, "c:s1", cfg, None, None,
@@ -608,7 +608,7 @@ def test_spd249_the_ranked_index_keeps_the_notes_the_message_is_about():
     plain = M.index_text(st, "owner", proj, "c:s1", cfg, None, None, query=None)
     assert plain[1] == recent[1], (plain[1], recent[1])
     # a pinned note ranks first: a cap of two lines keeps it and the note the message is about
-    from server.conductor import notes as N
+    from tandemapp.conductor import notes as N
     pin = others[0]                                   # the oldest user note: last in its scope
     st.get("owner", pin).pinned = True
     two = sum(M._tokens(N.line_of(st.get("owner", x))) for x in (pin, gate))
@@ -625,8 +625,8 @@ def test_spd249_the_ranked_index_keeps_the_notes_the_message_is_about():
 def test_spd249_the_ranked_index_through_the_router():
     """The settings document's `memory.notes`: ranked, 400 tokens; a first turn's prompt carries the
     note its message is about, fewer index lines than before, and the setting validates."""
-    from server.conductor import schema
-    from server.conductor.store import ConfigError
+    from tandemapp.conductor import schema
+    from tandemapp.conductor.store import ConfigError
     cond, seen = setup()
     st, proj, gate, _ = _index_store()
     for n in st.notes("owner"):
@@ -655,7 +655,7 @@ def test_spd249_the_ranked_index_through_the_router():
 
 def _head_ask(q, sid, ranked=False):
     """`ask` with QWEN38_NOTES_HEAD on: the served prompt's text and the generation's grid mark."""
-    from server.conductor import router as R
+    from tandemapp.conductor import router as R
     cond, seen = setup()
     cond.notes.write("owner", {"op": "add", "scope": "project", "kind": "gotcha",
                                "title": "the summer scene checker gate",

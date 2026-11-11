@@ -5,7 +5,7 @@ that tool, so chatd answered that it is not available, the model wrote the block
 answer around them, and the client got an empty turn. Here, string handling only (standard
 library, no torch):
 
-  1  the shared parser (server/memblock.py `call_block`, `tool_blocks`): the XML form and the JSON
+  1  the shared parser (app/tandemapp/memblock.py `call_block`, `tool_blocks`): the XML form and the JSON
      form as the block they mean; a parameter that is not a field (a `why`) kept in the body;
      the background writer reads its calls with the same function
                                                         test_call_block_*, test_writer_shares_it
@@ -16,7 +16,7 @@ library, no torch):
                                                         test_filter_*
   3  `without_notes`: the answer as the client gets it, the notes counted (SP2 reads it so)
                                                         test_without_notes
-  4  E1 case M (server/conductor/monitor/tier0.py): an answer of notes alone continues after a
+  4  E1 case M (app/tandemapp/conductor/monitor/tier0.py): an answer of notes alone continues after a
      hidden result, a tool response after a call; an answer with text, or a note in the
      reasoning, does not                                test_empty_turn_case_m
 
@@ -32,7 +32,7 @@ import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server import memblock  # noqa: E402
+from tandemapp import memblock  # noqa: E402
 
 CALL = ("<tool_call>\n<function=tandem_memory>\n<parameter=op>\nadd\n</parameter>\n"
         "<parameter=scope>\nproject\n</parameter>\n<parameter=kind>\ngotcha\n</parameter>\n"
@@ -79,7 +79,7 @@ def test_call_block_json():
 
 
 def test_writer_shares_it():
-    from server.conductor import memwriter
+    from tandemapp.conductor import memwriter
     text = "x " + CALL + "\n" + BASH + "\n" + JSON_CALL
     assert memwriter.tool_blocks(text) == memblock.tool_blocks(text)
     got = memblock.tool_blocks(text)
@@ -162,8 +162,8 @@ def test_without_notes():
 
 
 def test_empty_turn_case_m():
-    from server.conductor.monitor import tier0
-    from server.conductor.monitor.observe import FinishEvent
+    from tandemapp.conductor.monitor import tier0
+    from tandemapp.conductor.monitor.observe import FinishEvent
     task = {"close": "x</think>", "nudges": ["go on"], "tries": 2}
     sup = types.SimpleNamespace(req=types.SimpleNamespace(tools_offered=True, n=1),
                                 task_acts={}, tool_names=["bash"], tool_types={})
@@ -187,7 +187,7 @@ def test_empty_turn_case_m():
 
 
 def test_case_m_resolves_to_a_tool_response():
-    from server.conductor.monitor import executor, policy as policy_mod
+    from tandemapp.conductor.monitor import executor, policy as policy_mod
     pol = policy_mod.load_default()
     seen = []
     sup = types.SimpleNamespace(policy=pol, lift_ids=None,

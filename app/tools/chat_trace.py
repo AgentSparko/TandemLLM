@@ -25,7 +25,7 @@ chatd builds for that conversation is built again by the code of this tree:
              characters and image sizes as chatd's context guard counts them
 
     memory   with `--memory`, the engine's memory filter between the fake engine and chatd
-             (server/memblock.py, the filter a chat answer goes through under an active plan with
+             (app/tandemapp/memblock.py, the filter a chat answer goes through under an active plan with
              memory on): a recorded `tandem_memory` call is put back into the model's text in
              Qwen's call form, and the filter takes it as a note (stored in a scratch note store)
              instead of a call chatd runs; an answer of notes alone is continued with the next
@@ -108,22 +108,22 @@ def qwen_call(name: str, args: dict) -> str:
 
 
 class MemoryBridge:
-    """`--memory`: the engine's memory filter (server/memblock.py MemFilter, `calls` on) on each
+    """`--memory`: the engine's memory filter (app/tandemapp/memblock.py MemFilter, `calls` on) on each
     recorded step before chatd gets it; the notes go to a scratch note store as the engine's
-    `Memory.take` writes them (server/conductor/notes.py): no project (chatd's prompt names no
+    `Memory.take` writes them (app/tandemapp/conductor/notes.py): no project (chatd's prompt names no
     working directory), `from_user` when the request ends with the user's message (a rule about
     the user from a tool turn is kept for the session), counted per request, never printed."""
 
     def __init__(self, root: str):
-        from server.conductor import notes as notes_mod
+        from tandemapp.conductor import notes as notes_mod
         self.store = notes_mod.NoteStore(root)
         self.stored: list[dict] = []          # {request, op, scope, kind, demoted}
         self.refused: list[dict] = []         # {request, why}
         self.continued: list[int] = []        # requests whose answer was notes alone
 
     def step(self, s: dict, request: int, queue: list, from_user: bool = False) -> dict:
-        from server import memblock
-        from server.conductor import notes as notes_mod
+        from tandemapp import memblock
+        from tandemapp.conductor import notes as notes_mod
         if not any(c["name"] == memblock.TOOL for c in s["calls"]):
             return s
 
@@ -541,7 +541,7 @@ def monitor_notes(snap: dict) -> list[tuple[int, int, str]]:
 def memory_report(res: dict, bridge: MemoryBridge) -> list[str]:
     """`--memory`: the notes the filter stored and refused, by request, printed without their
     text; the failures: a `tandem_memory` call chatd still ran (or answered as not available)."""
-    from server import memblock
+    from tandemapp import memblock
     for n in bridge.stored:
         print(f"  memory: request {n['request']}: a note stored ({n['op']}, {n['scope']}, "
               f"{n['kind']}" + (f", {n['demoted']} -> session" if n.get("demoted") else "") + ")")

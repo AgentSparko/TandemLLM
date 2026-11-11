@@ -195,6 +195,7 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 | `server/diskcache.py` | `tandemapp.conductor.transcripts` |
 | `server/endalign.py` | `tandemapp.toolcall` |
 | `server/memory_api.py` | `tandemapp.conductor.notes`, `tandemapp.library_api` |
+| `server/mode.py` | `tandemapp.chat_forward` |
 | `server/probe.py` | `tandemapp.conductor.transcripts`, `tandemapp.ledger` |
 | `server/rolemem.py` | `tandemapp.conductor.schema` |
 | `server/setup/apply.py` | `tandemapp.conductor.redact` |
@@ -212,6 +213,7 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 | `tools/ledger_synth.py` | `tandemapp.ledger` |
 | `tools/loop_words_fp.py` | `tandemapp.conductor.monitor.tier0_words` |
 | `tools/memory_measure.py` | `tandemapp.compaction`, `tandemapp.conductor.notes` |
+| `tools/memory_recall_check.py` | `tandemapp.conductor.notes`, `tandemapp.conductor.transcripts` |
 | `tools/narrator_reference.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.schema`, `tandemapp.conductor.states` |
 | `tools/prefill_reuse_e2e.py` | `chatd.render` |
 | `tools/shadow_ab.py` | `tandemapp.conductor.schema`, `tandemapp.conductor.store` |

@@ -46,7 +46,7 @@ The Parallel page of Performance (`#/performance?tab=parallel`) ends with the La
 
 ### Held for memory
 
-A request that waits for memory before its prefill ([parallel-requests.md](parallel-requests.md#waiting-for-memory)) is shown as held, never as a hang. The server writes three lines for it (`server/activity.py` `memory_lines`), and the page shows them as they come:
+A request that waits for memory before its prefill ([parallel-requests.md](parallel-requests.md#waiting-for-memory)) is shown as held, never as a hang. The server writes three lines for it (`app/tandemapp/activity.py` `memory_lines`), and the page shows them as they come:
 
 - what the turn needs and why it waits: "This turn needs about <x> GiB to read <n> new tokens; <y> GiB is free, other turns and the caches hold <z> of it, and <g> must stay free for the system". When the check of its pages holds it, the line says "for its pages" and "while it reads" (0.15.4);
 - what happens meanwhile: chats with a higher priority ahead in the line, another chat's turn that is reading and its time left, idle cache being given back, or the time it has waited so far;

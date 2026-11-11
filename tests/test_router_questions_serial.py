@@ -70,6 +70,7 @@ import types
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
+sys.path.append(os.path.join(os.path.dirname(HERE), "app", "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
 
 from test_class_core import PAGODA, make  # noqa: E402
 from test_conductor_router import COMPOSITE, TOOLS, turn  # noqa: E402
@@ -79,14 +80,14 @@ from test_package_sticky import Script, _make, _session  # noqa: E402
 from test_snapshots import S, served  # noqa: E402
 
 from server import app  # noqa: E402
-from server.conductor import libsearch  # noqa: E402
+from tandemapp.conductor import libsearch  # noqa: E402
 try:
-    from server.conductor import deferred  # noqa: E402
+    from tandemapp.conductor import deferred  # noqa: E402
 except ImportError:            # a tree before VIS-119: each test that needs it fails alone
     deferred = None
-from server.conductor import router as router_mod  # noqa: E402
-from server.conductor.classify import Answer  # noqa: E402
-from server.conductor.decisions import Journal  # noqa: E402
+from tandemapp.conductor import router as router_mod  # noqa: E402
+from tandemapp.conductor.classify import Answer  # noqa: E402
+from tandemapp.conductor.decisions import Journal  # noqa: E402
 
 
 class _Knob:
@@ -629,7 +630,7 @@ def test_a_tool_calls_turn_drops_its_jobs():
 # ------------------------------------------------------------------ 12
 def test_the_defaults():
     from engine.settings import KNOBS
-    from server import knobs
+    from tandemapp import knobs
     want = {"SHADOW_ASK": "idle", "SHADOW_ASK_IDLE_S": "5", "PACKAGE_HOLD": "pick",
             "LIBRARY_HOLD": "message"}
     for k, v in want.items():

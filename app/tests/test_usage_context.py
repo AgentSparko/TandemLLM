@@ -10,7 +10,7 @@ import types
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from chatd import context
 from chatd.runs import Run, client_prompt_of
-from server.usage import RequestRecord
+from tandemapp.usage import RequestRecord
 
 
 def test_replayed_reasoning_counts_toward_the_compaction_threshold():

@@ -456,7 +456,7 @@ def test_alone_and_short_the_pools_reclaim_levels_run_before_it_waits():
 def _lane(app, pool, make, stream=True, max_new=8, think=None, prompt=None, h=None, rec=None, **kw):
     """`_recomputing` on a lane of `pool`, `make` its generation: tokens, error, the client's bytes, rec, log."""
     import torch
-    from server import usage
+    from tandemapp import usage
     h = h or _H(app)
     rec = rec or usage.RequestRecord("chatcmpl-lane", "chat", stream)
     got, err = [], None
@@ -792,7 +792,7 @@ def test_the_backoff_hold_starts_at_the_give_way_and_the_first_admissions_wait_c
     """(4) The lane is out of the line from its give-way on, before its re-admission prices and gates it (the gate's
     peak wait too). (5) Its first admission's wait counts toward `MEM_WAIT_S`: a lane that already waited the bound is
     not given another one."""
-    from server import usage
+    from tandemapp import usage
     app = _app()
     box, adm, pool = _wired(50.0)
     h = _H(app)
@@ -833,7 +833,7 @@ def test_a_backoff_says_so_and_ends_admitted_at_its_bound():
     """(6) While a lane backs off with memory there it is not a memory wait (`wait_reason` "backoff", not
     `waiting_memory`). (7) A backoff longer than what is left of the bound stops at the bound, and the lane is admitted
     there, not refused with "Memory stayed full"."""
-    from server import usage
+    from tandemapp import usage
     app = _app()
     box, adm, pool = _wired(50.0)
     tries, during = [], []

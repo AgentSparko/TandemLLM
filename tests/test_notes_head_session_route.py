@@ -2,7 +2,7 @@
 share it.
 
 The Chat tab (chatd) offers tools with a shell. The memory index named its routes on the session's
-own address (`{tandem_url}` = `http://host/s/<token>`, server/session_tokens.py), and with
+own address (`{tandem_url}` = `http://host/s/<token>`, app/tandemapp/session_tokens.py), and with
 `QWEN38_NOTES_HEAD=on` the index sits in the head at the system message's end: 30 sessions sent 30
 index texts, one after masking the token, so no chat reused another's head and every new chat read
 3-4.8k hidden tokens again.
@@ -58,9 +58,10 @@ sys.path.insert(0, HERE)
 from test_memory_router import CHAT_APP, _chat_app, _index_store, _cfg  # noqa: E402
 from test_ui_states import TOOLS, _go  # noqa: E402
 
-from server import app, session_tokens as st  # noqa: E402
-from server.conductor import memory as M  # noqa: E402
-from server.conductor import router as R  # noqa: E402
+from server import app  # noqa: E402
+from tandemapp import session_tokens as st  # noqa: E402
+from tandemapp.conductor import memory as M  # noqa: E402
+from tandemapp.conductor import router as R  # noqa: E402
 
 SYSTEM = "You are a helpful assistant. Today is Sunday, 1 November 2026."
 Q = "What do you know about my garden?"

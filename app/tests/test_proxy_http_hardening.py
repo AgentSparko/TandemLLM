@@ -132,7 +132,7 @@ def test_five_wrong_tokens_from_one_client_trip_the_throttle():
 def test_a_key_flood_does_not_wipe_an_active_ban():
     """The old `self._fails.clear()` at the 10k cap handed an attacker a free pass: the
     flood itself unbanned the peer the throttle had just caught."""
-    from server import auth as auth_mod
+    from tandemapp import auth as auth_mod
     t0 = time.time()
     a = auth_mod.Auth(admin_token=ADMIN, login=True, clock=lambda: t0)
     a.login_failed("victim")
@@ -152,7 +152,7 @@ def test_the_login_key_follows_the_proxy_trust():
     """Loopback is trusted by default (the nginx-on-this-host shape: every real client
     shares the 127.0.0.1 peer); TANDEM_TRUSTED_PROXY adds a LAN proxy; from any other
     peer X-Real-IP is noise."""
-    from server import auth as auth_mod
+    from tandemapp import auth as auth_mod
     plain = auth_mod.Auth(admin_token=ADMIN, login=True)
     hdrs = {"X-Real-IP": "198.51.100.7"}
     assert plain.login_key("203.0.113.9", hdrs) == "203.0.113.9"
@@ -168,7 +168,7 @@ def test_the_login_key_follows_the_proxy_trust():
 def test_the_overflow_sweep_lands_at_ninety_percent():
     """One sweep per 10 % of the table: after a flood the table sits at the low
     mark, not one under the cap, so the next thousand logins sweep nothing."""
-    from server import auth as auth_mod
+    from tandemapp import auth as auth_mod
     a = auth_mod.Auth(admin_token=ADMIN, login=True, clock=lambda: 0.0)
     for i in range(auth_mod.LOGIN_MAX_KEYS + 1):
         a.login_failed(f"203.0.113.{i}")

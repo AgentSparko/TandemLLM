@@ -100,6 +100,9 @@
    "tandemapp.library_api:Rate",
    "tandemapp.library_api:Refused"
   ],
+  "server/mode.py": [
+   "tandemapp.chat_forward"
+  ],
   "server/probe.py": [
    "tandemapp.conductor.transcripts:in_repository",
    "tandemapp.ledger:next_local"
@@ -168,6 +171,10 @@
   "tools/memory_measure.py": [
    "tandemapp.compaction",
    "tandemapp.conductor.notes:NoteStore"
+  ],
+  "tools/memory_recall_check.py": [
+   "tandemapp.conductor.notes:NoteStore",
+   "tandemapp.conductor.transcripts:memory_root"
   ],
   "tools/narrator_reference.py": [
    "tandemapp.conductor.narrator",
@@ -264,6 +271,9 @@
    "app/"
   ],
   "tools/memory_measure.py": [
+   "app/"
+  ],
+  "tools/memory_recall_check.py": [
    "app/"
   ],
   "tools/narrator_reference.py": [
@@ -406,6 +416,15 @@
     "app/"
    ]
   },
+  "tests/test_capture_lock.py": {
+   "imports": [
+    "tandemapp.metrics"
+   ],
+   "reads": [
+    "app/",
+    "app/tandemapp"
+   ]
+  },
   "tests/test_cards.py": {
    "imports": [
     "tandemapp.conductor.outcomes",
@@ -421,12 +440,6 @@
     "app/ops"
    ]
   },
-  "tests/test_chatd_egress_splice.py": {
-   "imports": [
-    "chatd.egress:_splice"
-   ],
-   "reads": []
-  },
   "tests/test_chatd_lifecycle.py": {
    "imports": [],
    "reads": [
@@ -434,38 +447,14 @@
     "app/ops"
    ]
   },
-  "tests/test_chatd_mcp_stdio_kill.py": {
-   "imports": [
-    "chatd.mcp"
-   ],
-   "reads": []
-  },
   "tests/test_chatd_memory_wait.py": {
    "imports": [
     "chatd.engine",
     "chatd.runs"
    ],
-   "reads": []
-  },
-  "tests/test_chatd_runs_error_frames.py": {
-   "imports": [
-    "chatd.runs:Run"
-   ],
-   "reads": []
-  },
-  "tests/test_chatd_stop_pending.py": {
-   "imports": [
-    "chatd.engine",
-    "chatd.runs:Run"
-   ],
-   "reads": []
-  },
-  "tests/test_chatd_workspace_grep.py": {
-   "imports": [
-    "chatd.workspace",
-    "chatd.workspace:Workspace"
-   ],
-   "reads": []
+   "reads": [
+    "app/"
+   ]
   },
   "tests/test_claim_check.py": {
    "imports": [
@@ -691,12 +680,6 @@
     "app/packages"
    ]
   },
-  "tests/test_demux_first_timeout.py": {
-   "imports": [
-    "chatd.sandbox:demux"
-   ],
-   "reads": []
-  },
   "tests/test_disk_cache_server.py": {
    "imports": [
     "tandemapp.conductor.routes",
@@ -707,6 +690,13 @@
     "app/",
     "app/contracts"
    ]
+  },
+  "tests/test_disk_session_id.py": {
+   "imports": [
+    "tandemapp.conductor.router:Plan",
+    "tandemapp.conductor.router:Session"
+   ],
+   "reads": []
   },
   "tests/test_effort_by_size.py": {
    "imports": [
@@ -764,6 +754,17 @@
     "app/"
    ]
   },
+  "tests/test_fail_open_busy.py": {
+   "imports": [
+    "tandemapp.conductor.classify:Answer",
+    "tandemapp.conductor.libsearch",
+    "tandemapp.conductor.migrations",
+    "tandemapp.conductor.router",
+    "tandemapp.conductor.schema",
+    "tandemapp.conductor.store:Store"
+   ],
+   "reads": []
+  },
   "tests/test_fake_engine.py": {
    "imports": [],
    "reads": [
@@ -776,6 +777,19 @@
    ],
    "reads": [
     "app/"
+   ]
+  },
+  "tests/test_floor_wait.py": {
+   "imports": [
+    "tandemapp.usage"
+   ],
+   "reads": []
+  },
+  "tests/test_gate_map.py": {
+   "imports": [],
+   "reads": [
+    "app/chatd",
+    "app/dashboard"
    ]
   },
   "tests/test_gate_script.py": {
@@ -849,6 +863,7 @@
   },
   "tests/test_kvpool_admission.py": {
    "imports": [
+    "tandemapp.activity",
     "tandemapp.auth",
     "tandemapp.parallel",
     "tandemapp.usage"
@@ -1008,12 +1023,24 @@
   "tests/test_memory_router.py": {
    "imports": [
     "tandemapp.conductor.memory",
+    "tandemapp.conductor.notes",
+    "tandemapp.conductor.notes:NoteStore",
+    "tandemapp.conductor.router",
     "tandemapp.conductor.schema",
+    "tandemapp.conductor.store:ConfigError",
     "tandemapp.memblock"
    ],
    "reads": [
     "app/"
    ]
+  },
+  "tests/test_memory_wait.py": {
+   "imports": [
+    "tandemapp.activity",
+    "tandemapp.compaction",
+    "tandemapp.usage"
+   ],
+   "reads": []
   },
   "tests/test_memory_where.py": {
    "imports": [
@@ -1116,6 +1143,14 @@
     "app/"
    ]
   },
+  "tests/test_notes_head_session_route.py": {
+   "imports": [
+    "tandemapp.conductor.memory",
+    "tandemapp.conductor.router",
+    "tandemapp.session_tokens"
+   ],
+   "reads": []
+  },
   "tests/test_ops_scripts.py": {
    "imports": [],
    "reads": [
@@ -1137,6 +1172,12 @@
     "app/",
     "app/tools"
    ]
+  },
+  "tests/test_own_eta_solo.py": {
+   "imports": [
+    "tandemapp.usage"
+   ],
+   "reads": []
   },
   "tests/test_owui_status.py": {
    "imports": [
@@ -1229,13 +1270,6 @@
     "app/tests"
    ]
   },
-  "tests/test_proxy_http_hardening.py": {
-   "imports": [
-    "app/tests/proxy_util.py",
-    "proxy.app"
-   ],
-   "reads": []
-  },
   "tests/test_queue_wait.py": {
    "imports": [
     "tandemapp.conductor.classify",
@@ -1326,11 +1360,27 @@
     "app/tools"
    ]
   },
-  "tests/test_router_questions_serial.py": {
+  "tests/test_round_runner.py": {
    "imports": [
-    "app/tests/test_libsearch.py"
+    "tandemapp.conductor.monitor.policy:GIVE_UP",
+    "tandemapp.conductor.monitor.policy:REGENERATE_CALL",
+    "tandemapp.conductor.monitor:Action"
    ],
    "reads": []
+  },
+  "tests/test_router_questions_serial.py": {
+   "imports": [
+    "app/tests/test_libsearch.py",
+    "tandemapp.conductor.classify:Answer",
+    "tandemapp.conductor.decisions:Journal",
+    "tandemapp.conductor.deferred",
+    "tandemapp.conductor.libsearch",
+    "tandemapp.conductor.router",
+    "tandemapp.knobs"
+   ],
+   "reads": [
+    "app/tests"
+   ]
   },
   "tests/test_sampling_defaults.py": {
    "imports": [
@@ -1800,14 +1850,6 @@
    "reads": [
     "app/"
    ]
-  },
-  "tests/test_usage_context.py": {
-   "imports": [
-    "chatd.context",
-    "chatd.runs:Run",
-    "chatd.runs:client_prompt_of"
-   ],
-   "reads": []
   },
   "tests/test_voice.py": {
    "imports": [

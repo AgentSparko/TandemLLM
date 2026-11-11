@@ -57,9 +57,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_conductor_router import body, by_label, setup, turn  # noqa: E402
 
-from server.conductor import libsearch, migrations, schema  # noqa: E402
-from server.conductor import router as router_mod  # noqa: E402
-from server.conductor.store import Store  # noqa: E402
+from tandemapp.conductor import libsearch, migrations, schema  # noqa: E402
+from tandemapp.conductor import router as router_mod  # noqa: E402
+from tandemapp.conductor.store import Store  # noqa: E402
 
 ESSAY = "Write a short essay about the history of tea in East Asia."
 FREE, BUSY = 150.0, 20_000.0
@@ -114,7 +114,7 @@ def _chat(cond, text=ESSAY, sid="chat-1", msgs=None):
 def _probs_qwen(fakes, probs: dict):
     """The Qwen fake answers the class question with `probs` (its top as the label) and the
     package question with its first option at 0.9."""
-    from server.conductor.classify import Answer
+    from tandemapp.conductor.classify import Answer
     fake = fakes["qwen"]
 
     def choice(state, question, options, max_chars=None):

@@ -15,7 +15,7 @@ state is replayed here on a fake MemAvailable, with Flash-Next's workspace model
   * the wait retried the pool's reclaim every second and printed each hand-back that freed nothing, eight lines a
     second (`_empty_line`);
   * the live view named the pages of that turn as its need without saying so, beside a wait line with other numbers
-    (`Admission.terms`, server/activity.py `memory_lines`).
+    (`Admission.terms`, app/tandemapp/activity.py `memory_lines`).
 
 The floor of the whole request (chunk, KV commit, sandbox, margin) is as it was: a turn that maps 5.7 GiB of pages and
 forwards 3,300 rows at 15.3 GiB free is 0.2 GiB short of it and still waits.
@@ -135,7 +135,7 @@ def _admit(app, b, cid: str, n, home: int = 0, max_new: int = 8192, slot=None, l
     has that (`_slot_share`'s answer for a regenerate or an edit). `more`: `served` (the ids the prefill reads),
     `home_ask`, `undecided`, each where the server has it; without them the client's tokens are priced."""
     import torch
-    from server import usage
+    from tandemapp import usage
     rec = usage.RequestRecord(f"chatcmpl-{cid}", "chat", True)
     out = io.StringIO()
     prompt = torch.zeros(n, dtype=torch.long) if isinstance(n, int) else torch.tensor(n, dtype=torch.long)
@@ -419,7 +419,7 @@ def test_a_wait_says_its_own_checks_numbers():
     to read 180 new tokens; 11 GiB is free and 9.7 must stay free for the system") was the pages' check named as
     the turn's need; it now says so. The block is the live contract's `memory`."""
     app = _app()
-    from server import activity
+    from tandemapp import activity
     n, fwd = 186_000, 3_300
     with _box(app, AVAIL) as b:
         ok, rec, log = _admit(app, b, "541dc", n, slot=_side(_from_nvme(n, fwd)))
@@ -725,7 +725,8 @@ def test_a_compaction_after_a_turn_that_thought_is_never_priced_under_its_forwar
     below it (they part at the head). Either way the gate charges at least the rows the compaction forwards and its
     first forward raises nothing. The chat's own head and system text are the copy's here, the closest a compaction
     can come to the chat."""
-    from server import compaction, endalign
+    from server import endalign
+    from tandemapp import compaction
     body = {"messages": [{"role": "system", "content": "Summarize."},
                          {"role": "user", "content": "<conversation>\n[User]: what the user asked\n</conversation>\n"
                                                      "The instructions."}]}
