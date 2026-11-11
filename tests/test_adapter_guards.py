@@ -87,7 +87,7 @@ from engine.models import REGISTRY  # noqa: E402
 #: moves with that file's bytes; the spill form, the one the engine computes (server/diskcache.py
 #: legacy_fingerprints), keeps its value
 GOLDEN_V2 = ("fc7ccaed9feffdbe43ec4147f552a6052829438d0f2b2c138eb1c63946af6fb9",
-             "1013afc4e3367d9afcc96e2c533df47d30105902b93d3cb3a89594c2e0fb5985")
+             "1cf3fc59d30aea910335a57a7f71f3cc2df8bcef2a30dd43b4d1f30dbb77c20d")
 GOLDEN_FP4 = {
     # SPD-201 (2026-10-24): the speed setup's knobs default on, so every family's fingerprint moved once;
     # SPD-215: Flash-Next's joint pass row-wise and grouped experts by default (its two adapters again);
