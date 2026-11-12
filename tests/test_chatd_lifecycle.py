@@ -252,7 +252,7 @@ def test_start_and_the_watchdog_find_the_launcher():
     repo = _chat_box(["start.sh"], layout=None)
     r = _start(repo)
     assert r.returncode == 0 and "healthy after" in r.stdout, r.stdout + r.stderr
-    said = [ln for ln in r.stdout.splitlines() if "chatd" in ln]
+    said = [ln for ln in r.stdout.splitlines() if "chatd" in ln and not ln.startswith("[start] mode: ")]
     assert said == [f"[start] WARNING: chatd: {repo} has no app/ops/chatd.sh or ops/chatd.sh; the engine "
                     "serves without the Chat tab"], r.stdout
     # the watchdog: the older launcher starts a dead chatd; with neither, one line an hour

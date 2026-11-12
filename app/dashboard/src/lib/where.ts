@@ -43,7 +43,7 @@ function members(f: FleetView, backend: string): Member[] {
 }
 
 /** The node and deployment a backend's request ran on. `backend` null is the server's own engine.
- *  A backend that serves several deployments (two models on one engine) is told apart by `model`;
+ *  A backend that serves several deployments (models sharing one engine) is told apart by `model`;
  *  one no member names (a cloud API, a backend outside the fleet) is nowhere. */
 export function whereOf(f: FleetView | null | undefined, backend: string | null | undefined, model?: string | null): Where {
   if (!f) return NOWHERE;
