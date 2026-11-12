@@ -3,7 +3,7 @@
 // own client from the mock engine over HTTP, the fetch's time limit, and the panel's source: the
 // button sits beside "Clear view" and every control the panel had is still there. The engine's own
 // file is tested in tests/test_logbuf.py, the panel in a browser in e2e/dev.spec.ts.
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,14 +16,9 @@ import { createMockMiddleware } from '../mock/server.ts';
 const EXAMPLE = readFileSync(new URL('../../contracts/dashboard-v1/logs-export.example.txt', import.meta.url), 'utf8');
 const DEV = readFileSync(new URL('../src/views/dev.ts', import.meta.url), 'utf8');
 const CSS = readFileSync(new URL('../src/styles/app.css', import.meta.url), 'utf8');
-// the engine's files, at the repository's root since SRV-747 moved the dashboard to app/; a tree of
-// app/ alone has none, and the two checks of the engine's numbers below are left out there
-const engineFile = (p: string): string | null => {
-  const u = new URL(`../../../${p}`, import.meta.url);
-  return existsSync(u) ? readFileSync(u, 'utf8') : null;
-};
-const LOGBUF = engineFile('server/logbuf.py');
-const ENGINE = engineFile('server/app.py');
+// logbuf.py is TandemApp's since SRV-747; the engine's handler timeout is checked from the engine's
+// side (tests/test_logbuf.py), as the dashboard reads nothing outside app/
+const LOGBUF = readFileSync(new URL('../../tandemapp/logbuf.py', import.meta.url), 'utf8');
 const NAME = /^[A-Za-z0-9.-]+$/;
 const ENTRY = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z (debug|info|warning|error) /;
 
@@ -64,7 +59,7 @@ describe('the file name', () => {
       expect(name.length).toBe(EXPORT_NAME_MAX + '.log'.length);
     }
     // the engine's limit is the same number
-    if (LOGBUF !== null) expect(LOGBUF).toMatch(/^EXPORT_NAME_MAX = 120\b/m);
+    expect(LOGBUF).toMatch(/^EXPORT_NAME_MAX = 120\b/m);
   });
 
   it("the engine's name is taken from Content-Disposition, and no other kind of name is", () => {
@@ -380,7 +375,6 @@ describe('the fetch has a time limit', () => {
 
   it("the limit is the engine's own handler timeout, 60 s", () => {
     expect(EXPORT_LIMIT_MS).toBe(60_000);
-    if (ENGINE !== null) expect(ENGINE).toMatch(/^HANDLER_TIMEOUT_S = float\(os\.environ\.get\("QSE_HANDLER_TIMEOUT_S", 60\.0\)\)$/m);
   });
 
   it('An engine that takes the request and sends nothing: the fetch is given up at 60 s, with an error that names the route', async () => {

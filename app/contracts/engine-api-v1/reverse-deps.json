@@ -984,7 +984,8 @@
     "tandemapp.logbuf"
    ],
    "reads": [
-    "app/"
+    "app/",
+    "app/dashboard"
    ]
   },
   "tests/test_loop_escape.py": {
