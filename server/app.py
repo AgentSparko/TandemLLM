@@ -95,6 +95,7 @@ from server import decider_api  # noqa: E402
 from server import laya_api  # noqa: E402
 from server import probe as probe_mod  # noqa: E402
 from server import diskcache as diskcache_mod  # noqa: E402
+from server import identity as identity_mod  # noqa: E402  (SRV-741 the replica identity)
 from server import library_api  # noqa: E402
 from server import cache_peek, chat_forward, model_card, tokenize_api  # noqa: E402
 from server import memory_api  # noqa: E402
@@ -9623,6 +9624,12 @@ class Handler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs, urlsplit
             q = parse_qs(urlsplit(self.path).query)
             return self._json(200, memory_owners(pools=(q.get("pools") or ["0"])[-1] == "1"))
+        if path == "/v1/replica/identity":
+            # SRV-741: what replicas compare before they serve one model (server/identity.py); the
+            # caller rule of /v1/models
+            if STATE.get("proxy") is not None and not STATE["proxy"].authorize(self)[0]:
+                return
+            return self._json(*identity_mod.answer(STATE, served_name, weights_profile))
         if path == "/v1/models":
             # with the conductor on, `TandemLLM` alone: the raw engine's name is a hidden alias
             cond = STATE.get("conductor")
