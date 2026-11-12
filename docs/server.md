@@ -9,6 +9,7 @@
 | `POST /v1/chat/completions` | anyone | chat, streamed or not |
 | `POST /v1/completions` | anyone | plain text completion |
 | `GET /v1/models` | anyone | the served model name, and `TandemLLM` when the conductor is on |
+| `GET /v1/replica/identity` | as `/v1/models` | what two engines compare before they serve one model as replicas: the code, the model's family and layers, the weights, drafters, rows and tokenizer by content, the decode settings and the window (`server/identity.py`); 503 `identity_pending` until it is computed, once after the start |
 | `GET /health` | anyone gets the status; the full body follows the admin rule | status, queue counters, cache report, memory |
 | `GET /metrics` | the metrics token when one is set, else the admin rule | Prometheus metrics ([server/METRICS.md](../server/METRICS.md)) |
 | `GET /v1/cache/stats` | the admin rule | the caches' counters |
