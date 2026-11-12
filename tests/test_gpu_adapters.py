@@ -247,6 +247,10 @@ ALLOWED = {
     # GB10 backend's memory as unified
     "app/proxy/hostcollect.py": "the standalone proxy has no tools/; a monitoring view, not an engine choice",
     "app/proxy/scrape.py": "the standalone proxy has no tools/; a monitoring view, not an engine choice",
+    # TandemApp's node agent names a GB10 host a Spark in its mDNS record; discovery's table maps
+    # OpenSSH versions to Ubuntu releases (a tuple like (8, 9) is a version, not a capability)
+    "app/proxy/nodeagent.py": "a node's kind in its mDNS record, not an engine choice",
+    "app/proxy/discovery.py": "OpenSSH versions to Ubuntu releases, not a GPU capability",
     # a stub nvidia-smi that plays a GB10 for the release gate's install check
     "tools/release_gate_setup.sh": "a stub nvidia-smi, not a choice",
 }
