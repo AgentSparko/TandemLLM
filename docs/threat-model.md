@@ -16,6 +16,8 @@ TandemLLM is a personal AI environment that runs on one machine on a home or off
 
 The supported deployment, from [server.md](server.md#the-admin-rule) and `server/auth.py` (AU1): the server listens on the LAN, sometimes behind nginx or a tunnel. The admin password (`QSE_ADMIN_TOKEN`, at least 32 characters) is optional and off by default. With no password, every route answers anyone who reaches the port. With one, the admin routes and every chat route need the bearer token or the `qse_dash` session cookie. One exemption, trusted-local, lets a request in without a token: its TCP peer is loopback and it carries neither `X-Forwarded-For` nor `X-Real-IP`. The chat API (`/v1/chat/completions`, `/v1/completions`, `/v1/models`) is open in both modes. chatd trusts only requests that carry the forward key (`X-Tandem-Forward`).
 
+One more listener exists only when one model is split across two engine processes ([architecture.md](architecture.md#stages-one-model-in-two-processes)): the stage link, one TCP connection between the two stage processes of one engine (`engine/methods/link.py`). Its handshake is a challenge keyed with a shared secret of at least 32 characters, and the identity frames that follow carry a MAC under the same key. Data frames are neither signed nor encrypted. A frame is capped at 64 KiB until the peer has proved the key and at 256 MiB after it, and its length is checked before any payload is allocated. The listener binds one explicit IP literal and refuses a wildcard address. Run the link only on a direct cable or a network segment you trust, and treat the key as a secret: anyone who can change bytes on that path can change the model's answers.
+
 Treat each of these as attacker-controlled:
 
 - every HTTP request that reaches port 8000, chatd's front on 4180, or the proxy: method, path, headers, body, chunked framing, WebSocket upgrades;
@@ -23,6 +25,7 @@ Treat each of these as attacker-controlled:
 - answers from MCP servers, `web_search` results and pages that `web_fetch` reads;
 - the model's output. It picks the tool calls, and those run bash, write files and start servers inside the sandbox. A prompt injection in a fetched page can steer it;
 - whatever runs inside a sandbox: it owns `/workspace` and its home, and can swap a file for a symlink or a FIFO while chatd reads it;
+- every byte that reaches the stage link's port before the handshake has passed;
 - weight files and their headers downloaded from the Hugging Face Hub: safetensors, EXL3 packs, GGUF; and the community index of weight packs (`server/setup/community.py`);
 - config files the setup API and the dashboard write: profiles, `model.yaml`, conductor config versions.
 
@@ -54,6 +57,7 @@ Every CPU test is a standalone script: `python tests/test_<name>.py`, exit 0 is 
 | workspace paths and uploads | chatd as above | `test_chatd_symlinks.py`, `test_chatd_attach.py`, `test_chatd_preview.py` |
 | proxy and relay | `python -m proxy --help`; `tests/fake_backend.py` is a backend | `test_proxy_relay.py`, `test_proxy_http1_tls_fd.py`, `test_proxy_model_card_auth.py` |
 | setup API | the fake engine above | `test_setup_api.py`, `test_setup_remove.py`, `test_setup_apply.py` |
+| stage link | no server needed; `tools/linkrelay.py` cuts and stalls a link | `test_link.py`, `test_stages.py` |
 | loaders and images | no server needed | `test_nemotron_h_gguf.py`, `test_exl3_standalone.py`, `test_images.py` |
 | dashboard | `cd dashboard && npm test` | `dashboard/tests/*.test.ts` |
 
