@@ -84,6 +84,10 @@ Words in the last user message steer it, for the e2e's error and edge states:
 it as one JSON line, `{"sha256": ..., "tokens": N}` of its ids, so a test compares the engine input
 of two requests (SRV-621: the `tools` profile's prompt against the raw path's).
 
+`GET /v1/replica/identity` answers from the flags, with family `fake`; `FAKE_IDENTITY_<FIELD>` in
+the environment replaces one top-level field of the block (`FAKE_IDENTITY_WEIGHTS=other`), so a test
+can make two fakes differ in one field.
+
 `FAKE_MEM_GIB` in the environment gives it the engine's memory policy (OPS-47) on an allocator that
 holds that many GiB: 76 with the default limits refuses every prompt with a 503 (the peak is 77 and
 a prefill's workspace is at least 1.15 GiB); 60 serves them.
@@ -377,6 +381,13 @@ def fake_load(seconds: float, sleep=time.sleep) -> None:
         print(line, flush=True)
 
 
+def _json_or_text(v: str):
+    try:
+        return json.loads(v)
+    except ValueError:
+        return v
+
+
 #: FAKE_POOL_FULL_ONCE: the messages that already met the full pool
 _POOL_FULL_SEEN: set = set()
 
@@ -631,6 +642,12 @@ def load(app, a) -> None:
         # while the writer sleeps (`app._par_sleep`), the admission on FAKE_MEMAVAILABLE_GIB
         app._par_fake_slots(a, FakeEngine)
     app.STATE["lane_run"] = lane_run
+    # SRV-741: the replica identity (server/identity.py) from the flags; no model, so no family
+    # and no layers; FAKE_IDENTITY_<FIELD> replaces one top-level field (JSON, else the text)
+    app.STATE["identity_given"] = {"family": "fake", "layers": None}
+    app.STATE["identity_override"] = {
+        k[len("FAKE_IDENTITY_"):].lower(): _json_or_text(v) for k, v in os.environ.items()
+        if k.startswith("FAKE_IDENTITY_") and len(k) > len("FAKE_IDENTITY_")}
     held = float(os.environ.get("FAKE_MEM_GIB") or 0)
     if held:
         # OPS-47 over HTTP: the memory policy on an allocator that holds FAKE_MEM_GIB and never
