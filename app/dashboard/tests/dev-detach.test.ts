@@ -13,7 +13,8 @@ describe('a detached dev view starts no log stream', () => {
       .toBeLessThan(gone.indexOf('super.disconnectedCallback();'));
   });
 
-  it('the grep box still debounces into openStream', () => {
-    expect(src).toContain('this.grepTimer = setTimeout(() => this.openStream(), 350);');
+  it("the grep box still debounces into openLog (openStream for the engine's own log)", () => {
+    expect(src).toContain('this.grepTimer = setTimeout(() => this.openLog(), 350);');
+    expect(src).toContain('if (!this.fleetSource) return this.openStream(resume);');
   });
 });
