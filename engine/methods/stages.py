@@ -69,7 +69,8 @@ class StageDown(StageError):
 class Block:
     """The rows of one round: `tokens` in DFS pre-order with `parents` (-1 for the first row), or a
     chain (`parents` None: a prompt chunk, kept whole). `head` is the tail's: logits of "all" rows,
-    the "last" row, or "none"."""
+    the "last" row, or "none". `graph` is the family's own tag of how the block runs (0: its
+    default); it crosses in the header."""
 
     __slots__ = ("tokens", "parents", "slot", "pos_class", "graph", "head")
 
@@ -175,6 +176,8 @@ class StageAdapter:
                    whole model's
       encode(t), decode(dtype, dims, buf)   a tensor as a typed buffer and back; a stage with
                    its own host staging overrides both
+      staging(nbytes)   a writable host buffer of exactly `nbytes` the link reads a carry into
+                   (`decode` is then given that buffer), or None for a buffer of the link's own
     """
 
     family = ""
@@ -221,6 +224,9 @@ class StageAdapter:
     def state(self) -> dict:
         raise NotImplementedError
 
+    def staging(self, nbytes: int):
+        return None
+
     def encode(self, t) -> tuple:
         """(dtype code, dims, buffer) of a tensor."""
         import torch
@@ -247,7 +253,9 @@ class StageAdapter:
 
 def family_stages(arch):
     """The stage module of a registered family (an `engine.models` Arch): its package's `stages`,
-    with `stage_adapter(model, lo, hi) -> StageAdapter`."""
+    with `stage_adapter(model, lo, hi) -> StageAdapter` and, for a family a server can start as
+    a stage, `open_stage(path, lo, hi, max_len, device, log) -> StageAdapter` (the stage's own
+    weights read from the checkpoint at `path`)."""
     return importlib.import_module("engine." + arch.package.replace("/", ".") + ".stages")
 
 
@@ -418,7 +426,7 @@ class Coordinator:
         self.why = self.why or getattr(exc, "code", "link")
         return StageDown(f"stage_down: {self.why}")
 
-    def _ask(self, payload: bytes, deadline: float):
+    def _ask(self, payload: bytes, deadline: float, into=None):
         link = self.link
         if link is None or link.state != "up":
             raise StageDown(f"stage_down: {self.why}")
@@ -426,7 +434,7 @@ class Coordinator:
         try:
             with link.lock:
                 link.send(L.STEP, payload, seq=self._seq, deadline=deadline)
-                fr = link.recv(deadline)
+                fr = link.recv(deadline, into=into)
         except L.LinkError as e:
             raise self._down(e) from e
         if fr.seq != self._seq or fr.epoch != self.epoch:
@@ -447,15 +455,15 @@ class Coordinator:
             self._clear()
             self._ask(pack_step(OP_RESET, 0), self.step_deadline)
 
-    def prefill(self, tokens, head: str = "all"):
+    def prefill(self, tokens, head: str = "all", graph: int = 0):
         """A prompt chunk: the logits its head asks for; both stages keep its rows."""
         with self._lock:
-            return self._run(Block(tokens, None, head=head))
+            return self._run(Block(tokens, None, graph=graph, head=head))
 
-    def verify(self, tokens, parents):
+    def verify(self, tokens, parents, graph: int = 0):
         """A draft block's logits [rows, vocab]; the block stays pending until `commit`."""
         with self._lock:
-            return self._run(Block(tokens, parents))
+            return self._run(Block(tokens, parents, graph=graph))
 
     def commit(self, path) -> None:
         """Keep the rows `path` of the last verify block. The tail keeps them now; the front is
@@ -493,13 +501,14 @@ class Coordinator:
         ad = self.adapter
         block.pos_class = ad.position_class(ad.length, block.rows)
         deadline = self.chunk_deadline if block.chain else self.step_deadline
+        into = ad.staging(block.rows * ad.carry_bytes_per_row)
         try:
-            fr = self._ask(pack_step(OP_STEP, ad.length, block, self._pending), deadline)
+            fr = self._ask(pack_step(OP_STEP, ad.length, block, self._pending), deadline, into)
         except StageError as e:
             if e.code != "desync" or replaying:
                 raise
             self._replay()
-            fr = self._ask(pack_step(OP_STEP, ad.length, block), deadline)
+            fr = self._ask(pack_step(OP_STEP, ad.length, block), deadline, into)
         self._pending = None
         want = (block.rows,) + tuple(ad.carry_dims)
         if fr.kind != L.CARRY or L.DTYPES[fr.dtype][0] != ad.carry_dtype or tuple(fr.dims) != want:
