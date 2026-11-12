@@ -187,6 +187,20 @@ A device profile will hold what the memory governor and the Setup Guide read abo
 
 The mesh marks where two boxes will split a model. At world 1, the only size built, it is absent from the code path: no collective runs and the graphs hold the same kernels. Its seams are ENG-259's and come before any work across boxes: weights read by slice, a shard tag on each state view, and the mesh in cache keys and price file names.
 
+### Stages: one model in two processes
+
+A model can be cut between two layers and run as two processes (ENG-307). The front stage holds the embedding and layers `[0, k)`. The tail stage holds layers `[k, layers)`, the head and the sampler, and it is the engine a client talks to. Each round the tail sends a step header: the block's tokens and parents, the length it starts at, and the commit path of the block before it. The front answers with the carry, the block's rows as they leave layer `k - 1`. Logits never cross. Each side keeps the KV rows and the recurrent sections of its own layers, under the names they have in one process.
+
+| part | where |
+|-|-|
+| the link: typed frames over one TCP connection, a cap on a frame's size, a deadline on every receive, a 1 s heartbeat, an HMAC challenge handshake that compares both engines' identity blocks | `engine/methods/link.py` |
+| the protocol: step header, carry, commit path, epochs, the `desync` answer, and the `StageAdapter` interface a family implements | `engine/methods/stages.py` |
+| a family's stage code | `engine/models/<family>/stages.py` |
+
+Only the reference path is built. `flashnext` and `lfm2_moe` run their torch reference as stages on the CPU, and `tests/test_stages.py` holds two real processes to the single process at every cut of both tiny test models: logits, sections and KV rows are compared with `torch.equal`. No served engine splits yet, and no speed is measured.
+
+A missed deadline (5 s for a block, 60 s for a prompt chunk) takes the link down, and the request ends with `stage_down`. A new connection gets a new epoch, and both sides start it from an empty state. A front whose length is not the tail's answers `desync`; the tail then replays the sequence's tokens. The link refuses a peer with another key, code, weights, family or layer range, and it has no second transport to fall back to. The handshake proves both ends hold the key; it does not encrypt frames, so the link belongs on a private network segment.
+
 ## The parts
 
 ```mermaid

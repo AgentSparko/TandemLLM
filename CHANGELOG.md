@@ -8,6 +8,10 @@ Releases of TandemLLM. Speed numbers are the benchmark row `serve-single-i256-o2
 
 - `GET /v1/replica/identity` names what two engines must share to serve one model as replicas: the code, the model, the weights, drafters, rows and tokenizer by content, and the decode settings (SRV-741). The fake engine answers it from its flags. [docs/server.md](docs/server.md#routes) lists it.
 
+### Engine
+
+- The link and the stage protocol for one model in two processes (ENG-307): a front stage with the first layers, a tail stage with the rest and the head, and only the rows at the cut between them. Built for the torch reference of Flash-Next and LFM2 MoE on the CPU, where every cut gives the single process's logits and state bit for bit; no served engine splits yet. [docs/architecture.md](docs/architecture.md#stages-one-model-in-two-processes) describes it.
+
 ### Models
 
 - Every model with attention layers offers "Long-context cache (FP8)" in the Setup Guide's Tools step, under Features (SPD-150). On, the attention layers keep their keys and values as e4m3 codes with one fp32 scale a (head, token): about half the bytes a token, so long chats take less memory. The answers change a little, so it is off by default, and off keeps the exact model. Flint's switch stays as it was. Flash-Next (`QWEN38_FN_KV_FP8`, 31,040 -> 18,944 bytes a token), Ornith (`QWEN38_Q35M_KV_FP8`, 24,576 -> 12,480), LFM2.5 (`QWEN38_LFM2_KV_FP8`, 20,480 -> 10,880) and the Nemotron 3.5 models (`QWEN38_NH_KV_FP8`, Bolt and Super VL 8,192 -> 4,224, Lightning 6,144 -> 3,168) are new; the 27B's switch is its existing `QWEN38_KV_FP8` (106,752 -> 74,496), which still turns off its verify graphs and is never paged. Speed and quality with the switch on are not measured. `/health` shows `weights.kv_cache` (`bf16` or `e4m3`), and the engine's manifest names the e4m3 form as another arch, so the caches never mix the two. [docs/caches.md](docs/caches.md#the-e4m3-kv-cache-opt-in-every-model-with-attention) has the steps.
