@@ -213,7 +213,9 @@ test.describe('dev', () => {
     await expect(button).toBeVisible();
     await expect(button).toHaveAttribute('title', 'Export the whole log as a text file');
     await expect(button).toHaveText('Export');
-    // beside "Clear view", in the same toolbar and of its size
+    // beside "Clear view", in the same toolbar and of its size; measured once the page's entrance
+    // (a translateY rise) is over, else the boxes sit at a fractional y and differ by float rounding
+    await expect(page.locator('main.content')).not.toHaveClass(/is-entering/);
     const clear = page.locator('#console .panel-tools button[title="Clear view"]');
     const [a, b] = [await clear.boundingBox(), await button.boundingBox()];
     expect(b?.height).toBe(a?.height);
