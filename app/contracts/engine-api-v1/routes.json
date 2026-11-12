@@ -167,6 +167,17 @@
     },
     {
       "method": "GET",
+      "path": "/v1/dashboard/logs/export",
+      "aliases": [],
+      "group": 3,
+      "used_by": [
+        "dashboard/src/lib/log-export.ts"
+      ],
+      "doc": "the whole log ring as one text file (SRV-803), as ../dashboard-v1/logs-export.example.txt",
+      "live": true
+    },
+    {
+      "method": "GET",
       "path": "/v1/dashboard/parallel",
       "aliases": [],
       "group": 3,
