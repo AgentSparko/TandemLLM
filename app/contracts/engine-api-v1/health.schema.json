@@ -32,9 +32,11 @@
     "mode": {
       "type": "string",
       "enum": [
-        "setup"
+        "setup",
+        "engine",
+        "chat"
       ],
-      "description": "setup mode (--setup) only"
+      "description": "setup in setup mode (--setup); else engine (the engine alone) or chat (the conductor on), server/mode.py"
     },
     "assistant": {
       "type": "string",
