@@ -2,10 +2,15 @@
 # Graceful stop: SIGTERM makes the server drain (new requests get 503 + Retry-After, the
 # generation in flight finishes), and only a server that will not go after the grace period is
 # killed. A hard kill mid-verify truncates whoever is streaming.
+#
+#   ops/stop.sh [GRACE]    stop (GRACE seconds to drain, default 60)
+#   ops/stop.sh --list     the pids it would signal, one a line; signals nothing
+# In a peer's tree (QSE_PEER, or the tree's run/peer; OPS-197) it stops that peer and nothing else.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 set -a; . "$HERE/serve.env"; set +a
 . "$HERE/engines.sh"
+PEER="$(this_peer)"
 GRACE="${1:-60}"
 # ALL of them, not the first. `head -1` was here until 2026-09-18, and the day two supervisors
 # raced -- cron's watchdog and a hold's own restore -- it stopped one engine, reported success, and
@@ -13,11 +18,14 @@ GRACE="${1:-60}"
 # port was free. A stop that leaves a process behind is worse than one that fails.
 # Engines only: a pattern over command lines took a lock holder that mentioned the path for
 # one, and SIGTERM to that flock freed the box lock in the middle of a hold.
-PIDS="$(engine_pids "$PORT")"
+if [ -z "$PEER" ]; then PIDS="$(engine_pids "$PORT")"; else PIDS="$(peer_pids "$PEER")"; fi
+[ "$GRACE" = "--list" ] && { [ -z "$PIDS" ] || echo "$PIDS"; exit 0; }
+[ -n "$PEER" ] && [ -z "$PIDS" ] && { echo "[stop] peer $PEER: not running"; exit 0; }
 [ -z "$PIDS" ] && { echo "[stop] nothing on :$PORT"; exit 0; }
 # OPS-65: the status file says so (a hold has written `held` already and keeps it)
 status() { [ "${QSE_STATUS_KEEP:-0}" = "1" ] || "${STATUS_PY:-python3}" "$HERE/engine_status.py" set "$@" \
     >/dev/null 2>&1 || true; }
+[ -z "$PEER" ] || status() { :; }               # the status file is the box's engine's
 status stopping --reason "${STATUS_REASON:-a stop}"
 trap 'status down --reason "${STATUS_REASON:-a stop}"' EXIT
 echo "[stop] SIGTERM $(echo $PIDS | tr '\n' ' '), up to ${GRACE}s to drain"

@@ -10,17 +10,23 @@
 #                                     unless --host says otherwise. While run/setup-pending exists (the
 #                                     installer writes it, the setup guide's apply job removes it) a
 #                                     plain start is setup mode too, with the host the marker names.
+#   QSE_PEER=NAME ops/start.sh        a peer beside the box's engine, from this tree (OPS-197,
+#                                     docs/operations.md): QSE_PEER_PORT, QSE_PEER_NEED_GB required
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 set -a; . "$HERE/serve.env"; set +a
 . "$HERE/engines.sh"
+PEER="${QSE_PEER:-}"
+if [ -n "$PEER" ]; then peer_layer || exit 2
+elif [ -n "$(this_peer)" ]; then echo "[start] this tree serves peer $(this_peer): QSE_PEER=$(this_peer)"; exit 2
+fi
 SETUP=0; SETUP_HOST=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --setup) SETUP=1; shift ;;
         --host) [ $# -ge 2 ] || { echo "[start] --host needs an address"; exit 2; }
                 SETUP_HOST="$2"; shift 2 ;;
-        -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
         *) echo "[start] unknown argument $1 (--setup, --host ADDR)"; exit 2 ;;
     esac
 done
@@ -36,6 +42,8 @@ esac
 LOGS="$REPO/logs"; mkdir -p "$LOGS"
 PIDFILE="$LOGS/engine.pid"
 LOG="$LOGS/engine-$(date +%Y%m%d-%H%M%S).log"
+LOGLINK="$LOGS/engine.log"
+[ -z "$PEER" ] || { PIDFILE="$LOGS/peer-$PEER.pid"; LOG="$LOGS/peer-$PEER-${LOG##*/engine-}"; LOGLINK="$LOGS/peer-$PEER.log"; }
 
 # OPS-155: chatd, the Chat tab's service, once the engine answers /health: started if it is not
 # running, by the checkout's ops/chatd.sh (its own session, nothing inherited above stdio, serve.env,
@@ -50,6 +58,7 @@ load_secrets() {
     if [ -f "$SECRETS" ]; then set -a; . "$SECRETS"; set +a; fi
 }
 start_chatd() {
+    [ -z "$PEER" ] || return 0                     # a peer starts no chatd
     if [ "${QSE_CHATD:-on}" = "off" ]; then
         if [ "${QSE_MODE:-}" = engine ]; then
             echo "[start] chatd: off (engine only; QSE_MODE=chat turns the chat on)"
@@ -88,7 +97,7 @@ if [ -f "$REPO/.watchdog.off" ] && [ "${HOLD_RESTART:-0}" != "1" ]; then
         exit 1
     fi
 fi
-if curl -sf -m 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+if [ -z "$PEER" ] && curl -sf -m 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
     echo "[start] already healthy on :$PORT"
     [ "$SETUP" = "1" ] || { load_secrets; start_chatd; }
     exit 0
@@ -98,7 +107,9 @@ fi
 # used to start a second engine beside it -- from the @reboot line, the watchdog or a hand. The same
 # goes for an engine on another port (a row3 or probe server a signalled hold left behind, 2026-09-25
 # 03:45): the watchdog would bring :8000 up beside it three minutes after the hold gave up.
-LIVE="$(engine_pids)"
+# A peer (QSE_PEER, OPS-197) is not that second engine; one on this port still is.
+LIVE="$( { main_pids; engine_pids "$PORT"; } | awk '!s[$0]++')"
+[ -z "$PEER" ] || { peer_check "$SETUP" || exit 1; LIVE=""; }
 if [ -n "$LIVE" ]; then
     echo "[start] REFUSING: an engine is already alive (pid $(echo $LIVE)): loading, or on another" \
          "port; one engine at a time"
@@ -115,6 +126,7 @@ cd "$REPO" || exit 1
 # that answers for the engine while it loads (the reverse proxy's fallback)
 STATUS_PY="${STATUS_PY:-python3}"
 status() { "$STATUS_PY" "$HERE/engine_status.py" set "$@" >/dev/null 2>&1 || true; }
+[ -z "$PEER" ] || status() { :; }               # the status file is the box's engine's
 # (OPS-173: one of another tree or release is replaced; it listens where the engine or setup mode does)
 [ -n "${QSE_STATUS_PORT:-}" ] && "$STATUS_PY" "$HERE/engine_status.py" ensure --port "$QSE_STATUS_PORT" \
     --engine-port "$PORT" --host "$( [ "$SETUP" = 1 ] && echo "$SETUP_HOST" || echo "${QSE_STATUS_HOST:-$HOST}")" 2>&1 | tail -1
@@ -279,7 +291,7 @@ setsid nohup "$PY" -u server/app.py \
     >"$LOG" 2>&1 < /dev/null &
 echo $! > "$PIDFILE"
 if [ "$ALLOC_FROM_PROFILE" = "1" ]; then unset PYTORCH_CUDA_ALLOC_CONF; fi
-ln -sfn "$LOG" "$LOGS/engine.log"
+ln -sfn "$LOG" "$LOGLINK"
 echo "[start] pid $(cat "$PIDFILE"), log $LOG"
 # every 2 s (it was every 10 s: an install's job waited up to 10 s more for an engine that answered,
 # VIS-211), 600 s in all
@@ -294,7 +306,8 @@ for i in $(seq 1 300); do
         if [ "${DROP_PAGE_CACHE:-0}" = "1" ]; then "$PY" tools/drop_page_cache.py 2>&1 | tail -1; fi
         # then the roles in ROLES_AUTOLOAD, one at a time through the residency planner (OPS-41);
         # a refusal leaves the engine serving and says why
-        ROLES_SERVICE_START=1 bash "$HERE/roles.sh" up || echo "[start] a role did not load (above)"
+        [ -n "$PEER" ] || ROLES_SERVICE_START=1 bash "$HERE/roles.sh" up \
+            || echo "[start] a role did not load (above)"
         # then the decision models the conductor's `deciders` document loads on start (ENG-179):
         # the engine loads them itself, in the background, one at a time through the residency
         # planner; a refusal is journaled and chat is served either way. /readyz says when they are warm
