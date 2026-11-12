@@ -362,10 +362,12 @@ def test_the_engine_does_not_inherit_the_box_lock():
         subprocess.run(["pkill", "-f", engine])
 
 def _start_with_fake_engine(drop: str, extra: str = "", procs=(), env=None,
-                           roles_probe: bool = False) -> tuple[subprocess.CompletedProcess, str]:
+                           roles_probe: bool = False, prepare=None) -> tuple[subprocess.CompletedProcess, str]:
     repo = _box(["start.sh"])
     for pid, argv, exe in procs:
         _proc(repo, pid, argv, exe)
+    if prepare:
+        prepare(repo)
     env_file = os.path.join(repo, "ops", "serve.env")
     engine = os.path.join(repo, "fake-engine.sh")
     # the same python runs the engine and the page-cache tool: the tool's call is recorded, and the engine's
@@ -1057,6 +1059,215 @@ def test_a_failing_block_ab_stops_the_gate():
     assert "--rule noworse" in open(os.path.join(repo, "markers")).read()
     ledger = open(os.path.join(repo, "results", "gate", "cal2", "report.md")).read()
     assert "5a block A/B (noworse): FAIL" in ledger and "ABORTED at 5a block A/B" in ledger, ledger
+
+
+# ------------------------------------------------------------------ peers (OPS-197, QA OPS-198)
+#
+# A peer is a second engine from a tree of its own, started with QSE_PEER=<name>. The matrix:
+#   1  the box's engine starts beside a peer; a peer starts beside the box's engine, with its own
+#      port, pid file and log, no status file, roles or chatd, and marks its tree
+#   2  a second peer of one name, a peer on the box's port or on a held port, a peer without
+#      QSE_PEER_NEED_GB, a peer under the memory line and a peer in setup mode are refused
+#   3  stop.sh of the box's tree leaves a peer alone; stop.sh of a peer's tree stops only it;
+#      --list names them without a signal
+#   4  the watchdog does not take a peer for the box's loader and never restarts a peer
+#   5  a hold refuses to begin while a peer lives and names it
+
+PEER_PORT = 18100
+
+
+def _peer_proc(repo: str, pid: int, port: int, name: str = "p1") -> None:
+    """A peer in the sandbox's process table: an engine with QSE_PEER in its environment."""
+    _proc(repo, pid, _engine_argv(port))
+    with open(os.path.join(repo, "proc", str(pid), "environ"), "wb") as fh:
+        fh.write(b"HOME=/home/u\0QSE_PEER=" + name.encode() + b"\0PATH=/usr/bin\0")
+
+
+def _peer_env(gib: float = 40, **over) -> dict:
+    """What a peer's start is given; the memory line read from a meminfo file of the test's."""
+    d = tempfile.mkdtemp(prefix="peer-meminfo-")
+    mi = os.path.join(d, "meminfo")
+    with open(mi, "w") as fh:
+        fh.write(f"MemTotal: 127543104 kB\nMemAvailable: {int(gib * 1024 * 1024)} kB\n")
+    env = {"QSE_PEER": "p1", "QSE_PEER_PORT": str(PEER_PORT), "QSE_PEER_NEED_GB": "1",
+           "QSE_MEMINFO": mi, "MEMGATE_PY": sys.executable}
+    env.update(over)
+    return {k: v for k, v in env.items() if v is not None}
+
+
+def _peer_start(env: dict, procs=(), peers=(), tree: dict | None = None):
+    """start.sh with the fake engine; memgate beside it, a status probe and a fake chatd.sh, so the
+    markers say what the start touched. `peers`: (pid, port, name) entries of the table."""
+    def prepare(repo):
+        os.makedirs(os.path.join(repo, "tools"), exist_ok=True)
+        shutil.copy(os.path.join(os.path.dirname(OPS), "tools", "memgate.py"),
+                    os.path.join(repo, "tools", "memgate.py"))
+        for name in ("chatd.sh", "status-py"):
+            path = os.path.join(repo, "ops" if name.endswith(".sh") else "bin", name)
+            with open(path, "w") as fh:
+                fh.write(MARKER)
+            os.chmod(path, 0o755)
+        for pid, port, name in peers:
+            _peer_proc(repo, pid, port, name)
+        if tree is not None:
+            tree["repo"] = repo
+    tree = {} if tree is None else tree
+    env = dict(env)
+    env.setdefault("STATUS_PY", "status-py")
+    return _start_with_fake_engine("0", procs=procs, env=env, roles_probe=True, prepare=prepare)
+
+
+def test_a_peer_starts_beside_the_box_engine_with_its_own_port_pid_and_log():
+    tree: dict = {}
+    r, marks = _peer_start(_peer_env(), procs=[(4321, _engine_argv(18998), PY_EXE)], tree=tree)
+    assert r.returncode == 0 and "healthy" in r.stdout, r.stdout + r.stderr
+    repo = tree["repo"]
+    engine = [ln for ln in marks.splitlines() if ln.startswith("engine ")]
+    assert len(engine) == 1 and f"--port {PEER_PORT}" in engine[0] and "--host 127.0.0.1" in engine[0]
+    assert "--usage-ledger off" in engine[0] and "--disk-cache off" in engine[0], engine
+    assert f"peer p1: tree {repo}, 127.0.0.1:{PEER_PORT}" in r.stdout, r.stdout
+    logs = os.listdir(os.path.join(repo, "logs"))
+    assert "peer-p1.pid" in logs and "peer-p1.log" in logs and "engine.pid" not in logs, logs
+    assert open(os.path.join(repo, "run", "peer")).read().strip() == "p1"
+    # no status file, roles or chatd of the box's engine
+    assert not any(ln.split()[0] in ("status-py", "chatd.sh", "roles") for ln in marks.splitlines()), marks
+    assert "MemAvailable 40.00 GiB, need >= 16" in r.stdout, r.stdout
+
+
+def test_the_box_engine_starts_beside_a_peer_and_keeps_its_status_and_chatd():
+    r, marks = _peer_start({}, peers=[(4400, PEER_PORT, "p1")])
+    assert r.returncode == 0 and "healthy" in r.stdout, r.stdout + r.stderr
+    kinds = [ln.split()[0] for ln in marks.splitlines()]
+    assert "status-py" in kinds and "chatd.sh" in kinds and "roles" in kinds, marks
+    assert "--port 18998" in marks
+
+
+def test_the_box_engine_still_refuses_beside_any_other_engine():
+    """The rule without peers is unchanged: any engine anywhere, and a peer on the box's port, stop it."""
+    repo = _box(["start.sh"])
+    _peer_proc(repo, 4401, 8000, "p1")
+    r = _run(repo, "start.sh")
+    assert r.returncode == 1 and "an engine is already alive (pid 4401)" in r.stdout, r.stdout
+
+
+def test_peer_refusals():
+    cases = [
+        # (env, peers, procs, exit, text)
+        (_peer_env(), [(4402, 18101, "p1")], [], 1, "REFUSING: peer p1 is alive already (pid 4402)"),
+        (_peer_env(QSE_PEER_PORT="18998"), [], [], 2, ":18998 is the box's engine's port"),
+        (_peer_env(), [], [(4403, _engine_argv(PEER_PORT), PY_EXE)], 1,
+         f"REFUSING: an engine holds :{PEER_PORT} (pid 4403)"),
+        (_peer_env(), [(4404, PEER_PORT, "p2")], [], 1, f"an engine holds :{PEER_PORT} (pid 4404)"),
+        (_peer_env(QSE_PEER_NEED_GB=None), [], [], 2, "QSE_PEER_NEED_GB is required"),
+        (_peer_env(gib=15.5), [], [], 1, "REFUSING: MemAvailable does not cover the need (1 GiB) plus the floor (15 GiB)"),
+        (_peer_env(QSE_PEER="../x"), [], [], 2, "QSE_PEER takes a name"),
+        (_peer_env(QSE_PEER_HOST="box.lan"), [], [], 2, "QSE_PEER_HOST takes an address"),
+        (_peer_env(QSE_PEER_PORT=None), [], [], 2, "QSE_PEER_PORT must name its port"),
+    ]
+    for env, peers, procs, code, text in cases:
+        tree: dict = {}
+        r, marks = _peer_start(env, procs=procs, peers=peers, tree=tree)
+        assert r.returncode == code and text in r.stdout, (env, r.stdout + r.stderr)
+        assert "engine " not in marks and not os.path.exists(os.path.join(tree["repo"], "logs", "peer-p1.pid"))
+    # the memory line passes once the floor is lower
+    r, _ = _peer_start(_peer_env(gib=15.5, QSE_PEER_FLOOR_GB="10"))
+    assert r.returncode == 0 and "healthy" in r.stdout, r.stdout
+
+
+def test_a_peer_refuses_setup_mode_and_a_tree_that_serves_another_peer():
+    repo = _box(["start.sh"])
+    os.makedirs(os.path.join(repo, "run"))
+    open(os.path.join(repo, "run", "setup-pending"), "w").close()
+    r = _run(repo, "start.sh", **_peer_env())
+    assert r.returncode == 1 and "REFUSING in setup mode" in r.stdout, r.stdout
+    os.remove(os.path.join(repo, "run", "setup-pending"))
+    with open(os.path.join(repo, "run", "peer"), "w") as fh:
+        fh.write("p2\n")
+    r = _run(repo, "start.sh", **_peer_env())
+    assert r.returncode == 1 and "this tree serves peer p2" in r.stdout, r.stdout
+    r = _run(repo, "start.sh")                          # a peer's tree never starts the box's engine
+    assert r.returncode == 2 and "this tree serves peer p2: QSE_PEER=p2" in r.stdout, r.stdout
+
+
+def test_stop_in_each_tree_stops_only_its_own_and_list_signals_nothing():
+    repo = _box(["stop.sh"])
+    box, peer, other = _sleeper(), _sleeper(), _sleeper()
+    try:
+        _proc(repo, box, _engine_argv(8000))
+        _peer_proc(repo, peer, PEER_PORT, "p1")
+        _peer_proc(repo, other, 18101, "p2")
+        r = _run(repo, "stop.sh", "--list")
+        assert r.returncode == 0 and r.stdout.split() == [str(box)], r.stdout
+        r = _run(repo, "stop.sh", "--list", QSE_PEER="p1")
+        assert r.stdout.split() == [str(peer)], r.stdout
+        assert _alive(box) and _alive(peer) and _alive(other)
+        r = _run(repo, "stop.sh", "5", QSE_PEER="p1")
+        assert r.returncode == 0 and f"SIGTERM {peer} " in r.stdout and "stopped" in r.stdout, r.stdout
+        assert not _alive(peer) and _alive(box) and _alive(other)
+        # a tree marked as p2's stops p2 alone without being told
+        os.makedirs(os.path.join(repo, "run"))
+        with open(os.path.join(repo, "run", "peer"), "w") as fh:
+            fh.write("p2\n")
+        r = _run(repo, "stop.sh", "5")
+        assert f"SIGTERM {other} " in r.stdout and not _alive(other) and _alive(box), r.stdout
+        shutil.rmtree(os.path.join(repo, "proc", str(other)))   # gone from the table, as from /proc
+        r = _run(repo, "stop.sh", "5")
+        assert "peer p2: not running" in r.stdout and _alive(box), r.stdout
+        os.remove(os.path.join(repo, "run", "peer"))
+        r = _run(repo, "stop.sh", "5")
+        assert f"SIGTERM {box} " in r.stdout and not _alive(box), r.stdout
+    finally:
+        for p in (box, peer, other):
+            if _alive(p):
+                os.kill(p, 9)
+
+
+def test_the_watchdog_does_not_take_a_peer_for_the_loader_and_never_restarts_one():
+    repo = _box(["watchdog.sh"])
+    _peer_proc(repo, 4405, 8000, "p1")                     # even one on the box's port
+    for _ in range(3):
+        r = _run(repo, "watchdog.sh", FAKE_HTTP_CODE="000")
+        assert r.returncode == 0, r.stderr
+    log = _wd_log(repo)
+    assert "loading" not in log and "3/3" in log and "restarting" in log, log
+    repo = _box(["watchdog.sh"])
+    for _ in range(4):
+        r = _run(repo, "watchdog.sh", FAKE_HTTP_CODE="000", QSE_PEER="p1")
+        assert r.returncode == 0 and "serves peer p1: nothing to do" in r.stdout, r.stdout
+    assert not os.path.exists(os.path.join(repo, "markers")), "no stop or start for a peer"
+
+
+def test_a_hold_refuses_to_begin_while_a_peer_lives():
+    repo = _box(["hold.sh"])
+    _peer_proc(repo, 4406, PEER_PORT, "p1")
+    r = subprocess.run(["bash", os.path.join(repo, "ops", "hold.sh"), "1", "--", "true"],
+                       capture_output=True, text=True, env=_env(repo, HOLD_ENGINE_WAIT=1), timeout=60)
+    assert r.returncode == 1 and "a peer engine is alive: p1 (pid 4406)" in r.stdout, r.stdout
+    assert not os.path.exists(os.path.join(repo, "markers")), "nothing stopped or started"
+    assert not os.path.exists(os.path.join(repo, ".watchdog.off"))
+    r = subprocess.run(["bash", os.path.join(repo, "ops", "hold.sh"), "1", "--", "true"],
+                       capture_output=True, text=True, env=_env(repo, QSE_PEER="p1"), timeout=60)
+    assert r.returncode == 1 and "this tree serves peer p1" in r.stdout, r.stdout
+
+
+def test_peers_in_the_process_table():
+    repo = _box([])
+    _proc(repo, 5001, _engine_argv(8000))
+    _peer_proc(repo, 5002, PEER_PORT, "p1")
+    _peer_proc(repo, 5003, 18101, "p2")
+    _proc(repo, 5004, _engine_argv(18102))
+    with open(os.path.join(repo, "proc", "5004", "environ"), "wb") as fh:
+        fh.write(b"QSE_PEER=\0")                        # empty: not a peer
+
+    def call(fn):
+        r = subprocess.run(["bash", "-c", f'. "{repo}/ops/engines.sh"; {fn}'],
+                           capture_output=True, text=True, env=_env(repo))
+        assert r.returncode == 0 and not r.stderr, r.stderr
+        return r.stdout.split()
+    assert call("main_pids") == ["5001", "5004"]
+    assert call("main_pids 8000") == ["5001"]
+    assert call("peer_pids") == ["5002", "5003"] and call("peer_pids p2") == ["5003"]
+    assert call("peer_name 5002") == ["p1"] and call("peer_name 5001") == []
 
 
 def test_the_scripts_parse():
