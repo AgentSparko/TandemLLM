@@ -535,7 +535,7 @@ def test_end_to_end_on_the_fake_engine():
         port = _wait(None, srv)
         st, _, cfg = _call(port, "GET", "/v1/config")
         assert st == 200 and cfg["engine"]["embedded"], "the proxy is on in the process"
-        lib = os.path.join(ROOT, "packages", "library")
+        lib = os.path.join(ROOT, "app", "packages", "library")
         names = [n for n in ("browser-game", "canvas-2d")
                  if os.path.exists(os.path.join(lib, n, "SKILL.md"))]
         assert names, "the shipped library"

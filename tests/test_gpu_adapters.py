@@ -243,13 +243,14 @@ ALLOWED = {
     "install.sh": "runs before the repository is on disk",
     # builds the third-party exllamav3 on a quantization box and logs its capability
     "tools/exl3/common.sh": "the third-party exllamav3 build, not this engine's kernels",
-    # the standalone proxy ships without tools/; it reports a GB10 backend's memory as unified
-    "proxy/hostcollect.py": "the standalone proxy has no tools/; a monitoring view, not an engine choice",
-    "proxy/scrape.py": "the standalone proxy has no tools/; a monitoring view, not an engine choice",
+    # the standalone proxy (TandemApp's, app/proxy since SRV-747) ships without tools/; it reports a
+    # GB10 backend's memory as unified
+    "app/proxy/hostcollect.py": "the standalone proxy has no tools/; a monitoring view, not an engine choice",
+    "app/proxy/scrape.py": "the standalone proxy has no tools/; a monitoring view, not an engine choice",
     # a stub nvidia-smi that plays a GB10 for the release gate's install check
     "tools/release_gate_setup.sh": "a stub nvidia-smi, not a choice",
 }
-SCAN = ("engine", "tools", "server", "proxy", "chatd", "ops", "bench")
+SCAN = ("engine", "tools", "server", "app/proxy", "app/chatd", "ops", "bench")
 
 
 def _scanned():

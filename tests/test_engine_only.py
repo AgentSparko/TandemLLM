@@ -20,7 +20,7 @@ The test matrix, the Gherkin of OPS-260:
      --conductor-config off, the engine's environment has no decision models, no autoload or
      narrator call, no role and no chatd; chat passes the conductor, asks the autoload, starts chatd;
      the switch to engine stops a running chatd of this tree (not for a hold's restart), and
-     ops/chatd.sh stop --this-tree leaves another tree's chatd running (Linux only)
+     app/ops/chatd.sh stop --this-tree leaves another tree's chatd running (Linux only)
                                                               test_start_flags_per_mode
                                                               test_chatd_stop_this_tree_only
   4  /health and /v1/models of a fake-engine server report the mode and what is loaded, chatd up or
@@ -252,12 +252,12 @@ def test_chatd_stop_this_tree_only():
            "QSE_CHATD_ENV": os.path.join(d, "none.env"), "QSE_CHAT_URL": "http://127.0.0.1:9"}
     procs = []
     try:
-        for cwd, kept in ((other, True), (ROOT, False)):
+        for cwd, kept in ((other, True), (os.path.join(ROOT, "app"), False)):
             p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", "-m", "chatd"], cwd=cwd)
             procs.append(p)
             with open(os.path.join(data, "chatd.pid"), "w") as fh:
                 fh.write(f"{p.pid}\n")
-            r = subprocess.run(["bash", os.path.join(ROOT, "ops", "chatd.sh"), "stop", "--this-tree"], env=env,
+            r = subprocess.run(["bash", os.path.join(ROOT, "app", "ops", "chatd.sh"), "stop", "--this-tree"], env=env,
                                capture_output=True, text=True, timeout=60)
             assert r.returncode == 0, r.stdout + r.stderr
             if kept:

@@ -306,8 +306,8 @@ def test_8_an_asked_stage_has_its_estimate():
     assert st.get("error") is None and st["eta_ms"] == FREE and "ms" in st, st
     assert plan.row["class_id"] == "research"
     # both rows (asked with its estimate, skipped busy) are what the decisions contract allows
-    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs",
-                           "contract", "conductor-v1", "decisions.schema.json")) as f:
+    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app",
+                           "contracts", "conductor-v1", "decisions.schema.json")) as f:
         c = json.load(f)
     busy, _, _ = _chat(_box()[0])
     for row in (st, busy.row["stages"][-1]):
