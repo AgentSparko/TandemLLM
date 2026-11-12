@@ -71,6 +71,9 @@
 // 611 KB with the data plane through the controller (SRV-733, 2026-10-28: 610.1 KB from 609.9): the fleet store
 // asks once whether the page's /v1 reaches the controller, and Usage then reads its ledger by default with the
 // switch and its words on one Spark too.
+// 615 KB after the rebase onto main's 0.15.4 (SRV-747, 2026-11-12: 613.9 KB, 628,681 bytes, from 610.1): main's
+// simple Setup Guide mode and the Log panel's export button on top of TandemApp's pages, rebuilt from the merged
+// sources.
 import { BUDGET, distSizes } from './gzip-size.mjs';
 
 const dist = new URL('../dist/', import.meta.url).pathname;
