@@ -369,6 +369,7 @@ def flags_table(rows: list, caption: str, label: str, notes: dict = None, served
 
 def gen_server_flags(root: str, knobs: dict) -> str:
     rows = argparse_rows(root, "server/app.py", "parser", {"knobs": knobs})
+    rows += argparse_rows(root, "server/stage.py", "add_flags", {"knobs": knobs})      # the stage flags
     return flags_table(rows, "Every flag of the engine's server, server/app.py, with the value the served profile passes where it differs",
                        "tab:ref-server-flags", served=served_flags(root))
 

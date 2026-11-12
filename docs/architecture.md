@@ -195,9 +195,14 @@ A model can be cut between two layers and run as two processes (ENG-307). The fr
 |-|-|
 | the link: typed frames over one TCP connection, a cap on a frame's size, a deadline on every receive, a 1 s heartbeat, an HMAC challenge handshake that compares both engines' identity blocks | `engine/methods/link.py` |
 | the protocol: step header, carry, commit path, epochs, the `desync` answer, and the `StageAdapter` interface a family implements | `engine/methods/stages.py` |
-| a family's stage code | `engine/models/<family>/stages.py` |
+| a family's stage code, and its tail stage in the server's engine interface | `engine/models/<family>/stages.py`, `tail.py` |
+| the server's part: the flags, the key file, the front's process, the tail's link and its refusals | `server/stage.py` |
 
-Only the reference path is built. `flashnext` and `lfm2_moe` run their torch reference as stages on the CPU, and `tests/test_stages.py` holds two real processes to the single process at every cut of both tiny test models: logits, sections and KV rows are compared with `torch.equal`. No served engine splits yet, and no speed is measured.
+Both families run their torch reference as stages on the CPU, and `tests/test_stages.py` holds two real processes to the single process at every cut of both tiny test models: logits, sections and KV rows are compared with `torch.equal`.
+
+`lfm2_moe` also runs its engine as stages (`--stage`, [server.md](server.md#one-model-as-two-stage-processes)). A stage's engine is the engine itself, built over a config whose layer lists hold the stage's own layers, so it loads, keeps and commits only those. Its two passes are the engine's row pass and prompt-chunk pass with the layer loop over `[lo, hi)`; `tests/test_lfm2_moe_stage.py` compares the loop bodies with the engine's as syntax trees and the rows with the engine's at every cut. The carry is what the engine holds at a layer boundary, the stream and the next layer's norm of it: `[rows, 2, hidden]` in bf16. Each block runs on the kernels the one process runs it on (a prompt chunk, a decode step, a verify block), eager. The tail checks the cut at load: decode steps against a verify block of the same tokens, bit for bit. A replay after a `desync` would run decode steps as prompt chunks, on other kernels, so the tail ends that request and drops the sequence instead.
+
+On the CPU the kernels run under Triton's interpreter. No split engine has run on a GPU yet, and no speed is measured.
 
 A missed deadline (5 s for a block, 60 s for a prompt chunk) takes the link down, and the request ends with `stage_down`. A new connection gets a new epoch, and both sides start it from an empty state. A front whose length is not the tail's answers `desync`; the tail then replays the sequence's tokens. The link refuses a peer with another key, code, weights, family or layer range, and it has no second transport to fall back to. The handshake proves both ends hold the key; it does not encrypt frames, so the link belongs on a private network segment.
 

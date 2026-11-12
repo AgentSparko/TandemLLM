@@ -155,4 +155,8 @@
 \texttt{-{}-log-\allowbreak{}content} & \texttt{off (a switch)} & let exception messages that quote a request into the log. \\
 \texttt{-{}-log-\allowbreak{}request-\allowbreak{}keys} & \texttt{off (a switch)} & one [body] line per request with the parameter names and the scalar values of the non-content ones (model, stream, max\_tokens, temperature,...); never messages, prompt, tools or stop strings. \\
 \texttt{-{}-verbose} & \texttt{off (a switch); served:\allowbreak{} on} & more log lines. \\
+\texttt{-{}-stage} & \texttt{none} & serve the layers [LO, HI) of -\kern0pt-model as one of two stage processes: 0:k is the front stage, k:layers the tail, the one a client talks to. \\
+\texttt{-{}-link-\allowbreak{}listen} & \texttt{none} & with -\kern0pt-stage: wait for the other stage on this address (an IP literal). \\
+\texttt{-{}-link-\allowbreak{}peer} & \texttt{none} & with -\kern0pt-stage: connect to the other stage at this address (an IP literal). \\
+\texttt{-{}-link-\allowbreak{}key-\allowbreak{}file} & \texttt{none} & with -\kern0pt-stage: the key both stages share, a file of mode 0600 with at least 32 bytes. \\
 \end{reftable}

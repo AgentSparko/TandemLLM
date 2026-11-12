@@ -10,7 +10,7 @@
 | `POST /v1/completions` | anyone | plain text completion |
 | `GET /v1/models` | anyone | the served model name, and `TandemLLM` when the conductor is on |
 | `GET /v1/replica/identity` | as `/v1/models` | what two engines compare before they serve one model as replicas: the code, the model's family and layers, the weights, drafters, rows and tokenizer by content, the decode settings and the window (`server/identity.py`); 503 `identity_pending` until it is computed, once after the start |
-| `GET /health` | anyone gets the status; the full body follows the admin rule | status, queue counters, cache report, memory |
+| `GET /health` | anyone gets the status; the full body follows the admin rule | status, queue counters, cache report, memory; on a stage process the `stage` block ([below](#one-model-as-two-stage-processes)) |
 | `GET /metrics` | the metrics token when one is set, else the admin rule | Prometheus metrics ([server/METRICS.md](../server/METRICS.md)) |
 | `GET /v1/cache/stats` | the admin rule | the caches' counters |
 | `POST /v1/cache/clear` | the admin rule; with a password set, only as a bearer header | empty the caches in RAM; `?tier=disk` the disk tier, `?tier=all` both |
@@ -252,6 +252,32 @@ The text. Each request writes what it writes alone up to a near tie: a joint rou
 Limits of phase A: side slots were text only (they read images since SRV-629); the side lane serves only slot 0's safe points; a side slot does not resume from slot 0's resident prefix (it resumes from the state store); the joint pass runs without CUDA graphs; each slot's accept, commit and stream run one after the other on the host, and socket writes happen while the turn is held. A side slot captures its verify graphs at their first use (`--side-precapture off`), so its build takes seconds.
 
 Timing (`QSE_PARALLEL_TIMING=1`, for measurements: every joint pass is synchronized and timed): `/health`'s `parallel.meeting` carries, per number of slots decoding, a slot's round (`round_ms`, submit to submit), its draft (`draft_ms`), its work after the verify (`post_ms`), the verify as it sees it (`verify_wait_ms`) and the joint pass's GPU time by blocks (`pass_ms`), and its tokens a round (`accept`: `joint<N>` or `alone`). `tools/parallel_bench.py` reads them per window.
+
+## One model as two stage processes
+
+`--stage LO:HI` starts the server as one of the two stage processes of a split model (ENG-307, [architecture.md](architecture.md#stages-one-model-in-two-processes)). It serves the layers `[LO, HI)` of `--model`: `0:k` is the front stage, `k:layers` the tail. Built for the `lfm2_moe` family.
+
+| flag | what |
+|-|-|
+| `--stage LO:HI` | the layer range this process serves |
+| `--link-listen IP:PORT` | wait for the other stage on this address |
+| `--link-peer IP:PORT` | connect to the other stage at this address |
+| `--link-key-file PATH` | the key both stages share |
+
+Each side takes one of `--link-listen` and `--link-peer`. Addresses are IP literals, and a wildcard address is refused. The key file must be a regular file of the server's user, mode 0600, with at least 32 bytes. The key appears in no log line, message or route.
+
+The tail is the engine clients talk to. It serves the chat and completion routes, and its `GET /v1/replica/identity` names its range in `stage`. The front loads its layers and answers `/health`; every other route answers 409 `stage_front`. Start the front first: the tail waits 120 s for the link, then refuses to start. A link whose two ends differ in key, code, weights, family or layer range is refused, and the start line says which.
+
+Limits of this first version, each refused at the start or at the request, never served another way:
+
+- one slot (`--parallel 1`), no KV pool, no disk tier, no prompt caches, no conductor, no backends, not in setup mode;
+- text only: a request with images gets 400 `stage_text_only`;
+- the passes run eager, without captured graphs;
+- `LFM2_KV_FP8` is not served split.
+
+`/health` on both stages carries a `stage` block: `role`, `lo`, `hi`, `layers`, `cut`, the stage's `options` (its limits) and `link` with `state`, `epoch`, `transport` and the bytes each way. While the link is down the tail's status is `degraded`. A request in flight ends with an error that says `stage_down`, and a new one gets 503 `stage_down` with `Retry-After: 5`. The tail keeps dialing or listening; a new link starts both stages empty under the next epoch, so the next request reads its prompt again.
+
+`tools/stage_cut_cost.py` measures what the cut costs by itself on one device: the same blocks through the whole model and through front, host copy and tail, in one process with no link.
 
 ## Qwen3.8-Flash-Next (SRV-87)
 
