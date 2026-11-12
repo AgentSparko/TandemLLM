@@ -14,6 +14,8 @@ set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 set -a; . "$HERE/serve.env"; set +a
 . "$HERE/engines.sh"
+# A peer's tree (OPS-197): the watchdog never restarts a peer
+if [ -n "$(this_peer)" ]; then echo "[watchdog] this tree serves peer $(this_peer): nothing to do"; exit 0; fi
 LOGS="$REPO/logs"; mkdir -p "$LOGS"
 STATE="$LOGS/watchdog.fails"; WD="$LOGS/watchdog.log"
 NEED="${WATCHDOG_FAILS:-3}"
@@ -92,7 +94,7 @@ fi
 # window; the old behaviour killed the loader and started another while the first one's memory was
 # still draining -- a second full load is how this box wedges). So: if a server process exists,
 # give it time; after LOADING_MAX minutes of consecutive failure, restart for real.
-PID="$(engine_pids "$PORT" | head -1)"                 # an engine, not a look-alike
+PID="$(main_pids "$PORT" | head -1)"                   # an engine, not a look-alike or a peer
 if [ -n "$PID" ] && [ -z "$FAILED" ]; then
     # The timestamp belongs to THIS loader, so it carries the pid it was taken for. It used to be
     # removed only on a 200: a loader that died before it ever answered left its start time behind,

@@ -23,6 +23,13 @@ MIN="${1:?usage: hold.sh <minutes> -- <command...>}"; shift
 [ $# -gt 0 ] || { echo "[hold] no command given"; exit 2; }
 cd "$REPO" || exit 1
 . "$HERE/engines.sh"
+# OPS-197: a hold needs the whole box, so it does not begin while a peer lives, and never in a peer's tree
+if [ -n "$(this_peer)" ]; then echo "[hold] REFUSING: this tree serves peer $(this_peer)"; exit 1; fi
+PEERS="$(for p in $(peer_pids); do echo "$(peer_name "$p") (pid $p)"; done)"
+if [ -n "$PEERS" ]; then
+    echo "[hold] REFUSING: a peer engine is alive: $(echo $PEERS | sed 's/) /), /g'); stop it first"
+    exit 1
+fi
 # How long the restore waits for an engine the command left behind; a knob only for the tests.
 ENGINE_WAIT="${HOLD_ENGINE_WAIT:-60}"
 
