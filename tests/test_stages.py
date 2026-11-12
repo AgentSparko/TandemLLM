@@ -13,6 +13,12 @@ reference families run at every cut.
      and KV rows after prefill + tree verify + commit + rollback are bit-equal to the reference
      (torch.equal, same dtype)
   -  the check can fail: one flipped bit in a carry changes the logits
+  -  a stalled front (relay blackhole) ends the request with stage_down inside its deadline, and
+     the heartbeat takes an idle link down
+  -  a killed front: stage_down; a new front gets a new epoch and both sides start empty
+  -  a cut link, then a reconnect to the same front process: a new epoch, the old rows are gone
+  -  a front whose length is not the tail's answers desync; the coordinator replays the tokens
+  -  an idle follower uses under 1 % of a core
 
 Run: python3 tests/test_stages.py
 """
@@ -391,15 +397,15 @@ def test_the_follower_acts_only_on_headers():
         for kind, payload in ((L.CARRY, b"\0" * 8), (L.REPLY, b"{}"), (L.OK, b""), (L.IDENT, b"x")):
             with link.lock:
                 link.send(kind, payload, seq=99)
-                fr = link.recv(2)
+                fr = link.recv(5)
             assert fr.kind == L.ERROR and fr.json()["code"] == "frame" and fr.seq == 99, fr
         with link.lock:
             link.send(L.STEP, b"not a header", seq=5)
-            assert link.recv(2).json()["code"] == "header"
+            assert link.recv(5).json()["code"] == "header"
             link.epoch += 1                                  # a header of another epoch
             link.send(L.STEP, S.pack_step(S.OP_RESET, 0), seq=6)
             link.epoch -= 1
-            assert link.recv(2).json()["code"] == "epoch"
+            assert link.recv(5).json()["code"] == "epoch"
         assert co.probe() == before and before["length"] == len(PROMPT)
         # a commit path for a block the front does not hold: desync, never a guess
         e = raises(S.StageError, lambda: co._ask(S.pack_step(S.OP_SYNC, len(PROMPT), commit=[0, 5]), 2))
@@ -614,6 +620,196 @@ def test_the_shared_modules_name_no_family():
             assert G.lint_hits(f.read()) == [], name
     for pkg in ("flashnext", "lfm2_moe"):
         assert os.path.isfile(os.path.join(ROOT, "engine", "models", pkg, "stages.py"))
+
+
+# ------------------------------------------------------------------ failures: stall, kill, cut, desync; idle
+def test_a_stalled_front_ends_the_request_inside_the_deadline():
+    from test_linkrelay import Relay
+    assert (S.STEP_S, S.CHUNK_S, L.HEARTBEAT_S) == (5.0, 60.0, 1.0)
+    front = Front("toy", 2)
+    r = Relay(front.port)
+    co = S.Coordinator(ToyStage(2, 4), step_deadline=1.0, chunk_deadline=2.0)
+    try:
+        front.connect(co, to=f"127.0.0.1:{r.port}")
+        co.prefill(PROMPT)
+        r.cmd(cmd="blackhole")
+        t0 = time.monotonic()
+        e = raises(S.StageDown, lambda: co.verify([1, 2], [-1, 0]))
+        took = time.monotonic() - t0
+        assert e.code == "stage_down" and 0.9 <= took < 3.0, (e.code, took)   # room for a loaded box
+        h = co.health()
+        assert h["status"] == "degraded" and h["stage"]["link"]["state"] == "down", h
+        assert h["stage"]["link"]["reason"] == "timeout", h
+        t0 = time.monotonic()
+        raises(S.StageDown, lambda: co.prefill([1]))        # no new request waits on a dead link
+        assert time.monotonic() - t0 < 1.0
+        r.cmd(cmd="heal")
+        # a prompt chunk has its own, longer deadline
+        front.connect(co, to=f"127.0.0.1:{r.port}")
+        r.cmd(cmd="blackhole")
+        t0 = time.monotonic()
+        raises(S.StageDown, lambda: co.prefill(PROMPT))
+        took = time.monotonic() - t0
+        assert 1.9 <= took < 4.5, took
+        r.cmd(cmd="heal")
+        # an idle link: the heartbeat finds the stall without a request
+        front.connect(co, to=f"127.0.0.1:{r.port}")
+        r.cmd(cmd="blackhole")
+        t0 = time.monotonic()
+        while co.health()["status"] == "ok" and time.monotonic() - t0 < 10:
+            time.sleep(0.05)
+        took = time.monotonic() - t0
+        assert co.health()["stage"]["link"]["state"] == "down" and took < 7.0, took
+    finally:
+        r.stop()
+        front.kill()
+    return note("step 1.0 s and chunk 2.0 s deadlines held; the idle heartbeat found the stall in %.1f s" % took)
+
+
+def test_a_killed_front_is_stage_down_and_a_new_one_starts_a_new_epoch():
+    want = play(Whole(ToyStage(0, 4)))
+    front, co, link = split("toy", 2)
+    try:
+        co.prefill(PROMPT)
+        co.verify([1, 2, 3], [-1, 0, 1])
+        co.commit([0, 1])
+        assert co.epoch == 1 and co.length == len(PROMPT) + 2
+        front.kill()
+        t0 = time.monotonic()
+        e = raises(S.StageDown, lambda: co.verify([4], [-1]))
+        assert e.code == "stage_down" and time.monotonic() - t0 < 4.0
+        assert co.health()["stage"]["link"]["state"] == "down"
+        raises(S.StageDown, lambda: co.probe())
+    finally:
+        front.kill()
+    front = Front("toy", 2)
+    try:
+        link = front.connect(co)
+        assert co.epoch == link.epoch == 2 and co.health()["stage"]["link"] == {"state": "up", "epoch": 2}
+        assert co.length == 0 and co.probe() == {"length": 0, "digest": ToyStage(0, 2).digest()}
+        assert play(co) == want                             # nothing of epoch 1 is in the answers
+    finally:
+        link.close()
+        front.kill()
+
+
+def test_a_cut_link_reconnects_with_a_new_epoch_and_an_empty_front():
+    from test_linkrelay import Relay
+    want = play(Whole(ToyStage(0, 4)))
+    front = Front("toy", 3)
+    r = Relay(front.port)
+    co = S.Coordinator(ToyStage(3, 4))
+    try:
+        via = f"127.0.0.1:{r.port}"
+        front.connect(co, to=via)
+        co.prefill(PROMPT)
+        assert co.probe()["length"] == len(PROMPT)
+        r.cmd(cmd="cut")
+        t0 = time.monotonic()
+        e = raises(S.StageDown, lambda: co.verify([4], [-1]))
+        assert e.code == "stage_down" and time.monotonic() - t0 < 4.0
+        raises(L.LinkError, lambda: front.connect(co, to=via))     # still cut: no link, still down
+        assert co.health()["status"] == "degraded"
+        r.cmd(cmd="heal")
+        link = front.connect(co, to=via)
+        # the same front process, which held 9 rows of epoch 1: they are gone
+        assert co.epoch == 2 and co.probe() == {"length": 0, "digest": ToyStage(0, 3).digest()}
+        assert play(co) == want
+        link.close()
+    finally:
+        r.stop()
+        front.kill()
+
+
+def test_a_desync_replays_the_tokens():
+    front, co, link = split("toy", 1, replay_rows=4)
+    try:
+        co.prefill(PROMPT)
+        co.verify([7, 19, 23], [-1, 0, 0])
+        co.commit([0, 2])
+        co._pending = None                    # the front never hears of the commit
+        got = co.verify([5, 6], [-1, 0])
+        assert co.replays == 1 and co.length == len(PROMPT) + 2
+        # both sides ran the committed tokens again as prompt chunks, then the block
+        ref = ToyStage(0, 4)
+        tokens = PROMPT + [7, 23]
+        for at in range(0, len(tokens), 4):
+            ref.rows(S.Block(tokens[at:at + 4], head="none"), None)
+        assert got == ref.rows(S.Block([5, 6], [-1, 0]), None)
+        co.commit([0, 1])
+        ref.commit([0, 1])
+        local = ToyStage(0, 1)
+        for at in range(0, len(tokens), 4):
+            local.rows(S.Block(tokens[at:at + 4]), None)
+        local.rows(S.Block([5, 6], [-1, 0]), None)
+        local.commit([0, 1])
+        assert co.probe() == {"length": len(tokens) + 2, "digest": local.digest()} and co.replays == 1
+    finally:
+        link.close()
+        front.kill()
+
+
+def _idle_share(front, co, seconds: float = 5.0) -> float:
+    co.prefill(PROMPT)
+    time.sleep(0.5)
+    pings = co.link.stats.tx_payload.get(L.PING, 0), co.link.stats.tx_frames
+    c0, t0 = front.cpu_seconds(), time.monotonic()
+    time.sleep(seconds)
+    used, wall = front.cpu_seconds() - c0, time.monotonic() - t0
+    assert co.link.stats.tx_frames - pings[1] >= 3 and co.health()["status"] == "ok"   # the heartbeat ran
+    return used / wall
+
+
+def test_an_idle_follower_uses_under_one_percent_of_a_core():
+    front, co, link = split("toy", 2)
+    try:
+        share = _idle_share(front, co)
+        assert share < 0.01, share
+    finally:
+        link.close()
+        front.kill()
+    return note(f"{100 * share:.2f} % of a core over 5 s with the heartbeat running")
+
+
+def test_a_family_front_restarts_into_a_new_epoch():
+    if torch is None:
+        raise _skip("no torch here")
+    want, snaps = reference("lfm2_moe", "float32")
+    front, co, link = split("lfm2_moe", 3, dump=True)
+    try:
+        co.prefill(PROMPT)
+        co.verify([7, 19, 23], [-1, 0, 0])
+        co.commit([0, 2])
+        front.kill()
+        e = raises(S.StageDown, lambda: co.verify([4], [-1]))
+        assert e.code == "stage_down"
+    finally:
+        front.kill()
+    front = Front("lfm2_moe", 3, dump=True)
+    try:
+        link = front.connect(co)
+        assert co.epoch == 2 and co.length == 0 and co.probe()["length"] == 0
+        got = [x for x in play(co) if x is not None]
+        for a, b in zip(got, want, strict=True):
+            same(a, b, "after the restart")
+        co.probe()
+        same_states({**torch.load(front.dump), **co.adapter.state()}, snaps[-1], "after the restart")
+    finally:
+        link.close()
+        front.kill()
+
+
+def test_an_idle_family_follower_uses_under_one_percent_of_a_core():
+    if torch is None:
+        raise _skip("no torch here")
+    front, co, link = split("lfm2_moe", 3)
+    try:
+        share = _idle_share(front, co)
+        assert share < 0.01, share
+    finally:
+        link.close()
+        front.kill()
+    return note(f"{100 * share:.2f} % of a core over 5 s with the heartbeat running")
 
 
 if __name__ == "__main__":
