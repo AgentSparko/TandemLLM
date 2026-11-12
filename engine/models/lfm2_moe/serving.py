@@ -533,10 +533,15 @@ def serve(a, ctx) -> dict:
     """LiquidAI's LFM2 MoE from a BF16 checkpoint or an EXL3 pack for the server (`--model <dir>`, the
     registry's `serve`; server/app.py `_load`). Plain decode from the captured step; any `--drafter` but
     none serves the lookup cut by StairCut (`lookup_drafter`, gated by the load-time self-check). What
-    the engine cannot hold yet is in `Lfm2MoeServing.caps`."""
+    the engine cannot hold yet is in `Lfm2MoeServing.caps`. With `--stage` (ENG-307) the tail stage of
+    the model split in two processes (tail.py `serve_stage`)."""
     from transformers import AutoTokenizer
 
     from engine.spec import Relax
+    stage = ctx.state.get("stage") if hasattr(ctx, "state") else None
+    if stage is not None:
+        from engine.models.lfm2_moe import tail
+        return tail.serve_stage(a, ctx, stage)
     ctx.keys(a.model, [a.model])
     if a.drafter not in ("none", "mtp"):
         ctx.log(f"[server] LFM2 MoE drafts with the lookup: --drafter {a.drafter} taken as the lookup")
