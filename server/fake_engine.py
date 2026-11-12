@@ -405,6 +405,7 @@ def load(app, a) -> None:
                         compacting=False, cold=False, grid_mark=None):
         # grid_mark (SPD-249): the real prefill's grid; the fake has no prefill grid
         ctx = [int(t) for t in prompt.tolist()]
+        tick = app.STATE.get("stage_tick")
         log = os.environ.get("QSE_FAKE_PROMPTS")
         if log:
             with open(log, "a") as f:
@@ -519,6 +520,8 @@ def load(app, a) -> None:
                                                   else after), 0
                     continue
             _lane("decode")                   # a block boundary: the side lane's safe point
+            if tick is not None:
+                tick(block)                   # ENG-307: a fake tail stage asks its front for the block
             if n:
                 app._par_sleep(len(block) / rate)
                 bs.block(15, len(block) - 1)
@@ -642,6 +645,9 @@ def load(app, a) -> None:
         # while the writer sleeps (`app._par_sleep`), the admission on FAKE_MEMAVAILABLE_GIB
         app._par_fake_slots(a, FakeEngine)
     app.STATE["lane_run"] = lane_run
+    stage = app.STATE.get("stage")
+    if stage is not None:                 # ENG-307: `--stage` on the fake, the link and the protocol alone
+        app.STATE["stage_tick"] = stage.fake_tail()
     # SRV-741: the replica identity (server/identity.py) from the flags; no model, so no family
     # and no layers; FAKE_IDENTITY_<FIELD> replaces one top-level field (JSON, else the text)
     app.STATE["identity_given"] = {"family": "fake", "layers": None}

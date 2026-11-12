@@ -96,6 +96,7 @@ from server import laya_api  # noqa: E402
 from server import probe as probe_mod  # noqa: E402
 from server import diskcache as diskcache_mod  # noqa: E402
 from server import identity as identity_mod  # noqa: E402  (SRV-741 the replica identity)
+from server import stage as stage_mod  # noqa: E402  (ENG-307 one model as two stage processes)
 from server import library_api  # noqa: E402
 from server import cache_peek, chat_forward, model_card, tokenize_api  # noqa: E402
 from server import memory_api  # noqa: E402
@@ -9580,13 +9581,15 @@ class Handler(BaseHTTPRequestHandler):
                        "gpu": dict(fault)} if fault is not None else {})
             if fault is not None:
                 code, status = 500, "failed"
+            stage = stage_mod.health(STATE, status)         # ENG-307: the stage, `degraded` while its link is down
+            status = stage.pop("status", status)
             if _auth().decide("health_full", self._peer(), self.headers) != "ok":
                 # through the proxy, the status and nothing about the configuration (a page there
                 # reaches the status responder through the same proxy, OPS-175)
                 return self._json(code, {"status": status, **failed})
             # SPD-249: the full body from HEALTH (server/health_cache.py): its parts timed, built at most
             # once a QSE_HEALTH_TTL_MS; what a watchdog decides on is built fresh on every call
-            fresh = {"status": status, **failed,
+            fresh = {"status": status, **failed, **stage,
                      "uptime_s": round(time.time() - STATE.get("started", time.time()), 1),
                      "engine_busy": LOCK.locked(), "inflight": dict(INFLIGHT)}
             return self._send_bytes(code, HEALTH.answer(fresh, _health_body))
@@ -9886,6 +9889,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_bytes(503, json.dumps({"error": {
                 "message": gpu_health.words(), "type": "engine_failed", "code": 503}}).encode(),
                 extra_headers=(("Retry-After", str(gpu_health.RETRY_AFTER_S)),))
+        refused = stage_mod.refusal(STATE, body)            # ENG-307: a stage takes no images, nothing while its link is down
+        if refused is not None:
+            return self._send_bytes(refused[0], refused[1], extra_headers=refused[2])
         # SPD-245: on its way to a slot, for the prefill burst (server/prefill_burst.py `received`)
         pool = dict.get(STATE, "pool")
         burst = pool.burst if pool is not None else None
@@ -13520,6 +13526,7 @@ def parser() -> argparse.ArgumentParser:
                          "the scalar values of the non-content ones (model, stream, max_tokens, "
                          "temperature, ...); never messages, prompt, tools or stop strings")
     ap.add_argument("--verbose", action="store_true")
+    stage_mod.add_flags(ap)                 # ENG-307: --stage, --link-listen, --link-peer, --link-key-file
     return ap
 
 
@@ -13561,6 +13568,7 @@ def main() -> None:
     a = ap.parse_args()
     if a.usage_context not in ("client", "engine"):
         ap.error("--usage-context / QSE_USAGE_CONTEXT is client or engine")
+    stage_mod.prepare(a, STATE)             # ENG-307: the stage flags, or a refusal before any load
     _thinking_default(a)
     # argparse does not check a default against `choices`, and a typo in QSE_DASHBOARD_LOGIN
     # ("true", "ON") must not quietly decide who reads the dashboard
@@ -13586,6 +13594,8 @@ def main() -> None:
     STATE["conductor_policy"] = _conductor_policy(a)
     _limits_at_start(a)
     _window_at_start(a)
+    if stage_mod.front(STATE):
+        return stage_mod.serve_front(a, STATE)      # ENG-307: the front stage serves no model route
     if a.fake_engine:
         from server import fake_engine
         fake_engine.load(sys.modules[__name__], a)

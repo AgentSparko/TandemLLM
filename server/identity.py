@@ -199,7 +199,8 @@ def block(state: dict, fixed: dict, served) -> dict:
                       "top_p": state.get("top_p", 1.0), "top_k": state.get("top_k", 0),
                       "parallel": int(args.get("parallel") or 1),
                       "kv_fp8": fixed.get("kv_fp8")},
-           "max_len": state.get("max_len"), "stage": None}
+           "max_len": state.get("max_len"),
+           "stage": getattr(state.get("stage"), "ident", None)}
     out.update(state.get("identity_override") or {})
     return out
 
