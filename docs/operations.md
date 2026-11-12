@@ -111,6 +111,20 @@ It arms a pause file so the watchdog stands back, and keeps it fresh for the who
 
 Taking the service down stops everyone who uses it. Hold the board when nobody needs the service, and keep holds short.
 
+## A second engine on one box
+
+A peer is a second engine run from a checkout of its own (same commit, its own `logs/` and `run/`), for tests that need two engines on one box. Its tree's `ops/start.sh` starts it with `QSE_PEER` set:
+
+    QSE_PEER=p1 QSE_PEER_PORT=8100 QSE_PEER_NEED_GB=20 bash ops/start.sh
+
+- `QSE_PEER_PORT` and `QSE_PEER_NEED_GB` (the GiB its load takes) are required. `QSE_PEER_HOST` is an address, `127.0.0.1` by default. `QSE_PEER_ENGINE_FLAGS` replaces `QSE_ENGINE_FLAGS`; `QSE_PEER_DISK_CACHE` gives it a disk tier of its own (off by default).
+- The start refuses in setup mode, when any engine holds its port, when a peer of the same name is alive, and when MemAvailable is under `QSE_PEER_NEED_GB` plus `QSE_PEER_FLOOR_GB` (15 by default), read by `tools/memgate.py`.
+- A peer runs the engine alone: no conductor, roles, decision models or chatd, and no status file, responder, usage ledger or backends. Its pid file and log are `logs/peer-<name>.pid` and `logs/peer-<name>.log`. Its first start writes `run/peer`, which marks the tree as the peer's.
+- In a peer's tree, `ops/stop.sh` stops that peer and nothing else, the watchdog does nothing, and a plain `ops/start.sh` refuses. `ops/stop.sh --list` prints the pids a stop would signal, without signalling.
+- The box's own scripts do not count a peer: its `start.sh` starts beside one, and its `stop.sh` and watchdog never act on one. `ops/hold.sh` refuses to begin while a peer is alive and names it, since a hold needs the whole box.
+
+`tools/memgate.py` also watches MemAvailable during a run (`--floor-gib`, every 0.2 s) and stops a load driver on a breach. `tools/linkrelay.py` puts a link between two processes on loopback: a TCP relay with a set delay and rate per direction, and a control socket that cuts, stalls (`blackhole`) and heals it. Its stats report its own added latency (`own_us`); measured at delay 0, that is the relay's floor on loopback, not a link cost. Nothing on one box measures speed: both engines share one GPU and one memory bus.
+
 ## While the engine is away (status page)
 
 A stop, a hold or a start takes the engine away for minutes, and whatever sits in front of it used to answer every URL, the dashboard included, with its own fallback text. `ops/engine_status.py` (stdlib, 0.3.41-test, OPS-65) lets the service say what is going on:
