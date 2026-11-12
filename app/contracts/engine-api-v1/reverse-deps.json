@@ -745,6 +745,13 @@
     "app/pyproject.toml"
    ]
   },
+  "tests/test_engine_only.py": {
+   "imports": [],
+   "reads": [
+    "app/",
+    "app/ops"
+   ]
+  },
   "tests/test_evaluate.py": {
    "imports": [
     "tandemapp.conductor.incontext",
@@ -763,7 +770,9 @@
     "tandemapp.conductor.schema",
     "tandemapp.conductor.store:Store"
    ],
-   "reads": []
+   "reads": [
+    "app/contracts"
+   ]
   },
   "tests/test_fake_engine.py": {
    "imports": [],
@@ -796,6 +805,13 @@
    "imports": [],
    "reads": [
     "app/tests"
+   ]
+  },
+  "tests/test_gpu_adapters.py": {
+   "imports": [],
+   "reads": [
+    "app/chatd",
+    "app/proxy"
    ]
   },
   "tests/test_gpu_health.py": {
@@ -1040,7 +1056,9 @@
     "tandemapp.compaction",
     "tandemapp.usage"
    ],
-   "reads": []
+   "reads": [
+    "app/contracts"
+   ]
   },
   "tests/test_memory_where.py": {
    "imports": [
@@ -1379,6 +1397,7 @@
     "tandemapp.knobs"
    ],
    "reads": [
+    "app/packages",
     "app/tests"
    ]
   },
