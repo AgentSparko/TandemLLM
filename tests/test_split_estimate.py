@@ -196,7 +196,7 @@ def test_the_flashnext_block():
         side = parts["front" if on_front else "tail"]["table"]
         assert side["gb"] == split_mod._r(f["table"]["bytes"] / GIB) and side["policy"] == "warm"
         for s in ("front", "tail"):
-            assert {p["basis"] for p in c[s]["parts"]} <= {"pack_headers", "config", "ask", "registry_whole_model"}
+            assert {p["basis"] for p in c[s]["parts"]} <= {"pack_headers", "config", "ask", "registry_whole_model"}, c[s]
             # the side's total and headroom from its parts (each part rounded on its own: a cent a part)
             assert abs(c[s]["gb"] - sum(p["gb"] for p in c[s]["parts"])) <= 0.01 * len(c[s]["parts"]), c[s]
             assert abs(c[s]["headroom_gb"] - (b["budget_gb"] - c[s]["gb"])) <= 0.011, c[s]
@@ -211,7 +211,12 @@ def test_the_flashnext_block():
     cold = split_mod.block(m, sel, {"table": "cold", "cuts": [1, 3, 99]}, path=path)
     assert [c["cut"] for c in cold["candidates"]] == [1, 3] and any("[99]" in n for n in cold["notes"])
     t = [p for c in cold["candidates"] for s in ("front", "tail") for p in c[s]["parts"] if p["id"] == "table"]
-    assert t and all(p["gb"] == 2.0 and p["basis"] == "registry" for p in t), t
+    # 2.05 reads its table warm: asked cold, the row cache is the engine's setting (2 GiB by default)
+    assert t and all(p["gb"] == 2.0 and p["basis"] == "setting" for p in t), t
+    m3, sel3 = _sel(FN, profile="flashnext-3.05", window=8192)
+    t = [p for c in split_mod.block(m3, sel3, {"cuts": [3]}, path=path)["candidates"] for s in ("front", "tail")
+         for p in c[s]["parts"] if p["id"] == "table"]
+    assert t and all(p["gb"] == 2.0 and p["basis"] == "registry" and p["policy"] == "cold" for p in t), t
     # without caches: one slot whatever the selection says, no kept states, no folders
     off = split_mod.block(m, sel, {}, path=path)
     assert off["shape"]["slots"] == 1 and off["shape"]["snapshots_gb"] == 0.0 and any("one slot" in n for n in off["notes"])
