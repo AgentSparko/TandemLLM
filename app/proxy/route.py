@@ -216,7 +216,26 @@ class Table:
         dflt = getattr(self.cfg, "default_backend", None) if default else None
         if dflt in s["backends"]:
             return self._route(s, dflt, None, model)
-        raise NotFound(model, f"The model '{model}' does not exist or no backend serves it")
+        raise NotFound(model, f"The model '{model}' does not exist or no backend serves it"
+                       + self._now_serves(s, model))
+
+    def _now_serves(self, s: dict, model: str) -> str:
+        """SRV-749: for an id a backend listed once and lists no more (its model list changed),
+        or `<backend>/<id>` of a backend that does not serve the id: what that backend serves
+        now, so a client pinned to the old id reads the new ones in its 404."""
+        bid, slash, rest = model.partition("/")
+        if not (slash and bid in s["backends"]):
+            bid = next((m["backend"] for m in self.cfg.models()
+                        if m["model"] == model and not m["present"]
+                        and m["backend"] in s["backends"]), None)
+        if bid is None:
+            return ""
+        ids = sorted((m["public_id"] or m["model"]) for m in s["by_backend"].get(bid, {}).values())
+        label = s["backends"][bid]["label"] or bid
+        if not ids:
+            return f": {label} serves no model now"
+        more = f" and {len(ids) - 12} more" if len(ids) > 12 else ""
+        return f": {label} serves now {', '.join(ids[:12])}{more}"
 
     def backend_for(self, bid: str) -> dict | None:
         return self.snapshot()["backends"].get(bid)
