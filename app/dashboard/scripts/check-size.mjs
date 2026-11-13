@@ -74,13 +74,21 @@
 // 615 KB after the rebase onto main's 0.15.4 (SRV-747, 2026-11-12: 613.9 KB, 628,681 bytes, from 610.1): main's
 // simple Setup Guide mode and the Log panel's export button on top of TandemApp's pages, rebuilt from the merged
 // sources.
+// OPS-246: dist/ is a build output; CI runs this after the build and a total over the budget fails
+// the job. An optional argument names another folder (the size test's fixture).
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { BUDGET, distSizes } from './gzip-size.mjs';
 
-const dist = new URL('../dist/', import.meta.url).pathname;
+const dist = process.argv[2] ? resolve(process.argv[2]) : new URL('../dist/', import.meta.url).pathname;
+if (!existsSync(dist)) {
+  console.error(`no ${dist}: build the page first (python3 tools/dashboard_bundle.py build)`);
+  process.exit(2);
+}
 const { files, total } = distSizes(dist);
 for (const f of files) console.log(`${(f.gzip / 1024).toFixed(1).padStart(7)} KB  ${f.path}`);
 console.log(`${(total / 1024).toFixed(1).padStart(7)} KB  total gzip (budget ${BUDGET / 1024} KB, ${BUDGET - total} bytes left)`);
 if (total > BUDGET) {
-  console.error('over budget');
+  console.error(`over budget: ${total} bytes gzip (${(total / 1024).toFixed(1)} KB) > budget ${BUDGET} bytes (${BUDGET / 1024} KB)`);
   process.exit(1);
 }

@@ -1,31 +1,35 @@
-# Checks that the committed dashboard bundle (app/dashboard/dist/) is what its source builds to, on
-# every pull request and push to main that touches app/dashboard/**. dist/ is committed on purpose:
-# install.sh clones main and serves it, with no Node on the machine (docs/dashboard.md). A build is
-# reproducible here: the asset names are content hashes and sw.js's cache name is a hash of them,
-# so after `npm ci && npm run build` any file git sees as changed, deleted or new means a stale dist/.
-#
-# Not a required check while it has a paths filter: a pull request that does not touch app/dashboard/
-# never runs it, and a required check that never runs stays pending.
+# Builds TandemApp's page (app/dashboard/dist), which is not in git (OPS-246), and hands it to the
+# jobs that package it. tests.yml calls it on every pull request and push to main, and its app job
+# installs the wheel with this build inside; a release workflow calls it the same way. One build:
+#   npm ci (the lockfile, exactly), then the type check and Vite (tools/dashboard_bundle.py build,
+#   which also writes dist/bundle.json: the bundle's content hash, each file's sha256, the commit,
+#   the lockfile's sha256 and the Node version)
+#   vitest, with the build's own checks on the new dist/ (no mock code, relative paths, the budget)
+#   the size budget: the gzip total of dist/ (pako, the same on every runner) over the budget in
+#   app/dashboard/scripts/gzip-size.mjs fails the job and prints both
+#   a second build into a temp folder must give the same bundle hash (reproducible)
+#   the bundle as an artifact `dashboard-dist` (the folder) and as a release archive
+#   `dashboard-bundle` (tandemapp-dashboard-<hash>.tar.gz and its .sha256)
 name: dashboard-dist
 
 on:
-  pull_request:
-    paths:
-      - "app/dashboard/**"
-      - ".github/workflows/dashboard-dist.yml"
-  push:
-    branches: [main]
-    paths:
-      - "app/dashboard/**"
-      - ".github/workflows/dashboard-dist.yml"
+  workflow_call:
+    outputs:
+      bundle:
+        description: "the bundle's content hash (sha256 of dist/, bundle.json)"
+        value: ${{ jobs.build.outputs.bundle }}
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  check:
+  build:
+    name: dashboard build
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
+    outputs:
+      bundle: ${{ steps.record.outputs.bundle }}
     defaults:
       run:
         working-directory: app/dashboard
@@ -41,24 +45,46 @@ jobs:
           cache: npm
           cache-dependency-path: app/dashboard/package-lock.json
 
-      - name: Install
-        run: npm ci
+      - name: Set up Python
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: "3.12"
 
-      - name: Build
-        run: npm run build
+      - name: Install, type check and build
+        run: python3 ../tools/dashboard_bundle.py build --commit "$GITHUB_SHA"
 
-      - name: Check the committed bundle
-        run: |
-          stale="$(git status --porcelain -- dist)"
-          if [ -n "$stale" ]; then
-            echo "app/dashboard/dist/ differs from what app/dashboard/ builds to. Run 'cd app/dashboard && npm ci && npm run build' and commit dist/:"
-            echo "$stale"
-            echo "::error::app/dashboard/dist/ is stale"
-            exit 1
-          fi
+      - name: Unit, contract and build tests
+        env:
+          DASHBOARD_DIST_REQUIRED: "1"
+        run: npm test
 
-      # informational only: the gzip budget has little headroom and the gzip size depends on the
-      # runner's zlib build, so a size over the budget here does not fail the check
-      - name: Bundle size (informational)
-        continue-on-error: true
+      - name: Size budget
         run: npm run test:size
+
+      - name: Same commit, same bundle
+        run: python3 ../tools/dashboard_bundle.py repro
+
+      - name: Record and pack
+        id: record
+        run: |
+          bundle="$(python3 -c 'import json; print(json.load(open("dist/bundle.json"))["sha256"])')"
+          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/bundle"
+          python3 ../tools/dashboard_bundle.py pack --out "$RUNNER_TEMP/bundle/tandemapp-dashboard-${bundle:0:16}.tar.gz"
+          echo "dashboard bundle \`$bundle\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the page
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: dashboard-dist
+          path: app/dashboard/dist
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the release archive
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: dashboard-bundle
+          path: ${{ runner.temp }}/bundle
+          if-no-files-found: error
+          retention-days: 14

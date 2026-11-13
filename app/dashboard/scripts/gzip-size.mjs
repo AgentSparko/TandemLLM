@@ -8,8 +8,13 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import pako from 'pako';
 
-/** The budget for the total gzip size of dist/, in bytes. */
+/** The budget for the total gzip size of dist/, in bytes: the one place it is set (OPS-246). The
+ * size check (scripts/check-size.mjs), its CI step and the build test all read it from here. */
 export const BUDGET = 615 * 1024;
+
+/** dist/bundle.json, the bundle's manifest (tools/dashboard_bundle.py): metadata the page never
+ * loads, so it is not part of the measure. */
+export const MANIFEST = 'bundle.json';
 
 /** The gzip size of one file's bytes, pako at level 6. */
 export const gzipSize = (bytes) => pako.gzip(bytes, { level: 6 }).length;
@@ -21,7 +26,7 @@ export const distSizes = (dir) => {
     for (const f of readdirSync(d).sort()) {
       const p = join(d, f);
       if (statSync(p).isDirectory()) walk(p, rel + f + '/');
-      else files.push({ path: rel + f, gzip: gzipSize(readFileSync(p)) });
+      else if (rel + f !== MANIFEST) files.push({ path: rel + f, gzip: gzipSize(readFileSync(p)) });
     }
   };
   walk(dir);
