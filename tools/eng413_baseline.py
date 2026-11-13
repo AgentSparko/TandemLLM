@@ -41,7 +41,7 @@ text (`/v1/tokenize`) and the prompt's ids (`/v1/tokenize` of the same messages 
 the stream's chunks after normalisation; a difference there is reported, never a failure.
 
 The normaliser (compare runs it on the raw records, so it can be changed after a capture):
-  N1  keys whose value is a moment, a duration, a rate, a process or a size of memory become "<v>":
+  N1  keys whose value is a moment, a duration, a rate, a process, a port or a size of memory become "<v>":
       the names in VOLATILE_KEYS and every key ending in one of VOLATILE_SUFFIXES
   N2  the subtrees under SHAPE_KEYS (host, GPU and memory figures, samples, series, timings, the
       live view's activity) keep their keys only, every value "<v>"
@@ -49,15 +49,19 @@ The normaliser (compare runs it on the raw records, so it can be changed after a
       the keys in ORDINAL_KEYS and the values that look like a completion, call or session id
       (ORDINAL_VALUE), so two references to one id stay equal and two different ids stay different
   N4  /metrics becomes its family list: name, type and each family's label names, no value
-  N5  the log lines (/v1/dashboard/logs?follow=0) keep their count's sign only and the first entry's keys
+  N5  the live view, the log and the requests in flight (SHAPE_ROUTES) keep their shape only: the
+      keys of the answer and of a list's first entry, and whether a list is empty
   N6  the journal's requests rows lose the engine's statistics (REQUEST_STATS: blocks, drafts,
       slot, lane, cache figures): how a request was served, not what it answered
   N7  of conductor_events, the router's and the monitor's rows are gated (JOURNAL_GATED, in order,
       with their hidden texts); the other kinds (config migrations, memory writers, outcomes) run
       on timers and threads of their own and are info
+  N8  the run's own folders (capture's `--strip`, kept in the record) become "<root>" in every
+      string: the ledger's path, the tree copy's paths in the flags and the weights list
 compare holds the normalised records equal, path by path. `--allow GLOB` (`*` and `?`, the rest
-literal) accepts a difference at a path that matches (`b3-engine-post.health.engine_api`); `--additive` accepts paths only the
-candidate has (an additive contract version). Exit 0 when every gated part is equal.
+literal) accepts a difference at a path that matches (`b3-engine-post./health.body.engine_api`);
+`--additive` accepts paths only the candidate has (an additive contract version). Exit 0 when every
+gated part is equal.
 """
 
 from __future__ import annotations
@@ -82,9 +86,11 @@ VOLATILE_KEYS = frozenset((
     "elapsed", "took", "took_s", "eta", "eta_s", "system_fingerprint", "first_ms", "labelled_at",
     "next", "next_at", "expires", "expires_at", "mtime", "load", "loadavg", "rss", "vms", "free",
     "available", "used", "cached", "buffers", "temperature", "temp", "power", "watts", "util",
-    "utilization", "clock", "fan", "rate", "rates", "health_cost", "seconds", "wall", "ms", "seed"))
+    "utilization", "clock", "fan", "rate", "rates", "health_cost", "seconds", "wall", "ms", "seed", "tps",
+    "bytes", "oldest", "newest", "port", "ports", "host_port"))
 VOLATILE_SUFFIXES = ("_ms", "_s", "_at", "_ts", "_tps", "_pct", "_ratio", "_hz", "tok_s", "_gib",
-                     "_gb", "_mb", "_kb", "_bytes", "_ns", "_us", "_mib", "_kib", "_ago", "_time")
+                     "_gb", "_mb", "_kb", "_bytes", "_ns", "_us", "_mib", "_kib", "_ago", "_time",
+                     "_avg", "_mean", "_p50", "_p90", "_p95", "_p99", "_us_max", "_us_last", "_port")
 SHAPE_KEYS = frozenset((
     "memory", "mem", "gpu", "gpus", "host", "hosts", "cpu", "disk", "disks", "net", "network",
     "page_cache", "allocator", "timings", "metrics", "samples", "series", "activity", "box",
@@ -92,6 +98,8 @@ SHAPE_KEYS = frozenset((
 ORDINAL_KEYS = frozenset((
     "id", "request_id", "session_key", "client_id", "question_id", "hidden_text_id",
     "parent_request", "tool_call_id", "upstream_request", "conversation_id", "session"))
+#: the reads whose values all move with the clock: compared by their shape (N5)
+SHAPE_ROUTES = frozenset(("/v1/dashboard/live", "/v1/dashboard/logs", "/v1/dashboard/parallel"))
 #: the journal's kinds compare holds equal (the router's decisions and the monitor's); the others
 #: (config migrations, memory writers, outcomes, judges) run on timers and threads of their own (N7)
 JOURNAL_GATED = frozenset(("route", "monitor"))
@@ -549,8 +557,23 @@ def metric_families(text: str) -> list:
     return [[n, fams[n], sorted(labels.get(n, ()))] for n in sorted(fams)]
 
 
+def _strip(x, prefixes: list):
+    """N8: the run's own folders (`--strip`) inside any string become "<root>"."""
+    if isinstance(x, dict):
+        return {k: _strip(v, prefixes) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_strip(v, prefixes) for v in x]
+    if isinstance(x, str):
+        for p in prefixes:
+            x = x.replace(p, "<root>")
+    return x
+
+
 def normalize_record(doc: dict) -> dict:
     """The normalised form of one record file, as compare holds it."""
+    prefixes = sorted((p.rstrip("/") for p in doc.get("strip") or [] if p and len(p) > 1), key=len, reverse=True)
+    if prefixes:
+        doc = _strip(doc, prefixes)
     kind = doc.get("set")
     if kind in ("b1", "b2", "b2f"):
         out = {"set": kind, "requests": {}}
@@ -568,15 +591,11 @@ def normalize_record(doc: dict) -> dict:
                 item["families"] = metric_families(r.get("text") or "")
             elif path == "/v1/dashboard/metrics" and isinstance(r.get("body"), str):
                 item["families"] = metric_families(r["body"])
-            elif path.startswith("/v1/dashboard/logs"):
+            elif path.split("?")[0] in SHAPE_ROUTES:
                 body = r.get("body")
-                if isinstance(body, dict) and isinstance(body.get("lines"), list):
-                    lines, item["shape"] = body["lines"], _shape(dict(body, lines=body["lines"][:1]))
-                elif isinstance(body, list):
-                    lines, item["shape"] = body, _shape(body[:1])
-                else:
-                    lines, item["shape"] = None, _shape(body)
-                item["has_lines"] = bool(lines)
+                item["shape"] = _shape(body)
+                item["empty_lists"] = sorted(k for k, v in (body.items() if isinstance(body, dict) else ())
+                                             if isinstance(v, list) and not v)
             else:
                 item["body"] = normalize(r.get("body", r.get("text")))
             out["routes"][path] = item
@@ -737,7 +756,8 @@ def cmd_capture(a) -> int:
     _guard(a.port)
     t0 = time.monotonic()
     model = a.model or served_name(a.port)
-    doc = {"set": a.set, "port": a.port, "model": model, "captured": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    doc = {"set": a.set, "port": a.port, "model": model, "strip": a.strip or [],
+           "captured": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     if a.set == "b1":
         doc["requests"] = battery_b1(a.port, model, a.max_tokens)
     elif a.set == "b2":
@@ -761,7 +781,7 @@ def cmd_capture(a) -> int:
 
 def cmd_journal(a) -> int:
     rows = read_journal(a.ledger)
-    path = save(a.out, a.name, {"set": "journal", "rows": rows})
+    path = save(a.out, a.name, {"set": "journal", "rows": rows, "strip": a.strip or []})
     print(f"[baseline] journal: " + ", ".join(f"{k} {len(v)}" for k, v in rows.items()) + f" -> {path}")
     return 0
 
@@ -802,10 +822,12 @@ def main(argv=None) -> int:
     c.add_argument("--model", default="", help="b1/b2f: the raw model name (default: /v1/models' first)")
     c.add_argument("--max-tokens", type=int, default=64, help="b1: a raw completion's tokens")
     c.add_argument("--max-tokens-chat", type=int, default=1024, help="b2: a chat turn's tokens")
+    c.add_argument("--strip", action="append", help="a folder of this run, \"<root>\" when compared (N8)")
     j = sub.add_parser("journal")
     j.add_argument("--ledger", required=True)
     j.add_argument("--out", required=True)
     j.add_argument("--name", required=True)
+    j.add_argument("--strip", action="append", help="a folder of this run (N8)")
     m = sub.add_parser("compare")
     m.add_argument("base")
     m.add_argument("cand")
