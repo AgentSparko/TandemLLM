@@ -13,6 +13,8 @@ The test matrix:
      a journal row of the monitor that moved fails, a memory writer's row is info    test_compare_sees_tokens_not_noise
   3b a memory writer's row between two monitor rows shifts no gated ordinal; an id that
      moved still fails                                                    test_an_info_row_shifts_no_gated_ordinal
+  3c B2 repeats on one tree: its requests go one after another, and the one that samples (the
+     title) names its seed                                              test_b2_samples_only_with_a_seed
   4  a capture refuses port 8000 (the box's engine) before it opens a socket          test_the_live_port_is_refused
   5  over a socket, the fake engine: B1 and B3 from two fresh engines compare equal;
      the monitor fixtures (B2f) make D1, E1, GIVE_UP, C3 and C4 act, and two fresh
@@ -185,6 +187,29 @@ def test_an_info_row_shifts_no_gated_ordinal():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return "an info row between monitor rows: gate SAME, info 1; a moved id: DIFF"
+
+
+def test_b2_samples_only_with_a_seed():
+    """B2 repeats on one tree: a request that samples (temperature above 0) names its seed, or the
+    engine draws a fresh one per request (W0 and W2a's titles differed so); B2's requests go one
+    after another, each after the last one's answer."""
+    sent, orig = [], B.run_one
+
+    def fake(port, name, endpoint, body, headers=None):
+        sent.append((name, copy.deepcopy(body)))
+        return {"name": name, "wire": {"content": "", "reasoning": "", "calls": {}}}
+    B.run_one = fake
+    try:
+        B.battery_b2(1, 64)
+    finally:
+        B.run_one = orig
+    names = [n for n, _ in sent]
+    assert names == ["opencode_turn1", "opencode_turn2", "opencode_turn3", "hermes", "raw_header",
+                     "opencode_title"], names
+    sampled = [(n, b.get("seed")) for n, b in sent if float(b.get("temperature") or 0) > 0]
+    assert sampled and all(isinstance(s, int) for _, s in sampled), sampled
+    assert dict(sampled)["opencode_title"] == B.TITLE_SEED
+    return f"{len(sent)} requests, {len(sampled)} sampled, each with its seed"
 
 
 def test_the_live_port_is_refused():

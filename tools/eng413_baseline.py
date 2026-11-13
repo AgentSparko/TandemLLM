@@ -375,6 +375,12 @@ def _assistant_turn(w: dict) -> tuple:
     return msg, tools
 
 
+#: the title request samples (temperature 0.5, as opencode's): without a seed the engine draws a
+#: fresh one per request, so two runs differ by design (W0 and W2a drew 5755977889632726758 and
+#: 4493622033207065211). Fixed here: W0's drawn seed, so W0's title is the one this seed makes
+TITLE_SEED = 5755977889632726758
+
+
 def battery_b2(port: int, max_tokens: int) -> list:
     tools = _opencode_tools()
     oc = {"User-Agent": OPENCODE_UA, "x-session-id": "ses_eng413b2"}
@@ -409,7 +415,7 @@ def battery_b2(port: int, max_tokens: int) -> list:
         headers={"User-Agent": OPENCODE_UA, "X-Tandem": "raw"}))
     out.append(run_one(port, "opencode_title", "/v1/chat/completions", {
         "model": "TandemLLM", "stream": True, "stream_options": {"include_usage": True}, "temperature": 0.5,
-        "max_tokens": max_tokens, "reasoning_effort": "low", "logprobs": True,
+        "seed": TITLE_SEED, "max_tokens": max_tokens, "reasoning_effort": "low", "logprobs": True,
         "messages": [{"role": "system", "content": "You are a title generator. You output ONLY a thread title."},
                      {"role": "user", "content": "Generate a title for this conversation:\n"},
                      {"role": "user", "content": "List the Python files in this project."}]},
