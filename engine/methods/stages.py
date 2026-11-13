@@ -21,6 +21,8 @@ request after it, until a new link is attached. A new link has a new epoch, and 
 from an empty state: nothing computed under an older epoch is used. A header whose length is not the
 follower's is answered `desync`; the coordinator then starts both sides over and replays the
 sequence's tokens before it repeats the step. A stale state costs a prefill, never an answer.
+A front whose own pass fails (not a block it refuses) answers `stage` with the reason and ends the
+link: the request ends with that reason, and the next link starts both sides empty.
 
 The step header, little-endian, then the arrays:
 

@@ -208,7 +208,7 @@ Flash-Next's kernels are CUDA, so no kernel of it runs on the CPU. The CPU tests
 
 On the CPU LFM2 MoE's kernels run under Triton's interpreter. No split Flash-Next has run on a GPU yet, and no speed is measured.
 
-A missed deadline (5 s for a block, 60 s for a prompt chunk) takes the link down, and the request ends with `stage_down`. A new connection gets a new epoch, and both sides start it from an empty state. A front whose length is not the tail's answers `desync`; the tail then replays the sequence's tokens. The link refuses a peer with another key, code, weights, family or layer range, and it has no second transport to fall back to. The handshake proves both ends hold the key; it does not encrypt frames, so the link belongs on a private network segment.
+A missed deadline (5 s for a block, 60 s for a prompt chunk) takes the link down, and the request ends with `stage_down`. A new connection gets a new epoch, and both sides start it from an empty state. A front whose length is not the tail's answers `desync`; the tail then replays the sequence's tokens. A front whose own pass fails answers `stage` with the reason and ends the link, so the request ends with that reason and not with a timeout. The link refuses a peer with another key, code, weights, family or layer range, and it has no second transport to fall back to. The handshake proves both ends hold the key; it does not encrypt frames, so the link belongs on a private network segment.
 
 ## The parts
 
