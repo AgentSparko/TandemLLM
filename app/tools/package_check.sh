@@ -123,6 +123,19 @@ if git -C "$REPO" rev-parse >/dev/null 2>&1; then
 else
   cp -R "$REPO/." "$T/src/"
 fi
+# the built page is a build output, not in git (OPS-246): the wheel takes the checkout's bundle,
+# which must be intact (tools/dashboard_bundle.py build or fetch makes it)
+if [ ! -f "$REPO/dashboard/dist/index.html" ]; then
+  "$PY" -I "$REPO/tools/dashboard_bundle.py" verify "$REPO/dashboard/dist" >"$OUT/bundle.log" 2>&1
+  fail "no built page in dashboard/dist: run 'python3 tools/dashboard_bundle.py build' (Node) or fetch a released bundle first"
+fi
+"$PY" -I "$REPO/tools/dashboard_bundle.py" verify "$REPO/dashboard/dist" >"$OUT/bundle.log" 2>&1 \
+  || fail "dashboard/dist does not match its bundle.json (bundle.log)"
+# git's list leaves the ignored dist/ out; a copy without git has it already
+[ -e "$T/src/dashboard/dist" ] || cp -R "$REPO/dashboard/dist" "$T/src/dashboard/dist"
+BUNDLE=$("$PY" -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["sha256"])' \
+  "$T/src/dashboard/dist/bundle.json") || fail "reading the bundle's manifest"
+echo "PASS the page's bundle ${BUNDLE:0:16} verifies" | tee -a "$OUT/summary.txt"
 $PY -m venv "$T/build" && "$T/build/bin/pip" -q install build >"$OUT/build.log" 2>&1 \
   || fail "the build venv"
 "$T/build/bin/python" -m build --wheel "$T/src" -o "$T/wheel" >>"$OUT/build.log" 2>&1 \
@@ -134,6 +147,7 @@ if grep -Eq "tests/|node_modules|\.safetensors|\.pt$|/src/.*\.ts$" "$OUT/wheel-f
   fail "the wheel holds tests, node_modules, weights or dashboard sources"
 fi
 grep -q "proxy/dashboard/index.html" "$OUT/wheel-files.txt" || fail "no built page in the wheel"
+grep -q "proxy/dashboard/bundle.json" "$OUT/wheel-files.txt" || fail "no bundle manifest in the wheel"
 # every file of the built page, as proxy/dashboard/<path> (sw.js was missing until SRV-747)
 "$PY" -I - "$WHL" "$T/src/dashboard/dist" >"$OUT/dist.log" 2>&1 <<'EOF' \
   || fail "dashboard/dist files missing from the wheel (dist.log)"
@@ -203,16 +217,17 @@ OLD="$T/venv/bin/tandem-dash"               # the old name (OPS-238): one line o
 echo "PASS the old name" | tee -a "$OUT/summary.txt"
 "$APP" check --env-file "$T/app.env" --config-db "$T/data/config.sqlite3" \
   --conductor-config "$T/conductor" >"$OUT/check.log" 2>&1 || fail "tandem-app check (check.log)"
-grep -q "^page .*proxy/dashboard$" "$OUT/check.log" || fail "check did not find the packaged page"
+grep -q "^page .*proxy/dashboard bundle ${BUNDLE:0:16} " "$OUT/check.log" \
+  || fail "check did not find the packaged page with its bundle"
 [ -e "$T/data/config.sqlite3" ] && fail "check wrote the config database"
 echo "PASS check" | tee -a "$OUT/summary.txt"
 QSE_TEST=1 "$APP" serve --env-file "$T/app.env" --config-db "$T/data/config.sqlite3" \
   --usage-ledger "$T/data/ledger.sqlite3" --conductor-config "$T/conductor" --port $PORT \
   --no-keychain >"$OUT/serve.log" 2>&1 &
 SRV=$!
-"$T/venv/bin/python" - "$PORT" "$OUT" <<'EOF' || fail "serve (serve.log, $OUT/serve-check.log)"
+"$T/venv/bin/python" - "$PORT" "$OUT" "$BUNDLE" <<'EOF' || fail "serve (serve.log, $OUT/serve-check.log)"
 import json, sys, time, urllib.request
-port, out = sys.argv[1], sys.argv[2]
+port, out, bundle = sys.argv[1], sys.argv[2], sys.argv[3]
 base = f"http://127.0.0.1:{port}"
 log = open(f"{out}/serve-check.log", "w")
 def get(path, raw=False):
@@ -230,6 +245,12 @@ print("models", ids, file=log)
 assert ids == ["fake-a"], ids
 st, page = get("/dashboard/", raw=True)
 assert st == 200 and b"<script" in page and b"not built" not in page, page[:200]
+with urllib.request.urlopen(base + "/dashboard/", timeout=10) as r:      # OPS-246
+    tag = r.headers.get("X-Tandem-Bundle")
+health = get("/health")
+print("bundle", tag, health.get("dashboard"), file=log)
+assert tag == bundle[:16], (tag, bundle)
+assert health["dashboard"]["sha256"] == bundle and health["dashboard"]["verified"], health
 sysd = get("/v1/dashboard/system")
 print("version", sysd["engine"]["version"], "hosts", [h["source"] for h in sysd.get("hosts", [])],
       file=log)
@@ -242,7 +263,8 @@ with urllib.request.urlopen(r, timeout=30) as resp:
     assert resp.status == 200
 print("ok", file=log)
 EOF
-echo "PASS serve: /v1/models, /dashboard/, system with hosts, one request" | tee -a "$OUT/summary.txt"
+echo "PASS serve: /v1/models, /dashboard/ with its bundle, system with hosts, one request" \
+  | tee -a "$OUT/summary.txt"
 # TandemNode from the wheel: a virtual node with its own state dir and port, on loopback, no mDNS;
 # its identity read as a controller reads it (proxy/nodesource.py AgentNode, the loopback secret)
 "$T/venv/bin/tandem-node" serve --host 127.0.0.1 --port $NPORT --state-dir "$T/node" \

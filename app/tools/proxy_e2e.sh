@@ -74,6 +74,11 @@ step unit-engines  $PY tests/test_proxy_engines.py
 step unit-harness  $PY tests/test_proxy_harness.py
 step unit-plugins  $PY tests/test_proxy_plugins.py
 step unit-collect  $PY tests/test_proxy_collect.py
+# the wheel needs the built page (OPS-246: not in git); with Node it is built first, else
+# package_check.sh stops and says how to get it
+if [ -d dashboard/node_modules ]; then
+  step dash-bundle $PY tools/dashboard_bundle.py build
+fi
 step package       bash tools/package_check.sh --extras host --out "$OUT/package"
 step bench         $PY tools/proxy_bench.py --n 200 --streams 64 --out "$OUT/bench.json"
 if [ -n "$ENGINE" ]; then
@@ -84,7 +89,7 @@ else
 fi
 if [ -d dashboard/node_modules ]; then
   step dash-vitest bash -c "cd dashboard && npx vitest run"
-  step dash-build  bash -c "cd dashboard && npm run build && npm run test:size"
+  step dash-size   bash -c "cd dashboard && npm run test:size"
   step dash-e2e    bash -c "cd dashboard && npx playwright test e2e/backends.spec.ts e2e/shell.spec.ts e2e/usage.spec.ts e2e/dev.spec.ts e2e/performance.spec.ts e2e/system.spec.ts e2e/engines.spec.ts --project=chromium-desktop --project=webkit-phone --workers=1"
 else
   echo "SKIP dashboard (no dashboard/node_modules: npm ci in dashboard/)" | tee -a "$OUT/summary.txt"

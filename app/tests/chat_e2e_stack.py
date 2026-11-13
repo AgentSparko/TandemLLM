@@ -36,6 +36,12 @@ def main(argv=None) -> int:
     ap.add_argument("--data", default=None)
     ap.add_argument("--keep", action="store_true")
     a = ap.parse_args(argv)
+    if not os.path.isfile(os.path.join(a.dashboard, "index.html")):
+        # the page is a build output, not in git (OPS-246): the e2e specs need the real one
+        from tandemapp import bundle
+        print(f"no built page in {a.dashboard}; the chat e2e specs need it.\n"
+              + bundle.message(a.dashboard), file=sys.stderr)
+        return 2
     fake, fport = fake_backend.start(models=["fake-a"], tps=400.0)
     data = a.data or tempfile.mkdtemp(prefix="chat-e2e-")
     os.environ.pop("QSE_CHAT_FORWARD_KEY", None)

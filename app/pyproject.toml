@@ -13,10 +13,16 @@
 # (dashboard/dist, as proxy/dashboard) and the shipped texts the conductor starts with (packages/,
 # as proxy/packages). The version is VERSION beside this file (proxy/_version.py reads it; an sdist
 # carries it through MANIFEST.in).
+#
+# The built page is not in git (OPS-246): build it first (`python3 tools/dashboard_bundle.py build`,
+# Node 20.19 or newer) or let the build fetch a released one (TANDEM_DASHBOARD_URL and
+# TANDEM_DASHBOARD_SHA256). The backend below is setuptools plus that check
+# (packaging/tandemapp_build.py): a wheel or sdist without the page stops with what to do.
 
 [build-system]
 requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+build-backend = "tandemapp_build"
+backend-path = ["packaging"]
 
 [project]
 name = "tandemapp"
@@ -72,7 +78,7 @@ packages = [
 
 [tool.setuptools.package-data]
 proxy = ["*.json"]
-"proxy.dashboard" = ["*.html", "*.js", "*.ico", "*.svg", "*.png", "*.webmanifest"]
+"proxy.dashboard" = ["*.html", "*.js", "*.json", "*.ico", "*.svg", "*.png", "*.webmanifest"]
 "proxy.dashboard.assets" = ["*"]
 "proxy.packages" = ["*.json", "inline/*", "skills/**/*", "library/*", "library/**/*", "system/**/*", "everyday/*", "everyday/**/*"]
 tandemapp = ["METRICS.md"]

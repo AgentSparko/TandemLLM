@@ -14,6 +14,17 @@
 # The System view's host collector sees the container, not the machine. For the machine and the
 # processes behind backends on it, run the container with `--pid=host` (and `--gpus all` for
 # NVML), or run `tandem-app hostcollect` on that machine and point the backend's host at it.
+#
+# The page is built here, in a Node stage (OPS-246: dashboard/dist is not in git): `npm ci` with the
+# lockfile, then `npm run build` (type check and Vite). The wheel stage records its manifest
+# (dashboard/dist/bundle.json, the bundle's content hash) and the build backend checks it.
+
+FROM node:22.12.0-bookworm-slim AS page
+WORKDIR /src/dashboard
+COPY dashboard/package.json dashboard/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY dashboard ./
+RUN npm run build
 
 FROM python:3.12-slim AS build
 WORKDIR /src
@@ -24,8 +35,13 @@ COPY proxy proxy
 COPY chatd chatd
 COPY tandemapp tandemapp
 COPY packages packages
-COPY dashboard/dist dashboard/dist
-RUN python -m build --wheel -o /wheel .
+COPY packaging/tandemapp_build.py packaging/tandemapp_build.py
+COPY tools/dashboard_bundle.py tools/dashboard_bundle.py
+COPY --from=page /src/dashboard/package-lock.json dashboard/package-lock.json
+COPY --from=page /src/dashboard/dist dashboard/dist
+RUN python tools/dashboard_bundle.py record --source docker \
+    && python tools/dashboard_bundle.py verify \
+    && python -m build --wheel -o /wheel .
 
 FROM python:3.12-slim
 RUN useradd --create-home --uid 10001 tandem && mkdir -p /data && chown tandem /data

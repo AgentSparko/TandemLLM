@@ -672,6 +672,21 @@ if [ "$RUNTIME_ONLY" = 1 ]; then
     exit 0
 fi
 
+# The dashboard's page (the engine serves it at /dashboard/) is a build output, not a file in git
+# (OPS-246): kept when the checkout has an intact one, else built when Node is here, else fetched
+# when TANDEM_DASHBOARD_URL and TANDEM_DASHBOARD_SHA256 name a released bundle. Without it the
+# engine and its API run, and /dashboard/ says how to build it.
+if [ -f "$SRC/app/tools/dashboard_bundle.py" ]; then
+    if [ "$DRY" = 1 ]; then
+        note "$PY $SRC/app/tools/dashboard_bundle.py ensure"
+    elif "$PY" -I "$SRC/app/tools/dashboard_bundle.py" ensure >"$DIR/state/dashboard-bundle.log" 2>&1; then
+        ok "dashboard page: $(tail -n 1 "$DIR/state/dashboard-bundle.log")"
+    else
+        warn "the dashboard's page is not built; the engine and its API work without it ($DIR/state/dashboard-bundle.log):"
+        tail -n 12 "$DIR/state/dashboard-bundle.log" | sed 's/^/      /'
+    fi
+fi
+
 # ---------------------------------------------------------------------------------------------
 # 4. Weights
 # ---------------------------------------------------------------------------------------------

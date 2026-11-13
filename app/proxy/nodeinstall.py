@@ -118,6 +118,10 @@ def checkout_files(root: str) -> tuple[dict, list[tuple[str, str]]]:
         src = os.path.join(root, dirs.get(pkg) or pkg.replace(".", os.sep))
         dest = pkg.replace(".", "/")
         pats = data.get(pkg, [])
+        if not os.path.isdir(src):
+            # the built page (dashboard/dist) is a build output (OPS-246): a checkout without it
+            # gives a wheel without the page; the agent serves no page, only the controller does
+            continue
         for name in sorted(os.listdir(src)):
             p = os.path.join(src, name)
             if not os.path.isfile(p):

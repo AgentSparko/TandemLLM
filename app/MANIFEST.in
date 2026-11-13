@@ -1,1 +1,6 @@
 include VERSION
+# the build backend (pyproject.toml's backend-path) and the bundle code it imports
+include packaging/tandemapp_build.py
+include tools/dashboard_bundle.py
+# the built page with its manifest: an sdist installs without Node (OPS-246)
+graft dashboard/dist

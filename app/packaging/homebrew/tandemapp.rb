@@ -3,7 +3,8 @@
 #   brew install ./app/packaging/homebrew/tandemapp.rb  (until a tap carries it)
 #   tandem-app service install                          the controller as a launchd agent
 #
-# Not published: the release sets `url` and `sha256` to its tarball when it ships TandemApp.
+# Not published: the release sets `url` and `sha256` to its tarball when it ships TandemApp, and the
+# dashboard resource's to the release's page bundle (tools/dashboard_bundle.py pack, OPS-246).
 class Tandemapp < Formula
   include Language::Python::Virtualenv
 
@@ -12,10 +13,22 @@ class Tandemapp < Formula
   url "https://github.com/0xBakeer/TandemLLM/archive/refs/tags/v0.16.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "AGPL-3.0-only"
-  head "https://github.com/0xBakeer/TandemLLM.git", branch: "main"
+
+  head do
+    url "https://github.com/0xBakeer/TandemLLM.git", branch: "main"
+    # a checkout has no built page (dashboard/dist is not in git): head builds it with Node
+    depends_on "node" => :build
+  end
 
   depends_on "cryptography"
   depends_on "python@3.13"
+
+  # the built page of the release, checked by Homebrew against its sha256 and by the bundle tool
+  # against its manifest
+  resource "dashboard" do
+    url "https://github.com/0xBakeer/TandemLLM/releases/download/v0.16.0/tandemapp-dashboard-0.16.0.tar.gz"
+    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  end
 
   resource "psutil" do
     url "https://files.pythonhosted.org/packages/aa/c6/d1ddf4abb55e93cebc4f2ed8b5d6dbad109ecb8d63748dd2b20ab5e57ebe/psutil-7.2.2.tar.gz"
@@ -23,11 +36,17 @@ class Tandemapp < Formula
   end
 
   def install
-    # TandemApp is app/ of the repository's tarball (its root once TandemApp ships on its own); the
-    # dashboard ships built (dashboard/dist), so no Node at install time
+    # TandemApp is app/ of the repository's tarball (its root once TandemApp ships on its own). The
+    # page: the release's bundle, or built with Node for head; checked before the wheel is built
     src = (buildpath/"app/pyproject.toml").exist? ? buildpath/"app" : buildpath
+    if build.head?
+      system "python3.13", src/"tools/dashboard_bundle.py", "build"
+    else
+      resource("dashboard").stage { (src/"dashboard/dist").install Dir["*"] }
+    end
+    system "python3.13", src/"tools/dashboard_bundle.py", "verify"
     venv = virtualenv_create(libexec, "python3.13")
-    venv.pip_install resources
+    venv.pip_install resources.reject { |r| r.name == "dashboard" }
     venv.pip_install_and_link src
   end
 
