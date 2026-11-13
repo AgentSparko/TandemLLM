@@ -711,16 +711,23 @@ class Coordinator:
         self.step_deadline, self.chunk_deadline, self.replay_rows = step_deadline, chunk_deadline, replay_rows
         self.slot, self.main = slot, main or self
         self.exact = bool(getattr(adapter, "exact", False))
+        #: True: a new link leaves this stage's sequence as it is (its caches hold it) and the front is
+        #: brought back to it at the next request; False: both sequences start empty
+        self.keep = False
         self.replays = 0                 # sequences run again as prompt chunks on both stages
         self.rebuilds = 0                # the front brought back to this side's state from the log
-        self.stats = {"snapshots": 0, "restore_hits": 0, "restore_misses": 0, "quiet_steps": 0, "rounds": 0,
-                      "drops": 0}
+        # what crossed the link, by kind of block: prompt chunks, decode steps, verify trees sent alone,
+        # joint rounds and the blocks in them (`round_max`: the most slots one round carried)
+        self.stats = {"chunks": 0, "steps": 0, "trees": 0, "rounds": 0, "round_blocks": 0, "round_max": 0,
+                      "snapshots": 0, "restore_hits": 0, "restore_misses": 0, "quiet_steps": 0, "drops": 0}
         self._tokens: list = []          # the committed sequence, for a replay
         self._pending = None             # the commit path the front has not seen yet
         self._block = None               # the tree block a commit may keep rows of
         self._root = _Node(None, root_key(getattr(adapter, "seed", b"")), 0)
         self._node = self._root          # the log's end: the committed state's key and length
-        self.marks: OrderedDict = OrderedDict()      # key -> [node, the front was sent it, kept on its disk]
+        #: key -> [the log's node, the slots whose front holds it, kept in the front's directory]; one
+        #: table a link: a state marked on one slot can be put back on another (its front is rebuilt)
+        self.marks: OrderedDict = OrderedDict() if main is None else main.marks
         if main is None:
             self.link = None
             self.epoch = 0
@@ -741,14 +748,19 @@ class Coordinator:
 
     # ------------------------------------------------------------------ the link
     def attach(self, link) -> None:
-        """Take a link whose handshake is done. Its epoch is new, so the state starts empty."""
+        """Take a link whose handshake is done. Its epoch is new, so the front starts empty; so does
+        this stage, unless it keeps its sequence (`keep`): then the front is brought back to it
+        from its own kept states or the log when the next request finds it elsewhere."""
         with self._lock:
             if self.link is not None and self.link.state == "up":
                 self.link.close()
             for co in [self] + list(self.sides.values()):
-                co._clear()
-                for m in co.marks.values():
-                    m[1] = m[2] = False          # a new front may hold none of them
+                if co.keep and co.exact:
+                    co._pending = None       # the rebuild lands every commit of the log
+                else:
+                    co._clear()
+            for m in self.marks.values():
+                m[1], m[2] = set(), False        # a new front may hold none of them
             self.link, self.epoch, self.why = link, link.epoch, None
             link.on_down = self._on_down
             link.start_heartbeat()
@@ -775,8 +787,9 @@ class Coordinator:
         """The counters of every slot's kept state, for `/health`."""
         cos = [self.main] + list(self.main.sides.values())
         out = {k: sum(c.stats[k] for c in cos) for k in self.stats}
-        out.update(marks=sum(len(c.marks) for c in cos), rebuilds=sum(c.rebuilds for c in cos),
-                   replays=sum(c.replays for c in cos))
+        out["round_max"] = self.main.stats["round_max"]
+        out.update(marks=len(self.marks), rebuilds=sum(c.rebuilds for c in cos),
+                   replays=sum(c.replays for c in cos), slots=len(cos))
         return out
 
     def _down(self, exc: Exception) -> StageDown:
@@ -913,6 +926,7 @@ class Coordinator:
             raise self._down(L.LinkProtocol("a carry of another shape"))
         out = ad.rows(block, ad.decode(fr.dtype, fr.dims, fr.payload))
         self._ran(block)
+        self.stats["trees" if not block.chain else "chunks" if block.rows > 1 else "steps"] += 1
         return out
 
     def _ran(self, block: Block) -> None:
@@ -978,6 +992,8 @@ class Coordinator:
             for co, b in zip(cos, blocks):
                 co._ran(b)
             m.stats["rounds"] += 1
+            m.stats["round_blocks"] += len(cos)
+            m.stats["round_max"] = max(m.stats["round_max"], len(cos))
             return outs
 
     # ------------------------------------------------------------------ state kept under a key
@@ -989,34 +1005,41 @@ class Coordinator:
             node = self._node
             m = self.marks.get(node.key)
             if m is None:
-                m = self.marks[node.key] = [node, False, False]
+                m = self.marks[node.key] = [node, set(), False]
                 self._trim()
             else:
                 self.marks.move_to_end(node.key)
-            if self.exact and (not m[1] or (keep and not m[2])):
+            if self.exact and (self.slot not in m[1] or (keep and not m[2])):
                 try:
                     self._flush(OP_SNAPSHOT, keep=keep)
-                    m[1], m[2] = True, m[2] or keep
+                    m[1].add(self.slot)
+                    m[2] = m[2] or keep
                     self.stats["snapshots"] += 1
                 except StageError:
                     pass
             return node.key
 
     def _trim(self) -> None:
-        gone = []
+        gone: dict = {}
         while len(self.marks) > MARKS:
             key, m = self.marks.popitem(last=False)
-            if m[1]:
-                gone.append(key)
-        if gone:
-            self.drop(gone)
+            for slot in m[1]:
+                gone.setdefault(slot, []).append(key)
+        for slot, keys in gone.items():
+            co = self.main if slot == 0 else self.main.sides.get(slot)
+            if co is not None:
+                co.drop(keys)
 
     def drop(self, keys) -> None:
-        """Tell the front to forget `keys` (nothing is said to a link that is down)."""
+        """Tell this slot's front to forget `keys` (nothing is said to a link that is down)."""
         with self._lock:
             keys = [bytes(k) for k in keys]
             for k in keys:
-                self.marks.pop(k, None)
+                m = self.marks.get(k)
+                if m is not None:
+                    m[1].discard(self.slot)
+                    if not m[1]:
+                        del self.marks[k]
             try:
                 for at in range(0, len(keys), 1024):
                     self._ask(pack_step(OP_DROP, 0, slot=self.slot, keys=keys[at:at + 1024]), self.step_deadline)
@@ -1044,14 +1067,14 @@ class Coordinator:
             if not hit and (m is None or m[0].orphan):
                 raise StageError("snapshot", "snapshot: the front stage does not hold its half of this state")
             if m is None:
-                m = self.marks[key] = [_Node(None, key, length, orphan=True), True, False]
+                m = self.marks[key] = [_Node(None, key, length, orphan=True), {self.slot}, False]
                 self._trim()
             else:
                 self.marks.move_to_end(key)
             self._node, self._pending, self._block = m[0], None, None
             self._tokens = []
             if hit:
-                m[1] = True
+                m[1].add(self.slot)
                 return "hit"
             self._rebuild(missed=key)
             return "rebuilt"
