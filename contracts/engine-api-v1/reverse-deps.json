@@ -611,6 +611,18 @@
     "app/"
    ]
   },
+  "tests/test_contract_toolcalls.py": {
+   "imports": [
+    "tandemapp.callrepair",
+    "tandemapp.toolcall:ToolCallBuffer",
+    "tandemapp.toolcall:parse_tool_calls",
+    "tandemapp.toolcall:schema_types",
+    "tandemapp.toolformats"
+   ],
+   "reads": [
+    "app/"
+   ]
+  },
   "tests/test_dashboard_api.py": {
    "imports": [
     "proxy.hostcollect",
