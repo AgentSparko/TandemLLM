@@ -1,6 +1,6 @@
 // OPS-235 (tests for OPS-234): TandemApp alone, the controller's host and the fleet update, in the mock
 // fleet. The three Gherkin scenarios of the ticket: the first open of TandemApp on a Mac with no Spark
-// lands on Add Spark; the controller on the Mac with three Sparks moves to Gold (the nodes trust the
+// lands on Get started (SRV-749: the ways in, Add Spark one of them); the controller on the Mac with three Sparks moves to Gold (the nodes trust the
 // new controller, the API URL is Gold's, the page follows to it); Qwen3.8-27B as Replicas on Gold and
 // R-3 while the fleet updates (one member drains and updates at a time, the model stays served).
 // Besides: a Split refuses a partial update, the mixed-version alert on the Overview and the fleet
@@ -32,10 +32,12 @@ test.describe('TandemApp alone, its controller, the fleet update', () => {
     await fresh(request, 'fleet4');
   });
 
-  test('Install on a Mac: the first open with no Spark lands on Add Spark; a route given is kept', async ({ page, request }, info) => {
+  test('Install on a Mac: the first open with no Spark lands on Get started, Add Spark one step away; a route given is kept', async ({ page, request }, info) => {
     await fresh(request, 'empty');
     await page.goto('./?fleet=empty');
-    await expect(page).toHaveURL(/#\/add-spark$/, { timeout: 10_000 });
+    await expect(page).toHaveURL(/#\/start$/, { timeout: 10_000 });
+    await page.locator('qse-start [data-path="spark"]').click();
+    await expect(page).toHaveURL(/#\/add-spark$/);
     await expect(page.locator('qse-add-spark .wz-stepper')).toBeVisible({ timeout: 10_000 });
     if (info.project.name === 'chromium-desktop') await shot(page, 'first-open-add-spark');
     // a link to another page is kept: no detour

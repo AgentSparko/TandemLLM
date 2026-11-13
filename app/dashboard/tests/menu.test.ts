@@ -25,7 +25,7 @@ describe('the menu', () => {
       ['Monitor', ['Overview', 'Performance', 'Usage', 'Hardware', 'Events & Alerts']],
       ['Fleet', ['Sparks', 'Models', 'API']],
       ['Tune', ['Conductor', 'Playground', 'Dev']],
-      ['Settings', ['Add Spark', 'App']],
+      ['Settings', ['Get started', 'Add Spark', 'App']],
     ]);
     expect(MONITOR).toEqual(['overview', 'performance', 'usage', 'hardware', 'events']);
     expect(PHONE_BAR).toEqual(['chat', 'overview', 'performance']);

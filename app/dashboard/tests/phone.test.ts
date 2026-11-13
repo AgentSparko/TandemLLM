@@ -10,7 +10,7 @@ describe('splitTabs', () => {
   it('keeps Chat, Overview and Performance in the bar, in the menu order, and the rest behind More', () => {
     const s = splitTabs(ITEMS, PHONE_BAR, 'chat');
     expect(s.bar.map((t) => t.id)).toEqual(['chat', 'overview', 'performance']);
-    expect(s.more.map((t) => t.id)).toEqual(['usage', 'hardware', 'events', 'sparks', 'models', 'api', 'conductor', 'playground', 'dev', 'add-spark', 'app']);
+    expect(s.more.map((t) => t.id)).toEqual(['usage', 'hardware', 'events', 'sparks', 'models', 'api', 'conductor', 'playground', 'dev', 'start', 'add-spark', 'app']);
     expect(s.moreShows).toBeNull();
   });
   it('the More slot shows the active section when that section is behind More', () => {

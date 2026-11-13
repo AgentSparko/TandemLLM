@@ -119,7 +119,7 @@ test.describe('shell', () => {
     await page.locator('.bb-more').click();
     await expect(page.locator('.more-sheet')).toBeVisible();
     await expect(page.locator('.more-sheet .more-g')).toHaveText(['Monitor', 'Fleet', 'Tune', 'Settings']);
-    await expect(page.locator('.more-item .nav-label')).toHaveText(['Chat', 'Overview', 'Performance', 'Usage', 'Hardware', 'Events & Alerts', 'Sparks', 'Models', 'API', 'Conductor', 'Playground', 'Dev', 'Add Spark', 'App']);
+    await expect(page.locator('.more-item .nav-label')).toHaveText(['Chat', 'Overview', 'Performance', 'Usage', 'Hardware', 'Events & Alerts', 'Sparks', 'Models', 'API', 'Conductor', 'Playground', 'Dev', 'Get started', 'Add Spark', 'App']);
     await page.locator('.more-item', { hasText: 'Dev' }).click();
     await expect(page).toHaveURL(/#\/dev/);
     await expect(page.locator('.more-sheet')).toBeHidden();
@@ -156,6 +156,7 @@ const PAGES: [section: string, selector: string, crumb: RegExp][] = [
   ['conductor', 'qse-conductor', /Tune\s*\/\s*Conductor/],
   ['playground', 'qse-playground', /Tune\s*\/\s*Playground/],
   ['dev', 'qse-dev', /Tune\s*\/\s*Dev/],
+  ['start', '.page-head[data-page="start"]', /Settings\s*\/\s*Get started/],
   ['add-spark', '.page-head[data-page="add-spark"]', /Settings\s*\/\s*Add Spark/],
   ['app', '.page-head[data-page="app"]', /Settings\s*\/\s*App/],
 ];

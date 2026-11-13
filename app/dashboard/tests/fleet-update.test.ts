@@ -209,12 +209,12 @@ describe('the controller host', () => {
     expect(m.handle('GET', '/v1/fleet/controller/move', q('to=desk'), null, at(30)).body).toMatchObject({ allowed: false, blocked: 'this controller moved already: open the new one' });
   });
 
-  it('Gherkin "Install on a Mac": the first open with no Spark lands on Add Spark; a route given is kept', () => {
+  it('Gherkin "Install on a Mac": the first open with no Spark lands on Get started; a route given is kept', () => {
     const e = new MockFleet({ seed: 42, scenario: 'empty', now: T0 / 1000 });
     const nodes = (e.handle('GET', '/v1/fleet/nodes', q(), null, at(0)).body as { nodes: FleetNode[] }).nodes;
     expect(nodes).toEqual([]);
-    expect(landing('', nodes)).toBe('add-spark');
-    expect(landing('#/', nodes)).toBe('add-spark');
+    expect(landing('', nodes)).toBe('start');
+    expect(landing('#/', nodes)).toBe('start');
     expect(landing('#/usage', nodes)).toBeNull();
     expect(landing('', [{ id: 'desk' }])).toBeNull();
     const v = valid('controller', e.handle('GET', '/v1/fleet/controller', q(), null, at(0)).body as ControllerView);
