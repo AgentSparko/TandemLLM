@@ -234,7 +234,7 @@ def test_two_stages_over_a_link():
     code, _, body = _http(port, "/health")
     f = body["stage"]
     assert code == 200 and body["status"] == "ok" and (f["role"], f["lo"], f["hi"]) == ("front", 0, 2), body
-    assert f["link"]["state"] == "up" and f["steps"] == 3, f
+    assert f["link"]["state"] == "up" and f["steps"] == 5, f    # three decode steps, two verify blocks
     for path, method, payload in (("/v1/models", None, None), ("/v1/replica/identity", None, None),
                                   ("/v1/completions", "POST", {"prompt": "hi"}),
                                   ("/v1/chat/completions", "POST", {"messages": []}), ("/health", "POST", {})):
@@ -293,7 +293,7 @@ def test_a_stalled_and_a_cut_link_end_in_stage_down_and_heal():
     try:
         tick = tail.fake_tail()
         co = tail.coordinator
-        co.step_deadline = 1.0
+        co.step_deadline, co.chunk_deadline = 1.0, 30.0     # the stalled block is a decode step: the step's time
         tick([1, 2, 3])
         took = {}
         for fault in ("blackhole", "cut"):

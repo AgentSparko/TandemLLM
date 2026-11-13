@@ -14,7 +14,8 @@ reference families run at every cut.
      (torch.equal, same dtype)
   -  the check can fail: one flipped bit in a carry changes the logits
   -  a stalled front (relay blackhole) ends the request with stage_down inside its deadline, and
-     the heartbeat takes an idle link down
+     the heartbeat takes an idle link down; a decode step (a chain of one row) and every request
+     but a prompt chunk of several rows get the step's deadline
   -  a killed front: stage_down; a new front gets a new epoch and both sides start empty
   -  a cut link, then a reconnect to the same front process: a new epoch, the old rows are gone
   -  a front whose length is not the tail's answers desync; the coordinator replays the tokens
@@ -664,6 +665,34 @@ def test_a_stalled_front_ends_the_request_inside_the_deadline():
         r.stop()
         front.kill()
     return note("step 1.0 s and chunk 2.0 s deadlines held; the idle heartbeat found the stall in %.1f s" % took)
+
+
+def test_a_stalled_decode_step_ends_inside_the_step_deadline():
+    """A decode token crosses as a chain of one row. It gets the step's deadline, not a prompt
+    chunk's: a GPU run waited 60 s on a stalled front for one row."""
+    from test_linkrelay import Relay
+    front = Front("toy", 2)
+    r = Relay(front.port)
+    co = S.Coordinator(ToyStage(2, 4), step_deadline=1.0, chunk_deadline=20.0)
+    took = {}
+    try:
+        for what, ask in (("a decode step", lambda: co.prefill([7], graph=1)),
+                          ("a chunk of one row", lambda: co.prefill([7])),
+                          ("a verify block", lambda: co.verify([1, 2], [-1, 0])),
+                          ("a sync", co.sync), ("a probe", co.probe), ("a reset", co.reset)):
+            front.connect(co, to=f"127.0.0.1:{r.port}")
+            co.prefill(PROMPT)
+            r.cmd(cmd="blackhole")
+            t0 = time.monotonic()
+            e = raises(S.StageDown, ask)
+            took[what] = time.monotonic() - t0
+            assert e.code == "stage_down" and 0.9 <= took[what] < 3.0, (what, took)
+            assert co.health()["stage"]["link"]["reason"] == "timeout", what
+            r.cmd(cmd="heal")
+    finally:
+        r.stop()
+        front.kill()
+    return note("step deadline 1.0 s against a chunk's 20 s: " + ", ".join(f"{k} {v:.1f} s" for k, v in took.items()))
 
 
 def test_a_killed_front_is_stage_down_and_a_new_one_starts_a_new_epoch():
