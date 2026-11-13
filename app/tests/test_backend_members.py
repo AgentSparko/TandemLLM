@@ -29,6 +29,7 @@ loopback sits on no node, as a server on another machine does.
      takes no request; 1.x and an engine that does not say serve       test_engine_by_url_api
   9  a fresh controller has no node and no backend member; one backend on a node's address is
      that node's engine, not a member                                  test_first_run_and_host_link
+  10 a Split is never recorded on a backend member: 409 not_a_node   test_split_not_on_a_backend
 
     python tests/test_backend_members.py
 """
@@ -399,6 +400,25 @@ def test_replicas_only_explicit():
         # a move onto a backend is refused in words
         st, p = bed.call("GET", f"/v1/fleet/deployments/twin/actions/move?from={a}&to={b}")
         assert st == 200 and p["allowed"] is False, p
+    finally:
+        bed.close()
+
+
+def test_split_not_on_a_backend():
+    bed = Bed()
+    try:
+        _fa, ua = bed.server(models=["twin"])
+        _fb, ub = bed.server(models=["twin"])
+        bed.add(ua, label="Srv A")
+        bed.add(ub, label="Srv B")
+        a, b = members_mod.member_id("srv-a"), members_mod.member_id("srv-b")
+        for ms in ([a, b], [{"backend": "srv-a"}, {"backend": "srv-b"}]):
+            st, d = bed.call("POST", "/v1/fleet/deployments",
+                             {"model": "twin", "type": "split", "members": ms})
+            assert st == 409, (st, d)
+            e = tf.ok(d, "error")["error"]
+            assert e["type"] == "not_a_node" and "Srv A" in e["message"], e
+        assert all(x["type"] != "split" for x in bed.deployments())
     finally:
         bed.close()
 
