@@ -26,7 +26,9 @@ logits of the prompt's last row and of every decoded row are compared with `torc
      its rows are in place; rows it had no room to copy out are a miss, and the front is rebuilt
   -  several slots: a sequence each on both stages over one copy of the weights; a joint round is
      one request and one carry, and each slot's logits, picks, streams and state are the one
-     engine's joint round's
+     engine's for that slot. The one engine's own joint pass (`verify_multi`) needs the CUDA build
+     and does not run on this host, so its slots verify one after the other here; the engine
+     gives a row of a joint pass its lone bits, and the GPU proof compares the batches
   -  both stages as the server starts them with the caches on: the seed in both stages' keys, a
      cached turn, a side slot with the pack's own drafter, a joint round
   -  the options and the store's settings from the server's flags
@@ -623,7 +625,8 @@ def test_slots_and_joint_rounds_equal_the_one_engines(monkeypatch):
             out.append(s.forward(torch.tensor([33]), s.kv.length).view(-1).clone())
         return out
 
-    # the one engine: three slots over its weights, its own joint pass, and each slot alone
+    # the one engine: three slots over its weights; its own joint pass where the host can run it (it needs
+    # the CUDA build of the joint kernels), else each slot alone, which the engine holds to the same bits
     s0 = FlashNextServing(eng, CAP)
     ones = [s0] + [s0.side_slot(CAP)[0] for _ in range(2)]
     try:
