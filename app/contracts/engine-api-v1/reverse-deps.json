@@ -1610,7 +1610,9 @@
    ]
   },
   "tests/test_split_estimate.py": {
-   "imports": [],
+   "imports": [
+    "tandemapp.auth"
+   ],
    "reads": [
     "app/contracts"
    ]
