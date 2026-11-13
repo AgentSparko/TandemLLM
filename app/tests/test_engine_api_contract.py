@@ -5,7 +5,7 @@ callers. The engine's side is the repository's tests/test_engine_api_contract.py
      a group, a shape that exists, and callers or a named consumer; the lists are disjoint
                                                                   test_routes_json
   2  every engine path literal is classified: in the Python callers (nodeengines, nodesource,
-     nodeagent, nodeweights, placement, fleetsetup, health, service, relay, deployments,
+     nodeagent, nodeweights, placement, fleetsetup, health, service, relay, deployments, canary,
      tandemapp/parallel, conductor/classify, chatd engine/agent/service/skills/tools,
      tools/tandem_eval) and in every string or template literal of dashboard/src that starts
      with /v1/, /health, /metrics, /readyz, /_tandem, /s/ or /dashboard/ (`${...}` is {param},
@@ -54,7 +54,8 @@ CONTRACT = os.path.join(ROOT, "contracts", "engine-api-v1")
 UI = os.path.join(ROOT, "dashboard", "src")
 CLIENTS = ("proxy/nodeengines.py", "proxy/nodesource.py", "proxy/nodeagent.py",
            "proxy/nodeweights.py", "proxy/placement.py", "proxy/fleetsetup.py", "proxy/health.py",
-           "proxy/service.py", "proxy/relay.py", "proxy/deployments.py", "tandemapp/parallel.py",
+           "proxy/service.py", "proxy/relay.py", "proxy/deployments.py", "proxy/canary.py",
+           "tandemapp/parallel.py",
            "tandemapp/conductor/classify.py", "chatd/engine.py", "chatd/agent.py",
            "chatd/service.py", "chatd/skills.py", "chatd/tools.py", "tools/tandem_eval.py")
 LISTS = ("routes", "engine_screens_until_eng413", "app_routes_via_engine", "app_families")

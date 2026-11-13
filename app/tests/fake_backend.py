@@ -91,6 +91,10 @@ need `Authorization: Bearer <key>`.
 Our engine's side of a relay (SRV-733): `board = True` answers `GET /v1/dashboard/parallel` with a
 lane per request in flight that carries `X-Tandem-Relay-Id` (None: 404, a server without the
 board); `top` holds what /v1/models carries beside `data` (the engine's `decision_models`);
+`identity` is the block of `GET /v1/replica/identity` (None: 404), the first `identity_pending`
+reads of it answer 503 `identity_pending`; `POST /v1/cache/release` answers 200 and counts in
+`releases`; a script's `logprobs` is the non-streamed choice's
+`logprobs.content`;
 `GET /v1/models/{id}` is the card of a listed id, of an id in `aliases`, else the engine's 404. A
 script's `quiet` is seconds of silence before any byte (a request the engine thinks over without
 a stream, or before its head), its `headers` the answer's own headers.
@@ -203,6 +207,12 @@ class Fake:
         self.inflight: set = set()
         self.top: dict = {}
         self.aliases: dict[str, str] = {}
+        # SRV-741: GET /v1/replica/identity's block (None: 404, an engine before 1.1); the first
+        # `identity_pending` reads answer 503 identity_pending with Retry-After 1
+        self.identity: dict | None = None
+        self.identity_pending = 0
+        self.identity_reads = 0
+        self.releases = 0               # POST /v1/cache/release calls (answered 200)
 
     def prompt_tokens(self, body: dict) -> tuple[int, int]:
         """(prompt tokens, cached) with the prefix cache: the longest earlier message prefix."""
@@ -275,6 +285,18 @@ def make_handler(fake: Fake):
                 return self._json(200, {"requests": fake.live(), "engine": {}})
             if p in ("/health", "/v1/health"):
                 return self._json(200, {"status": "ok", **(fake.health or {})})
+            if p == "/v1/replica/identity" and fake.identity is not None:
+                with fake.lock:
+                    fake.identity_reads += 1
+                    pending = fake.identity_pending > 0
+                    if pending:
+                        fake.identity_pending -= 1
+                if pending:
+                    return self._json(503, {"error": {"type": "identity_pending",
+                                                      "code": "identity_pending",
+                                                      "message": "retry"}},
+                                      (("Retry-After", "1"),))
+                return self._json(200, fake.identity)
             if p == "/version" and fake.dialect == "vllm":
                 return self._json(200, {"version": "0.30.0"})
             if p == "/server_info" and (fake.dialect or "").startswith("sglang"):
@@ -352,6 +374,11 @@ def make_handler(fake: Fake):
                         fake.prewarms += 1
                     return self._json(200, {"prewarmed": True, **fake.peek})
                 return self._json(200, fake.peek)
+            if p == "/v1/cache/release":
+                with fake.lock:
+                    fake.releases += 1
+                return self._json(200, {"released_bytes": int(body.get("bytes") or 0),
+                                        "levels": {}})
             if p == "/v1/setup/estimate":
                 if fake.estimate is None:
                     return self._json(404, {"error": {"message": "no route", "type": "not_found"}})
@@ -478,10 +505,12 @@ def make_handler(fake: Fake):
             extra = list((got.get("headers") or {}).items())
             if not body.get("stream"):
                 msg = {"role": "assistant", "content": content}
+                choice = {"index": 0, "message": msg, "finish_reason": "stop"}
+                if got.get("logprobs") is not None:
+                    choice["logprobs"] = {"content": got["logprobs"]}
                 return self._json(200, {"id": "chatcmpl-s", "object": "chat.completion",
-                                        "created": 1, "model": body.get("model"), "choices": [
-                                            {"index": 0, "message": msg, "finish_reason": "stop"}],
-                                        "usage": usage}, extra)
+                                        "created": 1, "model": body.get("model"),
+                                        "choices": [choice], "usage": usage}, extra)
             opts = body.get("stream_options") or {}
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
