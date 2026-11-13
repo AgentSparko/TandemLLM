@@ -1331,6 +1331,12 @@
     "app/tests"
    ]
   },
+  "tests/test_replica_identity.py": {
+   "imports": [],
+   "reads": [
+    "app/"
+   ]
+  },
   "tests/test_residency.py": {
    "imports": [
     "tandemapp.conductor.schema",
