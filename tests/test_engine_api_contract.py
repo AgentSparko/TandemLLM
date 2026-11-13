@@ -1,20 +1,23 @@
-"""The engine API contract v1, the engine's side (SRV-748): app/contracts/engine-api-v1 against the
-engine's code. TandemApp's side is app/tests/test_engine_api_contract.py; the live engine is
-tests/test_engine_api_live.py.
+"""The engine API contract v1, the engine's side (SRV-748; 1.3: ENG-427, QA ENG-428):
+contracts/engine-api-v1, which the engine owns, against the engine's code. TandemApp's side is its
+tests/test_engine_api_contract.py against its pinned copy; the live engine is
+tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_toolcalls.py.
 
   1  every path of routes.json's routes and app_routes_via_engine is one the engine dispatches
      (server/app.py, server/setup_api.py, ops/engine_status.py for the status responder,
      inproc.ROUTES, and the two in-process app modules that own a prefix); the engine-only
-     screens reach their inproc.ROUTES handler                    test_every_route_is_dispatched
-  2  server/engine_api.py VERSION, routes.json's version, ops/engine_status.py's literal and
-     TandemApp's proxy/engineapi.py SPEAKS are one version      test_one_version
+     screens reach their inproc.ROUTES handler; no planned route is dispatched yet
+                                                                  test_every_route_is_dispatched
+  2  server/engine_api.py VERSION, routes.json's version and ops/engine_status.py's literal are one
+     version; the vendored TandemApp's proxy/engineapi.py SPEAKS has its major and is not newer, and
+     its PIN (once it has one) says SPEAKS                       test_one_version
   3  reverse-deps.json equals the inventory this file computes from the engine's tree (python
      tests/test_engine_api_contract.py --write writes it); each read AST cannot see names a file
      that holds its mark; README.md lists every engine->app import    test_reverse_deps
-  4  the copies held equal until ENG-413: same_origin on a table of cases (server/setup_api.py,
-     tandemapp/auth.py), TIER_OF (server/cache_peek.py, tandemapp/usage.py), the OFF_WHY texts
-     (server/decider_api.py, server/conductor/shadow.py, tandemapp/conductor/routes.py)
-                                                                  test_copies_hold_equal
+  4  the copied values are the contract's (1.3; TandemApp holds its copies to the same files):
+     server/setup_api.py same_origin and same_origin_json answer auth.json's cases,
+     server/cache_peek.py TIER_OF is cache.json's tier_of, server/decider_api.py and
+     server/conductor/shadow.py OFF_WHY are the screens' off_why    test_values_are_the_contracts
   5  setup/: estimate-cases.json is models/estimate-cases.json byte for byte, limits.json's
      engine_max_slots is the registry's ENGINE_MAX_SLOTS          test_setup_fixtures
   6  node/: ops/serve.env carries PORT= and QSE_STATUS_PORT= as serve.env.example does and
@@ -25,6 +28,17 @@ tests/test_engine_api_live.py.
                                                                   test_node_fixtures
   7  the byte copies (test helpers, contract_check, the licenses, the setup fixture) are
      identical                                                    test_byte_copies
+  8  every schema and example here validates (dashboard/, decision/, health, setup); a reference
+     leaves the folder only to TandemApp's conductor-v1, dashboard-v1 and fleet-v1, and only from
+     the lists that name TandemApp's routes; routes.json's after_eng413 and leaves marks are well
+     formed                                                       test_schemas_and_references
+  9  metrics-families.json names every family of the engine's /metrics registry with its type and
+     labels, the conductor's as owner ext; metrics.md has a row for each and no other
+                                                                  test_metrics_families
+ 10  1.3 is additive (G4): every route of compat/1.2/routes.json is here with its method and
+     aliases; the 1.2 examples of compat/1.2/ (a 1.0, a 1.1 and a 1.2 engine's /health, both
+     stages, the split request and block) validate against the 1.3 schemas, and the 1.3
+     examples equal them but for engine_api                     test_additive_1_3
 
 CPU only, no torch, standard library only. Run: python tests/test_engine_api_contract.py
 """
@@ -44,7 +58,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-CONTRACT = os.path.join(ROOT, "app", "contracts", "engine-api-v1")
+CONTRACT = os.path.join(ROOT, "contracts", "engine-api-v1")
 REVERSE = os.path.join(CONTRACT, "reverse-deps.json")
 #: TandemApp's top-level packages, run in the engine's process until ENG-413 (server/__init__.py)
 APP_PACKAGES = ("tandemapp", "proxy", "chatd")
@@ -255,6 +269,9 @@ def test_every_route_is_dispatched():
         m = re.match(r"inproc\.ROUTES\[(\w+)\]", s["handler"])
         if m and m.group(1) not in inproc.ROUTES:
             misses.append(f"screen {s['path']}: no inproc.ROUTES[{m.group(1)}]")
+    # a planned route moves into `routes` in the minor of the engine that serves it
+    early = [p["path"] for p in doc["planned"] if p["kind"] == "route" and _dispatched(p["path"], engine)]
+    assert not early, f"served but still planned (move them into routes): {early}"
     assert not misses, misses
     n = sum(1 + len(r["aliases"]) for r in doc["routes"])
     return f"{n} paths of {len(doc['routes'])} routes, {len(doc['app_routes_via_engine'])} app " \
@@ -270,18 +287,30 @@ def _literal(path: str, name: str):
     raise AssertionError(f"{path} has no {name}")
 
 
+def _mm(v: str) -> tuple[int, int]:
+    assert re.fullmatch(r"\d+\.\d+", v), v
+    return tuple(int(x) for x in v.split("."))
+
+
 def test_one_version():
     from server import engine_api
     got = {"server/engine_api.py VERSION": engine_api.VERSION,
            "routes.json version": _routes()["version"],
-           "ops/engine_status.py ENGINE_API": _literal("ops/engine_status.py", "ENGINE_API"),
-           "app/proxy/engineapi.py SPEAKS": _literal("app/proxy/engineapi.py", "SPEAKS")}
+           "ops/engine_status.py ENGINE_API": _literal("ops/engine_status.py", "ENGINE_API")}
     assert len(set(got.values())) == 1, got
-    assert re.fullmatch(r"\d+\.\d+", engine_api.VERSION), engine_api.VERSION
+    mine = _mm(engine_api.VERSION)
+    # TandemApp speaks the contract it pinned: this major, never a newer minor than the engine's
+    speaks = _literal("app/proxy/engineapi.py", "SPEAKS")
+    assert _mm(speaks)[0] == mine[0] and _mm(speaks) <= mine, (speaks, engine_api.VERSION)
+    pin = os.path.join(ROOT, "app", "contracts", "engine-api-v1", "PIN")
+    if os.path.exists(pin):
+        with open(pin) as f:
+            said = dict(ln.split(None, 1) for ln in f.read().splitlines() if ln and not ln.startswith("#"))
+        assert said["engine_api"].strip() == speaks, (said, speaks)
     with open(os.path.join(ROOT, "server", "app.py")) as f:
         src = f.read()
     assert src.count('"engine_api": engine_api.VERSION') == 2       # the full and setup answers
-    return f"engine API {engine_api.VERSION} in 4 places"
+    return f"engine API {engine_api.VERSION} in 3 places, TandemApp speaks {speaks}"
 
 
 def test_reverse_deps():
@@ -319,35 +348,28 @@ def test_reverse_deps():
            f"{len(doc['tests'])} test files reach it, {len(doc['not_ast'])} reads outside the AST"
 
 
-ORIGIN_CASES = [
-    {},
-    {"Content-Type": "application/json"},
-    {"Content-Type": "application/json; charset=utf-8", "Origin": "http://box:8000",
-     "Host": "box:8000"},
-    {"Content-Type": "application/json", "Origin": "http://evil.example", "Host": "box:8000"},
-    {"Content-Type": "application/json", "Origin": "null", "Host": "box:8000"},
-    {"Content-Type": "application/json", "Origin": "https://box", "Host": "x",
-     "X-Forwarded-Host": "box"},
-    {"Content-Type": "text/plain", "Origin": "http://box:8000", "Host": "box:8000"},
-    {"Content-Type": "application/json", "Sec-Fetch-Site": "cross-site"},
-    {"Content-Type": "application/json", "Sec-Fetch-Site": "same-origin",
-     "Origin": "http://BOX:8000", "Host": "box:8000"},
-    {"Origin": "", "Host": "box"},
-]
+def _json(*parts: str):
+    with open(os.path.join(CONTRACT, *parts)) as f:
+        return json.load(f)
 
 
-def test_copies_hold_equal():
+def test_values_are_the_contracts():
     from server import cache_peek, decider_api, setup_api
     from server.conductor import shadow
-    from tandemapp import auth, usage
-    from tandemapp.conductor import routes
-    for h in ORIGIN_CASES:
-        assert setup_api.same_origin(h) == auth.same_origin(h), h
-        assert setup_api.same_origin_json(h) == auth.same_origin_json(h), h
-    assert cache_peek.TIER_OF == usage.TIER_OF
-    assert decider_api.OFF_WHY == routes.DECIDERS_OFF_WHY
-    assert shadow.OFF_WHY == routes.SHADOW_OFF_WHY
-    return f"same_origin on {len(ORIGIN_CASES)} cases, TIER_OF, 2 OFF_WHY texts"
+    cases = _json("auth.json")["same_origin"]
+    assert len(cases) >= 10, len(cases)
+
+    def answer(x):
+        return None if x is None else list(x)
+    for c in cases:
+        assert answer(setup_api.same_origin(c["headers"])) == c["same_origin"], c
+        assert answer(setup_api.same_origin_json(c["headers"])) == c["same_origin_json"], c
+    assert {c["headers"].get("Origin") is not None for c in cases} == {True, False}
+    assert cache_peek.TIER_OF == _json("cache.json")["tier_of"]
+    off = {s["path"]: s.get("off_why") for s in _routes()["engine_screens_until_eng413"]}
+    assert decider_api.OFF_WHY == off["/v1/conductor/deciders/*"]
+    assert shadow.OFF_WHY == off["/v1/conductor/shadow/*"]
+    return f"same_origin on {len(cases)} cases, TIER_OF, 2 OFF_WHY texts"
 
 
 def test_setup_fixtures():
@@ -438,6 +460,138 @@ def test_byte_copies():
                 diff.append(f"{a} != {b}")
     assert not diff, diff
     return f"{len(pairs)} file pairs identical"
+
+
+
+# ---------------------------------------------------------------------------- 1.3
+
+#: where a reference may leave this folder: TandemApp's contracts, from the lists that name its routes
+APP_CONTRACTS = ("../conductor-v1/", "../dashboard-v1/", "../fleet-v1")
+APP_LISTS = ("engine_screens_until_eng413", "app_routes_via_engine", "app_families", "planned")
+
+
+def _refs(node, out: list) -> list:
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == "$ref" and isinstance(v, str):
+                out.append(v)
+            else:
+                _refs(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _refs(v, out)
+    return out
+
+
+def test_schemas_and_references():
+    from tools import contract_check
+    doc = _routes()
+    bad, n = [], 0
+    # every schema's references stay in this folder and resolve
+    for base, _dirs, names in os.walk(CONTRACT):
+        for name in sorted(names):
+            if not name.endswith(".schema.json"):
+                continue
+            rel = os.path.relpath(os.path.join(base, name), CONTRACT)
+            with open(os.path.join(CONTRACT, rel)) as f:
+                schema = json.load(f)
+            for ref in _refs(schema, []):
+                file, _, _frag = ref.partition("#")
+                if file and not os.path.isfile(os.path.join(os.path.dirname(os.path.join(CONTRACT, rel)), file)):
+                    bad.append(f"{rel}: $ref {ref} leaves the folder or is missing")
+            # its example, where one sits beside it
+            ex = os.path.join(base, name.replace(".schema.json", ".example.json"))
+            if os.path.isfile(ex):
+                with open(ex) as f:
+                    errs = contract_check.validate(json.load(f), schema, root=base)
+                bad += [f"{os.path.relpath(ex, CONTRACT)}: {e}" for e in errs[:3]]
+                n += 1
+    # the routes' shapes: inside the folder; TandemApp's only from the lists of its routes
+    for r in doc["routes"]:
+        if r.get("schema") and (r["schema"].startswith("..") or
+                                not os.path.isfile(os.path.join(CONTRACT, r["schema"]))):
+            bad.append(f"{r['method']} {r['path']}: schema {r['schema']}")
+    for key in APP_LISTS:
+        for e in doc[key]:
+            for f in ("schema", "contract"):
+                v = e.get(f)
+                if v and v.startswith("..") and not v.startswith(APP_CONTRACTS):
+                    bad.append(f"{key} {e.get('path') or e.get('what')}: {f} {v}")
+    # the marks: what leaves and what an extension serves
+    after = {e["path"]: e["after_eng413"] for e in doc["app_routes_via_engine"]}
+    assert set(after.values()) == {"leaves", "extension"}, after
+    for p in ("/dashboard/*", "/v1/dashboard/session", "/v1/config", "/v1/config/*", "/v1/collect/*"):
+        assert after[p] == "leaves", p
+    assert all(e.get("why") for e in doc["app_routes_via_engine"])
+    for sc in doc["engine_screens_until_eng413"]:
+        assert sc["after_eng413"].startswith("/v1/engine/"), sc
+        assert any(p.get("replaces") == sc["path"] and p["path"] == sc["after_eng413"]
+                   for p in doc["planned"]), sc["path"]
+    leaving = [r["path"] for r in doc["routes"] if r.get("leaves")]
+    assert leaving == ["/v1/dashboard/metrics"], leaving
+    assert all(r["leaves"].startswith("2.0:") for r in doc["routes"] if r.get("leaves"))
+    assert not bad, bad
+    return f"{n} examples valid, references inside the folder, {len(after)} app routes marked " \
+           f"({sum(v == 'leaves' for v in after.values())} leave), {len(doc['planned'])} planned"
+
+
+def test_metrics_families():
+    import server  # noqa: F401  (its finder serves tandemapp from app/ until ENG-413)
+    from tandemapp import metrics as M        # ENG-413 WP2b: the engine's own registry
+    fam = {f["name"]: f for f in _json("metrics-families.json")["families"]}
+    reg = {m.name: m for m in M.REGISTRY._metrics}
+    assert set(fam) == set(reg), (sorted(set(fam) - set(reg)), sorted(set(reg) - set(fam)))
+    for name, m in reg.items():
+        f = fam[name]
+        assert (f["type"], f["labels"]) == (m.kind, list(m.labelnames)), (name, f, m.kind)
+        assert f["owner"] == ("ext" if name.startswith("qse_conductor_") else "engine"), f
+    with open(os.path.join(CONTRACT, "metrics.md")) as fh:
+        text = fh.read()
+    rows = set()
+    for line in text.splitlines():
+        if line.startswith("| `qse_"):
+            rows |= set(re.findall(r"`(qse_[a-z0-9_]+)`", line.split("|")[1]))
+    assert rows == set(fam), (sorted(rows - set(fam)), sorted(set(fam) - rows))
+    ext = sorted(n for n, f in fam.items() if f["owner"] == "ext")
+    return f"{len(fam)} families ({len(ext)} ext), each with a row in metrics.md"
+
+
+def test_additive_1_3():
+    from tools import contract_check
+    old = _json("compat", "1.2", "routes.json")
+    assert old["version"] == "1.2"
+    now = {(r["method"], r["path"], r.get("port")): r for r in _routes()["routes"]}
+    gone = []
+    for r in old["routes"]:
+        cur = now.get((r["method"], r["path"], r.get("port")))
+        if cur is None or set(cur["aliases"]) < set(r["aliases"]) or cur["live"] != r["live"]:
+            gone.append(f"{r['method']} {r['path']}")
+    assert not gone, f"1.3 dropped or narrowed 1.2 routes: {gone}"
+    assert {s["path"] for s in old["engine_screens_until_eng413"]} == \
+        {s["path"] for s in _routes()["engine_screens_until_eng413"]}
+    health = contract_check.load("health", CONTRACT)
+
+    def ok(d, schema):
+        return not contract_check.validate(d, schema, root=CONTRACT)
+    ex = _json("compat", "1.2", "health.example.json")
+    for said in ("1.0", "1.1", "1.2"):
+        assert ok(dict(ex, engine_api=said), health), said
+    assert ok({k: v for k, v in ex.items() if k != "engine_api"}, health)      # a 0.15.x engine
+    front, tail = _json("compat", "1.2", "health.stage-front.example.json"), \
+        _json("compat", "1.2", "health.stage-tail.example.json")
+    assert ok(front, health) and ok(tail, health)
+    req, block = _json("compat", "1.2", "split-request.example.json"), _json("compat", "1.2", "split.example.json")
+    assert ok(req, {"$ref": "setup/split.schema.json#/$defs/request"})
+    assert ok(block, {"$ref": "setup/split.schema.json"})
+    # the 1.3 examples are the 1.2 ones but for the version they say
+    for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
+        a, b = _json(name), _json("compat", "1.2", name)
+        assert {k: v for k, v in a.items() if k != "engine_api"} == \
+            {k: v for k, v in b.items() if k != "engine_api"}, name
+        assert a.get("engine_api") in (None, "1.3"), name
+    for name in ("split.example.json", "split-request.example.json"):
+        assert _json("setup", name) == _json("compat", "1.2", name), name
+    return f"{len(old['routes'])} 1.2 routes kept, 1.0/1.1/1.2 health and both stages valid, split valid"
 
 
 if __name__ == "__main__":

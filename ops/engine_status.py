@@ -80,9 +80,9 @@ STATES = ("starting", "up", "held", "stopping", "failed", "down")
 #: the model list when the status file has none yet (OPS-67)
 FALLBACK_MODEL = {"id": "TandemLLM", "object": "model", "owned_by": "tandemllm",
                   "description": "TandemLLM (the engine is restarting or stopped for maintenance)"}
-#: SRV-747: the engine API's version its /health carries (app/contracts/engine-api-v1), the same as
+#: SRV-747: the engine API's version its /health carries (contracts/engine-api-v1), the same as
 #: server/engine_api.py VERSION; a literal, since this script imports nothing of the engine
-ENGINE_API = "1.2"
+ENGINE_API = "1.3"
 KEEP_STARTS = 5
 #: a start takes about this long when none was measured yet (the 27B engine: 3 to 5 minutes)
 DEFAULT_START_S = 300

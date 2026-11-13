@@ -5,7 +5,7 @@ dashboard API in its own process and imports them from the app's tree. A finder 
 packages tandemapp, proxy and chatd from app/, once, for every entry point (server/app.py,
 `python -m server.setup.*`, the tools and the tests); nothing else under app/ becomes importable
 this way (app/tools and app/tests stay out of the engine's `tools` and `tests`).
-app/contracts/engine-api-v1/README.md lists each such import. ENG-413 removes the finder.
+contracts/engine-api-v1/README.md lists each such import. ENG-413 removes the finder.
 TandemApp never imports the engine (app/tests/test_import_boundary.py).
 """
 

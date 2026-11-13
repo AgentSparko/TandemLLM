@@ -1,0 +1,439 @@
+{
+ "version": "1.3",
+ "form": "xml",
+ "about": "Tool-call fixtures in the xml form (engine API 1.3): check.py runs them; both parser copies must answer every case's want. tool_sets are the tools a case's request offered.",
+ "tool_sets": {
+  "edit": [
+   {
+    "type": "function",
+    "function": {
+     "name": "write_file",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "path": {
+        "type": "string"
+       },
+       "content": {
+        "type": "string"
+       },
+       "n": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "path",
+       "content"
+      ]
+     }
+    }
+   },
+   {
+    "type": "function",
+    "function": {
+     "name": "get_time",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    }
+   }
+  ]
+ },
+ "cases": [
+  {
+   "id": "one-call",
+   "text": "Writing it.<tool_call>\n<function=write_file>\n<parameter=path>\n/tmp/a b.txt\n</parameter>\n<parameter=content>\nline one\nline two\n</parameter>\n<parameter=n>\n3\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "edit",
+   "names": true,
+   "types": "schema",
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "Writing it.",
+    "calls": [
+     {
+      "name": "write_file",
+      "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": 3}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "Writing it.",
+     "calls": [
+      {
+       "name": "write_file",
+       "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": 3}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "two-calls-text-after",
+   "text": "Two things.<tool_call>\n<function=write_file>\n<parameter=path>\n/tmp/a b.txt\n</parameter>\n<parameter=content>\nline one\nline two\n</parameter>\n<parameter=n>\n3\n</parameter>\n</function>\n</tool_call><tool_call>\n<function=get_time>\n</function>\n</tool_call> Done.",
+   "eos": true,
+   "tools": "edit",
+   "names": true,
+   "types": "schema",
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "Two things. Done.",
+    "calls": [
+     {
+      "name": "write_file",
+      "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": 3}"
+     },
+     {
+      "name": "get_time",
+      "arguments": "{}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "Two things. Done.",
+     "calls": [
+      {
+       "name": "write_file",
+       "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": 3}"
+      },
+      {
+       "name": "get_time",
+       "arguments": "{}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "repeated-call-dropped",
+   "text": "<tool_call>\n<function=write_file>\n<parameter=path>\n/tmp/a b.txt\n</parameter>\n<parameter=content>\nline one\nline two\n</parameter>\n<parameter=n>\n3\n</parameter>\n</function>\n</tool_call><tool_call>\n<function=write_file>\n<parameter=path>\n/tmp/a b.txt\n</parameter>\n<parameter=content>\nline one\nline two\n</parameter>\n<parameter=n>\n3\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "edit",
+   "names": true,
+   "types": "schema",
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "write_file",
+      "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": 3}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "write_file",
+       "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": 3}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "untyped-args-stay-text",
+   "text": "<tool_call>\n<function=write_file>\n<parameter=path>\n/tmp/a b.txt\n</parameter>\n<parameter=content>\nline one\nline two\n</parameter>\n<parameter=n>\n3\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "edit",
+   "names": true,
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "write_file",
+      "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": \"3\"}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "write_file",
+       "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": \"3\"}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "no-tools-offered",
+   "text": "Plain.<tool_call>\n<function=write_file>\n<parameter=path>\n/tmp/a b.txt\n</parameter>\n<parameter=content>\nline one\nline two\n</parameter>\n<parameter=n>\n3\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "want": {
+    "content": "Plain.",
+    "calls": [
+     {
+      "name": "write_file",
+      "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": \"3\"}"
+     }
+    ],
+    "renames": []
+   }
+  },
+  {
+   "id": "unclosed-at-eos",
+   "text": "Writing it.<tool_call>\n<function=write_file>\n<parameter=path>\n/tmp/a b.txt\n</parameter>\n<parameter=content>\nline one\nline two\n</parameter>\n<parameter=n>\n3\n</parameter>\n</function>\n",
+   "eos": true,
+   "tools": "edit",
+   "names": true,
+   "types": "schema",
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "Writing it.",
+    "calls": [
+     {
+      "name": "write_file",
+      "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": 3}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "Writing it.",
+     "calls": [
+      {
+       "name": "write_file",
+       "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": 3}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "unclosed-not-eos",
+   "text": "Writing it.<tool_call>\n<function=write_file>\n<parameter=path>\n/tmp/a b.txt\n</parameter>\n<parameter=content>\nline one\nline two\n</parameter>\n<parameter=n>\n3\n</parameter>\n</function>\n",
+   "eos": false,
+   "tools": "edit",
+   "names": true,
+   "types": "schema",
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "Writing it.<tool_call>\n<function=write_file>\n<parameter=path>\n/tmp/a b.txt\n</parameter>\n<parameter=content>\nline one\nline two\n</parameter>\n<parameter=n>\n3\n</parameter>\n</function>\n",
+    "calls": [],
+    "renames": [],
+    "stream": {
+     "content": "Writing it.",
+     "calls": [
+      {
+       "name": "write_file",
+       "arguments": "{\"path\": \"/tmp/a b.txt\", \"content\": \"line one\\nline two\", \"n\": 3}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "parameter-closer-missing-read",
+   "text": "Look.<tool_call>\n<function=write_file>\n<parameter=path>\n/a\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "edit",
+   "names": true,
+   "types": "schema",
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "Look.",
+    "calls": [
+     {
+      "name": "write_file",
+      "arguments": "{}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "Look.",
+     "calls": [
+      {
+       "name": "write_file",
+       "arguments": "{}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "broken-block-stays-text",
+   "text": "Look.<tool_call>\nnot a call at all\n</tool_call> after",
+   "eos": true,
+   "tools": "edit",
+   "names": true,
+   "types": "schema",
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "Look.<tool_call>\nnot a call at all\n</tool_call> after",
+    "calls": [],
+    "renames": [],
+    "stream": {
+     "content": "Look.<tool_call>\nnot a call at all\n</tool_call> after",
+     "calls": []
+    }
+   }
+  },
+  {
+   "id": "json-in-block",
+   "text": "<tool_call>{\"name\": \"get_time\", \"arguments\": {}}</tool_call>",
+   "eos": true,
+   "tools": "edit",
+   "names": true,
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "get_time",
+      "arguments": "{}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "get_time",
+       "arguments": "{}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "whole-answer-json-gated",
+   "text": "{\"name\": \"write_file\", \"arguments\": {\"path\": \"a\", \"content\": \"b\"}}",
+   "eos": true,
+   "tools": "edit",
+   "names": true,
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "write_file",
+      "arguments": "{\"path\": \"a\", \"content\": \"b\"}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "write_file",
+       "arguments": "{\"path\": \"a\", \"content\": \"b\"}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "whole-answer-json-no-names",
+   "text": "{\"name\": \"write_file\", \"arguments\": {\"path\": \"a\", \"content\": \"b\"}}",
+   "eos": true,
+   "tools": "edit",
+   "names": false,
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "{\"name\": \"write_file\", \"arguments\": {\"path\": \"a\", \"content\": \"b\"}}",
+    "calls": [],
+    "renames": [],
+    "stream": {
+     "content": "{\"name\": \"write_file\", \"arguments\": {\"path\": \"a\", \"content\": \"b\"}}",
+     "calls": []
+    }
+   }
+  },
+  {
+   "id": "explicit-types",
+   "text": "<tool_call>\n<function=write_file>\n<parameter=path>\np\n</parameter>\n<parameter=content>\n7\n</parameter>\n<parameter=n>\n2\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "types": {
+    "write_file": {
+     "content": [
+      "integer"
+     ]
+    }
+   },
+   "stream": [
+    1,
+    3,
+    7,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "write_file",
+      "arguments": "{\"path\": \"p\", \"content\": 7, \"n\": \"2\"}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "write_file",
+       "arguments": "{\"path\": \"p\", \"content\": 7, \"n\": \"2\"}"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

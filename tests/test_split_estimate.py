@@ -48,8 +48,8 @@ from server.setup import registry  # noqa: E402
 from server.setup import split as split_mod  # noqa: E402
 
 GIB = float(1 << 30)
-#: the engine API contract (app/contracts/engine-api-v1): the split ask and block (1.2)
-CONTRACT = os.path.join(ROOT, "app", "contracts", "engine-api-v1")
+#: the engine API contract (contracts/engine-api-v1): the split ask and block (1.2)
+CONTRACT = os.path.join(ROOT, "contracts", "engine-api-v1")
 FN = "qwen3.8-flash-next"
 
 

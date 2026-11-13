@@ -45,8 +45,8 @@ from server import stage  # noqa: E402
 from test_stage_server import KEY, _args, _free_port, _http, _keyfile, _refused, _tmp  # noqa: E402
 
 SHAPE = {"shape", "role", "lo", "hi", "range", "layers", "cut", "identity", "options", "link"}
-#: the engine API contract (app/contracts/engine-api-v1): the stage block is part of its /health schema
-CONTRACT = os.path.join(ROOT, "app", "contracts", "engine-api-v1")
+#: the engine API contract (contracts/engine-api-v1): the stage block is part of its /health schema
+CONTRACT = os.path.join(ROOT, "contracts", "engine-api-v1")
 
 
 def _contract_health(doc: dict) -> list:
