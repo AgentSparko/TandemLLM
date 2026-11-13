@@ -105,6 +105,7 @@ def _prepared(*argv, log=None) -> dict:
 def test_the_flags_and_the_range():
     a = _args()
     assert (a.stage, a.link_listen, a.link_peer, a.link_key_file) == ("", "", "", "")
+    assert a.stage_graphs == "on" and _args("--stage-graphs", "off").stage_graphs == "off"
     assert _prepared() == {}, "without --stage nothing is set"
     assert stage.parse_range("0:12") == (0, 12) and stage.parse_range("12:24") == (12, 24)
     for bad in ("", "12", "a:b", "3:3", "5:2", "-1:4", "1:2:3", "0:"):
@@ -114,7 +115,7 @@ def test_the_flags_and_the_range():
     for flag, val in (("--link-listen", "127.0.0.1:9100"), ("--link-peer", "127.0.0.1:9100"),
                       ("--link-key-file", key)):
         _refused(lambda: _prepared(flag, val), "needs --stage")
-    return "four flags; a link flag without --stage is refused"
+    return "four flags and the graphs' switch; a link flag without --stage is refused"
 
 
 def test_the_key_file_rules():
