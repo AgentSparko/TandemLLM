@@ -82,6 +82,9 @@ _LEN = struct.Struct("<I")
 HEADS = ("all", "last", "none")
 _HEAD = struct.Struct("<BBHHHIIH")
 MAX_TREE = 32767        # parents and commit paths are int16
+#: the graph tag a family gives a chain block of one decode token (the row kernels, the state
+#: advanced in place); 0 is a family's default (`Block.graph`)
+ONE_TOKEN = 1
 
 
 class StageError(Exception):

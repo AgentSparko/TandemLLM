@@ -47,14 +47,12 @@ import dataclasses
 import torch
 
 from engine.methods import link as L
+from engine.methods.stages import ONE_TOKEN as STEP  # a chain block's tag for one decode token
 from engine.methods.stages import Block, StageAdapter
 from engine.models.flashnext.arch import ARCH
 from engine.models.flashnext.config import FlashNextConfig
 from engine.models.flashnext.engine import DENSE_MAX, PREFILL_CHUNK, FlashNextEngine
 from engine.models.flashnext.ref import FlashNextRef, FNModelState, FNState
-
-#: a chain block's tag for one decode token: the row kernels, the state advanced in place
-STEP = 1
 
 
 class FlashNextStage(StageAdapter):
