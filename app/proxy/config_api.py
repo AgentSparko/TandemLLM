@@ -7,8 +7,17 @@ token, a dashboard session or a tool on the machine itself. No answer ever holds
 characters and a 6-hex-digit hash prefix. A user's key is in the answer to its creation, once.
 
     GET    /v1/config                                 everything the screens show, in one answer
-    POST   /v1/config/test                            {kind, url, key?}: test a backend not saved
-    POST   /v1/config/backends                        {id, kind, url, key?, ...}: add
+    POST   /v1/config/test                            {kind?, url, key?}: test a backend not saved;
+                                                      the answer says `reason` (key_rejected,
+                                                      unreachable, not_openai) when it fails
+    POST   /v1/config/backends                        {url, id?, kind?, key?, ...}: add. `kind`
+                                                      defaults to generic (any OpenAI-compatible
+                                                      server), `id` to a free one made from the
+                                                      label or the URL's host. With `verify`
+                                                      the backend is tested first and a failed
+                                                      test saves nothing: 409 `key_rejected` or
+                                                      `unreachable` with the test in the answer,
+                                                      until the same body comes with `confirm`
     GET    /v1/config/backends/{id}                   one, with its models
     PATCH  /v1/config/backends/{id}                   change fields (`key: null` removes the key)
     DELETE /v1/config/backends/{id}
@@ -33,8 +42,10 @@ from __future__ import annotations
 
 import json
 import os
-from urllib.parse import unquote
+import re
+from urllib.parse import unquote, urlsplit
 
+from proxy import adapters as adapters_mod
 from proxy import config as config_mod
 from proxy import health as health_mod
 
@@ -196,8 +207,24 @@ def _backends(handler, svc, method, parts, body, who):
             return _send(handler, 200, {"backends": [backend_view(svc, b)
                                                      for b in cfg.backends()]})
         if method == "POST":
+            body = dict(body)
+            verify, confirm = body.pop("verify", False), body.pop("confirm", False)
+            body.setdefault("kind", "generic")
+            if not body.get("id"):
+                body["id"] = free_id(cfg, body)
             if body.get("id") in ("engine",):
                 raise config_mod.ConfigError("the id 'engine' is the engine's own", field="id")
+            if verify and not confirm:
+                # SRV-749: a failed test saves nothing until the user confirms
+                t = _test_unsaved(svc, {k: body.get(k) for k in ("kind", "url", "key")})
+                if not t["ok"]:
+                    return _send(handler, 409, {"error": {
+                        "type": t["reason"] or "unreachable", "test": t,
+                        "message": ("the server refused the API key; nothing was saved. Fix "
+                                    "the key, or confirm to save it as it is")
+                        if t["reason"] == "key_rejected" else
+                        (f"the test failed ({t['error']}); nothing was saved. Confirm to "
+                         f"save it anyway")}})
             b = cfg.create_backend(body, who)
             svc.health.kick(b["id"])
             svc.engines.kick(b["id"])
@@ -244,6 +271,21 @@ def _backends(handler, svc, method, parts, body, who):
     return _send(handler, 404, {"error": {"type": "not_found", "message": "no such route"}})
 
 
+def free_id(cfg, doc: dict) -> str:
+    """A backend id nobody holds, from the label or the URL's host: a-z, 0-9, `-`, at most 32."""
+    try:
+        host = urlsplit(config_mod.norm_url(str(doc.get("url") or ""))).hostname or ""
+    except ValueError:
+        host = ""
+    base = re.sub(r"[^a-z0-9]+", "-", str(doc.get("label") or host).lower()).strip("-")[:28]
+    base = base if base and base != "engine" else "backend"
+    taken = {b["id"] for b in cfg.backends()}
+    bid, i = base, 2
+    while bid in taken:
+        bid, i = f"{base}-{i}", i + 1
+    return bid
+
+
 def _users(handler, svc, method, parts, body, who):
     cfg = svc.cfg
     if not parts:
@@ -270,7 +312,7 @@ def _users(handler, svc, method, parts, body, who):
 def _test_unsaved(svc, body: dict) -> dict:
     """Test connection before saving: the probe with the given kind, URL and key."""
     kind = body.get("kind") or "generic"
-    if kind not in config_mod.KINDS:
+    if not isinstance(kind, str) or kind not in config_mod.KINDS:
         raise config_mod.ConfigError(f"kind must be one of {', '.join(config_mod.KINDS)}",
                                      field="kind")
     url = body.get("url") or config_mod.KINDS[kind]["url"]
@@ -288,5 +330,10 @@ def _test_unsaved(svc, body: dict) -> dict:
     b = {"id": doc["id"], "kind": kind, "url": config_mod.norm_url(url),
          "timeouts": dict(config_mod.TIMEOUTS[cloud]), "inject_usage": True}
     r = health_mod.probe(b, key, log=svc.log)
+    # SRV-749: why a test failed, in one word the page can act on; what the adapter relays
+    reason = None if r["ok"] else "key_rejected" if r.get("key_rejected") else \
+        "unreachable" if r["status"] is None else "not_openai"
     return {"ok": r["ok"], "status": r["status"], "latency_ms": r["latency_ms"],
-            "error": r["error"], "models": [m["id"] for m in (r["models"] or [])]}
+            "error": r["error"], "models": [m["id"] for m in (r["models"] or [])],
+            "reason": reason, "key_rejected": reason == "key_rejected",
+            "routes": list(adapters_mod.make(b).routes())}
