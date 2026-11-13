@@ -298,7 +298,10 @@ def test_local_label_wheel():
         names = z.namelist()
     assert "Name: tandemapp" in meta.splitlines() and "Version: 0.15.0+test" in meta
     assert "proxy/appservice.py" in names and "proxy/nodeupdate.py" in names
-    assert "proxy/dashboard/index.html" in names and "tandemapp/__init__.py" in names
+    assert "tandemapp/__init__.py" in names
+    # the built page when this checkout has one (OPS-246: a build output), else none
+    built = os.path.isfile(os.path.join(ROOT, "dashboard", "dist", "index.html"))
+    assert ("proxy/dashboard/index.html" in names) == built, built
     assert not [n for n in names if n.startswith("server/")]
     pkg = nodeinstall.Package(out, env={"TANDEM_NODE_WHEEL": path})
     assert pkg.target() == "0.15.0+test" and pkg.wheel() == path

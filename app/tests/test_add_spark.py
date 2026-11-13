@@ -1131,8 +1131,15 @@ def test_the_node_wheel():
             names = z.namelist()
             assert "Name: tandemapp" in z.read(f"tandemapp-{v}.dist-info/METADATA").decode()
             assert {"proxy/nodeagent.py", "proxy/preflight.py", "chatd/__init__.py",
-                    "tandemapp/__init__.py", "tandemapp/static.py", "proxy/dashboard/index.html",
-                    "proxy/dashboard/sw.js"} <= set(names)
+                    "tandemapp/__init__.py", "tandemapp/static.py"} <= set(names)
+            # the built page rides along when this checkout has one (OPS-246: a build output,
+            # which CI's app job and every deploy put there); else the wheel has none
+            page = {"proxy/dashboard/index.html", "proxy/dashboard/sw.js",
+                    "proxy/dashboard/bundle.json"}
+            if os.path.isfile(os.path.join(ROOT, "dashboard", "dist", "index.html")):
+                assert page <= set(names), sorted(page - set(names))
+            else:
+                assert not [n for n in names if n.startswith("proxy/dashboard/")]
             assert not [n for n in names if n.split("/")[0] in ("server", "engine")], \
                 "the node wheel carries no engine code"
             di = next(n for n in names if n.endswith(".dist-info/entry_points.txt"))

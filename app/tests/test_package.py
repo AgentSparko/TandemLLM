@@ -30,6 +30,8 @@ from proxy import _version  # noqa: E402
 KEY = "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s="
 # packages of the wheel that hold data alone (no .py): the built page and the shipped texts
 DATA_ONLY = ("proxy.dashboard", "proxy.packages")
+# the built page's packages: their folder (dashboard/dist) is a build output, not in git (OPS-246)
+BUILT = ("proxy.dashboard", "proxy.dashboard.assets")
 
 
 def _toml() -> dict:
@@ -56,6 +58,9 @@ def test_pyproject_matches_the_tree():
         "the wheel carries no engine code"
     for pkg in st["packages"]:
         d = dirs.get(pkg, pkg.replace(".", "/"))
+        if pkg in BUILT:
+            assert d.startswith("dashboard/dist"), (pkg, d)
+            continue
         assert os.path.isdir(os.path.join(ROOT, d)), (pkg, d)
         if not pkg.startswith(DATA_ONLY):
             assert any(f.endswith(".py") for f in os.listdir(os.path.join(ROOT, d))), pkg
@@ -70,32 +75,66 @@ def test_pyproject_matches_the_tree():
                 assert pkg in st["packages"], f"{pkg} is not in pyproject.toml's packages"
     for f in p["license-files"] + [p["readme"]]:
         assert os.path.exists(os.path.join(ROOT, f)), f
-    assert os.path.exists(os.path.join(ROOT, "dashboard", "dist", "index.html"))
+    # the build backend: setuptools plus the page's check (OPS-246), in this tree
+    assert t["build-system"]["build-backend"] == "tandemapp_build"
+    assert t["build-system"]["backend-path"] == ["packaging"]
+    assert os.path.isfile(os.path.join(ROOT, "packaging", "tandemapp_build.py"))
     # an sdist carries VERSION too: proxy/_version.py reads it beside pyproject.toml
     with open(os.path.join(ROOT, "MANIFEST.in")) as f:
         assert "include VERSION" in f.read().splitlines()
 
 
+# the kinds of file a build writes into dashboard/dist (OPS-246: the page is a build output, so a
+# tree without it is checked against these; a built one is checked as it is too)
+PAGE_FIXTURE = ("index.html", "sw.js", "favicon.svg", "manifest.webmanifest", "bundle.json",
+                "assets/app-BfpBka-5.js", "assets/chunk-4_UfH9At.js", "assets/index-DtRYx9Wt.css",
+                "assets/xterm-pane-B1njb2Cr.css")
+
+
+def _page_files(root: str) -> list[str]:
+    base = os.path.join(root, "dashboard", "dist")
+    return [os.path.join(d, f) for d, _, fs in os.walk(base) for f in fs]
+
+
 def test_the_built_page_is_in_the_wheel():
     """Every file of dashboard/dist is package data (sw.js was missing from every install until
-    SRV-747), in setuptools' globs and in the node wheel's own reading of them
-    (proxy/nodeinstall.py checkout_files)."""
+    SRV-747; bundle.json since OPS-246), in setuptools' globs and in the node wheel's own reading
+    of them (proxy/nodeinstall.py checkout_files): on a fixture page, and on the built page when
+    this tree has one."""
     import fnmatch
     from proxy import nodeinstall
     st = _toml()["tool"]["setuptools"]
-    pkg_of = {os.path.normpath(os.path.join(ROOT, d)): pkg
-              for pkg, d in st["package-dir"].items() if pkg in st["packages"]}
-    base = os.path.join(ROOT, "dashboard", "dist")
-    files = [os.path.join(d, f) for d, _, fs in os.walk(base) for f in fs]
-    assert os.path.join(base, "sw.js") in files and len(files) > 10, len(files)
-    missing = [os.path.relpath(f, base) for f in files
-               if not any(fnmatch.fnmatch(os.path.basename(f), g) for g in
-                          st["package-data"].get(pkg_of.get(os.path.dirname(f)), []))]
-    assert not missing, f"not in the wheel: {missing[:5]}"
+    fix = tempfile.mkdtemp(prefix="pkg-page-")
+    try:
+        shutil.copy(os.path.join(ROOT, "pyproject.toml"), fix)
+        for rel in PAGE_FIXTURE:
+            p = os.path.join(fix, "dashboard", "dist", *rel.split("/"))
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "w") as f:
+                f.write("x")
+        trees = [fix] + ([ROOT] if os.path.isfile(os.path.join(ROOT, "dashboard", "dist",
+                                                                "index.html")) else [])
+        for tree in trees:
+            pkg_of = {os.path.normpath(os.path.join(tree, d)): pkg
+                      for pkg, d in st["package-dir"].items() if pkg in st["packages"]}
+            base = os.path.join(tree, "dashboard", "dist")
+            files = _page_files(tree)
+            assert os.path.join(base, "sw.js") in files and \
+                os.path.join(base, "bundle.json") in files and len(files) >= len(PAGE_FIXTURE), \
+                (tree, len(files))
+            missing = [os.path.relpath(f, base) for f in files
+                       if not any(fnmatch.fnmatch(os.path.basename(f), g) for g in
+                                  st["package-data"].get(pkg_of.get(os.path.dirname(f)), []))]
+            assert not missing, f"not in the wheel: {missing[:5]}"
+            _, got = nodeinstall.checkout_files(tree)
+            names = {w for w, _ in got}
+            want = {"proxy/dashboard/" + os.path.relpath(f, base).replace(os.sep, "/")
+                    for f in files}
+            assert want <= names, f"not in the node wheel: {sorted(want - names)[:5]}"
+    finally:
+        shutil.rmtree(fix, ignore_errors=True)
     _, got = nodeinstall.checkout_files(ROOT)
     names = {w for w, _ in got}
-    want = {"proxy/dashboard/" + os.path.relpath(f, base).replace(os.sep, "/") for f in files}
-    assert want <= names, f"not in the node wheel: {sorted(want - names)[:5]}"
     assert {"tandemapp/__init__.py", "tandemapp/METRICS.md", "tandemapp/laya_kit/laya-drive.js",
             "tandemapp/conductor/monitor/policy.default.json", "chatd/__init__.py",
             "proxy/config.schema.json"} <= names
@@ -114,13 +153,20 @@ def test_the_dash_image_copies_every_package():
         return any(d == r or d.startswith(r + "/") for r in roots)
 
     with open(os.path.join(ROOT, "packaging", "Dockerfile.app")) as f:
-        copied = [w[1].rstrip("/") for w in (ln.split() for ln in f)
-                  if len(w) == 3 and w[0] == "COPY"]
+        words = [ln.split() for ln in f]
+    copied = [w[1].rstrip("/") for w in words if len(w) == 3 and w[0] == "COPY"]
+    # OPS-246: the page comes from the image's Node stage, which builds it from dashboard/
+    staged = [w[3].rstrip("/") for w in words if len(w) == 4 and w[0] == "COPY"
+              and w[1] == "--from=page"]
     with open(os.path.join(ROOT, "packaging", "Dockerfile.app.dockerignore")) as f:
         allowed = [ln.strip()[1:].rstrip("/") for ln in f if ln.strip().startswith("!")]
     for d in sorted(srcs):
+        if under(d, staged):
+            assert under("dashboard", allowed), "the Node stage needs dashboard/ in the context"
+            continue
         assert under(d, copied), f"{d} is not COPYed in packaging/Dockerfile.app"
         assert under(d, allowed), f"{d} is not allowed in packaging/Dockerfile.app.dockerignore"
+    assert "dashboard/dist" in staged
 
 
 def test_the_shipped_texts_are_in_the_wheel():
@@ -194,8 +240,12 @@ def test_the_page_in_an_installed_layout():
         with open(os.path.join(d, "proxy", "dashboard", "index.html"), "w") as f:
             f.write("<html></html>")
         assert mod.default_dir() == os.path.join(d, "proxy", "dashboard")
-        os.makedirs(os.path.join(d, "dashboard", "dist"))
-        assert mod.default_dir() == os.path.join(d, "dashboard", "dist"), "a checkout wins"
+        # OPS-246: an empty dist (an editable install's folders, no build yet) is no page
+        os.makedirs(os.path.join(d, "dashboard", "dist", "assets"))
+        assert mod.default_dir() == os.path.join(d, "proxy", "dashboard"), "an empty dist loses"
+        with open(os.path.join(d, "dashboard", "dist", "index.html"), "w") as f:
+            f.write("<html></html>")
+        assert mod.default_dir() == os.path.join(d, "dashboard", "dist"), "a built checkout wins"
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
