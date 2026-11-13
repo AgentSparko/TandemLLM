@@ -1609,6 +1609,18 @@
     "app/contracts"
    ]
   },
+  "tests/test_split_estimate.py": {
+   "imports": [],
+   "reads": [
+    "app/contracts"
+   ]
+  },
+  "tests/test_stage_contract.py": {
+   "imports": [],
+   "reads": [
+    "app/contracts"
+   ]
+  },
   "tests/test_state_channel.py": {
    "imports": [
     "tandemapp.conductor.states",
