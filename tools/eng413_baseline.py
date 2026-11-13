@@ -21,7 +21,8 @@ every SSE line of a stream), with what compare gates on beside it:
        `cache_prompt: false` on all of them: every request reads its prompt whole.
   b2   chat mode (the conductor on, model `TandemLLM`): an opencode-shaped session of three turns, each
        built from the answers before it (tool calls answered with fixed results), a Hermes-shaped
-       request, `X-Tandem: raw`, and opencode's title request. Streamed, with `logprobs`.
+       request, `X-Tandem: raw`, and opencode's title request (its max_tokens the turns' bound, not
+       opencode's 32,000, so a window's length stays bounded). Streamed, with `logprobs`.
   b2f  the fake engine (`server/app.py --fake-engine`) with the session monitor on: the prompts that
        make it act -- D1 (a reasoning loop closed), E1 (an empty turn continued, cases A and B),
        GIVE_UP (empty after two tries), C3 (a repeated call: the tail note, then the regenerate), C4
@@ -402,7 +403,7 @@ def battery_b2(port: int, max_tokens: int) -> list:
         headers={"User-Agent": OPENCODE_UA, "X-Tandem": "raw"}))
     out.append(run_one(port, "opencode_title", "/v1/chat/completions", {
         "model": "TandemLLM", "stream": True, "stream_options": {"include_usage": True}, "temperature": 0.5,
-        "max_tokens": 32000, "reasoning_effort": "low", "logprobs": True,
+        "max_tokens": max_tokens, "reasoning_effort": "low", "logprobs": True,
         "messages": [{"role": "system", "content": "You are a title generator. You output ONLY a thread title."},
                      {"role": "user", "content": "Generate a title for this conversation:\n"},
                      {"role": "user", "content": "List the Python files in this project."}]},
