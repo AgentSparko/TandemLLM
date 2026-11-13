@@ -60,6 +60,9 @@ The normaliser (compare runs it on the raw records, so it can be changed after a
       on timers and threads of their own and are info
   N8  the run's own folders (capture's `--strip`, kept in the record) become "<root>" in every
       string: the ledger's path, the tree copy's paths in the flags and the weights list
+  N9  the engine's moving state is N1's too (engine_busy, a slot's busy, running, the turn's acquires
+      and owner, cache hit counters, the allocator's pools block): W0 read it twice, moments apart,
+      with no request in flight and it moved; inside N2's subtrees N1's keys are "<v>" as well
 compare holds the normalised records equal, path by path. `--allow GLOB` (`*` and `?`, the rest
 literal) accepts a difference at a path that matches (`b3-engine-post./health.body.engine_api`);
 `--additive` accepts paths only the candidate has (an additive contract version). Exit 0 when every
@@ -89,7 +92,9 @@ VOLATILE_KEYS = frozenset((
     "next", "next_at", "expires", "expires_at", "mtime", "load", "loadavg", "rss", "vms", "free",
     "available", "used", "cached", "buffers", "temperature", "temp", "power", "watts", "util",
     "utilization", "clock", "fan", "rate", "rates", "health_cost", "seconds", "wall", "ms", "seed", "tps",
-    "bytes", "oldest", "newest", "port", "ports", "host_port"))
+    "bytes", "oldest", "newest", "port", "ports", "host_port")) | frozenset((
+    # N9: the engine's moving state, read twice moments apart in W0 with no request in flight
+    "engine_busy", "busy", "running", "acquires", "owner", "hits", "pools"))
 VOLATILE_SUFFIXES = ("_ms", "_s", "_at", "_ts", "_tps", "_pct", "_ratio", "_hz", "tok_s", "_gib",
                      "_gb", "_mb", "_kb", "_bytes", "_ns", "_us", "_mib", "_kib", "_ago", "_time",
                      "_avg", "_mean", "_p50", "_p90", "_p95", "_p99", "_us_max", "_us_last", "_port")
@@ -498,7 +503,7 @@ def _volatile(key: str) -> bool:
 
 def _shape(x):
     if isinstance(x, dict):
-        return {k: _shape(v) for k, v in sorted(x.items())}
+        return {k: "<v>" if _volatile(k) else _shape(v) for k, v in sorted(x.items())}
     if isinstance(x, list):
         return [_shape(x[0])] if x else []
     return "<v>"
