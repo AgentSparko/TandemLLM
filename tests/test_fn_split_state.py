@@ -21,10 +21,14 @@ logits of the prompt's last row and of every decoded row are compared with `torc
   -  a front that starts again in the middle of a conversation is rebuilt from the tail's log,
      each block as the kind it was: the next turn's logits and the front's sections and rows are
      the ones of a front that never stopped; the same front after a cut link serves its own kept
-     half; a front whose budget dropped the state is rebuilt
+     half
+  -  a front under its budget: a state gives up its sections and stays a link of its chain while
+     its rows are in place; rows it had no room to copy out are a miss, and the front is rebuilt
   -  several slots: a sequence each on both stages over one copy of the weights; a joint round is
      one request and one carry, and each slot's logits, picks, streams and state are the one
      engine's joint round's
+  -  both stages as the server starts them with the caches on: the seed in both stages' keys, a
+     cached turn, a side slot with the pack's own drafter, a joint round
   -  the options and the store's settings from the server's flags
   -  the cut-cost tool times its uncut arm a second time each run and says whether its baseline
      is clean
@@ -83,7 +87,7 @@ class Split:
         self.key = secrets.token_bytes(32)
         self.block = {"identity": 1, "code": "c0de", "weights": "w8", "family": "qwen4_exp",
                       "layers": eng.cfg.num_hidden_layers}
-        self.listeners = []
+        self.listeners, self.threads = [], []
         self.new_tail()
         self.new_front()
         self.connect()
@@ -113,7 +117,9 @@ class Split:
                 fol.run(connect)
             except Exception:                              # noqa: BLE001  (the listener closed)
                 pass
-        threading.Thread(target=serve, daemon=True).start()
+        t = threading.Thread(target=serve, daemon=True)
+        t.start()
+        self.threads.append(t)
 
     def connect(self):
         end = time.monotonic() + 20
@@ -141,10 +147,15 @@ class Split:
         self.connect()
 
     def close(self) -> None:
+        """Every follower thread ended before the next case (and before the process ends: a thread
+        still in a kernel stand-in then takes the interpreter down)."""
         if self.co.link is not None:
             self.co.link.close()
         for lis in self.listeners:
             lis.close()
+        for t in self.threads:
+            t.join(15)
+        assert not any(t.is_alive() for t in self.threads), "a follower thread did not end"
 
 
 def one(eng):
@@ -545,35 +556,47 @@ def test_a_link_that_drops_inside_a_generation(monkeypatch):
             "request again gives the one engine's logits, with a new front (rebuilt) and with the same one")
 
 
-def test_a_front_whose_budget_dropped_a_state_is_rebuilt(monkeypatch):
+def test_a_front_under_its_budget(monkeypatch):
     H, cuda = T.setup(monkeypatch)
     eng = T.reference(H)["eng"]
     s1, r1 = one(eng), resident(end=True)
     w1 = turn(s1, A1, resident=r1)
     r1.keep_end(s1, None, w1[1], len(A1))
-    wb = turn(s1, B1, n_new=3, resident=r1)
     w2 = turn(s1, w1[1] + A2, resident=r1)
-    del wb
+    r1.keep_end(s1, None, w2[1], len(w1[1]) + len(A2))
+    turn(s1, B1, n_new=3, resident=r1)
+    w3 = turn(s1, w2[1] + [80, 81], n_new=3, resident=r1)
     probe = Split(eng, 3)
     try:
         one_state = sum(t.numel() * t.element_size() for t in probe.front.sv.state.sections().values())
     finally:
         probe.close()
-    x = Split(eng, 3, store_bytes=2 * one_state)             # two states' sections, no room for rows
+    x = Split(eng, 3, store_bytes=2 * one_state)             # two states' sections, no room for a row
     try:
         res = resident(end=True)
         g1 = turn(x.srv, A1, resident=res)
         res.keep_end(x.srv, None, g1[1], len(A1))
         st = x.front.store
-        assert st.bytes <= st.budget and st.stats["evicted"] >= 2 and len(st.entries) <= 2
-        turn(x.srv, B1, n_new=3, resident=res)               # a guest: its rows go over the conversation's
+        rep = st.report()
+        # the older states gave up their sections and stay links of the chain: their rows are in place
+        assert st.bytes <= st.budget and st.stats["evicted"] >= 2 and rep["links"] >= 2, rep
+        assert sum(1 for e in st.entries.values() if e.sections is not None) <= 2
         g2 = turn(x.srv, g1[1] + A2, resident=res)
-        assert g2[2]["kind"] == "end"
-        same_rows(g2[0], w2[0], "after the store gave the state up")
+        assert (g2[2]["kind"], g2[3]) == ("end", len(g1[1]))
+        same_rows(g2[0], w2[0], "the conversation's end, through links")
+        assert x.srv.restores == {"hit": 1, "rebuilt": 0, "refused": 0} and x.co.rebuilds == 0
+        res.keep_end(x.srv, None, g2[1], len(g1[1]) + len(A2))
+        # a guest writes over the first rows: no room to copy them out, so the chain is given up
+        turn(x.srv, B1, n_new=3, resident=res)
+        g3 = turn(x.srv, g2[1] + [80, 81], n_new=3, resident=res)
+        assert g3[2]["kind"] == "end"
+        same_rows(g3[0], w3[0], "after the store gave the conversation's rows up")
         assert x.srv.restores["rebuilt"] == 1 and x.srv.restores["refused"] == 0 and st.bytes <= st.budget
+        same_state(x, s1, "after the rebuild")
     finally:
         x.close()
-    return "a front store of two states' bytes: the conversation's chain was given up, a miss, rebuilt, the same logits"
+    return ("a front store of two states' bytes: older states stay links while their rows are in place and the "
+            "conversation's end restores through them; rows a guest wrote over are given up, a miss, rebuilt")
 
 
 # ------------------------------------------------------------------ slots and joint rounds
@@ -678,6 +701,9 @@ def test_the_options_say_what_a_cached_split_serves(monkeypatch, tmp_path):
         from engine.models.flashnext.serving import manifest
         m = x.srv.manifest()
         assert m.arch == manifest().arch + "-stage-3-6" and "engine/models/flashnext/stages.py" in m.modules
+        from engine.methods import manifest as mf
+        fp, whole = mf.fingerprint(ROOT, m, {}), mf.fingerprint(ROOT, manifest(), {})
+        assert len(fp) == len(whole) and fp != whole, "a stage's disk tier would read the one process's files"
         # what a cached split still refuses
         _raises(ValueError, lambda: setattr(x.srv.kv, "length", 7), "keeps no rows by length")
         x.srv.forward(torch.tensor(A1[:8]), 0)
@@ -692,6 +718,111 @@ def test_the_options_say_what_a_cached_split_serves(monkeypatch, tmp_path):
     finally:
         x.close()
     return "caches and slots only with --stage-caches on; the store's bytes, folder and name; images, rows by length and a keyless state refused"
+
+
+def test_both_stages_start_with_the_caches_as_the_server_starts_them(monkeypatch, tmp_path):
+    """server/stage.py and `serve`'s stage branch with --stage-caches on and three slots: the front
+    builds its slots and its store from the flags, the tail is the cached serving on the server's
+    own coordinator; then a cached turn, a side slot with the pack's own drafter and a joint round
+    over that wiring."""
+    H, cuda = T.setup(monkeypatch)
+    import functools
+    import json
+    import urllib.request
+
+    from engine.methods import stages as S
+    from engine.models.flashnext import serving as SV
+    from engine.models.flashnext import stages as ST
+    from engine.models.flashnext import tail as TL
+    from ports import free_port
+    from server import stage
+    eng = T.reference(H)["eng"]
+    d = H.host_pack()
+    monkeypatch.setattr(TL, "DEVICE", "cpu")
+    monkeypatch.setattr(ST, "open_stage", functools.partial(ST.open_stage, device="cpu"))
+    monkeypatch.setattr(SV, "CAPTURE_ROWS", 4)
+    monkeypatch.setenv("QWEN38_FN_DRAFT_HOT", "0")
+    monkeypatch.setitem(sys.modules, "transformers", types.SimpleNamespace(
+        AutoTokenizer=types.SimpleNamespace(from_pretrained=lambda path: T._Tok())))
+    key = str(tmp_path / "link.key")
+    with open(os.open(key, os.O_WRONLY | os.O_CREAT, 0o600), "w") as f:
+        f.write(secrets.token_hex(32) + "\n")
+    lines, marks = [], []
+    link_port, port = free_port(), free_port()
+    common = ("--model", d, "--link-key-file", key, "--stage-caches", "on", "--parallel", "3", "--drafter", "mtp",
+              "--stage-snapshots-gb", "1", "--stage-cache-dir", str(tmp_path / "front"))
+    fa = T._args(*common, "--stage", "0:3", "--link-listen", f"127.0.0.1:{link_port}", "--port", str(port))
+    fstate: dict = {}
+    stage.prepare(fa, fstate, log=lines.append)
+    assert fstate["stage"].options["slots"] == 3 and fstate["stage"].options["caches"] == "on"
+    threading.Thread(target=stage.serve_front, args=(fa, fstate, lines.append), daemon=True).start()
+
+    def front_health():
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=5) as r:
+            return json.loads(r.read())["stage"]
+    end, st = time.monotonic() + 240, None
+    while st is None and time.monotonic() < end:
+        try:
+            st = front_health()
+        except OSError:
+            time.sleep(0.2)
+    assert st["options"]["slots"] == 3 and st["state"]["slots"] == {} and st["state"]["snapshots"] == 0, st
+    assert sum("built and warmed" in x for x in lines) == 2 and any("first launches" in x for x in lines), lines[-6:]
+    ta = T._args(*common, "--stage", "3:6", "--link-peer", f"127.0.0.1:{link_port}")
+    tstate: dict = {}
+    stage.prepare(ta, tstate, log=lines.append)
+    ctx = types.SimpleNamespace(state=tstate, keys=lambda *x: None, mark=marks.append, log=lines.append,
+                                vision=lambda *x: 1 / 0)
+    out = SV.serve(ta, ctx)
+    srv, fol = out["engine"], fstate["stage"].follower
+    try:
+        assert type(srv) is TL.FlashNextSplitCached and srv.co.keep and srv.caps.caches and "caches on" in out["describe"]
+        seed = tstate["stage"].seed()
+        assert seed == fstate["stage"].seed() and srv.co.key == S.root_key(seed) != S.root_key()
+        # a cached turn over the server's own link: the one engine's logits, the front's half under the same key
+        s1, r1 = one(eng), resident(end=True)
+        w1 = turn(s1, A1, resident=r1)
+        r1.keep_end(s1, None, w1[1], len(A1))
+        w2 = turn(s1, w1[1] + A2, resident=r1)
+        res = resident(end=True)
+        g1 = turn(srv, A1, resident=res)
+        res.keep_end(srv, None, g1[1], len(A1))
+        same_rows(g1[0], w1[0], "turn 1 as the server starts the stages")
+        g2 = turn(srv, g1[1] + A2, resident=res)
+        assert g2[2]["kind"] == "end"
+        same_rows(g2[0], w2[0], "turn 2 from the end of turn 1")
+        srv.co.sync()
+        assert srv.restores["hit"] == 1 and srv.co.rebuilds == 0 and fol.seats[0].key == srv.co.key
+        assert os.path.isdir(os.path.join(str(tmp_path / "front"), seed.hex()[:32]))
+        # a side slot with the pack's own drafter, and one without: the server's loop on slot 1
+        e1, d1 = srv.side_slot(CAP, out["drafter"])
+        e2, _ = srv.side_slot(CAP, None)
+        assert d1 is not None and e1.heads["mtp"].graphs and e1.co.slot == 1 and e1.co.key == S.root_key(seed)
+        assert e1.fn is not srv.fn and e1.fn.W is srv.fn.W and e1.fn.draft_ids is srv.fn.draft_ids
+        tokens = T._loop(e1, T.PROMPT, 12, d1)
+        assert tokens == T._loop(SV.FlashNextServing(eng, CAP), T.PROMPT, 12), "slot 1 with its drafter"
+        e1.co.sync()
+        assert e1.stats["verify_blocks"] > 0 and fol.seats[1].key == e1.co.key
+        # a joint round of the three slots over the server's link
+        for s, p in ((srv, A1[:19]), (e1, A1[3:25]), (e2, B1 + A2)):
+            s.kv.length = 0
+            s.forward(torch.tensor(p), 0)
+        lgs = type(srv).forward_tree_multi([(s, torch.tensor([7, 19, 23]), [-1, 0, 0], s.kv.length) for s in (srv, e1, e2)])
+        ref = one(eng)
+        ref.forward(torch.tensor(A1[3:25]), 0)
+        T.same(lgs[1], ref.forward_tree(torch.tensor([7, 19, 23]), [-1, 0, 0], ref.kv.length), "slot 1's block in the round")
+        type(srv).commit_tree_multi([(s, [0, 2]) for s in (srv, e1, e2)])
+        th = stage.health(tstate, "ok")["stage"]
+        assert th["state"]["rounds"] == 1 and th["state"]["round_max"] == 3 and th["state"]["slots"] == 3, th["state"]
+        assert th["options"]["slots"] == 3 and th["options"]["caches"] == "on"
+        fh = front_health()
+        assert sorted(fh["state"]["slots"]) == ["0", "1", "2"] and fh["state"]["rounds"] == 1, fh["state"]
+        assert isinstance(stage.disk(tstate, object()), stage.StageDisk)
+    finally:
+        srv.co.link.close()
+        time.sleep(1.0)                          # the front's follower drops its sequences before the next case
+    return ("server/stage.py and serve() with --stage-caches on and three slots: one seed in both stages' keys, a "
+            "cached turn, slot 1 with the pack's drafter through the server's loop, a joint round of three")
 
 
 def test_the_cut_cost_tool_checks_its_baseline(monkeypatch):

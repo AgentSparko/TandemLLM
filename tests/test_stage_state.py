@@ -179,11 +179,12 @@ class Whole:
 class Pair:
     """A front (a follower thread) and a tail's coordinator over loopback."""
 
-    def __init__(self, k: int = 2, slots: int = 1):
-        self.k, self.slots = k, slots
+    def __init__(self, k: int = 2, slots: int = 1, seed: bytes = b""):
+        self.k, self.slots, self.seed = k, slots, seed
         self.key = secrets.token_bytes(32)
         self.block = {"identity": 1, "code": "c0de", "weights": "w8", "family": "toy", "layers": 4}
         self.tail = Toy(k, 4, slots)
+        self.tail.seed = seed                    # as the server sets it on slot 0's adapter: code, weights, cut
         self.co = S.Coordinator(self.tail, step_deadline=10.0, chunk_deadline=10.0)
         self.threads: list = []
         self.new_front()
@@ -192,6 +193,7 @@ class Pair:
     def new_front(self) -> None:
         """A front process's start: empty, nothing kept."""
         self.front = Toy(0, self.k, self.slots)
+        self.front.seed = self.seed
         self.follower = S.Follower(self.front, idle_deadline=3.0)
         self.listener = L.Listener("127.0.0.1:0")
         fol, lis = self.follower, self.listener
@@ -539,10 +541,11 @@ def test_a_joint_round_is_one_request_and_gives_each_slots_answers():
         b = w.verify([3, 4 + s], [-1, 0])
         w.commit([0, 1])
         alone.append((a, b, w.prefill([90 + s], graph=STEP)))
-    x = Pair(slots=3)
+    x = Pair(slots=3, seed=b"code, weights, cut")
     try:
         co = x.co
         cos = [co] + [co.side(x.tail.slot(i), i) for i in (1, 2)]
+        assert co.key == S.root_key(x.seed) != S.root_key() and all(c.key == co.key for c in cos)
         raises(ValueError, lambda: co.side(x.tail, 0))
         for s, c in enumerate(cos):
             c.prefill([10 + s] + PROMPT[s:])
