@@ -11,6 +11,8 @@ thread the coordinator.
   -  a front whose rows are not the tail's is found by its key, also at the same length
   -  a new epoch empties both running sequences; a state restored after it is the front's own kept
      one (same process) or rebuilt (a new front): never another state's section
+  -  a tail that keeps its sequence over a new link (its caches hold it) is left as it is, and
+     the front is brought back to it at the next request
   -  the front keeps a state only under the key it computed itself
   -  a state this coordinator has no log of and the front does not hold is refused, nothing changes
   -  several slots: one sequence each; a joint round is one request and one carry and gives what
@@ -444,6 +446,39 @@ def test_a_state_restored_after_a_new_epoch_is_never_anothers():
     return "epoch 2, same front: its own kept state; epoch 3, a new front: rebuilt; a section of another length: not used"
 
 
+def test_a_tail_that_keeps_its_sequence_brings_the_front_back():
+    want = play(Whole())
+    w = Whole()
+    play(w)
+    want_more = more(w)
+    for marked, fresh in ((True, False), (False, False), (False, True)):
+        x = Pair()
+        try:
+            co = x.co
+            co.keep = True
+            assert play(co) == want
+            if marked:
+                co.mark()
+            co.verify([4, 4], [-1, 0])                                   # a tree waits for its commit
+            n, key = co.length, co.key
+            if fresh:
+                x.kill_front()
+                x.new_front()
+            else:
+                x.cut()
+            x.connect()
+            assert co.epoch == 2 and co.length == n and co.key == key and x.front.n == 0
+            ran = len(x.tail.ran)
+            co.commit([])                                                # this stage's own block, still its own
+            assert more(co) == want_more and co.rebuilds == 1 and co.replays == 0
+            assert len(x.tail.ran) == ran + 3, "the tail ran its sequence again"
+            assert co.stats["quiet_steps"] == (0 if marked else 6)       # its own kept state, or the log
+            assert x.follower.seats[0].key == co.key
+        finally:
+            x.close()
+    return "a new link under a kept sequence: the front comes back from its kept state, or block by block from the log"
+
+
 def test_the_front_keeps_a_state_only_under_its_own_key():
     x = Pair()
     try:
@@ -528,6 +563,8 @@ def test_a_joint_round_is_one_request_and_gives_each_slots_answers():
             c.commit([0, 1])
         assert [c.prefill([90 + s], graph=STEP) for s, c in enumerate(cos)] == [c_ for _, _, c_ in alone]
         assert x.follower.stats["rounds"] - n0 == 2 and co.stats["rounds"] == 2
+        assert (co.stats["round_blocks"], co.stats["round_max"], co.stats["trees"]) == (6, 3, 0)
+        assert sum(c.stats["chunks"] for c in cos) == 3
         assert [x.follower.seats[i].key for i in range(3)] == [c.key for c in cos]
         assert len({c.key for c in cos}) == 3
         # a round takes one block a slot; a chain block is no round's
