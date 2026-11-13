@@ -23,7 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from tandemapp import metrics as M  # noqa: E402
+from server.api import metrics as M  # noqa: E402
 
 NAME = r"[a-zA-Z_:][a-zA-Z0-9_:]*"
 SAMPLE = re.compile(rf"^(?P<name>{NAME})(?P<labels>\{{.*\}})?\s(?P<value>\S+)$")
@@ -121,7 +121,7 @@ def test_a_full_scrape_parses():
 
 
 def test_every_documented_metric_is_registered():
-    # app/tandemapp/METRICS.md is the contract; a rename that forgets the document fails here.
+    # contracts/engine-api-v1/metrics.md is the contract; a rename that forgets the document fails here.
     want = {
         "qse_requests_total", "qse_requests_running", "qse_requests_waiting",
         "qse_request_success_total", "qse_requests_refused_total", "qse_prompt_tokens_total",
@@ -572,7 +572,7 @@ def test_install_wires_the_three_hooks_once():
 # --- contract 0.2.0 -----------------------------------------------------------------------
 
 class _Rec:
-    """The fields of app/tandemapp/usage.py's RequestRecord that on_record reads."""
+    """The fields of server/api/usage.py's RequestRecord that on_record reads."""
 
     def __init__(self, **kw):
         self.finish_reason, self.prompt_tokens, self.cached_tokens = "stop", 100, 0

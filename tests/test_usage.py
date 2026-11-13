@@ -36,7 +36,7 @@ import torch  # noqa: E402
 
 from engine import cache  # noqa: E402
 from server import app  # noqa: E402
-from tandemapp import usage  # noqa: E402
+from server.api import usage  # noqa: E402
 
 FIELDS = ("usage", "timings", "metrics")
 

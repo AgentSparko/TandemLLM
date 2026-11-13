@@ -1059,7 +1059,7 @@ def test_the_schema_takes_the_engine_section_and_checks_peak_over_ceiling():
 # ------------------------------------------------------------------ Prometheus
 
 def test_the_memory_metrics_render_from_the_cache_stats():
-    from tandemapp import metrics as M
+    from server.api import metrics as M
     rep = budget(FakeAlloc(60, 1)).report()
     rep["shed"]["park"] = 2
     rep["refused"] = 1

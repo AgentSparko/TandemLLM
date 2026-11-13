@@ -42,7 +42,7 @@ from test_conductor_router import body as rbody  # noqa: E402
 
 from engine.spec import ThinkBudget  # noqa: E402
 from server import app, compat  # noqa: E402
-from tandemapp import logbuf  # noqa: E402
+from server.api import logbuf  # noqa: E402
 from server.api import thinking  # noqa: E402
 
 PHRASE = "Considering the limited time by the user"

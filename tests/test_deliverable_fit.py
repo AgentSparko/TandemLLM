@@ -35,7 +35,7 @@ sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_conductor_router as T  # noqa: E402
-from tandemapp import metrics  # noqa: E402
+from server.api import metrics  # noqa: E402
 from tandemapp.conductor import migrations, schema, shipped, signals  # noqa: E402
 from tandemapp.conductor import packages as packages_mod  # noqa: E402
 from tandemapp.conductor import router as router_mod  # noqa: E402

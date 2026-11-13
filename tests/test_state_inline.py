@@ -62,7 +62,7 @@ sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, 
 sys.path.insert(0, HERE)
 
 from server import app, queue_wait as qwait  # noqa: E402
-from tandemapp import ledger  # noqa: E402
+from server.api import ledger  # noqa: E402
 from tandemapp.conductor import narrator, states  # noqa: E402
 import test_ui_states as tu  # noqa: E402
 

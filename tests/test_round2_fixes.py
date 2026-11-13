@@ -60,7 +60,7 @@ from test_ui_states import TOOLS, _go, lines, opencode, serve  # noqa: E402  (fi
 from test_memory_router import setup as mem_setup  # noqa: E402
 
 from server import app  # noqa: E402
-from tandemapp import dashboard_api as D, ledger, live as live_mod, usage  # noqa: E402
+from server.api import dashboard_api as D, ledger, live as live_mod, usage  # noqa: E402
 from tandemapp.conductor import schema  # noqa: E402
 from tandemapp.conductor.classify import Answer, distribution  # noqa: E402
 from tandemapp.conductor.router import _code_guard  # noqa: E402

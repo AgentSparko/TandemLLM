@@ -54,7 +54,7 @@ sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: Tande
 sys.path.insert(0, HERE)
 
 from server import app, queue_wait as qwait  # noqa: E402
-from tandemapp import ledger  # noqa: E402
+from server.api import ledger  # noqa: E402
 from tandemapp.conductor import states  # noqa: E402
 import test_ui_states as tu  # noqa: E402
 

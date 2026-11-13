@@ -265,7 +265,7 @@ def test_regenerate_over_http():
         assert seeds[0] != seeds[1]
         # the speed sample leaves the regenerate rows out
         c = sqlite3.connect(ledger)
-        from tandemapp import dashboard_api
+        from server.api import dashboard_api
         n_all = c.execute("SELECT COUNT(*) FROM requests WHERE status = 200 AND "
                           "client_kind != 'internal'").fetchone()[0]
         n_speed = c.execute(f"SELECT COUNT(*) FROM requests WHERE client_kind != 'internal' AND "

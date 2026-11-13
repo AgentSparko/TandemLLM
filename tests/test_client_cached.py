@@ -38,7 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import test_forward_tree as T  # noqa: E402,F401  (the CPU environment before the engine imports)
 
 from server import app, slots as slots_mod  # noqa: E402
-from tandemapp import usage  # noqa: E402
+from server.api import usage  # noqa: E402
 from engine import cache  # noqa: E402
 
 GiB = slots_mod.GiB

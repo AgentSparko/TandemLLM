@@ -28,7 +28,7 @@ import torch  # noqa: E402
 
 from engine import cache  # noqa: E402
 from server import app  # noqa: E402
-from tandemapp import auth, metrics  # noqa: E402
+from server.api import auth, metrics  # noqa: E402
 
 
 def test_a_session_hit_and_a_prefix_hit_are_told_apart():

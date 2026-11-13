@@ -1,22 +1,31 @@
-"""G5 for ENG-413 WP2a (QA ENG-432): the engine's wire format is the engine's own code.
+"""G5 for ENG-413 WP2a and WP2b (QA ENG-432): the engine's wire format and its observability are
+the engine's own code.
 
 server/api holds the engine's copies of the modules it took from TandemApp: toolcall, toolformats,
-callrepair, refusal, thinking, argloop. After WP2a only TandemApp's own tree (app/, the extension
-side) imports TandemApp's copies; the engine does not.
+callrepair, refusal, thinking, argloop (WP2a); metrics, usage, ledger, live, parallel, activity,
+logbuf, dashboard_api, http_body, auth (WP2b). Only TandemApp's own tree (app/, the extension side)
+imports TandemApp's copies; the engine does not.
 
   1  no engine file outside app/ imports one of those modules from TandemApp, by import statement,
      by importlib name or in a code string; no engine script or config names one, except the
      files ALLOWED says why                                    test_no_engine_file_imports_them
-  2  server/api imports only the standard library and server/api itself    test_api_stands_alone
+  2  server/api imports only the standard library and server/api itself; torch (metrics' GPU
+     gauges) and numpy (dashboard_api's order statistics) only inside a function or a try, as
+     OPTIONAL says                                                test_api_stands_alone
   3  the importers the plan names (server/app.py, server/compat.py, server/endalign.py,
-     server/setup/wren.py, tools/argloop_fp.py) take each module from server/api
-                                                                  test_the_importers_use_the_engine_copy
-  4  in a fresh process the engine copy, server/compat.py and server/endalign.py load no TandemApp
-     module; compat's Refusal is server/api's; the forms register; the default effort caps are
-     the seed's                                                 test_a_process_loads_no_app_module
+     server/setup/wren.py, tools/argloop_fp.py; WP2b: server/setup_api.py, server/probe.py) take
+     each module from server/api                                 test_the_importers_use_the_engine_copy
+  4  in a fresh process every server/api module, server/compat.py and server/endalign.py load no
+     TandemApp module; compat's Refusal is server/api's; the forms register; the default effort
+     caps are the seed's; the registry holds the engine's families
+                                                                  test_a_process_loads_no_app_module
   5  thinking.LEVELS (the effort caps without a conductor) is the conductor's seed, thinking and
      budget per level (until the extension hands its levels in, ENG-413 WP3)
                                                                   test_the_seed_levels_are_the_conductors
+  6  each WP2b copy is TandemApp's module as forked: the same code once the imports are named
+     alike, docstrings aside; the ledger's copy adds only the side-shape helpers it took from the
+     conductor's signals. A change to either copy fails here until it lands in both
+                                                                  test_the_copies_are_the_fork
 
 CPU, standard library only. Run: python tests/test_api_import_guard.py
 """
@@ -35,13 +44,11 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
-#: TandemApp's module -> the engine's copy (ENG-413 WP2a)
-MOVED = {"tandemapp.toolcall": "server.api.toolcall",
-         "tandemapp.toolformats": "server.api.toolformats",
-         "tandemapp.callrepair": "server.api.callrepair",
-         "tandemapp.refusal": "server.api.refusal",
-         "tandemapp.thinking": "server.api.thinking",
-         "tandemapp.argloop": "server.api.argloop"}
+#: TandemApp's module -> the engine's copy (ENG-413 WP2a, then WP2b)
+WP2A = ("toolcall", "toolformats", "callrepair", "refusal", "thinking", "argloop")
+WP2B = ("metrics", "usage", "ledger", "live", "parallel", "activity", "logbuf", "dashboard_api",
+        "http_body", "auth")
+MOVED = {f"tandemapp.{m}": f"server.api.{m}" for m in WP2A + WP2B}
 #: the engine's tree (app/ is TandemApp's)
 ENGINE_DIRS = ("bench", "engine", "manual", "models", "ops", "server", "tests", "tools")
 SKIP_DIRS = ("__pycache__", "node_modules")
@@ -51,14 +58,27 @@ ALLOWED = {
     "tests/test_api_import_guard.py": "this guard names what it looks for",
     "tools/gate/map.yaml": "a vendored change to TandemApp's copies still takes the server's gate: "
                            "its conductor runs them in the engine's process in chat mode",
+    "tests/test_ledger_owners.py": "holds the engine's ledger against TandemApp's: one file, the "
+                                   "same schema, each table written by the same side",
+    "tools/ledger_synth.py": "TandemApp's tool (plan 3.7: it moves to TandemApp, WP10); it reads "
+                             "TandemApp's ledger, the one its controller writes",
+    "tools/ledger_migrate_check.py": "TandemApp's tool (plan 3.7: it moves to TandemApp, WP10)",
+    "tools/app_split_check.sh": "follows the history of TandemApp's own tandemapp/ledger.py in the "
+                                "split; it reads no module",
 }
-NAMES = re.compile(r"\btandemapp[./](toolcall|toolformats|callrepair|refusal|thinking|argloop)\b")
+NAMES = re.compile(r"\btandemapp[./](" + "|".join(WP2A + WP2B) + r")\b")
 #: the files the plan switches (section 3.1, WP2a), with the modules each must take from server/api
 IMPORTERS = {"server/app.py": {"toolformats", "callrepair", "toolcall", "thinking", "argloop"},
              "server/compat.py": {"refusal", "toolformats"},
              "server/endalign.py": {"toolcall"},
              "server/setup/wren.py": {"toolcall"},
-             "tools/argloop_fp.py": {"argloop"}}
+             "tools/argloop_fp.py": {"argloop"},
+             "server/setup_api.py": {"dashboard_api"},
+             "server/probe.py": {"ledger"}}
+IMPORTERS["server/app.py"] |= set(WP2B)
+#: third-party imports server/api may make, only inside a function or a try (an optional speedup or
+#: a gauge read where the engine runs)
+OPTIONAL = {"server/api/metrics.py": {"torch"}, "server/api/dashboard_api.py": {"numpy"}}
 
 
 def _files(suffixes: tuple) -> list[str]:
@@ -135,8 +155,10 @@ def test_no_engine_file_imports_them():
 
 def test_api_stands_alone():
     std = set(getattr(sys, "stdlib_module_names", ())) or {
-        "__future__", "ast", "bisect", "dataclasses", "importlib", "json", "os", "re", "shlex",
-        "threading", "time", "uuid", "zlib"}
+        "__future__", "ast", "bisect", "collections", "contextlib", "dataclasses", "datetime",
+        "hashlib", "hmac", "importlib", "json", "math", "os", "queue", "re", "secrets", "select",
+        "shlex", "shutil", "socket", "sqlite3", "subprocess", "sys", "threading", "time",
+        "traceback", "urllib", "uuid", "zlib", "zoneinfo"}
     std.add("__future__")
     api = os.path.join(ROOT, "server", "api")
     bad, n = [], 0
@@ -149,6 +171,11 @@ def test_api_stands_alone():
             rel = os.path.relpath(os.path.join(base, x), ROOT)
             with open(os.path.join(base, x)) as f:
                 tree = ast.parse(f.read())
+            guarded = set()          # imports inside a function or a try: optional ones may be there
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Try)):
+                    guarded |= {id(c) for c in ast.walk(node) if c is not node}
+            optional = OPTIONAL.get(rel.replace(os.sep, "/"), set())
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom) and node.level:
                     bad.append(f"{rel}:{node.lineno} relative import")
@@ -156,12 +183,14 @@ def test_api_stands_alone():
                 names = [a.name for a in node.names] if isinstance(node, ast.Import) else \
                     [node.module] if isinstance(node, ast.ImportFrom) else []
                 for nm in names:
+                    if nm.split(".")[0] in optional and id(node) in guarded:
+                        continue
                     if nm.split(".")[0] not in std and not (nm == "server.api" or
                                                              nm.startswith("server.api.")):
                         bad.append(f"{rel}:{node.lineno} imports {nm}")
-    assert n >= 9, n
+    assert n >= 19, n
     assert not bad, bad
-    return f"{n} files, standard library and server.api only"
+    return f"{n} files, standard library and server.api only ({len(OPTIONAL)} optional imports)"
 
 
 def test_the_importers_use_the_engine_copy():
@@ -181,6 +210,8 @@ CHILD = """
 import sys
 sys.path.insert(0, sys.argv[1])
 from server.api import argloop, callrepair, refusal, thinking, toolcall, toolformats
+from server.api import (activity, auth, dashboard_api, http_body, ledger, live, logbuf, metrics,
+                        parallel, usage)
 from server import compat, endalign
 assert compat.Refusal is refusal.Refusal
 toolformats.get(None)
@@ -188,6 +219,9 @@ print("forms", ",".join(sorted(toolformats.FORMATS)))
 print("caps", sorted(thinking.caps().items()))
 a = '<tool_call>\\n<function=f>\\n<parameter=x>\\n1\\n</parameter>\\n</function>\\n</tool_call>'
 print("same", endalign.same_calls(a, a))
+print("families", len(metrics.REGISTRY._metrics))
+print("hermes", ledger.client_of({"User-Agent": "OpenAI/Python 2.24.0"}, {"messages": [
+    {"role": "system", "content": ledger.SIDE_SHAPES[2]["match"]}]})[1])
 print("app", sorted(m for m in sys.modules if m.split(".")[0] in ("tandemapp", "proxy", "chatd")))
 """
 
@@ -204,7 +238,11 @@ def test_a_process_loads_no_app_module():
     assert out["caps"] == str(sorted({"low": 1024, "medium": 8192, "high": 16384,
                                       "xhigh": 0}.items())), out["caps"]
     assert out["same"] == "True", out
-    return "server.api, compat and endalign load no TandemApp module; 3 forms; seed caps"
+    with open(os.path.join(ROOT, "contracts", "engine-api-v1", "metrics-families.json")) as f:
+        assert int(out["families"]) == len(__import__("json").load(f)["families"]), out
+    assert out["hermes"] == "hermes", out
+    return "server.api, compat and endalign load no TandemApp module; 3 forms; seed caps; " \
+           f"{out['families']} families; the Hermes title call read without the conductor"
 
 
 def test_the_seed_levels_are_the_conductors():
@@ -215,6 +253,54 @@ def test_the_seed_levels_are_the_conductors():
     assert thinking.LEVELS == theirs, (thinking.LEVELS, theirs)
     assert thinking.caps() == thinking.caps(schema.ROUTER["effort"]["levels"])
     return f"{len(theirs)} levels"
+
+
+#: what the WP2b fork changed in each copy beyond the import lines (ENG-413 WP2b): the ledger took
+#: the conductor's side-shape helpers in; nothing else changed but docstrings and comments
+FORK_ADDED = {"ledger": {"SIDE_SHAPES", "_text", "side_shape"}}
+
+
+def _fork_view(path: str, mod: str, engine: bool) -> list[str]:
+    """The module's top-level statements as code, docstrings dropped, imports of a moved module
+    named as server/api's, `signals.` dropped (the ledger's helpers are its own in the engine) and
+    the helpers the engine's copy added left out."""
+    with open(path) as f:
+        tree = ast.parse(f.read())
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if isinstance(body, list) and body and isinstance(body[0], ast.Expr) and \
+                isinstance(body[0].value, ast.Constant) and isinstance(body[0].value.value, str):
+            body[0] = ast.Pass()
+    out = []
+    for node in tree.body:
+        if engine and getattr(node, "name", None) in FORK_ADDED.get(mod, ()):
+            continue
+        if engine and isinstance(node, ast.Assign) and any(
+                getattr(t, "id", None) in FORK_ADDED.get(mod, ()) for t in node.targets):
+            continue
+        if not engine and isinstance(node, ast.ImportFrom) and node.module == "tandemapp.conductor":
+            continue                      # the ledger's `from tandemapp.conductor import signals`
+        code = ast.unparse(node)
+        code = re.sub(r"\btandemapp(\.| import )(" + "|".join(WP2B) + r")\b",
+                      lambda m: ("server.api" + m.group(1) + m.group(2)), code)
+        code = code.replace("signals.", "")
+        out.append(code)
+    return out
+
+
+def test_the_copies_are_the_fork():
+    diffs = []
+    for m in WP2B:
+        theirs = _fork_view(os.path.join(ROOT, "app", "tandemapp", m + ".py"), m, False)
+        ours = _fork_view(os.path.join(ROOT, "server", "api", m + ".py"), m, True)
+        if theirs != ours:
+            import difflib
+            d = list(difflib.unified_diff(theirs, ours, "app/tandemapp/" + m, "server/api/" + m,
+                                          lineterm="", n=0))
+            diffs.append("\n".join(d[:12]))
+    assert not diffs, "the copies parted; land the change in both or record the fork here:\n" + \
+        "\n".join(diffs)
+    return f"{len(WP2B)} copies are TandemApp's modules as forked"
 
 
 if __name__ == "__main__":

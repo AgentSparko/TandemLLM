@@ -210,7 +210,7 @@ def test_describe_names_the_kv_pages():
 
 
 def test_parallel_lane_waiting_for_memory():
-    from tandemapp import parallel
+    from server.api import parallel
 
     class Rec:
         waiting_memory = True
@@ -256,7 +256,7 @@ def test_a_non_streamed_wait_ends_in_a_readable_503():
     import types
     import torch
     app = _app()
-    from tandemapp import usage
+    from server.api import usage
     app.STATE.clear()
     app.STATE["queue_timeout"] = 1.5
     app.STATE["request_timeout"] = 3600.0
@@ -291,7 +291,7 @@ def test_a_streamed_wait_outlasts_the_queue_timeout():
     import types
     import torch
     app = _app()
-    from tandemapp import usage
+    from server.api import usage
     app.STATE.clear()
     app.STATE["queue_timeout"] = 0.5
     app.STATE["request_timeout"] = 30.0
@@ -458,7 +458,7 @@ def test_srv773_no_reclaim_for_a_request_the_gate_refuses():
     import types
     app = _app()
     from engine import kvpool
-    from tandemapp import usage
+    from server.api import usage
     calls = []
     kp = kvpool.KVPool(hard_floor=0, meminfo=lambda: 100 * GiB)
     kp.add_reclaimer("idle_side", lambda want, o: calls.append(("idle_side", want)) or GiB)
@@ -506,7 +506,7 @@ def test_srv773_a_resumed_turn_is_admitted_with_the_end_held():
     that end held (the gate's levels never give it back for this request), and admitted."""
     import types
     app = _app()
-    from tandemapp import usage
+    from server.api import usage
     app.STATE.clear()
     res = _Res()
     mem = _Mem(peak=int(75.8 * GiB), ws=int(0.8 * GiB), res=res)
@@ -535,7 +535,7 @@ def test_srv775_a_lone_refusal_is_admitted_over_the_peak_and_counted():
     import threading
     import types
     app = _app()
-    from tandemapp import usage
+    from server.api import usage
     app.STATE.clear()
     refuse = {"on": True}
     mem = _Mem(peak=75 * GiB, ws=int(9.9 * GiB), refuse=lambda: refuse["on"])
@@ -581,7 +581,7 @@ def test_srv775_strict_keeps_a_lone_request_waiting():
     timeout, and nothing ran over the peak."""
     import types
     app = _app()
-    from tandemapp import usage
+    from server.api import usage
     app.STATE.clear()
     mem = _Mem(peak=75 * GiB, ws=int(9.9 * GiB), refuse=lambda: True)
     app.STATE.update(mem=mem, mem_load={"allocated": 58 * GiB}, queue_timeout=1.0, request_timeout=30.0)
@@ -626,7 +626,7 @@ def test_srv775_a_lone_over_peak_admit_is_credited_the_free_blocks_and_starts_at
     import io
     import types
     app = _app()
-    from tandemapp import usage
+    from server.api import usage
     app.STATE.clear()
     ws = int(3.89 * GiB)
     mem = _SpareMem(peak=int(75.82 * GiB), ws=ws, refuse=lambda: True, spare=int(2.28 * GiB))
@@ -664,7 +664,7 @@ def test_srv777_a_client_that_leaves_during_the_memory_wait_is_booked_abandoned(
     import types
     import torch
     app = _app()
-    from tandemapp import activity, usage
+    from server.api import activity, usage
     app.STATE.clear()
     app.STATE["queue_timeout"] = 30.0
     app.STATE["request_timeout"] = 3600.0
@@ -749,7 +749,7 @@ def test_srv775_eight_short_cold_prompts_are_admitted_together():
     capped at it, as before SRV-775: a family without a rows model (2.75 GiB each, by rows too) starts all eight."""
     import types
     app = _app()
-    from tandemapp import usage
+    from server.api import usage
     app.STATE.clear()
     mem = _LineMem(peak=200 * GiB, ws=0)
     app.STATE.update(mem=mem, mem_load={"allocated": 0}, queue_timeout=0.5, request_timeout=30.0)
@@ -939,7 +939,7 @@ def test_srv773_a_pass_that_sheds_the_anchor_a_branch_resumes_at_runs_again_on_t
     `[req]` fields carry them, not the 4,886."""
     import types
     app = _app()
-    from tandemapp import usage
+    from server.api import usage
     app.STATE.clear()
     res = _Branch([58_000, 4_096])
     mem = _RowsMem(peak=200 * GiB, res=res, on_gate=lambda i: res.shed() if i == 0 else None)
@@ -965,7 +965,7 @@ def test_srv773_a_shed_during_the_wait_is_charged_and_an_over_peak_admit_counted
     import threading
     import types
     app = _app()
-    from tandemapp import usage
+    from server.api import usage
     app.STATE.clear()
     res = _Branch([58_000, 30_000, 4_096])
     mem = _RowsMem(peak=200 * GiB, refuse=lambda: True, res=res, on_gate=lambda i: res.shed() if i == 0 else None)
@@ -1003,7 +1003,7 @@ def test_srv773_the_served_prompts_end_is_held_after_the_routers_notes():
     sys.path.insert(0, os.path.join(ROOT, "tests"))
     from test_cache import tokens
     from test_end_anchor import _state, turn
-    from tandemapp import usage
+    from server.api import usage
     res = _state()
     note = tokens(9, seed=93)
     client1 = tokens(60, seed=94)
@@ -1105,7 +1105,7 @@ def _home_admit(app, res, n, home, cid="home"):
     """`_par_admit` of an `n`-row prompt on side slot 1 whose resident is `res`, at home there with `home` tokens."""
     import types
     import torch
-    from tandemapp import usage
+    from server.api import usage
     mem = _FNMem(peak=int(75.82 * GiB), ws=0, res=res)
     app.STATE.clear()
     app.STATE.update(mem=mem, mem_load={"allocated": int(54.4 * GiB)}, queue_timeout=1.0, request_timeout=30.0)
@@ -1470,7 +1470,7 @@ def test_the_release_route_answers_trusted_local_and_the_admin_only():
     import contextlib
     import io
     app = _app()
-    from tandemapp import auth
+    from server.api import auth
 
     class Req(app.Handler):
         def __init__(self, body, headers):

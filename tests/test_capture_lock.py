@@ -211,7 +211,7 @@ def test_the_debug_check_fails_off_thread_without_the_guard():
 #: `off_thread(site)` around its CUDA call. A spy over the served engine (every CUDA entry point called from another
 #: thread while a capture was open, 561 captures under a 5 Hz /health and 1 Hz /metrics poll) found these.
 OFF_THREAD_SITES = [
-    ("app/tandemapp/metrics.py", "_unified_free", "metrics.unified_free"),
+    ("server/api/metrics.py", "_unified_free", "metrics.unified_free"),
 ]
 
 
@@ -240,7 +240,7 @@ def test_a_metrics_scrape_waits_for_an_open_capture():
     """/metrics' free-memory reading (`_unified_free`, a driver call) runs only after a capture let go."""
     import threading
     import time
-    from tandemapp import metrics
+    from server.api import metrics
     order, opened = [], threading.Event()
     hooks = dict(metrics.ENGINE_HOOKS)
     metrics.ENGINE_HOOKS["capture_lock"] = capture_lock      # what server/app.py hands it (SRV-747)

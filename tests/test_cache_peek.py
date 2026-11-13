@@ -48,7 +48,7 @@ import torch  # noqa: E402
 from engine import cache  # noqa: E402
 from engine.models.adapter import CostModel  # noqa: E402
 from server import app, cache_peek  # noqa: E402
-from tandemapp.usage import RequestRecord  # noqa: E402
+from server.api.usage import RequestRecord  # noqa: E402
 from test_cache import tokens  # noqa: E402
 from test_end_anchor import BIG, CH, TOOL, ChatTok, Req, _state, turn  # noqa: E402
 from test_session_spill import _spill  # noqa: E402

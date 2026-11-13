@@ -38,7 +38,7 @@ from test_usage import UTok, _ids, _script  # noqa: E402
 from http.server import ThreadingHTTPServer  # noqa: E402
 
 from server import app  # noqa: E402
-from tandemapp import auth, dashboard_api, logbuf, metrics  # noqa: E402
+from server.api import auth, dashboard_api, logbuf, metrics  # noqa: E402
 from tools import contract_check  # noqa: E402
 
 ADMIN = "adm-" + "a1b2c3d4" * 6

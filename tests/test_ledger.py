@@ -33,7 +33,7 @@ from test_app_loop import Req, serve  # noqa: E402  (first: the CPU environment)
 from test_usage import UTok, _ids, _script  # noqa: E402
 
 from server import app  # noqa: E402
-from tandemapp import ledger, usage  # noqa: E402
+from server.api import ledger, usage  # noqa: E402
 
 SENTINEL = "zqx-SENTINEL-7f3a91"
 
@@ -275,7 +275,7 @@ sys.path.insert(0, os.path.join({root!r}, "tests"))
 import test_app_loop as t
 from http.server import ThreadingHTTPServer
 from server import app
-from tandemapp import ledger, usage
+from server.api import ledger, usage
 
 t.serve()
 led = ledger.Ledger({path!r})

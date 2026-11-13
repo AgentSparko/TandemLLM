@@ -367,6 +367,9 @@ BASELINE = {
     "engine/shadow.py": 1, "server/setup/wren.py": 17,
     # SRV-747: shadow.py's off text (it names the 0.8B), copied for a server that runs no engine
     "app/tandemapp/conductor/routes.py": 1,
+    # ENG-413 WP2b: the engine's copy of tandemapp/metrics.py, the same two (a conductor family's help
+    # text and the router's "qwen" stage source)
+    "server/api/metrics.py": 2,
     # the 27B's own config and drafters (engine/*.py is its package by history, ENG-221)
     "engine/config.py": 2, "engine/drafters/dflash2.py": 1, "engine/drafters/dspark.py": 1,
     # SAME_ROWS names files by path; the legacy FN_*/Q35M_* knob owners (frozen, nothing new). The FN_* knobs of the

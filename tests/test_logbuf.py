@@ -36,7 +36,7 @@ from test_usage import UTok, _ids, _script  # noqa: E402
 from http.server import ThreadingHTTPServer  # noqa: E402
 
 from server import app  # noqa: E402
-from tandemapp import auth, logbuf  # noqa: E402
+from server.api import auth, logbuf  # noqa: E402
 from tools import contract_check  # noqa: E402
 
 SENTINEL = "qqz-SENTINEL-4d2e88-content"

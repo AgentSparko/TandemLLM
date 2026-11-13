@@ -37,7 +37,7 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 from engine import cache, disk_cache as dc  # noqa: E402
 from server import diskcache, memlimits  # noqa: E402
 from server.conductor import inproc  # noqa: E402
-from tandemapp import metrics as M  # noqa: E402
+from server.api import metrics as M  # noqa: E402
 from tandemapp.conductor import routes, schema  # noqa: E402
 from tools import contract_check  # noqa: E402
 from test_cache import fresh, tokens  # noqa: E402

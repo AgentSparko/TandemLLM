@@ -36,7 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_setup_apply as T  # noqa: E402
 from server import app  # noqa: E402
-from tandemapp import auth  # noqa: E402
+from server.api import auth  # noqa: E402
 from server.setup import apply, remove  # noqa: E402
 
 

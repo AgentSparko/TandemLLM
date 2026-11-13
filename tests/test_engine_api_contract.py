@@ -15,9 +15,10 @@ tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_to
      tests/test_engine_api_contract.py --write writes it); each read AST cannot see names a file
      that holds its mark; README.md lists every engine->app import    test_reverse_deps
   4  the copied values are the contract's (1.3; TandemApp holds its copies to the same files):
-     server/setup_api.py same_origin and same_origin_json answer auth.json's cases,
-     server/cache_peek.py TIER_OF is cache.json's tier_of, server/decider_api.py and
-     server/conductor/shadow.py OFF_WHY are the screens' off_why    test_values_are_the_contracts
+     server/setup_api.py and server/api/auth.py same_origin and same_origin_json answer
+     auth.json's cases, server/cache_peek.py and server/api/usage.py TIER_OF are cache.json's,
+     server/decider_api.py and server/conductor/shadow.py OFF_WHY are the screens' off_why
+                                                                  test_values_are_the_contracts
   5  setup/: estimate-cases.json is models/estimate-cases.json byte for byte, limits.json's
      engine_max_slots is the registry's ENGINE_MAX_SLOTS          test_setup_fixtures
   6  node/: ops/serve.env carries PORT= and QSE_STATUS_PORT= as serve.env.example does and
@@ -355,6 +356,7 @@ def _json(*parts: str):
 
 def test_values_are_the_contracts():
     from server import cache_peek, decider_api, setup_api
+    from server.api import auth as api_auth, usage as api_usage
     from server.conductor import shadow
     cases = _json("auth.json")["same_origin"]
     assert len(cases) >= 10, len(cases)
@@ -362,14 +364,16 @@ def test_values_are_the_contracts():
     def answer(x):
         return None if x is None else list(x)
     for c in cases:
-        assert answer(setup_api.same_origin(c["headers"])) == c["same_origin"], c
-        assert answer(setup_api.same_origin_json(c["headers"])) == c["same_origin_json"], c
+        for mod in (setup_api, api_auth):           # ENG-413 WP2b: and the engine's auth copy
+            assert answer(mod.same_origin(c["headers"])) == c["same_origin"], (mod.__name__, c)
+            assert answer(mod.same_origin_json(c["headers"])) == c["same_origin_json"], (mod.__name__, c)
     assert {c["headers"].get("Origin") is not None for c in cases} == {True, False}
     assert cache_peek.TIER_OF == _json("cache.json")["tier_of"]
+    assert api_usage.TIER_OF == _json("cache.json")["tier_of"]
     off = {s["path"]: s.get("off_why") for s in _routes()["engine_screens_until_eng413"]}
     assert decider_api.OFF_WHY == off["/v1/conductor/deciders/*"]
     assert shadow.OFF_WHY == off["/v1/conductor/shadow/*"]
-    return f"same_origin on {len(cases)} cases, TIER_OF, 2 OFF_WHY texts"
+    return f"same_origin on {len(cases)} cases (2 copies), TIER_OF (2 copies), 2 OFF_WHY texts"
 
 
 def test_setup_fixtures():
@@ -536,8 +540,7 @@ def test_schemas_and_references():
 
 
 def test_metrics_families():
-    import server  # noqa: F401  (its finder serves tandemapp from app/ until ENG-413)
-    from tandemapp import metrics as M        # ENG-413 WP2b: the engine's own registry
+    from server.api import metrics as M        # ENG-413 WP2b: the engine's own registry
     fam = {f["name"]: f for f in _json("metrics-families.json")["families"]}
     reg = {m.name: m for m in M.REGISTRY._metrics}
     assert set(fam) == set(reg), (sorted(set(fam) - set(reg)), sorted(set(reg) - set(fam)))

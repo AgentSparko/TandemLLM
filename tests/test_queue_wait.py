@@ -138,7 +138,7 @@ def test_7_the_w18_shape_is_not_read_as_twenty_seconds():
 
 def test_7_the_handler_reads_the_holder_s_record():
     from server import app
-    from tandemapp.usage import RequestRecord as Record
+    from server.api.usage import RequestRecord as Record
     r = Record("chatcmpl-x", "chat", True)
     r.thinking, r.max_tokens = True, 4000
     assert app._live_of(r) is None                     # before its first prefill chunk
@@ -327,7 +327,7 @@ def test_6_a_short_wait_shows_no_line_and_own_work_is_measured():
             assert app._own_holder() == want, (who, want)
     finally:
         app.HOLDER["who"] = None
-    from tandemapp import ledger, usage
+    from server.api import ledger, usage
     assert "wait_own_ms" in ledger.COLUMNS and "wait_own_ms" in usage.RequestRecord(
         "x", "chat", False).row()
 

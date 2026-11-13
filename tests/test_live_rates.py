@@ -18,7 +18,7 @@ sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
 
-from tandemapp import activity, live, metrics, usage  # noqa: E402
+from server.api import activity, live, metrics, usage  # noqa: E402
 from test_live import Clock, _rec, _reg, _row, _valid  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -558,7 +558,7 @@ def test_the_chunk_hook_appends_one_tuple_and_nothing_runs_per_token():
     mark = 'activity_mod.pf_mark(rec.pf_marks, done, total, now, watch.info.get("window"))'
     assert code.count(mark) == 1, code
     assert code.count("(") - code.count("()") <= 13 and ".pf =" not in code, code
-    track = open(os.path.join(ROOT, "app", "tandemapp", "usage.py")).read().split(
+    track = open(os.path.join(ROOT, "server", "api", "usage.py")).read().split(
         "def track(self, source):")[1].split("def lock_acquired")[0]
     assert "anchor" not in track and "pf_marks" not in track
 

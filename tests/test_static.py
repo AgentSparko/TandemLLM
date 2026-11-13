@@ -22,7 +22,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_app_loop import Req, serve  # noqa: E402  (first: the CPU environment)
 
 from server import app  # noqa: E402
-from tandemapp import auth, static  # noqa: E402
+from tandemapp import static  # noqa: E402
+from server.api import auth  # noqa: E402
 
 PROXY = {"X-Forwarded-For": "203.0.113.44", "X-Real-IP": "203.0.113.44"}
 

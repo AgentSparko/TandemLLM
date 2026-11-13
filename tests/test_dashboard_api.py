@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_app_loop import Req, serve  # noqa: E402  (first: the CPU environment)
 
 from server import app  # noqa: E402
-from tandemapp import auth, dashboard_api as D, ledger, usage  # noqa: E402
+from server.api import auth, dashboard_api as D, ledger, usage  # noqa: E402
 from tools import contract_check  # noqa: E402
 
 BERLIN = D.zone("Europe/Berlin")

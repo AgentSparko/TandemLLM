@@ -188,7 +188,7 @@ def test_the_queued_line_says_why():
     finally:
         for s in pool.slots:
             s.lock.release()
-    from tandemapp import activity
+    from server.api import activity
     assert activity.label({"state": "queued", "queue": {"place": None, "reason": w}}) == \
         "Queued: all 3 slots are busy"
     assert activity.label({"state": "queued", "queue": {"place": 2}}) == "Queued, about 2nd in line"

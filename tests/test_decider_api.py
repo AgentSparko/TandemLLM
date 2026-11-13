@@ -133,7 +133,7 @@ def test_2_behind_the_engines_bearer_auth():
     assert st == 401 and "Bearer" in hdr.get("WWW-Authenticate", ""), (st, out)
     assert _ask(body, headers=PROXY)[0] == 200, "the admin token through the proxy"
     assert _ask(body, token=None)[0] == 200, "a tool on the box itself (trusted local)"
-    from tandemapp.auth import Auth
+    from server.api.auth import Auth
     assert Auth(None, login=False).decide("decider", "203.0.113.44", PROXY) == "ok", \
         "AU1: no admin password set, the route is open"
     assert Auth(None, login=False).decide("decider", "127.0.0.1", {}) == "ok"

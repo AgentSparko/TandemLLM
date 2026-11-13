@@ -462,7 +462,7 @@ def test_public_address():
 
 
 def test_live_label_while_encoding():
-    from tandemapp import activity
+    from server.api import activity
 
     class Rec:
         encoding = (1, 2)

@@ -124,7 +124,7 @@ def test_the_facts_are_the_stage_loaders():
 # ------------------------------------------------------------------ 2
 def _post(body: dict, mem: dict) -> tuple[int, bytes]:
     from server import app
-    from tandemapp import auth
+    from server.api import auth
     from server.setup import device as device_mod
     import time
     app.STATE.clear()

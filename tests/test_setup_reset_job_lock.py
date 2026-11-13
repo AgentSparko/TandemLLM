@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_setup_apply import Box, FakeWren, _api  # noqa: E402
 
 from server import app  # noqa: E402
-from tandemapp import auth  # noqa: E402
+from server.api import auth  # noqa: E402
 from server import setup_api  # noqa: E402
 from server.setup import apply, reset  # noqa: E402
 
