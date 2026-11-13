@@ -1416,27 +1416,14 @@ def corrector_heads(fn, rows: int) -> dict:
     return {int(i.numel()): int(i.numel()) <= rows for i in ids if i is not None}
 
 
-def build(pack: str, max_len: int, tok, spec: bool = True, depth: int = 4, mark=lambda stage: None, log=print,
-          corpus: str | None = None, kv_pool=None):
-    """Flash-Next for the server (`serve` below): the pack's weights, the engine in the loop's
-    interface, and with `spec` the shared MTP drafter over the pack's MTP head with the hot draft head
-    (`FN_DRAFT_HOT` ids of ops/fn-hot-vocab.npy, 0 = the whole vocabulary), its graphs captured and
-    StairCut's prior from the price file -- gated by the load-time self-check (a failed check serves
-    plain decode); with FN_LOOKUP the lookup over the request's text and `corpus` joins the cut (ENG-229;
-    the tokenizer is the 27B's, so its corpus and suffix store read as they are, checked by fingerprint).
-    `mark(stage)` at "weights", "engine", "drafters" (the server's load ledger). `kv_pool()`: opens the
-    KV pool after the weights, before the state is allocated, as the 27B's builder does (ENG-241: opened
-    before the weights, the self-check's first Triton launch refused a pointer, "cannot be accessed
-    from Triton", 2026-10-12).
-    Returns (serving, drafter or None, info)."""
-    from engine.models.flashnext.load import load as fn_load
-    idx, W, banks, tables, timing = fn_load(pack, "cuda", mtp=spec)
-    mark("weights")
-    fn = FlashNextEngine(idx.cfg, W, tables, banks, device="cuda", max_len=max_len)
-    if kv_pool is not None:
-        kv_pool()
-    eng = FlashNextServing(fn, max_len)
-    mark("engine")
+def draft_setup(eng, pack: str, tok, spec: bool = True, depth: int = 4, log=print, corpus: str | None = None,
+                self_check=None) -> tuple:
+    """The drafters of a serving adapter `eng` over the pack's MTP head (`build`, and a split model's
+    tail stage, tail.py): the hot draft head, the coupled drafts' heads and corrector, the load-time
+    self-check (`self_check(prompt ids, log=)`; the engine's own by default) and, when it passes, the
+    MTP tree drafter with its graphs captured. Returns (drafter or None, the check's result, the hot
+    head's size, the corrector's status or None)."""
+    fn = eng.fn
     drafter, check, hot, corrector = None, None, int(_S.get("FN_DRAFT_HOT")), None
     if spec:
         if hot:
@@ -1463,7 +1450,7 @@ def build(pack: str, max_len: int, tok, spec: bool = True, depth: int = 4, mark=
             if CR.ON:
                 # SPD-249: the corrector on the device before any draft graph is captured (its launch is in them),
                 # its file checked against this model's MTP output width
-                cr = CR.get(pack=pack, hidden=idx.cfg.hidden_size)
+                cr = CR.get(pack=pack, hidden=fn.cfg.hidden_size)
                 if cr is not None:
                     heads = corrector_heads(fn, int(cr.T.shape[0]))
                     if not heads:
@@ -1476,7 +1463,7 @@ def build(pack: str, max_len: int, tok, spec: bool = True, depth: int = 4, mark=
             corrector = CR.status(heads)
         text = tok.apply_chat_template([{"role": "user", "content": "Count from one to twenty in words."}],
                                        tokenize=False, add_generation_prompt=True, enable_thinking=False)
-        check = fn.self_check(tok(text, add_special_tokens=False)["input_ids"], log=log)
+        check = (self_check or fn.self_check)(tok(text, add_special_tokens=False)["input_ids"], log=log)
         if check["ok"]:
             ngram = None
             if _S.get("FN_LOOKUP") == "1":
@@ -1497,6 +1484,31 @@ def build(pack: str, max_len: int, tok, spec: bool = True, depth: int = 4, mark=
             drafter.capture_all()
         else:
             log("[server] Flash-Next self-check FAILED: speculation off, plain decode only")
+    return drafter, check, hot, corrector
+
+
+def build(pack: str, max_len: int, tok, spec: bool = True, depth: int = 4, mark=lambda stage: None, log=print,
+          corpus: str | None = None, kv_pool=None):
+    """Flash-Next for the server (`serve` below): the pack's weights, the engine in the loop's
+    interface, and with `spec` the shared MTP drafter over the pack's MTP head with the hot draft head
+    (`FN_DRAFT_HOT` ids of ops/fn-hot-vocab.npy, 0 = the whole vocabulary), its graphs captured and
+    StairCut's prior from the price file -- gated by the load-time self-check (a failed check serves
+    plain decode); with FN_LOOKUP the lookup over the request's text and `corpus` joins the cut (ENG-229;
+    the tokenizer is the 27B's, so its corpus and suffix store read as they are, checked by fingerprint).
+    `mark(stage)` at "weights", "engine", "drafters" (the server's load ledger). `kv_pool()`: opens the
+    KV pool after the weights, before the state is allocated, as the 27B's builder does (ENG-241: opened
+    before the weights, the self-check's first Triton launch refused a pointer, "cannot be accessed
+    from Triton", 2026-10-12).
+    Returns (serving, drafter or None, info)."""
+    from engine.models.flashnext.load import load as fn_load
+    idx, W, banks, tables, timing = fn_load(pack, "cuda", mtp=spec)
+    mark("weights")
+    fn = FlashNextEngine(idx.cfg, W, tables, banks, device="cuda", max_len=max_len)
+    if kv_pool is not None:
+        kv_pool()
+    eng = FlashNextServing(fn, max_len)
+    mark("engine")
+    drafter, check, hot, corrector = draft_setup(eng, pack, tok, spec=spec, depth=depth, log=log, corpus=corpus)
     mark("drafters")
     info = {"pack": pack, "load": timing, "self_check": check,
             "draft_head": f"hot {hot}" if spec else None, "depth": depth if drafter is not None else 0}
@@ -1517,7 +1529,12 @@ def serve(a, ctx) -> dict:
     draft head, verified as a tree that a sampled request walks (`det`); the load-time self-check gates
     it. `ctx` is the server's: `keys(path, weights)` (the tokenizer's and the weights' fingerprints),
     `mark(stage)` (the load ledger), `log(line)`, `vision(path, tower_of)` (the server's tower, processor and
-    image caches, with the pack's EXL3 tower: VIS-97). What it cannot hold yet is in `FlashNextServing.caps`."""
+    image caches, with the pack's EXL3 tower: VIS-97). What it cannot hold yet is in `FlashNextServing.caps`. With
+    `--stage` (ENG-307) the tail stage of the model split in two processes (tail.py `serve_stage`)."""
+    stage = ctx.state.get("stage") if hasattr(ctx, "state") else None
+    if stage is not None:
+        from engine.models.flashnext import tail
+        return tail.serve_stage(a, ctx, stage)
     from transformers import AutoTokenizer
 
     from engine.spec import Relax
