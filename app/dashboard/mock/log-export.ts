@@ -1,5 +1,5 @@
 // The mock engine's log export (SRV-803), in the form of server/logbuf.py `export_text`: the
-// header's fields in the contract's order (docs/contract/dashboard-v1/logs-export.example.txt),
+// header's fields in the contract's order (contracts/dashboard-v1/logs-export.example.txt),
 // a blank line, then every line of the ring as `<UTC time> <level> <msg>`.
 
 import type { LogLine } from '../src/api/types.ts';

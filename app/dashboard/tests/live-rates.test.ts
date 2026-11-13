@@ -220,7 +220,7 @@ describe('the pieces', () => {
   it('rateText prints what the tile and the banner print', () => {
     expect([rateText(743.02), rateText(1253), rateText(43.21), rateText(null), rateText(99.95)]).toEqual(['743', '1,253', '43.2', '—', '100.0']);
   });
-  it('prefillLive mirrors server/activity.py: the warm-up mark, the 2 s window, the last two marks', () => {
+  it('prefillLive mirrors tandemapp/activity.py: the warm-up mark, the 2 s window, the last two marks', () => {
     const m = [
       { done: 1024, t: 3000 },
       { done: 2048, t: 4400 },

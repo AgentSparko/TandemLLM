@@ -1,13 +1,13 @@
-// The mock's live registry: what `server/live.py` + `server/activity.py` do,
+// The mock's live registry: what `tandemapp/live.py` + `tandemapp/activity.py` do,
 // over the mock engine's own requests -- the tick simulator's request every ~15 s, the
 // Playground's chats, the "busy" scenario (one decoding, one prefilling, one queued, two done),
 // and the contract 1.1 scenarios: `agent-turn` (prefilling with progress, thinking, writing, a
 // tool call with growing arguments, finishing, waiting for the client, the next request continuing
 // it), `abandoned` (the client leaves mid-prefill), `stops` (one of each stop reason in `recent`)
 // and `constrained`. `contract: '1.0'` makes the snapshot a 1.0 message for the fallback test.
-// The words of `label` and `sentence` mirror server/activity.py. Never in dist/.
+// The words of `label` and `sentence` mirror tandemapp/activity.py. Never in dist/.
 //
-// VIS-40: the live rates without the warm-up, as server/live.py computes them. A scripted chunked
+// VIS-40: the live rates without the warm-up, as tandemapp/live.py computes them. A scripted chunked
 // prefill has chunk marks (`chunk`, `chunkMs` for the first chunks' own durations, then
 // `prefillTps`); its now-rate reads the marks of the last 2 s after the first chunk. A decoding
 // request is anchored the first time the mock sees it at 50 decoded tokens. `rates` plays the
@@ -64,7 +64,7 @@ export interface SupEvent {
   tier?: number;
 }
 
-/** server/activity.py::_ACTION_WORDS, the "Supervising: ..." label's words. */
+/** tandemapp/activity.py::_ACTION_WORDS, the "Supervising: ..." label's words. */
 const ACTION_DOING: Record<string, string> = { CLOSE_REASONING: 'closing the reasoning', CONTINUE_HIDDEN: 'continuing an empty turn', REGENERATE_CALL: 'having the tool calls written again', PROMPT_TAIL_NOTE: 'adding a note', SET_THINK_BUDGET: 'setting the thinking budget', GIVE_UP: 'giving up' };
 
 export interface MockLiveRequest {
@@ -97,7 +97,7 @@ export const WINDOWS: NonNullable<ServerLive['windows']> = { decode_warmup_token
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 
-/** server/activity.py::prefill_live over the mock's marks: the rate with the first `warm` chunks left out. */
+/** tandemapp/activity.py::prefill_live over the mock's marks: the rate with the first `warm` chunks left out. */
 export function prefillLive(marks: { done: number; t: number }[], warm: number, windowS: number, start: { done: number; t: number } | null, end?: { total: number; t: number }): { tps_live: number | null; tps_live_avg: number | null; reached: boolean } {
   const out = { tps_live: null as number | null, tps_live_avg: null as number | null, reached: false };
   const a = warm - 1;
@@ -133,7 +133,7 @@ const MOCK_LINES: [string, string][] = [
   ['tool', 'writing mario/render.js, 240 lines so far'],
 ];
 
-/** server/live.py::_mostly_cached. */
+/** tandemapp/live.py::_mostly_cached. */
 export function mostlyCached(total: number | null, cached: number | null, w = WINDOWS): boolean | null {
   if (total == null || cached == null) return null;
   const fresh = total - cached;
@@ -155,7 +155,7 @@ const ordinal = (k: number) => `${k}${k % 100 >= 10 && k % 100 <= 20 ? 'th' : ({
 
 const SILENT: Record<string, string> = { queued: 'in the queue', prefilling: 'of silent prefill', replaying: 'while replaying', thinking: 'while thinking', closing_reasoning: 'while closing the reasoning', writing: 'while writing', tool_call: 'while writing a tool call', finishing: 'while finishing' };
 
-/** server/activity.py::sentence, word for word. */
+/** tandemapp/activity.py::sentence, word for word. */
 export function sentence(stop: Omit<LiveStop, 'sentence'>, r: { elapsed: number | null; lockMs: number | null; toolNames: string[]; maxTokens: number | null }): string {
   const sent = stop.tokens_sent || 0;
   const tokens = `${n(sent)} token${sent === 1 ? '' : 's'} sent`;
@@ -187,7 +187,7 @@ export function sentence(stop: Omit<LiveStop, 'sentence'>, r: { elapsed: number 
   }
 }
 
-/** server/activity.py::label, word for word. */
+/** tandemapp/activity.py::label, word for word. */
 export function label(a: Pick<LiveActivity, 'state' | 'queue' | 'prefill' | 'reasoning' | 'tool' | 'step' | 'stop'>): string {
   switch (a.state) {
     case 'queued':
@@ -552,7 +552,7 @@ export class MockLive {
     return { ...prefillLive(marks, this.windows.prefill_warmup_chunks, this.windows.now_window_s, start, end), chunks: marks.length };
   }
 
-  /** server/live.py::_decode_live: (now, avg, warmup) from the anchor on. */
+  /** tandemapp/live.py::_decode_live: (now, avg, warmup) from the anchor on. */
   private decodeLive(r: MockLiveRequest, now: number): { now: number | null; avg: number | null; warmup: LiveRequest['decode_warmup'] } {
     if (r.firstAt == null || r.row.cache_source === 'response') return { now: null, avg: null, warmup: null };
     const warmup = { tokens: Math.max(0, r.tokens - 1), reached: !!r.anchor };
@@ -725,7 +725,7 @@ export class MockLive {
     };
   }
 
-  /** server/activity.py::conductor_of over the script: what had happened by `now` (or the end). */
+  /** tandemapp/activity.py::conductor_of over the script: what had happened by `now` (or the end). */
   private conductorOf(r: MockLiveRequest, now: number): LiveActivity['conductor'] | undefined {
     if (!r.sup) return this.conductorMode ? null : undefined;
     const end = r.endedAt ?? now;

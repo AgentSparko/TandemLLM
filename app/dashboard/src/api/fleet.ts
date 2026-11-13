@@ -1,4 +1,4 @@
-// The fleet API of TandemApp's controller (docs/contract/fleet-v1, SRV-723, SRV-725, SRV-727,
+// The fleet API of TandemApp's controller (contracts/fleet-v1, SRV-723, SRV-725, SRV-727,
 // SRV-729, SRV-731, VIS-246, VIS-248, VIS-250, VIS-252): the Sparks, the links between them, the deployments,
 // per-node metric series, each node's newest sample, the controller's host, memory, events, alerts,
 // rules, the node actions, the saved window layouts, discovery and the Add Spark wizard's session;

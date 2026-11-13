@@ -414,7 +414,7 @@ describe('four events a second, one sparkline point a second', () => {
     expect(ring.samples.map((x) => x.t)).toEqual([100, 101, 102]);
   });
   it('the recorded fixture: sample.t is the same across the 4 Hz events of one second', () => {
-    // the sampler keeps one history sample a second (server/live.py): the ring must not grow per event
+    // the sampler keeps one history sample a second (tandemapp/live.py): the ring must not grow per event
     const a = msg('opencode_tool_call').sample!;
     const ring = emptyRing();
     push(ring, a, a.t + 1);

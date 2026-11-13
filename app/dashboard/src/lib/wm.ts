@@ -1,5 +1,5 @@
 // The window manager's model (VIS-256, concept §11): one page's layout on one device class, in the
-// fleet contract's shape (docs/contract/fleet-v1 layout.schema.json): its two sidebars, its docks
+// fleet contract's shape (contracts/fleet-v1 layout.schema.json): its two sidebars, its docks
 // (right and bottom, each a set of tabs with the one it shows and its share of the work area) and its
 // windows, each docked, floating (placed and sized in pixels, raised by z) or minimised (with where it
 // returns to). Every change is a pure function from a layout to a new one, so the rules can be tested;

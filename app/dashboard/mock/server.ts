@@ -730,7 +730,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
       if (path.startsWith('/v1/conductor/')) {
         // AU1: no password set, every route is open; with one, reads follow the dashboard's rule
         // and writes take the admin token or a session (only the bearer with requireToken), as
-        // server/conductor/routes.py
+        // tandemapp/conductor/routes.py
         const parts = path.split('/').slice(3);
         // VIS-48: the transcripts take the token or a session for reads too
         // G2: the token count of the Packages editor is a read, as the server's

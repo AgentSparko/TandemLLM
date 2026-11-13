@@ -1,7 +1,7 @@
 // The mock engine's memory notes (2026-10-05): six synthetic notes of the owner in the three scopes
 // -- a pinned ratified rule, a provisional rule, a project gotcha with an earlier revision, a stale
 // program_state, a session note, an archived one -- and the routes over them as
-// server/conductor/routes.py `_notes` answers (list, one, edit, status, archive, delete, search,
+// tandemapp/conductor/routes.py `_notes` answers (list, one, edit, status, archive, delete, search,
 // injected, writes, export, the user's delete). Synthetic text only.
 
 type Note = Record<string, unknown> & { id: string; title: string; body: string; kind: string; scope: string; status: string; writer: string; tags: string[]; pinned: boolean; changelog: string[]; updated: string; created: string; project: string | null; session: string | null; verify_by: string | null; sources: string[]; revisions: number; archived?: string; reason?: string };

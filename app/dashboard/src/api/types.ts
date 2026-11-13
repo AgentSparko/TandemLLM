@@ -1,5 +1,5 @@
-// Dashboard API contract v1 — the TypeScript view of docs/contract/dashboard-v1/*.schema.json.
-// Prose: docs/contract/dashboard-v1/README.md. A change here bumps contract_version.
+// Dashboard API contract v1 — the TypeScript view of contracts/dashboard-v1/*.schema.json.
+// Prose: contracts/dashboard-v1/README.md. A change here bumps contract_version.
 
 export type ContractVersion = '1.0' | '1.1' | '1.2' | '1.3';
 
@@ -540,7 +540,7 @@ export interface ChatMetrics {
 }
 
 // The live view: GET /v1/dashboard/live?follow=0, and the data of one `event: live`.
-// Definitions in docs/contract/dashboard-v1 (live.schema.json).
+// Definitions in contracts/dashboard-v1 (live.schema.json).
 export type LivePhase = 'queued' | 'prefill' | 'decode' | 'done';
 
 export interface LiveSample {
@@ -618,8 +618,8 @@ export interface LiveLine {
 }
 
 // ---- contract 1.1: what the model is doing right now ------------------
-// Definitions in docs/contract/dashboard-v1 (live.schema.json, contract 1.1); the words (`label`,
-// `sentence`) come from server/activity.py and are shown as sent.
+// Definitions in contracts/dashboard-v1 (live.schema.json, contract 1.1); the words (`label`,
+// `sentence`) come from tandemapp/activity.py and are shown as sent.
 export type ActivityState = 'queued' | 'waiting_memory' | 'prefilling' | 'replaying' | 'thinking' | 'closing_reasoning' | 'writing' | 'tool_call' | 'finishing' | 'done';
 export type EngineState = 'idle' | 'busy' | 'waiting_for_client' | 'draining' | 'starting';
 export type StopReason = 'stop' | 'length' | 'tool_calls' | 'timeout' | 'abandoned' | 'error' | 'refused' | 'rejected' | 'cancelled';
@@ -683,7 +683,7 @@ export interface LiveActivity {
   memory?: MemoryWait | null;
 }
 
-/** SRV-787: a request the engine's admission holds for memory (server/activity.py `memory_of`). The `lines` are
+/** SRV-787: a request the engine's admission holds for memory (tandemapp/activity.py `memory_of`). The `lines` are
  *  the server's words (what and why, what happens meanwhile, how it ends) and are shown as sent. */
 export interface MemoryWait {
   need_gib: number | null;

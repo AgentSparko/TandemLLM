@@ -2,7 +2,7 @@
 // format (server/conductor/transcripts.py) -- a long overnight one with hidden notes whose journal
 // rows exist in the mock's journal, a compaction, checker results and a redacted secret; a short
 // coding one; a kept one; a chat counted only; and a directory without meta.json -- and the
-// memory routes over them, as server/conductor/routes.py `_memory` answers. Synthetic text only.
+// memory routes over them, as tandemapp/conductor/routes.py `_memory` answers. Synthetic text only.
 
 const PER_PAGE = 200;
 type Row = Record<string, unknown> & { session: string | null; dir: string; keep: boolean; counts: Record<string, number> | null; last_ms: number | null };
@@ -151,7 +151,7 @@ export function diskSeed(now: number): MockDisk {
   };
 }
 
-/** `/v1/conductor/memory/disk[/clear]` on the mock, as server/conductor/routes.py answers. */
+/** `/v1/conductor/memory/disk[/clear]` on the mock, as tandemapp/conductor/routes.py answers. */
 export function diskRoute(disk: MockDisk, method: string, rest: string[], settings: Record<string, unknown>, version: number): { status: number; body: unknown } {
   const view = () => {
     const base = { contract_version: '1.0', running: disk.running, settings_version: version, settings, flag: disk.running ? '/home/demo/.qwen38-spark-engine/cache/disk' : 'off', floor_gb: 50 };

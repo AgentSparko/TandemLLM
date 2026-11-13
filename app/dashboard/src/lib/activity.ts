@@ -1,7 +1,7 @@
 // The Live panel's words for contract 1.1: the "Now" line for the engine, the activity
 // cell and the timeline of a request, the tone of a stop, and the health of the stream itself.
 // Pure functions over the message, no DOM. The server's `label` and `sentence` are shown as sent
-// (server/activity.py); this file adds numbers and formatting only. Every state has a glyph and
+// (tandemapp/activity.py); this file adds numbers and formatting only. Every state has a glyph and
 // a word, so colour is never the only signal.
 
 import type { ActivityState, LiveActivity, LiveEngine, LiveRequest, LiveStop, LiveTimelineEntry, LiveWindows, StopReason } from '../api/types';

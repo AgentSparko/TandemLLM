@@ -1,6 +1,6 @@
 // The Memory screen's Notes tab (2026-10-05): the list's filters, the tree's labels, the line diff of
 // a note's history, the write rows in words, the settings over their defaults, and the mock engine's
-// notes routes (the server's shapes: server/conductor/routes.py `_notes`).
+// notes routes (the server's shapes: tandemapp/conductor/routes.py `_notes`).
 import { describe, expect, it } from 'vitest';
 import { notesRoute, notesSeed } from '../mock/notes.ts';
 import type { NoteMeta, NoteWriteRow } from '../src/api/conductor';

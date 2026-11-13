@@ -1,4 +1,4 @@
-// The conductor's API (/v1/conductor/*, contract docs/contract/conductor-v1): its types and calls.
+// The conductor's API (/v1/conductor/*, contract contracts/conductor-v1): its types and calls.
 // Reads go through the shared `request`. Writes and the memory routes go through `write`, which
 // sends no token: the dashboard asks for no password (AU1, 2026-10-06). With none set on the
 // server every route is open; once one is set, a 401 here is a plain error until the sign-in for
@@ -616,7 +616,7 @@ export interface EvalReport {
   file?: string;
   [k: string]: unknown;
 }
-/** A suite report's verdict (tools/tandem_eval.py, docs/contract/dashboard-v1/tandem-eval). */
+/** A suite report's verdict (tools/tandem_eval.py, contracts/dashboard-v1/tandem-eval). */
 export interface EvalVerdict {
   better: boolean | null;
   why: string;
@@ -1177,7 +1177,7 @@ export const conductor = {
     if (!res.ok) throw new ApiError(endpoint, res.status, `HTTP ${res.status}`, 'error');
     return await res.blob();
   },
-  // 2026-10-05: the memory notes (server/conductor/routes.py `_notes`); the admin rule, reads included
+  // 2026-10-05: the memory notes (tandemapp/conductor/routes.py `_notes`); the admin rule, reads included
   notes: (user = 'owner') => write<NotesList>(`/v1/conductor/memory/notes?user=${enc(user)}`, 'GET'),
   note: (id: string, user = 'owner') => write<NoteOne>(`/v1/conductor/memory/notes/${enc(id)}?user=${enc(user)}`, 'GET'),
   noteEdit: (id: string, fields: Partial<Pick<NoteFull, 'title' | 'body' | 'kind' | 'tags' | 'verify_by'>>, user = 'owner') => write<{ note: NoteFull }>(`/v1/conductor/memory/notes/${enc(id)}?user=${enc(user)}`, 'PUT', fields),
