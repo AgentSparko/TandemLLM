@@ -3,6 +3,8 @@
 /dist/
 *.egg-info/
 __pycache__/
+# the dashboard's built page: a build output (tools/dashboard_bundle.py, CI), never in git (OPS-246)
+/dashboard/dist/
 # what the tools and the controller write on demand; never under version control
 results/
 logs/
