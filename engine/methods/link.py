@@ -21,8 +21,9 @@ The handshake, before any other frame:
     both     -> IDENT  the engine's identity block with its stage, and a MAC over it
     both     -> OK, or REFUSE with the reason
 
-Both identity blocks must name the same code, weights, family and layer count, and the two stages'
-layer ranges must be complementary: [0, k) and [k, layers). Anything else refuses the link; there is
+Both identity blocks must name the same code, weights, family and layer count, the two stages' layer
+ranges must be complementary: [0, k) and [k, layers), and both must keep state alike (`stage.caches`,
+"off" when absent) with the same slots (`stage.slots`, 1 when absent). Anything else refuses the link; there is
 no second transport to fall back to. The key comes from the caller's configuration (`read_key`) and
 is never printed, logged or put in an error. The handshake proves both ends hold the key; frames after
 it are neither encrypted nor signed, so the link belongs on a private segment.
@@ -95,7 +96,8 @@ class LinkProtocol(LinkError):
 
 
 class LinkRefused(LinkError):
-    """The handshake refused the peer; `reason` is auth, version, code, weights, family, layers or stage."""
+    """The handshake refused the peer; `reason` is auth, version, code, weights, family, layers, stage, caches
+    or slots."""
 
     code = "refused"
 
@@ -448,6 +450,15 @@ def mismatch(mine: dict, theirs: dict) -> str | None:
         return "stage"
     (lo0, hi0, r0), (lo1, hi1, r1) = stages
     if not (lo0 == 0 and 0 < hi0 == lo1 < hi1 == layers and (r0, r1) == ("front", "tail")):
+        return "stage"
+    # what both stages must serve alike (SRV-817): a field left out is its default, one slot and no caches
+    s0, s1 = mine["stage"], theirs["stage"]
+    if str(s0.get("caches", "off")) != str(s1.get("caches", "off")):
+        return "caches"
+    try:
+        if int(s0.get("slots", 1)) != int(s1.get("slots", 1)):
+            return "slots"
+    except (TypeError, ValueError):
         return "stage"
     return None
 

@@ -271,7 +271,9 @@ Timing (`QSE_PARALLEL_TIMING=1`, for measurements: every joint pass is synchroni
 
 Each side takes one of `--link-listen` and `--link-peer`. Addresses are IP literals, and a wildcard address is refused. The key file must be a regular file of the server's user, mode 0600, with at least 32 bytes. The key appears in no log line, message or route.
 
-The tail is the engine clients talk to. It serves the chat and completion routes, and its `GET /v1/replica/identity` names its range in `stage`. The front loads its layers and answers `/health`; every other route answers 409 `stage_front`. Start the front first: the tail waits 120 s for the link, then refuses to start. A link whose two ends differ in key, code, weights, family or layer range is refused, and the start line says which.
+The tail is the engine clients talk to. It serves the chat and completion routes, and its `GET /v1/replica/identity` names its range in `stage`. The front loads its layers and answers `/health`; every other route answers 409 `stage_front`. Start the front first: the tail waits 120 s for the link, then refuses to start. Stop the tail first (its planned stop drains the disk tier's writer), then the front. A link whose two ends differ in key, code, weights, family, layer range, caches (`--stage-caches`) or slots (`--parallel`) is refused with the reason (`auth`, `code`, `weights`, `family`, `stage`, `caches`, `slots`): a tail at its start refuses to start and says it, a running tail's `/health` says it in `stage.link.reason` while it keeps trying, and the front logs it and shows it in its own `stage.link.reason`.
+
+A front with `--stage-caches on` checks the box before any weight is read: MemAvailable must cover its weights, its attention layers' rows and its sections for every slot (from the pack's headers), `--stage-snapshots-gb` for every slot and the floor (`--parallel-floor-gb`), and the filesystem of `--stage-cache-dir` must hold `--stage-cache-gb` (its free space and the files already in it). Otherwise it refuses with the figures. A front never takes `--disk-cache`: the disk tier is the tail's, and the front's half goes to `--stage-cache-dir`.
 
 Limits, each refused at the start or at the request, never served another way:
 
@@ -302,7 +304,30 @@ Flash-Next with `--stage-caches on` (both stages take the flag):
 - `/health` adds `stage.state`: on the tail the snapshots, restores, rebuilds and joint rounds; on the front each slot's kept states and bytes.
 - Not served: images, the session spill, the layer-major window and the joint prefill. A joint round runs each slot's block on its own, so a round of N slots reads the weights N times.
 
-`/health` on both stages carries a `stage` block: `role`, `lo`, `hi`, `layers`, `cut`, the stage's `options` (its limits) and `link` with `state`, `epoch`, `transport` and the bytes each way. While the link is down the tail's status is `degraded`. A request in flight ends with an error that says `stage_down`, and a new one gets 503 `stage_down` with `Retry-After: 5`. The tail keeps dialing or listening. Without `--stage-caches on` a new link starts both stages empty under the next epoch, so the next request reads its prompt again.
+`/health` on both stages carries a `stage` block (below). While the link is down the tail's status is `degraded`. A request in flight ends with an error that says `stage_down`, and a new one gets 503 `stage_down` with `Retry-After: 5`. The tail keeps dialing or listening. Without `--stage-caches on` a new link starts both stages empty under the next epoch, so the next request reads its prompt again.
+
+### The stage block
+
+A server that is not a stage has no `stage` key in `/health`. A stage's full `/health` answer carries this block on both sides, every field present (shape 1; a field added later is optional):
+
+| field | type | what |
+|-|-|-|
+| `shape` | int | the block's version: 1 |
+| `role` | `front` \| `tail` | which stage |
+| `lo`, `hi` | int | the layer range `[lo, hi)` |
+| `range` | string | the same as `LO:HI` |
+| `layers` | int | the model's layers |
+| `cut` | int | `hi` on the front, `lo` on the tail |
+| `identity` | string \| null | this stage's handshake identity block by content (16 hex digits); null on the tail before its first link |
+| `options` | object | the limits the stage serves with (`stage_options`: `slots`, `caches`, `graphs`, `kv_cache`, `images`, `prefill_chunk`, `max_len`, `carry`, and with caches on `snapshots_gb`, `cache_dir` (`set` or `none`), `cache_dir_gb`, `joint_round`) |
+| `link.state` | `up` \| `down` | |
+| `link.epoch` | int | counts the links; 0 before the first |
+| `link.reason` | string \| null | null while up; else why: `no peer yet`, `refused (<reason>)`, `timeout`, `closed`, ... |
+| `link.transport` | string \| null | `tcp`; null before the first link |
+| `link.bytes` | object \| null | `tx`, `rx` of the current link; null before the first |
+| `link.peer` | object \| null | the other stage of the last link: `role`, `lo`, `hi`, `identity` (equal to the other stage's own `identity`); null before the first link |
+| `steps` | int | the front: carries sent |
+| `state` | object | with `--stage-caches on` only: the tail's counters (`chunks`, `steps`, `trees`, `rounds`, `round_blocks`, `round_max`, `snapshots`, `restore_hits`, `restore_misses`, `quiet_steps`, `drops`, `marks`, `rebuilds`, `replays`, `slots`) or the front's (`snapshots`, `restores`, `restore_misses`, `quiet_steps`, `rounds`, and `slots`: each slot's store report) |
 
 `tools/stage_cut_cost.py` measures what the cut costs by itself on one device: the same blocks through the whole model and through front, host copy and tail, in one process with no link. A run reads its blocks once before the clock starts, changes which arm goes first every run, and times the uncut arm a second time; `baseline.clean` says whether that second pass is within 2 % of the first.
 

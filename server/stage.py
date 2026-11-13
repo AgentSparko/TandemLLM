@@ -49,6 +49,11 @@ from server import identity as identity_mod
 
 #: how long a tail waits at its start for the front's link
 ATTACH_S = 120.0
+#: the version of `/health`'s `stage` block (docs/server.md "The stage block"); a field added is a minor
+HEALTH_SHAPE = 1
+#: where the front's start check reads MemAvailable (a test's file in its place)
+MEMINFO = "/proc/meminfo"
+GIB = float(1 << 30)
 RETRY_S = 1.0
 RETRY_AFTER_S = 5
 #: the fake engine's stand-in model (`--fake-engine --stage`): no weights, the protocol alone
@@ -183,6 +188,8 @@ class Stage:
         self._key, self._base = key, base
         self._listener = None
         self._said = (None, 0.0)
+        self._ident = None               # what this stage sends in the handshake, once built
+        self.refused = None              # the reason of the last link the other stage refused
         self.coordinator = None          # the tail's
         self.follower = None             # the front's
         self.link = None
@@ -201,7 +208,16 @@ class Stage:
         """The handshake's payload: what both stages must agree on, with this stage's range."""
         if (adapter.lo, adapter.hi) != (self.lo, self.hi):
             raise ValueError(f"the stage holds layers [{adapter.lo}, {adapter.hi}), not --stage {self.lo}:{self.hi}")
-        return S.stage_identity(dict(self._base), adapter)
+        ident = S.stage_identity(dict(self._base), adapter)
+        # SRV-817: what both stages must serve alike, compared at the link (engine/methods/link.py `mismatch`);
+        # named only when not the default, so a default stage's block is the one it was
+        slots, caches = int(self.options.get("slots", 1) or 1), str(self.options.get("caches", "off"))
+        if slots != 1:
+            ident["stage"]["slots"] = slots
+        if caches != "off":
+            ident["stage"]["caches"] = caches
+        self._ident = ident
+        return ident
 
     def _say(self, line: str) -> None:
         """A log line, not repeated inside a minute."""
@@ -234,6 +250,7 @@ class Stage:
                 link = self._open(ident, 0, max(0.1, min(RETRY_S, end - time.monotonic())))
                 break
             except L.LinkRefused as e:
+                self.refused = e.reason
                 raise SystemExit(f"[stage] REFUSING to start: the other stage refused the link ({e.reason})")
             except L.LinkError as e:
                 if time.monotonic() >= end:
@@ -256,13 +273,15 @@ class Stage:
             try:
                 link = self._open(ident, co.epoch, RETRY_S)
             except L.LinkRefused as e:
+                self.refused = e.reason
+                co.why = f"refused ({e.reason})"         # /health's stage.link.reason
                 self._say(f"link: refused ({e.reason})")
                 continue
             except L.LinkError as e:
                 self._say(f"link: down ({co.why}); no peer yet ({e.code})")
                 continue
             co.attach(link)
-            self.link = link
+            self.link, self.refused = link, None
             self.log(f"[stage] {link.describe()}")
 
     def fake_tail(self):
@@ -307,6 +326,27 @@ class Stage:
             out["stage"]["link"].update(transport=link.transport, bytes={
                 "tx": link.stats.tx_bytes, "rx": link.stats.rx_bytes})
         out["stage"].update(lo=self.lo, hi=self.hi, layers=self.layers, options=self.options)
+        return self._shape(out)
+
+    def _shape(self, out: dict) -> dict:
+        """SRV-817: every field of the stage block present (docs/server.md "The stage block"): the range as
+        text, the link's reason (null while up), transport, bytes and the peer's identity digest (null before
+        a first link), and this stage's own identity digest."""
+        s = out["stage"]
+        lk = s["link"]
+        up = lk.get("state") == "up"
+        if not up and lk.get("reason") is None:
+            lk["reason"] = (f"refused ({self.refused})" if self.refused else
+                            (self.link.why if self.link is not None and self.link.why else "no peer yet"))
+        lk.setdefault("reason", None)
+        lk.setdefault("transport", None)
+        lk.setdefault("bytes", None)
+        peer = getattr(self.link, "peer_ident", None) if self.link is not None else None
+        ps = (peer or {}).get("stage") or {}
+        lk["peer"] = None if peer is None else {"role": ps.get("role"), "lo": ps.get("lo"), "hi": ps.get("hi"),
+                                                "identity": identity_digest(peer)}
+        s.update(shape=HEALTH_SHAPE, range=f"{self.lo}:{self.hi}",
+                 identity=identity_digest(self._ident) if self._ident is not None else None)
         return out
 
     def down(self) -> str | None:
@@ -315,6 +355,95 @@ class Stage:
         if co is None or (co.link is not None and co.link.state == "up"):
             return None
         return str(co.why or "down")
+
+
+def identity_digest(ident: dict) -> str:
+    """A handshake identity block by content: the front's own digest is the tail's `link.peer.identity`."""
+    import hashlib
+    return hashlib.sha256(json.dumps(ident, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+
+def _mem_available_gib(path: str | None = None) -> float | None:
+    try:
+        with open(path or MEMINFO) as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / (1 << 20)
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _folder_bytes(d: str) -> int:
+    n = 0
+    for root, _, files in os.walk(d):
+        for f in files:
+            try:
+                n += os.lstat(os.path.join(root, f)).st_size
+            except OSError:
+                pass
+    return n
+
+
+def front_check(st: "Stage", a, log=print) -> None:
+    """SRV-817: a front that keeps state checks the box before any weight is read: MemAvailable must cover its
+    weights, its attention layers' rows and sections a slot (the family's `split_facts`, from the pack's headers;
+    nothing for a family without it), `--stage-snapshots-gb` a slot and the floor (`--parallel-floor-gb`), and the
+    filesystem of `--stage-cache-dir` must hold `--stage-cache-gb` (its free space and the files already in it).
+    ValueError names what is short; a box without /proc/meminfo skips the memory half, and says so."""
+    o = st.options
+    if st.role != "front" or o.get("caches") != "on":
+        return
+    slots = max(1, int(o.get("slots", 1) or 1))
+    snaps = float(o.get("snapshots_gb", getattr(a, "stage_snapshots_gb", 0.0)) or 0.0)
+    states = snaps * slots
+    stage_gb, how = 0.0, "no figure for its weights"
+    facts = None
+    if st.family is not None and hasattr(st.family, "split_facts"):
+        try:
+            facts = st.family.split_facts(a.model)
+        except (OSError, ValueError, KeyError) as e:
+            log(f"[stage] front check: the pack's headers do not read ({type(e).__name__}); weights not counted")
+    if facts is not None:
+        k = st.hi
+        extra = facts["front_extra_bytes"]
+        w = facts["shared_bytes"] + sum(facts["layer_bytes"][:k]) + (extra[k] if k in extra else extra.get(str(k), 0))
+        attn = sum(1 for li in facts["attention_layers"] if li < k)
+        kvl = facts["kv_layer"]
+        win = int(getattr(a, "max_len", 0) or 0)
+        side = int(getattr(a, "side_max_len", 0) or 0) or win
+        rows = attn * (kvl["per_token"] * win + kvl["const"]) + (slots - 1) * attn * (kvl["per_token"] * side + kvl["const"])
+        stage_gb = (w + rows + slots * sum(facts["section_bytes"][:k])) / GIB
+        how = f"weights, rows and sections {stage_gb:.2f} GiB"
+    floor = float(getattr(a, "parallel_floor_gb", 15.0) or 0.0)
+    need = stage_gb + states + floor
+    avail = _mem_available_gib()
+    if avail is None:
+        log("[stage] front check: no MemAvailable on this box; the memory is not checked")
+    elif avail < need:
+        raise ValueError(f"the front needs {need:.2f} GiB of MemAvailable ({how}, kept states "
+                         f"--stage-snapshots-gb {snaps:g} x {slots} slot(s) = {states:.2f} GiB, floor {floor:g} GiB);"
+                         f" there are {avail:.2f} GiB")
+    d = getattr(a, "stage_cache_dir", "") or ""
+    if d:
+        want = float(getattr(a, "stage_cache_gb", 0.0) or 0.0)
+        p = os.path.abspath(os.path.expanduser(d))
+        probe = p
+        while not os.path.exists(probe) and os.path.dirname(probe) != probe:
+            probe = os.path.dirname(probe)
+        try:
+            v = os.statvfs(probe)
+        except OSError as e:
+            raise ValueError(f"--stage-cache-dir {d}: its filesystem does not answer ({type(e).__name__})") from None
+        free = v.f_bavail * v.f_frsize
+        held = _folder_bytes(p) if os.path.isdir(p) else 0
+        if free + held < want * GIB:
+            raise ValueError(f"--stage-cache-dir {d}: --stage-cache-gb {want:g} asked, "
+                             f"{(free + held) / GIB:.2f} GiB there ({free / GIB:.2f} free, "
+                             f"{held / GIB:.2f} in its files)")
+    log(f"[stage] front check: {how}, kept states {states:.2f} GiB, floor {floor:g} GiB"
+        + (f", MemAvailable {avail:.2f} GiB" if avail is not None else "")
+        + (f"; its folder holds {float(getattr(a, 'stage_cache_gb', 0.0) or 0.0):g} GiB" if d else ""))
 
 
 def prepare(a, state: dict, log=print) -> None:
@@ -327,7 +456,9 @@ def prepare(a, state: dict, log=print) -> None:
         return
     try:
         state["stage"] = _prepare(a, log)
+        front_check(state["stage"], a, log)
     except ValueError as e:
+        state.pop("stage", None)
         raise SystemExit(f"[stage] REFUSING: {e}") from None
     st = state["stage"]
     if getattr(a, "session_spill", "off") == "on":
@@ -353,6 +484,8 @@ def _prepare(a, log) -> Stage:
             ("kv-pool", getattr(a, "kv_pool", "off") == "on", "a stage keeps its rows in place: --kv-pool off"),
             ("disk-cache", getattr(a, "disk_cache", "off") not in ("", "off", None) and not caches,
              "a stage keeps no caches: --disk-cache off (the disk tier: --stage-caches on)"),
+            ("disk-cache", getattr(a, "disk_cache", "off") not in ("", "off", None) and lo == 0,
+             "the disk tier is the tail's: --disk-cache off on the front (its half: --stage-cache-dir)"),
             ("conductor", getattr(a, "conductor", "raw") not in ("raw", "off"),
              "a stage serves the raw engine: --conductor raw"),
             ("backends", getattr(a, "backends", "off") not in ("", "off", None),
@@ -448,9 +581,15 @@ def serve_front(a, state: dict, log=print) -> None:
     def connect(last_epoch: int):
         try:
             st.link = st._open(ident, last_epoch, None)
+        except L.LinkRefused as e:
+            st.refused = e.reason                       # /health's stage.link.reason, until a link is up
+            st._say(f"link: refused ({e.reason})")
+            time.sleep(RETRY_S)
+            raise
         except L.LinkError:
             time.sleep(RETRY_S)
             raise
+        st.refused = None
         return st.link
 
     def health() -> dict:
