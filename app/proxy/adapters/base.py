@@ -86,7 +86,7 @@ class Stamps:
 
     __slots__ = ("usage", "finish_reason", "reasoning", "tools", "tokens_seen", "error",
                  "model", "think_open", "kind", "tool_name", "tool_chars", "fingerprint",
-                 "response_id")
+                 "response_id", "done")
 
     def __init__(self):
         self.usage = None              # the provider's usage object, as sent
@@ -107,6 +107,7 @@ class Stamps:
         # the answer's own id (`id`; a Responses answer's `response.id`), the first one seen: our
         # engine's is its ledger row's request_id (SRV-733, the row of record)
         self.response_id = None
+        self.done = False              # the stream's `data: [DONE]` seen
 
 
 def _answer_id(obj: dict, st: Stamps) -> None:
@@ -286,6 +287,8 @@ class Adapter:
     def read_frame(self, path: str, event: bytes, st: Stamps, injected: bool) -> tuple[bool, bool]:
         """(the frame carries a token, drop it before the client)."""
         data = sse_data(event)
+        if data == b"[DONE]":
+            st.done = True
         if data is None or data == b"[DONE]":
             return False, False
         try:

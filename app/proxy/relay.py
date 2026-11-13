@@ -66,6 +66,7 @@ import time
 
 from proxy import http1
 from proxy.adapters import ENDPOINTS, Stamps
+from proxy.adapters.base import CHAT, COMPLETIONS
 from proxy.measure import RelayRecord
 from tandemapp.parallel import _fetch_json
 
@@ -414,7 +415,12 @@ class Relay:
                 backend.get("kind") != "tandemllm":
             w = CostTap(w, lambda: self._cost_line(st, adapter, path, backend, rec))
         try:
-            self._pump(conn, path, adapter, st, injected, rec, w, to, poll, hx)
+            ended = self._pump(conn, path, adapter, st, injected, rec, w, to, poll, hx)
+            if ended and _cut_short(path, st):
+                # SRV-741: a body without a length (our engine's stream) ends at the close, so an
+                # engine that died or a link that broke mid-answer looks like an end: no [DONE],
+                # no finish and no error frame is the early close
+                raise http1.Closed()
             if hx is not None:
                 self._settle(handler, path, backend, adapter, st, rec, w, to, poll, hx, pool,
                              conn, headers)
@@ -677,6 +683,12 @@ def _finish(st) -> str:
     if st.error:
         return "error"
     return FINISH.get(st.finish_reason or "stop", "stop")
+
+
+def _cut_short(path: str, st) -> bool:
+    """A chat or completion stream that ended without `[DONE]`, a finish reason or an error."""
+    return path in (CHAT, COMPLETIONS) and not st.done and st.finish_reason is None and \
+        st.error is None
 
 
 def _event_end(buf: bytearray) -> tuple[int, int]:
