@@ -14,7 +14,7 @@ import { MockFleet } from '../mock/fleet.ts';
 import { createMockMiddleware } from '../mock/server.ts';
 import { bound, writeOf } from '../mock/setup-relay.ts';
 import type { FleetDeployment, Placement, PlacementNode, SetupConfirm, WeightsCopyJob, WeightsMatrix } from '../src/api/fleet.ts';
-import { basisWord, copyWords, countWords, depActions, depCounts, linkWords, managedWords, MEMBER_WORD, membersFor, memberTone, newDeployment, phaseWords, pickType, placeBar, scoped, setSimpleMode, shortId, simpleMode, sizeWords, SPLIT_MOVE, SPLIT_NO_PLAN, stageBar, weightsCell } from '../src/lib/models.ts';
+import { basisWord, copyWords, countWords, depActions, depCounts, linkWords, managedWords, MEMBER_WORD, membersFor, memberTone, newDeployment, phaseWords, pickType, placeBar, scoped, setSimpleMode, shortId, simpleMode, sizeWords, SPLIT_MOVE, SPLIT_NO_PLAN, stageBar, tileFigures, weightsCell } from '../src/lib/models.ts';
 import { isCancelled, setConfirmer, setSetupNode, setupApi, setupBase } from '../src/setup/api.ts';
 
 const FDIR = join(__dirname, '..', '..', 'contracts', 'fleet-v1');
@@ -202,6 +202,33 @@ describe('VIS-273: a Split on the Models pages', () => {
     setSimpleMode(true);
     expect(simpleMode()).toBe(true);
     vi.unstubAllGlobals();
+  });
+  it('the tiles count a running Split: the tail’s decode, both stages’ memory; a backend says not available', () => {
+    const stage = (role: 'front' | 'tail', runs = true) => ({ role, layers: plan[role].layers, need_gib: plan[role].need_gib, budget_gib: plan[role].budget_gib, runs, link: 'up' as const, epoch: 1, reason: null });
+    const ms = (runs: boolean) => [
+      { node: 'r1', alias: 'R-1', engine: 'e', backend: null, model: 'm', managed: true, state: 'serving' as const, text: '', routable: false, stage: stage('front', runs) },
+      { node: 'r2', alias: 'R-2', engine: 'e', backend: 'b2', model: 'm', managed: true, state: 'serving' as const, text: '', routable: runs, stage: stage('tail', runs) },
+    ];
+    const split = dep({ id: 'sp', type: 'split', members: ['r1', 'r2'], member_states: ms(true) });
+    const nodes = [
+      { id: 'r1', alias: 'R-1', status: 'up', class: 'spark' },
+      { id: 'r2', alias: 'R-2', status: 'up', class: 'spark' },
+      { id: 'backend.c', alias: 'Cloud', status: 'up', class: 'backend' },
+    ];
+    // what the controller answered while a Split served: no node rate, the stages not in the memory reading
+    const zero = (node: string) => ({ node, weights: 0, kv: 0, cache: 0, usable: 121.6 });
+    const t = tileFigures(nodes, [split], {}, { sp: { r1: 0, r2: 30 } }, [zero('r1'), zero('r2')]);
+    expect([t.tps.r1, t.tps.r2, t.tps['backend.c']]).toEqual([null, 30, null]);
+    expect([t.mem.r1, t.mem.r2, t.mem['backend.c']]).toEqual([plan.front.need_gib, plan.tail.need_gib, null]);
+    expect([t.cap, t.planned, t.backends]).toEqual([243.2, true, ['Cloud']]);
+    // a reading that covers the stage wins; a node rate wins when it is the larger
+    const full = tileFigures(nodes.slice(0, 2), [split], { r2: 41 }, { sp: { r2: 30 } }, [{ ...zero('r1'), weights: 150 }, zero('r2')]);
+    expect([full.tps.r2, full.mem.r1, full.mem.r2]).toEqual([41, 150, plan.tail.need_gib]);
+    // a stopped Split counts what the nodes read, 0 included
+    const off = tileFigures(nodes.slice(0, 2), [dep({ ...split, member_states: ms(false) })], {}, { sp: { r2: 30 } }, [zero('r1'), zero('r2')]);
+    expect([off.tps.r2, off.mem.r1, off.mem.r2, off.planned]).toEqual([null, 0, 0, false]);
+    // no reading and no stage: no figure, never 0
+    expect(tileFigures(nodes.slice(0, 1), [], {}, {}, []).mem.r1).toBeNull();
   });
 });
 

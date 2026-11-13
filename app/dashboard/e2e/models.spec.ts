@@ -158,6 +158,12 @@ test.describe('Models pages', () => {
     await expect(adv.locator('summary')).toContainText('not chosen');
     expect(await noSideScroll(page)).toBe(true);
     await shot(page, info, 'split-advanced');
+    // VIS-272: the measured figures as table rows, each column on its own
+    const meas = adv.locator('[data-split-measured]');
+    await expect(meas.locator('tbody tr')).toHaveCount(1);
+    await expect(meas.locator('tbody td').nth(1)).toHaveText('0.87');
+    await expect(meas.locator('tbody td').nth(2)).toHaveText('5.2');
+    expect(await noSideScroll(page)).toBe(true);
     await page.locator('[data-models-mode="simple"]').click();
     await expect(adv).toHaveCount(0);
     // Start: one action for the pair, the front first
@@ -176,6 +182,10 @@ test.describe('Models pages', () => {
     await expect(c.locator('[data-link]')).toContainText('link up · epoch 1 · tcp · fabric pair');
     await expect(c.locator('[data-dep-status]')).toHaveAttribute('data-dep-status', 'serving');
     await shot(page, info, 'split-linked');
+    // VIS-272: the tiles count both stages; the mock's nodes read no engine memory, as the controller's did
+    const mem = page.locator('[data-tile="mem"]');
+    await expect(mem).toContainText('Split stages by plan');
+    await expect(mem.locator('.mtile-val')).not.toHaveText(/^0\.0/);
     // the link drops: degraded, in plain words, and it heals by itself
     const knob = (mock: string) => page.request.post('/v1/fleet/deployments/dsv41/actions/start', { data: { mock } });
     expect((await knob('link-down')).ok()).toBeTruthy();
