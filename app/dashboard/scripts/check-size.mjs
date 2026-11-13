@@ -80,6 +80,9 @@
 // the first-open page with its connect-a-server form (a chunk of its own, loaded when it opens), a backend's place
 // in the scope bar and on Overview, Hardware's no-host-figures state. Room looked for first: eleven style rules no
 // page used went (167 bytes gzip); the form is already its own chunk, but the budget counts every file.
+// 622 KB with both on one line (2026-11-13: 621.1 KB, 635,979 bytes): a Split's view and Get started
+// together, plus the Models tiles that count a Split's stages and the plan's measured table (410
+// bytes). Room looked for first: no style rule is left that no page uses. One budget for both.
 // OPS-246: dist/ is a build output; CI runs this after the build and a total over the budget fails
 // the job. An optional argument names another folder (the size test's fixture).
 import { existsSync } from 'node:fs';

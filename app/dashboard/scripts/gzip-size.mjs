@@ -10,7 +10,7 @@ import pako from 'pako';
 
 /** The budget for the total gzip size of dist/, in bytes: the one place it is set (OPS-246). The
  * size check (scripts/check-size.mjs), its CI step and the build test all read it from here. */
-export const BUDGET = 619 * 1024;
+export const BUDGET = 622 * 1024;
 
 /** dist/bundle.json, the bundle's manifest (tools/dashboard_bundle.py): metadata the page never
  * loads, so it is not part of the measure. */
