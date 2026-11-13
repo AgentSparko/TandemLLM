@@ -430,6 +430,13 @@ def serve_front(a, state: dict, log=print) -> None:
         if hasattr(adapter, "warm"):
             adapter.warm()                 # the kernels' first launches, before a deadline counts
         log(f"[stage] front stage: weights and engine {t1 - t0:.1f} s, first launches {time.monotonic() - t1:.1f} s")
+        # ENG-423: every slot's stage and its first launches now, not inside a round's deadline
+        for i in range(1, int(st.options.get("slots", 1))):
+            t2 = time.monotonic()
+            side = adapter.slot(i)
+            if hasattr(side, "warm"):
+                side.warm()
+            log(f"[stage] front stage: slot {i} built and warmed in {time.monotonic() - t2:.1f} s")
     adapter.seed = st.seed()
     ident = st.identity(adapter)
     st.follower = S.Follower(adapter)
