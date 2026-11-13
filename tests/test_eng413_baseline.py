@@ -217,18 +217,19 @@ def _run(tmp: str, label: str, mode: str) -> str:
     ledger = os.path.join(wd, "ledger.sqlite3")
     port = _free_port()
     p = _fake(port, ledger, config)
+    strip = ["--strip", os.path.join(tmp, label)]       # N8: this run's folder in the paths it reports
     try:
         if mode == "engine":
-            assert B.main(["capture", "--port", str(port), "--set", "b3", "--out", out, "--name", "b3-pre"]) == 0
-            assert B.main(["capture", "--port", str(port), "--set", "b1", "--out", out, "--name", "b1"]) == 0
-            assert B.main(["capture", "--port", str(port), "--set", "b3", "--out", out, "--name", "b3-post"]) == 0
+            for name, kind in (("b3-pre", "b3"), ("b1", "b1"), ("b3-post", "b3")):
+                assert B.main(["capture", "--port", str(port), "--set", kind, "--out", out, "--name", name,
+                               *strip]) == 0
         else:
             model = "TandemLLM" if mode == "chat" else "qwen38-spark-engine"
             assert B.main(["capture", "--port", str(port), "--set", "b2f", "--out", out, "--name", f"b2f-{mode}",
-                           "--model", model]) == 0
+                           "--model", model, *strip]) == 0
     finally:
         _stop(p)
-    assert B.main(["journal", "--ledger", ledger, "--out", out, "--name", f"journal-{mode}"]) == 0
+    assert B.main(["journal", "--ledger", ledger, "--out", out, "--name", f"journal-{mode}", *strip]) == 0
     return out
 
 
@@ -260,8 +261,9 @@ def test_fake_engine_records_repeat():
             if mode == "engine":
                 with open(os.path.join(a, "b1.json")) as f:
                     recs = json.load(f)["requests"]
-                assert all(r["gate"]["logprobs"] and r["gate"]["text_ids"] for r in recs), \
-                    [r["name"] for r in recs if not r["gate"]["logprobs"]]
+                bad = [r["name"] for r in recs if not r["gate"]["logprobs"]
+                       or not isinstance(r["gate"].get("text_ids"), list) or not r["gate"].get("prompt_ids")]
+                assert not bad, f"records without tokens, text ids or prompt ids: {bad}"
             else:
                 acts = _acts(os.path.join(a, f"journal-{mode}.json"))
                 want = {"D1:CLOSE_REASONING", "E1:CONTINUE_HIDDEN", "E1:GIVE_UP", "C3:REGENERATE_CALL"}
