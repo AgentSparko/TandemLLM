@@ -842,6 +842,7 @@ def split_facts(path: str) -> dict:
     `check_pack(path, cut)`'s `stages.<role>.bytes` equal `shared + layers + front_extra[cut]` and
     `shared + tail_only + layers` at every cut (tests/test_split_estimate.py)."""
     from engine.models.flashnext.pack import TABLE_FILE, PackIndex, expected_names
+    from engine.settings import SETTINGS as _S
     idx = PackIndex.open(path)
     idx.audit(mtp=True)
     c = idx.cfg
@@ -889,7 +890,9 @@ def split_facts(path: str) -> dict:
         # the draft layer is one attention layer of its own, with its own cache a slot (the tail's)
         "draft_attention_layers": 1 if c.mtp_num_hidden_layers else 0,
         "carry_bytes_per_row": {k: carry_parts(c, k) * c.hc_count * c.hidden_size * 2 for k in range(1, n)},
-        "table": {"bytes": int(idx.files.get(TABLE_FILE, 0)), "layers": sorted(c.ple_layers)} if c.ple_layers else None,
+        # read cold, the table's rows come through a row cache of FN_TABLE_CACHE_GB (engine/settings.py)
+        "table": {"bytes": int(idx.files.get(TABLE_FILE, 0)), "layers": sorted(c.ple_layers),
+                  "cache_gib": float(_S.get("FN_TABLE_CACHE_GB") or 2)} if c.ple_layers else None,
         "pack_bytes": int(sum(idx.files.values())),
         "caches": True, "slots_max": SLOTS_MAX, "snapshots_gb": SNAPSHOTS_GB,
         "measured": [dict(m) for m in MEASURED],

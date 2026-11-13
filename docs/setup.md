@@ -112,7 +112,7 @@ The answer is `split` in the estimate's body (`server/setup/split.py`). The fact
 | part | side | basis |
 |-|-|-|
 | `weights`: its layers, what both read (embedding, head, final mixer), the tail's own (the draft layer, the final norm), the norm the front reads of layer k | both | `pack_headers` |
-| `table`: the warm table's file, or the cold table's row cache | the side that holds a layer reading it | `pack_headers` or `registry` |
+| `table`: the warm table's file, or the cold table's row cache (the profile's, or the engine's setting when the profile reads it warm) | the side that holds a layer reading it | `pack_headers`, `registry` or `setting` |
 | `kv`: slot 0 at the window, each side slot at the side window | both | `config` |
 | `sections`: recurrent and conv states, a slot | both | `config` |
 | `draft_kv`: the draft layer's own cache, a slot | tail | `config` |

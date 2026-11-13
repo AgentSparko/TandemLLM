@@ -21,7 +21,8 @@ For each legal cut `k` (the ask's, else every one the family supports) each side
                  mixer), the tail's own (the draft layer, the final norm), the norm the front reads
                  of layer k                                                  pack_headers
     table        the n-gram table on the stage that holds a layer that reads it: its file when
-                 warm (the page cache), its row cache when cold              pack_headers / registry
+                 warm (the page cache), its row cache when cold (the profile's, else the engine's
+                 setting the family names)                          pack_headers / registry / setting
     kv           slot 0 at the window and every side slot at the side window, for the stage's
                  attention layers                                            config
     sections     the recurrent and conv states of the stage's layers, a slot  config
@@ -211,7 +212,12 @@ def block(m: dict, sel: dict, ask, *, path: str | None = None, facts: dict | Non
         if policy == "warm":
             table_mem = table["bytes"] / GIB
         else:
-            table_mem, table_basis = float((prof.get("table") or {}).get("cache_gib", 2.0)), "registry"
+            # the profile's row cache when it reads its table cold, else the engine's setting the family names
+            own = float((prof.get("table") or {}).get("cache_gib") or 0.0)
+            if (prof.get("table") or {}).get("policy") == "cold" and own > 0:
+                table_mem, table_basis = own, "registry"
+            else:
+                table_mem, table_basis = float(table.get("cache_gib") or 0.0), "setting"
     fixed = [(p["id"], p["gib"]) for p in m["memory"]["parts"]]
     for p in m["memory"].get("per_window_parts") or []:
         gb = p["bytes_per_token"] * window / GIB
