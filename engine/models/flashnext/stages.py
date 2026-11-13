@@ -610,15 +610,15 @@ class FlashNextRowStage(StageAdapter):
         graphs, the dense class's are captured here); then a decode step and a verify block past
         the dense regime, eager, so the sparse attention's kernels have run once."""
         from tools import fn_seq_kernels as SK
-        eng, st = self.eng, self.st
+        eng, st, me = self.eng, self.st, self.slot_id
         W = eng.cfg.hc_count * eng.cfg.hidden_size
 
         def carry(rows: int):
             return None if self.lo == 0 else torch.zeros(rows, self.parts, W, dtype=eng.dtype, device=eng.device)
         self.reset()
-        self.rows(Block([0] * 8, None, head="last"), carry(8))
-        self.rows(Block([0], None, graph=STEP), carry(1))
-        self.rows(Block([0, 0, 0, 0], [-1, 0, 1, 1]), carry(4))
+        self.rows(Block([0] * 8, None, slot=me, head="last"), carry(8))
+        self.rows(Block([0], None, slot=me, graph=STEP), carry(1))
+        self.rows(Block([0, 0, 0, 0], [-1, 0, 1, 1], slot=me), carry(4))
         self.commit([0, 1, 3])
         # the first rows of the first sparse class: a block past the dense budget
         far = eng.cfg.indexer_compress_ratio * (SK.TOPK + 2) if eng.cfg.has_indexer else 0
@@ -627,8 +627,8 @@ class FlashNextRowStage(StageAdapter):
             try:
                 eng.flush(st)
                 st.length = far                      # rows of zeros behind it: nobody's sequence
-                self.rows(Block([0], None, graph=STEP), carry(1))
-                self.rows(Block([0, 0, 0, 0], [-1, 0, 1, 1]), carry(4))
+                self.rows(Block([0], None, slot=me, graph=STEP), carry(1))
+                self.rows(Block([0, 0, 0, 0], [-1, 0, 1, 1], slot=me), carry(4))
                 self.commit([0, 1, 3])
             finally:
                 self.graphs = graphs

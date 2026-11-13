@@ -296,9 +296,12 @@ class Stage:
                 out["stage"]["state"] = self.coordinator.report()
             elif self.follower is not None:
                 fol = self.follower
-                out["stage"]["state"] = {**fol.stats, "slots": {
-                    str(i): seat.adapter.store.report() for i, seat in sorted(fol.seats.items())
-                    if getattr(seat.adapter, "store", None) is not None}}
+                try:
+                    out["stage"]["state"] = {**fol.stats, "slots": {
+                        str(i): seat.adapter.store.report() for i, seat in sorted(list(fol.seats.items()))
+                        if getattr(seat.adapter, "store", None) is not None}}
+                except RuntimeError:             # the follower's thread changed a table meanwhile: next time
+                    out["stage"]["state"] = dict(fol.stats)
         link = self.link
         if link is not None:
             out["stage"]["link"].update(transport=link.transport, bytes={
