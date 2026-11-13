@@ -7,6 +7,12 @@
     --link-key-file PATH   the key both stages share: a file of mode 0600 with at least 32 bytes
     --stage-graphs on|off  a family whose stage captures graphs for its passes: its own graphs
                            (on, the default) or every pass eager
+    --stage-caches on|off  keep state on both stages under one key (ENG-423): the prefix, session
+                           and resident caches, the disk tier (`--disk-cache`) and side slots
+                           (`--parallel`); off, the default: one sequence, nothing kept
+    --stage-snapshots-gb G the front: memory for the states it keeps, a slot
+    --stage-cache-dir PATH the front: where it writes its half of what the tail's disk tier keeps
+    --stage-cache-gb G     the front: that directory's size
 
 The tail is the engine a client talks to: the server as it is, with the family's tail stage as its
 engine (the family's `serve` reads `STATE["stage"]` and asks it for the link, `Stage.attach`). The
@@ -16,11 +22,13 @@ engine/methods; a family's stage code is its own (`engine/models/<family>/stages
 names no family.
 
 What a stage does not serve is refused at the start, before any weight is read: more than one
-slot, the KV pool, the disk tier, the conductor, setup mode, a family without a stage loader, a
-range that is neither the front nor the tail. A request with images gets 400. While the link is
-down the tail's `/health` says `degraded` with `stage.link.state: down`, a request in flight ends
-with `stage_down`, and a new one gets 503 with Retry-After; a new link starts both stages from an
-empty state under a new epoch.
+slot and the disk tier without `--stage-caches on` (or for a family that keeps no state split),
+the KV pool, the conductor, setup mode, a family without a stage loader, a range that is neither
+the front nor the tail. The session spill is turned off. A request with images gets 400. While the
+link is down the tail's `/health` says `degraded` with `stage.link.state: down`, a request in
+flight ends with `stage_down`, and a new one gets 503 with Retry-After; a new link starts both
+stages' running sequences empty under a new epoch. A state the caches put back after that is the
+front's own kept half under the same key, or the front is rebuilt from the tail's log of blocks.
 
 The key is read once, from the file, and appears in no message, log line or route.
 """
@@ -59,6 +67,17 @@ def add_flags(ap) -> None:
     ap.add_argument("--stage-graphs", default="on", choices=("on", "off"),
                     help="with --stage: a stage whose family captures graphs for its passes captures "
                          "its own (on), or runs every pass eager (off)")
+    ap.add_argument("--stage-caches", default="off", choices=("on", "off"),
+                    help="with --stage: keep state on both stages under one key: the prefix, session and "
+                         "resident caches, the disk tier and side slots (ENG-423); off: one sequence, "
+                         "nothing kept")
+    ap.add_argument("--stage-snapshots-gb", type=float, default=2.0, metavar="G",
+                    help="with --stage-caches on, the front stage: memory for the states it keeps, a slot")
+    ap.add_argument("--stage-cache-dir", default="", metavar="PATH",
+                    help="with --stage-caches on, the front stage: the directory for its half of what the "
+                         "tail's disk tier keeps (none: a state read from the tail's disk is rebuilt or missed)")
+    ap.add_argument("--stage-cache-gb", type=float, default=32.0, metavar="G",
+                    help="with --stage-cache-dir: the directory's size; the files unused longest go first")
     ap.add_argument("--link-key-file", default="", metavar="PATH",
                     help="with --stage: the key both stages share, a file of mode 0600 with at "
                          "least 32 bytes")
@@ -172,6 +191,12 @@ class Stage:
         return f"Stage({self.role} [{self.lo}, {self.hi}) of {self.layers})"
 
     # ------------------------------------------------------------------ the link
+    def seed(self) -> bytes:
+        """What both stages put in every state's key: the code, the weights, the family and the cut."""
+        import hashlib
+        return hashlib.sha256(json.dumps({**self._base, "cut": self.hi if self.lo == 0 else self.lo},
+                                         sort_keys=True, default=str).encode()).digest()
+
     def identity(self, adapter) -> dict:
         """The handshake's payload: what both stages must agree on, with this stage's range."""
         if (adapter.lo, adapter.hi) != (self.lo, self.hi):
@@ -200,6 +225,7 @@ class Stage:
         reason, a front that is not there the address. A thread then keeps the link: when it goes
         down it opens the next one, which starts both stages empty under a new epoch."""
         ident = self.identity(adapter)
+        adapter.seed = self.seed()
         co = self.coordinator = S.Coordinator(adapter)
         end = time.monotonic() + ATTACH_S
         where = f"listening on {self.listen}" if self.listen else f"at {self.peer}"
@@ -264,6 +290,15 @@ class Stage:
                 "state": "up" if up else "down", "epoch": self.link.epoch if self.link is not None else 0}}}
             if self.follower is not None:
                 out["stage"]["steps"] = self.follower.steps
+        if self.options.get("caches") == "on":
+            # ENG-423: the kept state's counters, each side its own
+            if self.coordinator is not None:
+                out["stage"]["state"] = self.coordinator.report()
+            elif self.follower is not None:
+                fol = self.follower
+                out["stage"]["state"] = {**fol.stats, "slots": {
+                    str(i): seat.adapter.store.report() for i, seat in sorted(fol.seats.items())
+                    if getattr(seat.adapter, "store", None) is not None}}
         link = self.link
         if link is not None:
             out["stage"]["link"].update(transport=link.transport, bytes={
@@ -292,6 +327,10 @@ def prepare(a, state: dict, log=print) -> None:
     except ValueError as e:
         raise SystemExit(f"[stage] REFUSING: {e}") from None
     st = state["stage"]
+    if getattr(a, "session_spill", "off") == "on":
+        # its restore puts states back without the engine's verb: the front's half could not follow
+        a.session_spill = "off"
+        log("[stage] the session spill is not served split: --session-spill off")
     log(f"[stage] {st.role} stage, layers [{st.lo}, {st.hi}) of {st.layers}; "
         + (f"link listens on {st.listen}" if st.listen else f"link dials {st.peer}")
         + f"; options {json.dumps(st.options, sort_keys=True)}")
@@ -302,12 +341,15 @@ def _prepare(a, log) -> Stage:
     if bool(a.link_listen) == bool(a.link_peer):
         raise ValueError("--stage needs one of --link-listen and --link-peer")
     L.parse_addr(a.link_listen or a.link_peer)
+    caches = getattr(a, "stage_caches", "off") == "on"
+    slots = int(getattr(a, "parallel", 1) or 1)
     for flag, bad, why in (
             ("setup", bool(getattr(a, "setup", False)), "setup mode serves no model"),
-            ("parallel", int(getattr(a, "parallel", 1) or 1) > 1, "a stage serves one slot: --parallel 1"),
+            ("parallel", slots > 1 and not caches,
+             "a stage serves one slot: --parallel 1 (side slots: --stage-caches on)"),
             ("kv-pool", getattr(a, "kv_pool", "off") == "on", "a stage keeps its rows in place: --kv-pool off"),
-            ("disk-cache", getattr(a, "disk_cache", "off") not in ("", "off", None),
-             "a stage keeps no caches: --disk-cache off"),
+            ("disk-cache", getattr(a, "disk_cache", "off") not in ("", "off", None) and not caches,
+             "a stage keeps no caches: --disk-cache off (the disk tier: --stage-caches on)"),
             ("conductor", getattr(a, "conductor", "raw") not in ("raw", "off"),
              "a stage serves the raw engine: --conductor raw"),
             ("backends", getattr(a, "backends", "off") not in ("", "off", None),
@@ -317,7 +359,8 @@ def _prepare(a, log) -> Stage:
     key = read_key_file(a.link_key_file)
     args = vars(a)
     if getattr(a, "fake_engine", False):
-        family, name, layers, weights, options = None, FakeStage.family, FAKE_LAYERS, "fake", {"slots": 1}
+        family, name, layers, weights = None, FakeStage.family, FAKE_LAYERS, "fake"
+        options = {"slots": slots, "caches": "on"} if caches else {"slots": 1}
         if not (0 <= lo < hi <= layers) or (lo, hi) == (0, layers) or (lo != 0 and hi != layers):
             raise ValueError(f"--stage {lo}:{hi}: a stage is the front 0:k or the tail k:{layers} of the "
                              f"fake engine's {layers} layers")
@@ -329,6 +372,10 @@ def _prepare(a, log) -> Stage:
         if not hasattr(family, "open_stage"):
             raise ValueError(f"the {name} family is not served as a stage yet")
         options = family.stage_options(a, lo, hi)
+        if caches and options.get("caches") != "on":
+            raise ValueError(f"--stage-caches on: the {name} family keeps no state split yet")
+        if slots > int(options.get("slots", 1)):
+            raise ValueError(f"--parallel {slots}: this family's stage serves {options.get('slots', 1)} slot(s)")
         layers = identity_mod._layers({}, args)
         weights = [diskcache.content_id(x) for x in str(a.model).split(",")]
     base = {"identity": identity_mod.VERSION, "code": identity_mod.code_digest(),
@@ -374,9 +421,16 @@ def serve_front(a, state: dict, log=print) -> None:
     if st.family is None:
         adapter = FakeStage(st.lo, st.hi)
     else:
-        adapter = st.family.open_stage(a.model, st.lo, st.hi, int(a.max_len), log=log, options=st.options)
+        more = {}
+        if hasattr(st.family, "store_options"):
+            more["store"] = st.family.store_options(st.options, a, st.seed())      # ENG-423: its kept states
+        t0 = time.monotonic()
+        adapter = st.family.open_stage(a.model, st.lo, st.hi, int(a.max_len), log=log, options=st.options, **more)
+        t1 = time.monotonic()
         if hasattr(adapter, "warm"):
             adapter.warm()                 # the kernels' first launches, before a deadline counts
+        log(f"[stage] front stage: weights and engine {t1 - t0:.1f} s, first launches {time.monotonic() - t1:.1f} s")
+    adapter.seed = st.seed()
     ident = st.identity(adapter)
     st.follower = S.Follower(adapter)
     started = time.time()
@@ -413,6 +467,47 @@ def health(state: dict, status: str) -> dict:
     if status == "ok" and mine != "ok":
         out["status"] = mine
     return out
+
+
+class StageDisk:
+    """The tail's disk tier (engine/disk_cache.py) with the front told what it keeps (ENG-423).
+    Every call is the tier's own. After the tier took a state's sections for an anchor file, the
+    engine asks the front to write its half under the same key (`disk_keep`). A restore the front
+    cannot follow (it holds no half of that state and no log rebuilds it) is a miss: the anchor is
+    given up and the prefill goes on from the caches in memory or cold."""
+
+    def __init__(self, tier):
+        self.__dict__["_tier"] = tier
+
+    def __getattr__(self, name):
+        return getattr(self._tier, name)
+
+    def __setattr__(self, name, value):
+        setattr(self._tier, name, value)
+
+    def capture(self, job, eng, L: int) -> None:
+        self._tier.capture(job, eng, L)
+        if job is not None and L in getattr(job, "lines", ()):
+            keep = getattr(eng, "disk_keep", None)
+            if keep is not None:
+                keep()
+
+    def restore(self, eng, drafter, hit) -> bool:
+        try:
+            return self._tier.restore(eng, drafter, hit)
+        except S.StageError as e:
+            if e.code != "snapshot":
+                raise
+            self._tier._fail("stage", hit, ("anchor", hit.anchor["key"]))
+            return False
+
+
+def disk(state: dict, tier):
+    """The disk tier as a tail stage with caches uses it; any other server's as it is."""
+    st = state.get("stage")
+    if tier is None or st is None or st.role != "tail" or st.options.get("caches") != "on":
+        return tier
+    return StageDisk(tier)
 
 
 def _has_image(body: dict) -> bool:

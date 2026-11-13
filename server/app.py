@@ -14747,7 +14747,7 @@ def _serve(a, led) -> None:
     except ValueError as exc:
         raise SystemExit(f"[probe] {exc}")
     # C1: the disk tier under the caches in RAM (None, nothing opened, with --disk-cache off)
-    STATE["disk_cache"] = diskcache_mod.start(STATE, a, journal)
+    STATE["disk_cache"] = stage_mod.disk(STATE, diskcache_mod.start(STATE, a, journal))    # ENG-423
     # Live conversations on the NVMe (engine/spill.py), and the one the last planned
     # stop wrote read back before the first request
     STATE["spill"] = diskcache_mod.start_spill(STATE, a, STATE["disk_cache"], journal)
