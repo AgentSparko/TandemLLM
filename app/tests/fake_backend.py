@@ -28,6 +28,8 @@ not ask gets no usage at all. Words in the last user message steer it:
     FAKE_SLOW            ten tokens a second
     FAKE_TPS <n>         <n> tokens a second (the parallel load: backends of different speeds)
     FAKE_STALL <s>       stop for <s> seconds after the third token
+    FAKE_EOF             the stream's body has no length and ends at the close, as our engine's
+                         does (no chunked encoding); with FAKE_DROP the close is all there is
     FAKE_DROP            close the connection after five tokens, no [DONE] (FAKE_DROP_ONCE: only
                          the first time per text, so a client's retry gets through)
     FAKE_429             429 with Retry-After: 1 (FAKE_429_ONCE: only the first time per text)
@@ -512,6 +514,7 @@ def make_handler(fake: Fake):
                                         "created": 1, "model": body.get("model"),
                                         "choices": [choice], "usage": usage}, extra)
             opts = body.get("stream_options") or {}
+            self._eof = False
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
@@ -660,10 +663,14 @@ def make_handler(fake: Fake):
             opts = body.get("stream_options") or {}
             asked = isinstance(opts, dict) and opts.get("include_usage") is True
             on_finish = "FAKE_USAGE_FINISH" in text
+            self._eof = "FAKE_EOF" in text
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
-            self.send_header("Transfer-Encoding", "chunked")
+            if self._eof:
+                self.close_connection = True
+            else:
+                self.send_header("Transfer-Encoding", "chunked")
             self.end_headers()
             with fake.lock:
                 fake.streams += 1
@@ -722,6 +729,11 @@ def make_handler(fake: Fake):
             return first
 
         def _send_chunk(self, data: bytes):
+            if getattr(self, "_eof", False):     # FAKE_EOF: the body ends at the close
+                if data:
+                    self.wfile.write(data)
+                    self.wfile.flush()
+                return
             self.wfile.write(f"{len(data):x}\r\n".encode() + data + b"\r\n")
             self.wfile.flush()
 

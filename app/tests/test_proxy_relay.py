@@ -301,6 +301,19 @@ def test_idle_timeout_is_its_own_reason_and_a_dropped_stream_ends_in_error():
         st, _, got = px.post("/v1/chat/completions", _chat("x FAKE_DROP", stream=True))
         assert b"upstream_closed" in got
         assert px.rows()[-1]["finish_reason"] == "error"
+        # SRV-742: a body that ends at the close (our engine's stream): a close before [DONE] is
+        # the same error frame and row, a whole answer and its close are not
+        for path, body in (("/v1/chat/completions", _chat("x FAKE_EOF FAKE_DROP", stream=True)),
+                           ("/v1/completions", {"model": "fake-a", "prompt": "x FAKE_EOF FAKE_DROP",
+                                                "stream": True})):
+            st, _, got = px.post(path, body)
+            assert st == 200 and b"upstream_closed" in got, (path, got[-300:])
+            assert got.endswith(b"data: [DONE]\n\n"), (path, got[-100:])
+            r = px.rows()[-1]
+            assert r["finish_reason"] == "error" and r["error_type"] == "upstream_closed", (path, r)
+        st, _, got = px.post("/v1/chat/completions", _chat("x FAKE_EOF", stream=True))
+        assert st == 200 and b"upstream_closed" not in got and got.endswith(b"data: [DONE]\n\n")
+        assert px.rows()[-1]["finish_reason"] == "stop", px.rows()[-1]
     srv.shutdown()
 
 
