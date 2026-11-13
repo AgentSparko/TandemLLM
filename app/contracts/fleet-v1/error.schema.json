@@ -50,7 +50,8 @@
             "cross_origin",
             "json_only",
             "too_large",
-            "method_not_allowed"
+            "method_not_allowed",
+            "not_a_node"
           ]
         },
         "code": {

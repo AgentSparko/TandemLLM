@@ -31,7 +31,8 @@
     "class": {
       "type": "string",
       "enum": [
-        "spark"
+        "spark",
+        "backend"
       ]
     },
     "hw": {
@@ -233,6 +234,119 @@
         "since",
         "by",
         "inflight"
+      ],
+      "additionalProperties": false
+    },
+    "backend": {
+      "type": "object",
+      "description": "SRV-749: the backend behind a member of class backend: what the OpenAI-compatible surface and this gateway say of it. Never its API key.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "the backend's id in the config database (/v1/config/backends/{id})"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "cloud": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "string"
+        },
+        "key_set": {
+          "type": "boolean",
+          "description": "whether an API key is stored for it; the key itself is in no answer"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "up",
+            "down",
+            "key_rejected",
+            "unknown",
+            "disabled"
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "latency_ms": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the model ids it serves through this gateway"
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the OpenAI routes its adapter relays"
+        },
+        "figures": {
+          "type": "string",
+          "enum": [
+            "own",
+            "gateway"
+          ],
+          "description": "where its tok/s, requests and TTFT come from: its own metrics page, or what this gateway measured of the requests it relayed (requests in flight and TTFT only)"
+        },
+        "engine_api": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "a TandemLLM engine reached by URL: the engine API its /health says (proxy/engineapi.py); null for any other kind and before the first answer",
+          "properties": {
+            "engine_api": {
+              "type": "string"
+            },
+            "assumed": {
+              "type": "boolean"
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "why": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "engine_api",
+            "assumed",
+            "ok",
+            "why"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "cloud",
+        "url",
+        "key_set",
+        "state",
+        "error",
+        "latency_ms",
+        "models",
+        "routes",
+        "figures",
+        "engine_api"
       ],
       "additionalProperties": false
     }
