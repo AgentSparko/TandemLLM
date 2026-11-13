@@ -13,12 +13,19 @@ engine in one process (torch.equal, same dtype):
      states and KV rows, equal the one engine's
   -  a stage engine holds its own layers only, and a stage read from a checkpoint
      (`open_stage`) holds only their weights and gives the same rows
+  -  an EXL3 pack with a head of its own (not tied to the embedding) and one with half-integer
+     rates, read by the stage loader: at every cut the two stages give the whole pack's logits on
+     the reference path, the tail's engine finds its head, and `check_pack` reads from the headers
+     what each stage will ask for (the EXL3 kernels themselves need CUDA)
+  -  the real window (`--max-len 16384`): a prompt past the first attention class, on both sides
   -  one flipped bit in a carry changes the logits (the check can fail)
   -  tools/stage_cut_cost.py runs the uncut and the cut arm over one copy of the weights, compares
      every output and records every setting
   -  the tail behind the server's engine interface (`Lfm2MoeSplitServing`) over a real link gives
      the logits and the tokens `Lfm2MoeServing` gives, through the server's own decode loop too;
-     its self-check across the cut passes
+     its self-check across the cut passes; a prompt of several chunks is cut where the engine
+     cuts it; with a drafter the loop's verify blocks and partial commits cross the link and
+     the tokens are the one process's
   -  what a split does not hold is refused: a length set by hand, a snapshot, a side slot, images
   -  stages that disagree are refused: a block past the smaller window, other weights (the
      handshake), a range that is neither front nor tail; a replay after a desync ends the request
@@ -348,6 +355,136 @@ def test_a_stage_from_a_checkpoint_reads_its_own_weights():
     return "two stages read from one checkpoint: own layers' weights only, the one engine's rows"
 
 
+# ------------------------------------------------------------------ packs as they are served
+class RefCut:
+    """Front and tail on the reference path (the CPU reads EXL3 blocks there), one process."""
+
+    def __init__(self, front, tail=None):
+        self.front, self.tail = front, tail
+
+    def run(self, block):
+        out = self.front.rows(block, None)
+        return out if self.tail is None else self.tail.rows(block, out)
+
+    def commit(self, path):
+        self.front.commit(path)
+        if self.tail is not None:
+            self.tail.commit(path)
+
+
+def _pack_play(m) -> list:
+    import test_lfm2_moe_pack as P
+    out = [m.run(S.Block(P.PROMPT.tolist(), None))]
+    out.append(m.run(S.Block([7, 19, 23, 44], [-1, 0, 1, 1])))
+    m.commit([0, 1, 3])
+    out.append(m.run(S.Block([9, 10], chain_of(2))))
+    m.commit([0])
+    out.append(m.run(S.Block([4, 5, 6], None)))
+    return out
+
+
+def test_an_exl3_pack_with_its_own_head_loads_as_two_stages():
+    if torch is None:
+        raise _skip("no torch here")
+    import test_lfm2_moe_pack as P
+    from engine.models.lfm2_moe import stages
+    from engine.models.lfm2_moe.engine import Lfm2MoeEngine
+    from engine.models.lfm2_moe.load import load
+    from engine.models.lfm2_moe.ref import Lfm2MoeRef
+    seen = []
+    for halves in (False, True):
+        d = os.path.join(P._tmp(), "exl3")
+        cfg, plain, blocks = P._exl3_pack(d, halves=halves)
+        Lyr = cfg.num_hidden_layers
+        idx, LW, experts, _ = load(d, device="cpu", dtype=torch.float32, log=None)
+        assert idx.formats["lm_head"] == "exl3" and not torch.is_tensor(LW["lm_head.weight"])
+        whole = stages.Lfm2MoeStage(Lfm2MoeRef(cfg, LW, experts=experts), 0, Lyr)
+        want = _pack_play(RefCut(whole))
+        for k in range(1, Lyr):
+            ads = []
+            for lo, hi in ((0, k), (k, Lyr)):
+                _, W, ex, timing = stages.load_stage(d, lo, hi, device="cpu", dtype=torch.float32, log=None)
+                assert timing["layers"] == [lo, hi] and set(ex) == {i for i in cfg.moe_layers if lo <= i < hi}
+                bases, names = stages.stage_names(cfg, lo, hi)
+                assert all(n in W for n in names) and all(b + ".weight" in W for b in bases if ".experts." not in b)
+                assert {int(n.split(".")[1]) for n in W if n.startswith("layers.")} <= set(range(lo, hi)) | {hi}
+                # the engine over the stage's weights: it builds, and the last stage finds its head
+                eng = Lfm2MoeEngine(stages.stage_config(cfg, lo, hi), W, ex, device="cpu", max_len=64)
+                if hi == Lyr:
+                    assert eng.head_weight() is W["lm_head.weight"] and "embedding_norm.weight" in W
+                else:
+                    assert "lm_head.weight" not in W and "embedding_norm.weight" not in W
+                stages.Lfm2MoeRowStage(eng, lo, hi)
+                ads.append(stages.Lfm2MoeStage(Lfm2MoeRef(cfg, W, experts=ex), lo, hi))
+            got = _pack_play(RefCut(*ads))
+            for i, (a, b) in enumerate(zip(got, want, strict=True)):
+                same(a, b, f"halves {halves}, cut {k}, output {i}")
+        seen.append(sorted({x for v in idx.k_histogram().values() for x in v}))
+    return f"a quantised head of its own, rates {seen}: cuts 1..3 give the whole pack's logits; the tail finds its head"
+
+
+def test_check_pack_reads_the_headers_for_both_stages():
+    if torch is None:
+        raise _skip("no torch here")
+    import test_lfm2_moe_pack as P
+    from engine.models.lfm2_moe import stages
+    from engine.models.lfm2_moe.pack import PackIndex
+    d = os.path.join(P._tmp(), "exl3")
+    cfg, _, _ = P._exl3_pack(d)
+    res = stages.check_pack(d, 2)
+    assert (res["head"], res["exl3"], res["layers"], res["cut"]) == ("exl3", True, 4, 2), res
+    f, t = res["stages"]["front"], res["stages"]["tail"]
+    assert f["layers"] == [0, 2] and t["layers"] == [2, 4] and f["tensors"] > 0 and t["tensors"] > 0
+    total = sum(x.nbytes for n, x in PackIndex.open(d).tensors.items() if not n.endswith(".mul1"))
+    emb = cfg.vocab_size * cfg.hidden_size * 2
+    norm = cfg.hidden_size * 2                               # layer 2's operator norm: both stages read it
+    assert f["bytes"] + t["bytes"] == total + emb + norm, (f, t, total)
+    b = os.path.join(P._tmp(), "bf16")
+    P._bf16_ckpt(b)
+    assert stages.check_pack(b, 3)["head"] == "tied"
+    _raises(ValueError, lambda: stages.check_pack(d, 4), "no cut at 4")
+    _raises(ValueError, lambda: stages.check_pack(d, 0), "no cut at 0")
+    # a pack that lacks a tensor a stage reads is named before anything loads
+    from safetensors.torch import load_file, save_file
+    for fn in sorted(os.listdir(d)):
+        if fn.endswith(".safetensors"):
+            part = load_file(os.path.join(d, fn))
+            if "model.layers.3.ffn_norm.weight" in part:
+                del part["model.layers.3.ffn_norm.weight"]
+                save_file(part, os.path.join(d, fn))
+    import json as _json
+    ip = os.path.join(d, "model.safetensors.index.json")
+    wm = _json.load(open(ip))
+    wm["weight_map"].pop("model.layers.3.ffn_norm.weight")
+    _json.dump(wm, open(ip, "w"))
+    _raises(ValueError, lambda: stages.check_pack(d, 2), "layers.3.ffn_norm.weight")
+    return f"front {f['tensors']} tensors, tail {t['tensors']}: every byte of the pack is one stage's; a missing tensor is named"
+
+
+def test_the_real_window_and_a_prompt_past_the_first_attention_class():
+    E = _need_kernels()
+    from engine.models.lfm2_moe import kernels as K
+    from engine.models.lfm2_moe import stages
+    from engine.models.lfm2_moe.engine import Lfm2MoeEngine
+    cfg, eng, _ = E.tiny()
+    big = Lfm2MoeEngine(cfg, eng.W, eng.experts, device=eng.device, max_len=16384)
+    assert K.classes(16384) == [4, 8, 16, 32]
+    prompt = [3 + (i * 37) % 250 for i in range(2060)]
+    one = Alone(big, cap=16384)
+    front, tail = stages.stage_adapter(big, 0, 3), stages.stage_adapter(big, 3, cfg.num_hidden_layers)
+    assert front.cap == tail.cap == 16384 and front.st.k[2].shape[1] == 16384
+    two = Cut(front, tail)
+    for m in (one, two):
+        m.out = [m.chunk(prompt), m.step(11), m.verify([7, 19, 23, 44], [-1, 0, 1, 1])]
+        m.commit([0, 1, 3])
+        m.out.append(m.step(5))
+    assert tail.position_class(tail.length, 1) == 8, "the rows sit in the second attention class"
+    for i, (a, b) in enumerate(zip(two.out, one.out, strict=True)):
+        same(a, b, f"output {i}")
+    same_states(two.state(), one.state(), "at 2,065 rows")
+    return "max_len 16,384: 2,060 prompt rows, then a step, a tree and its commit in class 8, bit for bit"
+
+
 def test_the_cut_cost_tool_compares_both_arms():
     E = _need_kernels()
     from tools import stage_cut_cost as T
@@ -465,13 +602,20 @@ class _Tok:
         return "".join(chr(ord("a") + int(t) % 26) for t in seq)
 
 
-def _loop(eng, prompt, n: int) -> list:
+def _drafter():
+    """A drafter that offers a five-row chain at every step (tests/test_window_edge.py): most rows are
+    refused, so the loop verifies, keeps a part of a block and rolls the rest back, round after round."""
+    from test_window_edge import FixedDrafter
+    return FixedDrafter(250, 5, tree_mode=True)
+
+
+def _loop(eng, prompt, n: int, drafter=None) -> list:
     """`n` greedy tokens from the server's own decode loop over `eng`."""
     from engine.penalty import PenaltySpec
     from engine.spec import Relax
     from server import app
     app.STATE.clear()
-    app.STATE.update(engine=eng, drafter=None, k=4, tree=False, sampled_tree=False, relax=Relax(1.0, 1),
+    app.STATE.update(engine=eng, drafter=drafter, k=15, tree=drafter is not None, sampled_tree=False, relax=Relax(1.0, 1),
                      verbose=False, state_store=None, prefix_cache=False, prefix_chunk=0, session_cache=False,
                      tok=_Tok(), device="cpu", max_len=128, default_max_tokens=64, pen_spec=PenaltySpec(),
                      model="t", cfg_eos=None, think_budget=0, think_stall=False, reasoning_format="tags",
@@ -497,6 +641,35 @@ def test_the_servers_loop_writes_the_same_tokens_split():
         link.close()
         t.join(10)
     return f"12 and 8 greedy tokens through server/app.py's loop: the one process's, {want[:6]}..."
+
+
+def test_a_prompt_of_several_chunks_and_a_drafted_decode_split():
+    E = _need_kernels()
+    from engine.models.lfm2_moe import engine as eng_mod
+    from engine.models.lfm2_moe import tail as tail_mod
+    from engine.models.lfm2_moe.serving import Lfm2MoeServing
+    cfg, eng, _ = E.tiny()
+    text = [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111]
+    prompt = text + [70] + text + [71] + text[:4]            # 30 rows; the lookup has a copy to offer
+    saved = eng_mod.PREFILL_CHUNK, tail_mod.PREFILL_CHUNK
+    eng_mod.PREFILL_CHUNK = tail_mod.PREFILL_CHUNK = 8       # four chunks, the last of six rows
+    srv, front, link, t = linked(E, 3)
+    try:
+        one = Lfm2MoeServing(eng, 128)
+        same(srv.forward(torch.tensor(prompt), 0), one.forward(torch.tensor(prompt), 0), "four chunks")
+        same(srv.hidden_post_norm, one.hidden_post_norm, "every chunk's final rows")
+        assert srv.stats["prefill_rows"] == 30 and front.length == 30
+        want = _loop(one, prompt, 16, _drafter())
+        blocks = one.stats["verify_blocks"]
+        got = _loop(srv, prompt, 16, _drafter())
+        assert got == want and len(want) == 16, (got, want)
+        assert blocks > 0 and srv.stats["verify_blocks"] > 0 and srv.co.replays == 0, (blocks, srv.stats)
+        assert srv.co.probe()["length"] == srv.kv.length
+    finally:
+        eng_mod.PREFILL_CHUNK, tail_mod.PREFILL_CHUNK = saved
+        link.close()
+        t.join(10)
+    return f"30 rows in four chunks; 16 drafted tokens: {srv.stats['verify_blocks']} verify blocks across the link"
 
 
 def test_what_a_split_does_not_hold_is_refused():
