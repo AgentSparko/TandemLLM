@@ -340,6 +340,7 @@ All three run the same drafters and settings and are held to the same exactness 
 The dashboard also runs on its own as TandemApp (`tandem-app`), in front of any OpenAI-compatible engine or cloud API: vLLM, SGLang, llama.cpp, LM Studio, Ollama, OpenAI, DeepSeek, or another TandemLLM. Clients send their requests to one address, the proxy routes them by model id, and one ledger records tokens, time to first token, decode speed, cached tokens and cost for every backend. It needs no GPU and no torch:
 
 ```bash
+python3 app/tools/dashboard_bundle.py build   # the page is built, not in git: Node 20.19 or newer
 pip install './app[host]'      # Python 3.11 or newer; the host extra adds psutil and NVML
 tandem-app                     # http://127.0.0.1:8080/dashboard/ opens on Setup
 ```

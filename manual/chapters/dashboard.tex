@@ -1,6 +1,6 @@
 \chapter{The dashboard, view by view}\label{ch:dashboard}
 
-The engine serves its own web page at \code{/dashboard/}, and the standalone proxy serves the same page at \code{:8080/dashboard/}. It answers what a log cannot answer at a glance: what the engine is doing right now, for whom, and how fast. It is written in TypeScript with Lit components, its charts are hand-drawn SVG, it loads nothing from a CDN, and the server serves it from \code{dashboard/dist/} with no Node on the machine that serves it. The parts every view loads are about 45~KB of gzip. Figure~\ref{fig:dashboard-map} shows the nine views and what each reads.
+The engine serves its own web page at \code{/dashboard/}, and the standalone proxy serves the same page at \code{:8080/dashboard/}. It answers what a log cannot answer at a glance: what the engine is doing right now, for whom, and how fast. It is written in TypeScript with Lit components, its charts are hand-drawn SVG, it loads nothing from a CDN, and the server serves it from \code{dashboard/dist/} with no Node on the machine that serves it. That folder is a build output, not a file in git: CI or \code{app/tools/dashboard\_bundle.py} builds it, and its \code{bundle.json} names the bundle by a content hash. The parts every view loads are about 45~KB of gzip. Figure~\ref{fig:dashboard-map} shows the nine views and what each reads.
 
 \begin{figure}[htbp]
 \centering

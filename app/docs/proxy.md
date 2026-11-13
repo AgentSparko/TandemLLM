@@ -34,8 +34,9 @@ Setting the kind and the URL in the environment locks them on the Backends scree
 
 ### On its own
 
-Anyone without a GPU runs the same code as TandemApp, the `tandem-app` command. It needs Python 3.11 or newer, the standard library and `cryptography`, and never pulls torch. From a checkout:
+Anyone without a GPU runs the same code as TandemApp, the `tandem-app` command. It needs Python 3.11 or newer, the standard library and `cryptography`, and never pulls torch. A checkout has no built page (see "The built page" below), so build it first, with Node 20.19 or newer, or fetch a released one:
 
+    python3 app/tools/dashboard_bundle.py build     # npm ci and npm run build in app/dashboard
     pip install ./app                   # or './app[host]': adds psutil and NVML for the System view
     tandem-app                          # 127.0.0.1:8080, ~/.tandemllm/config.sqlite3
     open http://127.0.0.1:8080/dashboard/
@@ -54,7 +55,7 @@ Then open `http://127.0.0.1:8080/dashboard/#/usage`.
 
 ### In docker
 
-`app/packaging/Dockerfile.app` builds an image of about 70 MB on `python:3.12-slim`, with the built page inside and no compiler or torch in it:
+`app/packaging/Dockerfile.app` builds an image of about 70 MB on `python:3.12-slim`, with the page inside and no compiler or torch in it. A Node stage builds the page from `app/dashboard` with the lockfile, so the checkout needs no Node:
 
     docker build -f app/packaging/Dockerfile.app -t tandemllm-app app
     cp app/packaging/app.env.example app.env      # fill in; no quotes around values
@@ -62,6 +63,18 @@ Then open `http://127.0.0.1:8080/dashboard/#/usage`.
         --env-file app.env tandemllm-app
 
 The config database, the usage ledger and the key file (when `TANDEM_SECRETS_KEY` is not set) live in the `/data` volume. Inside the container the server binds 0.0.0.0, so what the outside reaches is what `-p` publishes: `127.0.0.1:8080` for this machine, a LAN address for a local network. Turn the login on (`TANDEM_DASHBOARD_LOGIN=on` and `TANDEM_ADMIN_TOKEN`) before you publish it to anything but loopback. Failed logins are throttled per client: a fronting proxy's `X-Real-IP` is believed only when the TCP peer is loopback, or names itself in `TANDEM_TRUSTED_PROXY`. With `-p`, a proxy on the host does not reach the container from loopback: Docker forwards its connection from the bridge's gateway, 172.17.0.1 on the default bridge, so that gateway address goes into `TANDEM_TRUSTED_PROXY`; without it every client behind the proxy shares one bucket. The proxy must set `X-Real-IP` itself (`proxy_set_header X-Real-IP $remote_addr;` in nginx): a proxy that passes the client's own header on lets the client pick its bucket. The container runs as an unprivileged user and answers its health check on `/health`.
+
+### The built page
+
+The page (`app/dashboard/dist/`) is a build output and not in git. CI builds it on every pull request (`.github/workflows/dashboard-dist.yml`: `npm ci`, the type check, vitest, the build, the size budget, a second build that must give the same hash) and hands it to the jobs that package it. `app/tools/dashboard_bundle.py` is the one tool every install path uses:
+
+    python3 app/tools/dashboard_bundle.py build                 # npm ci + npm run build, then dist/bundle.json
+    python3 app/tools/dashboard_bundle.py verify                # the files against their bundle.json
+    python3 app/tools/dashboard_bundle.py fetch --url URL --sha256 SHA256   # a released bundle, checked
+    python3 app/tools/dashboard_bundle.py ensure                # intact, else build (Node), else fetch, else what to do
+    python3 app/tools/dashboard_bundle.py publish --to host:/var/www/tandemapp   # ensure, then rsync
+
+`dist/bundle.json` holds the bundle's content hash (the sha256 over each file's path and sha256), every file's sha256, the commit, the lockfile's sha256 and the Node version. The same commit built twice gives the same hash. The server names the bundle it serves: `tandem-app check` prints it on its `page` line, every answer under `/dashboard/` carries `X-Tandem-Bundle` (16 hex digits of the hash, `none` for the "not built" page), and `/health` with the admin token has it under `dashboard`. `pip install` of a checkout without the page stops and says how to get it, `pip install -e` too; with `TANDEM_DASHBOARD_LATER=1` an editable install goes on, and `/dashboard/` says the page is not built until it is. A fetch needs the archive's sha256 from the release and refuses an archive without one, with links, or with a path outside its folder. Releases do not ship the archive yet.
 
 Up to 0.15.0 the image was `tandemllm-dash` and the volume `tandem-dash`; the volume keeps its old name and its data. Mount it as before, or copy it into the new volume once:
 

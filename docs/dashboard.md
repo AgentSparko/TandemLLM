@@ -115,14 +115,14 @@ TandemLLM's own calls to itself (the router's question to the engine, `client_ki
 
 ## Building and testing
 
-The app is written in TypeScript with Lit components and built by Vite. Its charts are hand-drawn SVG, and it loads nothing from a CDN. `app/dashboard/dist/` is committed, and the server serves it from there. The `dashboard-dist` workflow (`.github/workflows/dashboard-dist.yml`) builds it from source on every pull request and push to main that touches `app/dashboard/` and fails when the result differs from the committed `dist/`, so a dashboard change comes with its rebuilt `dist/`.
+The app is written in TypeScript with Lit components and built by Vite. Its charts are hand-drawn SVG, and it loads nothing from a CDN. The built page, `app/dashboard/dist/`, is a build output and not in git; the server serves it from there. The `dashboard-dist` workflow (`.github/workflows/dashboard-dist.yml`) builds it on every pull request and push to main with `npm ci` and the lockfile, runs vitest and the size budget on the result, checks that a second build gives the same bundle hash, and hands the page to the jobs that package it. `python3 app/tools/dashboard_bundle.py build` does the same build on your machine and writes `dist/bundle.json`, the bundle's hash; [app/docs/proxy.md](../app/docs/proxy.md) ("The built page") has the fetch of a released bundle and how the server names the bundle it serves.
 
 ```bash
 cd app/dashboard
 npm ci
 npm run dev:mock        # the app against a mock engine, token "mock" (?mock=nologin: the login off)
 npm test                # unit, contract and build tests
-npm run build           # type-check and build dist/
+npm run build           # type-check and build dist/ (not in git)
 npx playwright test     # end-to-end, Chromium and WebKit, desktop and phone
 ```
 

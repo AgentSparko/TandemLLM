@@ -34,11 +34,11 @@ Run these in `dashboard/`.
 | command | what |
 |-|-|
 | `npm run dev:mock` | the app on `http://localhost:5173/dashboard/` against the mock engine (token `mock`) |
-| `npm run build` | type-check and build `dist/`; commit the result, because the server serves it |
+| `npm run build` | type-check and build `dist/`, which the server serves; it is not in git (`python3 ../tools/dashboard_bundle.py build` also runs `npm ci` and records the bundle's hash) |
 | `npm run preview:mock` | the built app on port 4173 with the mock engine |
 | `npm test` | unit tests, contract validation and build checks (181 tests) |
 | `npm run test:contract` | every contract example and every mock response against the schemas |
-| `npm run test:size` | gzip size of `dist/` against the budget |
+| `npm run test:size` | gzip size of `dist/` against the budget (`BUDGET` in `scripts/gzip-size.mjs`, the one place it is set; over it fails CI) |
 | `npm run e2e` | Playwright against `preview:mock` (builds first) |
 | `npm run e2e:shots` | screenshots of every view into `screenshots/` (not versioned) |
 

@@ -10,7 +10,7 @@ pip install './app[host]'  # the host extra adds psutil and NVML for the System 
 tandem-app                 # http://127.0.0.1:8080/dashboard/ opens on Setup
 \end{shell}
 
-The distribution is called \code{tandemapp}. Its \code{host} extra adds \code{psutil} and \code{nvidia-ml-py}, which the System view uses to read the machine; without them the collector falls back to \code{/proc} and \code{nvidia-smi}. The package is not on PyPI; install it from the checkout, or build the wheel with \code{python -m build --wheel app}. \code{python -m proxy} in the checkout's \code{app/} does the same as \code{tandem-app} without installing anything but \code{cryptography}.
+The distribution is called \code{tandemapp}. Its \code{host} extra adds \code{psutil} and \code{nvidia-ml-py}, which the System view uses to read the machine; without them the collector falls back to \code{/proc} and \code{nvidia-smi}. The package is not on PyPI; install it from the checkout, or build the wheel with \code{python -m build --wheel app}. Its page (\code{app/dashboard/dist}) is a build output and not in git: build it first with \code{python3 app/tools/dashboard_bundle.py build} (Node 20.19 or newer), or fetch a released bundle with its \code{fetch} command and the bundle's sha256. A wheel build without the page stops and says how to get it. \code{python -m proxy} in the checkout's \code{app/} does the same as \code{tandem-app} without installing anything but \code{cryptography}.
 
 The page opens on Setup\index{Setup screen} while no backend exists: add one, test the connection, save. The panels that only an engine fills (caches, speculation, the engine side of the conductor) say that this server has no engine.
 
