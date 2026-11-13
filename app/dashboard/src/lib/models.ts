@@ -5,18 +5,19 @@
 // placement plan's parts, the nodes a type takes, the body that creates the deployment. Weights: each
 // cell of the packs × Sparks matrix (present, in use, copying, missing, off) and a copy's words.
 
-import type { DeploymentNew, DeploymentStatus, DeploymentType, FleetDeployment, MemberState, Placement, PlacementNode, PlacementType, WeightsCopyJob, WeightsMatrix } from '../api/fleet';
+import type { DeploymentNew, DeploymentStatus, DeploymentType, FleetDeployment, MemberState, Placement, PlacementNode, PlacementType, SplitLink, SplitPhase, SplitSide, WeightsCopyJob, WeightsMatrix } from '../api/fleet';
 import type { Scope } from './scope';
 
 export const TYPE_WORD: Record<DeploymentType, string> = { single: 'Single', replicas: 'Replicas', split: 'Split', role: 'Role' };
 export const TYPE_HELP: Record<DeploymentType, string> = {
   single: 'one Spark serves it',
   replicas: 'the same model on two or more Sparks; each conversation stays on one',
-  split: 'one model across 2 or 4 Sparks joined by the fabric',
+  split: 'one model cut across two Sparks: the front stage on one, the tail on the other',
   role: 'a helper model beside another deployment',
 };
-/** the Split's honest state until the pipeline split exists */
-export const SPLIT_NOT_BUILT = 'not built yet (ENG-307): planned and recorded, it does not run';
+/** a Split recorded before it could run: it has no plan to start from */
+export const SPLIT_NO_PLAN = 'recorded without a plan: plan it again on Serve a model to start it';
+export const SPLIT_MOVE = 'a Split’s two stages move together: stop it, plan it on the new Sparks and start it';
 
 export type Tone = 'ok' | 'warn' | 'err' | 'drain' | 'muted';
 /** a tone's text class */
@@ -31,11 +32,12 @@ export const MEMBER_WORD: Record<MemberState, string> = {
   mismatch: 'mismatch',
   off: 'off',
   gone: 'gone',
+  waiting: 'waiting for the link',
 };
 
 export function memberTone(s: MemberState): Tone {
   if (s === 'serving') return 'ok';
-  if (s === 'starting' || s === 'mismatch') return 'warn';
+  if (s === 'starting' || s === 'mismatch' || s === 'waiting') return 'warn';
   if (s === 'draining' || s === 'leaving') return 'drain';
   if (s === 'gone') return 'muted';
   return 'err';
@@ -70,10 +72,12 @@ export function depActions(d: FleetDeployment): DepAction[] {
   const busy = d.job?.state === 'running' ? 'a job runs: wait for it' : null;
   const split = d.type === 'split';
   const stopped = d.state === 'stopped' || d.status === 'stopped';
+  const ms = d.member_states ?? [];
   const out: DepAction[] = [];
-  if (stopped || d.status === 'down') out.push({ id: 'start', label: 'Start', why: split ? SPLIT_NOT_BUILT : busy });
-  if (!stopped || (d.member_states ?? []).some((m) => m.state === 'serving')) out.push({ id: 'stop', label: 'Stop…', why: busy });
-  out.push({ id: 'move', label: 'Move…', why: split ? 'a Split moves with ENG-307' : busy });
+  // a Split starts and stops as a pair: one action for both stages
+  if (stopped || d.status === 'down') out.push({ id: 'start', label: 'Start', why: split && !d.split ? SPLIT_NO_PLAN : busy });
+  if (!stopped || ms.some((m) => m.state === 'serving' || m.stage?.runs)) out.push({ id: 'stop', label: 'Stop…', why: busy });
+  out.push({ id: 'move', label: 'Move…', why: split ? SPLIT_MOVE : busy });
   out.push({ id: 'edit', label: 'Edit…', why: busy });
   out.push({ id: 'delete', label: 'Delete…', why: busy });
   return out;
@@ -197,12 +201,76 @@ export function newDeployment(p: Placement, t: DeploymentType, members: string[]
   if (o.name?.trim()) out.name = o.name.trim();
   if (o.api_id?.trim()) out.api_id = o.api_id.trim();
   if (t === 'split' && tp?.stages.length) out.stages = tp.stages;
+  if (t === 'split' && tp?.split) out.split = tp.split;
   if (t === 'role') {
     if (o.role?.trim()) out.role = o.role.trim();
     if (o.role_of) out.role_of = o.role_of;
   }
-  if (t === 'split') out.state = 'stopped';
   return out;
+}
+
+// ---- a Split: its two stages and the link between them (VIS-272) ---------------------------------
+
+/** One stage's bar: its need by part against its Spark's budget, the budget marked. Weights and
+ *  KV keep their colours; the rest is one segment a part. */
+export function stageBar(s: SplitSide): PlaceBar {
+  const scale = Math.max(s.budget_gib, s.need_gib, 1e-9);
+  return {
+    segs: s.parts.filter((p) => p.gib > 0).map((p) => ({ id: p.id, label: p.basis === 'margin' ? 'slot margin' : p.id.replace(/_/g, ' '), gib: p.gib, f: p.gib / scale, kind: 'new' as const })),
+    budgetAt: Math.min(1, s.budget_gib / scale),
+    over: !s.fits,
+    text: `needs ${r1(s.need_gib)} of ${r1(s.budget_gib)} GiB · ${s.fits ? `${r1(s.headroom_gib)} headroom` : `${r1(-s.headroom_gib)} short`}`,
+  };
+}
+
+/** computed or measured, in a word: every figure of a plan is computed from the engine's estimate
+ *  but the planner's own margin */
+export const basisWord = (basis: string): string => (basis === 'margin' ? 'margin' : 'computed');
+
+export const LINK_KIND: Record<SplitLink['kind'], string> = { fabric: 'fabric pair', lan: 'LAN pair', loopback: 'loopback, one machine', given: 'addresses given by hand' };
+
+/** "link up · epoch 2 · tcp · fabric pair" */
+export function linkWords(l: SplitLink): { tone: Tone; text: string } {
+  const st = l.state ?? 'unknown';
+  const parts = [st === 'up' ? 'link up' : st === 'down' ? `link down${l.reason ? ` (${l.reason})` : ''}` : 'link not up yet', l.epoch ? `epoch ${l.epoch}` : '', l.transport ?? '', LINK_KIND[l.kind]];
+  return { tone: st === 'up' ? 'ok' : st === 'down' ? 'err' : 'muted', text: parts.filter(Boolean).join(' · ') };
+}
+
+/** A Split's phase in plain words, for the card: what it is, and what to do or not do. */
+export function phaseWords(phase: SplitPhase | undefined, front: string, tail: string): { tone: Tone; title: string; text: string } | null {
+  switch (phase) {
+    case 'starting-front':
+      return { tone: 'warn', title: 'Starting the front', text: `The front stage loads on ${front}. The tail on ${tail} starts once it answers.` };
+    case 'starting-tail':
+      return { tone: 'warn', title: 'Starting the tail', text: `The front is up. The tail stage loads on ${tail} and links to it.` };
+    case 'degraded':
+      return { tone: 'warn', title: 'Degraded', text: `Both stages run, but they are not linked. Requests get a 503 with Retry-After until they are. The stages link again by themselves: nothing to do.` };
+    case 'partial':
+      return { tone: 'err', title: 'Half running', text: `Only one of the two stages runs, so nothing is served. Start brings the other one back; Stop ends the one that runs.` };
+    case 'stopping':
+      return { tone: 'muted', title: 'Stopping', text: `The tail on ${tail} stops first, then the front on ${front}.` };
+    case 'down':
+      return { tone: 'err', title: 'Down', text: 'Neither stage runs. Start starts the front, then the tail.' };
+    default:
+      return null;
+  }
+}
+
+const SIMPLE_KEY = 'tandem.models.simple';
+/** the Models page's mode: simple (the default) shows the two stages and the link; advanced adds every number */
+export function simpleMode(): boolean {
+  try {
+    return localStorage.getItem(SIMPLE_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+export function setSimpleMode(on: boolean): void {
+  try {
+    localStorage.setItem(SIMPLE_KEY, on ? '1' : '0');
+  } catch {
+    /* private mode: per page */
+  }
 }
 
 // ---- Weights -------------------------------------------------------------------------------------

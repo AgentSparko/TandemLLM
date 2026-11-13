@@ -74,6 +74,8 @@
 // 615 KB after the rebase onto main's 0.15.4 (SRV-747, 2026-11-12: 613.9 KB, 628,681 bytes, from 610.1): main's
 // simple Setup Guide mode and the Log panel's export button on top of TandemApp's pages, rebuilt from the merged
 // sources.
+// 618 KB with a Split on the Models pages (VIS-272, 2026-11-13: 616.3 KB, 631,140 bytes, from 613.9): its two
+// stage bars, the link, the plan before the start with every part's basis, the phases in words.
 // OPS-246: dist/ is a build output; CI runs this after the build and a total over the budget fails
 // the job. An optional argument names another folder (the size test's fixture).
 import { existsSync } from 'node:fs';

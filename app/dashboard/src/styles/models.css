@@ -113,6 +113,40 @@ qse-models .link-btn {
 .dcard-note {
   background: color-mix(in srgb, var(--cobalt) 9%, var(--bg-3));
 }
+/* a Split's two stages and the link between them (VIS-272) */
+.sstages,
+.sstage,
+.sadv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.sstages {
+  gap: 4px;
+}
+.sstage-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.slink {
+  margin-left: 9px;
+  padding: 5px 0 5px 12px;
+  border-left: 2px solid var(--rule-strong);
+}
+.slink[data-link='up'] {
+  border-left-color: var(--ok);
+}
+.slink[data-link='down'] {
+  border-left: 2px dashed var(--err);
+}
+.sadv {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
+}
 .dcard-acts {
   display: flex;
   flex-wrap: wrap;

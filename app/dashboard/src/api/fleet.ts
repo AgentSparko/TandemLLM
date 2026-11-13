@@ -242,6 +242,79 @@ export interface DeploymentStage {
   gib: number;
 }
 
+/** SRV-817: one stage's side of a Split's cut on its node; every figure is computed from the
+ *  engine's estimate unless its part's basis is `margin` (the planner's slot margin) */
+export interface SplitSide {
+  node: string;
+  alias: string;
+  role: 'front' | 'tail';
+  /** LO:HI */
+  layers: string;
+  need_gib: number;
+  estimate_gib?: number;
+  margin_gib?: number;
+  budget_gib: number;
+  headroom_gib: number;
+  fits: boolean;
+  slot_gib?: number;
+  table?: boolean;
+  parts: { id: string; gib: number; basis: string }[];
+  disk: { pack_gib: number | null; cache_gib: number | null; free_gib: number | null };
+}
+export type SplitPhase = 'stopped' | 'starting-front' | 'starting-tail' | 'linked' | 'degraded' | 'partial' | 'stopping' | 'down';
+export interface SplitLink {
+  kind: 'fabric' | 'lan' | 'loopback' | 'given';
+  listen: string;
+  peer: string;
+  front_iface?: string | null;
+  tail_iface?: string | null;
+  /** a LAN or hand-given pair: the data link is neither signed nor encrypted after its handshake */
+  warn: string | null;
+  /** a deployment's link now */
+  state?: 'up' | 'down' | 'unknown';
+  epoch?: number | null;
+  reason?: string | null;
+  transport?: string | null;
+}
+/** SRV-817: the plan of a Split (POST /v1/fleet/placement), kept in its record */
+export interface SplitPlan {
+  cut: number;
+  layers: number;
+  family?: string | null;
+  rule: string;
+  why?: string;
+  window?: number;
+  slots?: number;
+  shape: Record<string, unknown>;
+  margin: { slot_factor: number; text: string };
+  front: SplitSide;
+  tail: SplitSide;
+  headroom_gib?: number;
+  carry_bytes_per_row?: number | null;
+  table_on?: string | null;
+  candidates: { cut: number; front_gib: number; tail_gib: number; headroom_gib: number; fits: boolean; chosen: boolean; why: string | null }[];
+  computed: boolean;
+  /** what a split of this family was measured to cost on a GPU; every other number is computed */
+  measured: Record<string, unknown>[];
+  notes?: string[];
+  link: SplitLink;
+  built?: boolean;
+  phase?: SplitPhase;
+}
+/** a Split's stage on a member: the plan's role and layers, and its engine's stage block now */
+export interface MemberStage {
+  role: 'front' | 'tail';
+  layers: string | null;
+  need_gib: number | null;
+  budget_gib?: number | null;
+  runs: boolean;
+  link: 'up' | 'down' | null;
+  epoch: number | null;
+  reason: string | null;
+  transport?: string | null;
+  identity?: string | null;
+}
+
 export interface FleetDeployment {
   id: string;
   name: string;
@@ -249,8 +322,10 @@ export interface FleetDeployment {
   pack: string;
   type: DeploymentType;
   members: string[];
-  /** a Split's stages, in pipeline order */
+  /** a Split's stages: the front's, then the tail's */
   stages?: DeploymentStage[];
+  /** SRV-817: a Split's plan with its phase and link now */
+  split?: SplitPlan;
   /** the model id clients send to the one API */
   api_id: string;
   /** context window, tokens */
@@ -274,7 +349,7 @@ export interface FleetDeployment {
   affinity?: 'root' | 'own';
 }
 
-export type MemberState = 'serving' | 'starting' | 'down' | 'draining' | 'leaving' | 'mismatch' | 'off' | 'gone';
+export type MemberState = 'serving' | 'starting' | 'down' | 'draining' | 'leaving' | 'mismatch' | 'off' | 'gone' | 'waiting';
 export interface DeploymentMember {
   node: string;
   alias: string;
@@ -288,6 +363,7 @@ export interface DeploymentMember {
   text: string;
   /** takes requests now (only `serving` does) */
   routable: boolean;
+  stage?: MemberStage;
 }
 
 export type DeploymentAction = 'start' | 'stop' | 'move';
@@ -334,6 +410,7 @@ export interface DeploymentNew {
   api_id?: string;
   ctx?: number;
   stages?: DeploymentStage[];
+  split?: SplitPlan;
   role?: string;
   role_of?: string;
   affinity?: 'root' | 'own';
@@ -359,14 +436,16 @@ export interface DeploymentPlan {
   engine?: string;
 }
 
-/** POST /v1/fleet/placement: a Setup Guide model and pack, the context a lane holds; `nodes` in
- *  pipeline order for a Split (without it every node is planned) */
+/** POST /v1/fleet/placement: a Setup Guide model and pack, the context a lane holds; `nodes`: a
+ *  Split's front node, then its tail's (without it every node is planned); `split` asks for a
+ *  Split's plan (true: every default) */
 export interface PlacementRequest {
   model: string;
   pack: string;
   ctx: number;
   slots?: number;
   nodes?: string[];
+  split?: boolean | Record<string, unknown>;
 }
 export interface PlacementNode {
   node: string;
@@ -392,12 +471,13 @@ export interface PlacementNode {
 export interface PlacementType {
   type: DeploymentType;
   allowed: boolean;
-  /** false for a Split until ENG-307: planned and recorded only */
   built: boolean;
   nodes: string[];
   reason: string | null;
   warn: string | null;
   stages: DeploymentStage[];
+  /** SRV-817: an allowed Split's plan */
+  split?: SplitPlan;
 }
 export interface Placement {
   contract_version: string;

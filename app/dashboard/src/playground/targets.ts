@@ -1,7 +1,7 @@
 // What the Playground sends to (VIS-254, concept §8.10): this server's own model, as before, or on a
 // fleet a deployment through TandemApp's gateway (the deployment picks its member), or one member of
 // it pinned (`X-Tandem-Pin`: that Spark only, for an A/B of the same prompt on two Sparks). A stopped
-// deployment and a Split (not built yet, ENG-307) serve nothing and are not offered.
+// deployment serves nothing and is not offered; a Split is one target (its tail answers), never pinned.
 
 import { api } from '../api/client';
 import type { FleetDeployment, FleetNode } from '../api/fleet';
@@ -22,9 +22,9 @@ export function targetsOf(f: FleetView | null): Target[] {
   const out: Target[] = [HERE];
   if (!f) return out;
   for (const d of f.deployments) {
-    if (d.type === 'split' || d.state === 'stopped' || d.status === 'stopped') continue;
+    if (d.state === 'stopped' || d.status === 'stopped') continue;
     out.push({ key: `dep:${d.id}`, label: `${d.name} · ${TYPE_WORD[d.type]}`, deployment: d, pin: null });
-    if (d.members.length < 2) continue;
+    if (d.members.length < 2 || d.type === 'split') continue;
     for (const id of d.members) {
       const n = f.nodes.find((x) => x.id === id);
       if (n) out.push({ key: `pin:${d.id}:${id}`, label: `${d.name} on ${n.alias}`, deployment: d, pin: n });

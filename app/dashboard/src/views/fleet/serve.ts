@@ -4,8 +4,9 @@
 // /v1/fleet/placement plans every Spark from its own estimate: a memory bar per Spark from the plan's
 // parts (what runs there now, the new engine's weights, KV and fixed parts, the budget marked), what
 // it needs and has free, and why it does not fit in words; the types Single, Replicas, Split and Role
-// each allowed or refused with the reason, a Split planned only (not built yet, ENG-307); picking
-// Sparks plans those, in pick order for a Split. Each Spark opens its own Setup Guide (?node=, through
+// each allowed or refused with the reason; a Split shows its plan before the start (./split.ts,
+// VIS-272: the cut the planner chose, both stages' numbers, the link and its warning); picking
+// Sparks plans those: a Split's front first, then its tail. Each Spark opens its own Setup Guide (?node=, through
 // the controller's relay) to set it up first. 3 Serve: the name and API id, a review, then POST
 // /v1/fleet/deployments and its start (actions/start), whose job is followed Spark by Spark. The
 // choices live in the hash (?model=&pack=&ctx=&slots=&step=), so a reload keeps them.
@@ -17,13 +18,14 @@ import { fleet, type DeploymentJob, type DeploymentType, type FleetDeployment, t
 import type { SetupModel, SetupModelsList } from '../../api/types';
 import { refreshContext, registerContext, type ContextContent } from '../../lib/context';
 import { onFleet, refreshFleet, type FleetState } from '../../lib/fleet-state';
-import { membersFor, newDeployment, pickType, placeBar, SOURCE_WORD, SPLIT_NOT_BUILT, TYPE_HELP, TYPE_WORD } from '../../lib/models';
+import { membersFor, newDeployment, pickType, placeBar, setSimpleMode, simpleMode, SOURCE_WORD, TYPE_HELP, TYPE_WORD } from '../../lib/models';
 import { onRoute, parseHash, setParams } from '../../lib/router';
 import { LightElement } from '../../ui/base';
 import { nodeChip } from '../../ui/node-chip';
 import { clock, signInCard } from '../monitor/bits';
 import { checkSession } from '../monitor/data';
 import { modelTabs } from './models';
+import { modeSwitch, splitView } from './split';
 
 const STEPS = ['model', 'placement', 'serve'] as const;
 type Step = (typeof STEPS)[number];
@@ -56,6 +58,7 @@ export class QseServe extends LightElement {
   @state() private made: FleetDeployment | null = null;
   @state() private job: DeploymentJob | null = null;
   @state() private startErr = '';
+  @state() private simple = simpleMode();
   private follow: ReturnType<typeof setTimeout> | null = null;
   private unsub: (() => void)[] = [];
   private seq = 0;
@@ -168,7 +171,8 @@ export class QseServe extends LightElement {
     this.planErr = '';
     try {
       // every Spark's row from the plan of all; the types from the plan of the Sparks picked
-      const body = { model, pack, ctx: this.num('ctx', 32768), slots: this.num('slots', 1) };
+      // split: true asks the planner for a Split's plan too (the cut, both stages, the link)
+      const body = { model, pack, ctx: this.num('ctx', 32768), slots: this.num('slots', 1), split: true };
       const [p, mine] = await Promise.all([fleet.placement(body), this.picked.length ? fleet.placement({ ...body, nodes: this.picked }) : Promise.resolve(null)]);
       if (s !== this.seq) return;
       this.plan = p;
@@ -210,7 +214,6 @@ export class QseServe extends LightElement {
       const body = newDeployment(p, t, this.members, { name: this.name, api_id: this.apiId, role: this.roleWord, role_of: this.roleOf });
       this.made = await fleet.createDeployment(body);
       refreshFleet();
-      if (t === 'split') return;
       try {
         const r = await fleet.deploymentAct(this.made.id, 'start');
         this.job = r.job;
@@ -249,7 +252,7 @@ export class QseServe extends LightElement {
     return {
       title: 'Serve a model',
       body: html`<section class="csec"><div class="csec-h"><span class="eyebrow">How placement plans</span></div><p class="small">Each Spark is planned from its own Setup Guide estimate: its device, what is free there now and what it serves already. A Spark that serves something keeps it; the new engine must fit beside it.</p></section>
-        ${p ? html`<section class="csec"><div class="csec-h"><span class="eyebrow">This plan</span></div><ul class="sp-ctx-list small">${p.types.map((t) => html`<li><b>${TYPE_WORD[t.type]}</b> <span class=${t.allowed ? 'ok-ink' : 'err-ink'}>${t.allowed ? '✓' : '✕'}</span> <span class="muted">${t.allowed ? (t.built ? TYPE_HELP[t.type] : SPLIT_NOT_BUILT) : t.reason}</span></li>`)}</ul></section>` : nothing}
+        ${p ? html`<section class="csec"><div class="csec-h"><span class="eyebrow">This plan</span></div><ul class="sp-ctx-list small">${p.types.map((t) => html`<li><b>${TYPE_WORD[t.type]}</b> <span class=${t.allowed ? 'ok-ink' : 'err-ink'}>${t.allowed ? '✓' : '✕'}</span> <span class="muted">${t.allowed ? TYPE_HELP[t.type] : t.reason}</span></li>`)}</ul></section>` : nothing}
         <section class="csec"><div class="csec-h"><span class="eyebrow">Setup Guide per Spark</span></div><div class="ctx-nodes">${(this.f?.nodes ?? []).map((n) => html`<a class="mini-now" href=${guideHref(n.id, this.q.get('model') ?? undefined)} data-guide=${n.id}>${nodeChip(n)}<span class="small muted">Setup Guide</span></a>`)}</div></section>`,
     };
   }
@@ -326,13 +329,24 @@ export class QseServe extends LightElement {
           if (!tp) return nothing;
           const on = this.type === t;
           return html`<button type="button" role="radio" aria-checked=${on} class="ptype ${on ? 'is-on' : ''} ${tp.allowed ? '' : 'is-no'}" data-type=${t} data-allowed=${tp.allowed} ?disabled=${!tp.allowed} @click=${() => (this.type = t)}>
-            <span class="row"><span class="tag dep-type is-${t}">${TYPE_WORD[t]}</span><span class="small ${tp.allowed ? 'ok-ink' : 'err-ink'}">${tp.allowed ? '✓ allowed' : '✕ refused'}</span>${!tp.built ? html`<span class="tag" data-not-built>not built yet (ENG-307)</span>` : nothing}</span>
+            <span class="row"><span class="tag dep-type is-${t}">${TYPE_WORD[t]}</span><span class="small ${tp.allowed ? 'ok-ink' : 'err-ink'}">${tp.allowed ? '✓ allowed' : '✕ refused'}</span></span>
             <span class="small">${tp.allowed ? TYPE_HELP[t] : tp.reason}</span>
             ${tp.allowed && tp.nodes.length ? html`<span class="xs muted">${tp.nodes.map((x) => f.nodes.find((n) => n.id === x)?.alias ?? x).join(t === 'split' ? ' → ' : ', ')}${tp.stages.length ? ` · ${tp.stages.map((s) => `${s.gib.toFixed(1)} GiB`).join(' / ')} a stage` : ''}</span>` : nothing}
             ${tp.warn ? html`<span class="xs warn-ink">⚠ ${tp.warn}</span>` : nothing}
           </button>`;
         })}</div>
-      </section>`;
+      </section>
+      ${this.splitPlan()}`;
+  }
+
+  /** the Split's plan before its start, when Split is the type picked */
+  private splitPlan(): TemplateResult | typeof nothing {
+    const sp = this.type === 'split' ? this.typed?.types.find((x) => x.type === 'split')?.split : null;
+    if (!sp) return nothing;
+    return html`<section class="panel" data-panel="split-plan">
+      <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">The Split’s plan</h2><p class="panel-sub">Cut at layer ${sp.cut} of ${sp.layers}: the front stage on ${sp.front.alias}, the tail on ${sp.tail.alias}. Every figure is computed from each Spark’s own estimate${sp.measured.length ? '; what was measured is listed under Advanced' : ''}.</p></div>${modeSwitch(this.simple, (on) => (setSimpleMode(on), (this.simple = on)))}</header>
+      ${splitView(sp, null, this.f?.nodes ?? [], this.simple)}
+    </section>`;
   }
 
   private serveStep(): TemplateResult {
@@ -343,7 +357,7 @@ export class QseServe extends LightElement {
     const alias = (id: string) => f.nodes.find((n) => n.id === id)?.alias ?? id;
     const ms = this.members;
     const j = this.job;
-    const done = !!this.made && (t === 'split' || (j && j.state !== 'running') || !!this.startErr);
+    const done = !!this.made && ((j && j.state !== 'running') || !!this.startErr);
     return html`<section class="panel" data-panel="sv-review">
         <div class="sv-grid">
           <label class="field"><span>Name</span><input data-sv-name .value=${this.name} ?disabled=${!!this.made} @input=${(e: Event) => (this.name = (e.target as HTMLInputElement).value)} /></label>
@@ -360,7 +374,7 @@ export class QseServe extends LightElement {
           <div><dt>context</dt><dd class="num">${p.ctx.toLocaleString('en-US')} tokens a lane · ${p.slots} lane${p.slots === 1 ? '' : 's'}</dd></div>
           <div><dt>API</dt><dd>listed once in <code>/v1/models</code> as <code>${this.apiId || p.model}</code></dd></div>
         </dl>
-        ${t === 'split' ? html`<p class="dcard-note small" data-not-built>◇ ${SPLIT_NOT_BUILT}. Serve records the plan; its start answers 501 until ENG-307.</p>` : nothing}
+        ${t === 'split' ? html`<p class="dcard-note small" data-split-order>◇ Serve records the plan and starts both stages as one: the front first, then the tail.</p>${this.splitPlan()}` : nothing}
         ${this.signIn ? signInCard('Deployments') : nothing}
         ${this.err ? html`<p class="small err-ink" data-sv-error>${this.err}</p>` : nothing}
         ${this.made ? html`<p class="small ok-ink" data-sv-made>✓ ${this.made.name} recorded as ${this.made.api_id}.</p>` : nothing}
@@ -372,7 +386,7 @@ export class QseServe extends LightElement {
               ${j.state !== 'running' ? html`<p class="small ${j.state === 'done' ? 'ok-ink' : 'err-ink'}">${j.state === 'done' ? `✓ ${this.made?.name} serves.` : `✕ the start failed: ${j.error?.message ?? ''}`}</p>` : html`<p class="xs muted">since ${clock(j.started_at)}…</p>`}`
           : nothing}
         <div class="sv-acts">
-          ${done ? html`<a class="btn btn-primary" href="#/models" data-sv-done>Deployments</a>` : html`<button type="button" class="btn btn-primary" data-sv-go ?disabled=${this.busy || !!this.made || !ms.length || (t === 'role' && !this.roleOf)} @click=${() => void this.serve()}>${this.busy ? 'Working…' : t === 'split' ? 'Record the Split' : 'Serve'}</button>`}
+          ${done ? html`<a class="btn btn-primary" href="#/models" data-sv-done>Deployments</a>` : html`<button type="button" class="btn btn-primary" data-sv-go ?disabled=${this.busy || !!this.made || !ms.length || (t === 'role' && !this.roleOf)} @click=${() => void this.serve()}>${this.busy ? 'Working…' : 'Serve'}</button>`}
         </div>
       </section>`;
   }
