@@ -517,13 +517,24 @@ class _NoGuard:
         return None
 
 
+def _allocator(name: str) -> float:
+    """The caching allocator's counter `name` ("allocated_bytes.all.current") read off torch's nested
+    dict, as engine/cache.py `cuda_stats` reads it: never through `torch.cuda.memory_allocated` and its
+    kin, which leave cyclic garbage on every call (tests/test_alloc_stats_cycles.py holds server/ to
+    that). The engine hands `cuda_stats` itself; this is the reading without it (a test, a tool)."""
+    import torch
+    v = torch.cuda.memory_stats_as_nested_dict()
+    for part in name.split("."):
+        v = v.get(part, 0) if isinstance(v, dict) else 0
+    return float(v) if isinstance(v, int) else 0.0
+
+
 def _gpu_memory():
     try:
         stats = ENGINE_HOOKS["cuda_stats"]
         if stats is not None:
             return float(stats("allocated_bytes.all.current")[0])
-        import torch
-        return float(torch.cuda.memory_allocated())
+        return _allocator("allocated_bytes.all.current")
     except Exception:                                              # noqa: BLE001
         return {}
 
@@ -533,8 +544,7 @@ def _gpu_reserved():
         stats = ENGINE_HOOKS["cuda_stats"]
         if stats is not None:
             return float(stats("reserved_bytes.all.current")[0])
-        import torch
-        return float(torch.cuda.memory_reserved())
+        return _allocator("reserved_bytes.all.current")
     except Exception:                                              # noqa: BLE001
         return {}
 

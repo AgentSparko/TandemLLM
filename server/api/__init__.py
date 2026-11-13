@@ -27,7 +27,8 @@ And what the engine reports of itself (ENG-413 WP2b):
 They were TandemApp's modules (tandemapp/*) run in the engine's process; these are copies from
 that fork, changed only where they imported each other, the conductor's seed levels
 (thinking.LEVELS), the conductor's side shapes (ledger.side_shape) or its compaction check
-(compaction.is_compaction, which runs with the conductor off: tests/test_compaction_trace.py).
+(compaction.is_compaction, which runs with the conductor off: tests/test_compaction_trace.py), or
+read the allocator off torch's nested dict where a GPU gauge has no engine hook (metrics._allocator).
 TandemApp keeps its own copies for its extension and its controller. Both copies answer
 contracts/engine-api-v1/toolcalls/ alike (tests/test_contract_toolcalls.py here, TandemApp's own
 test there); the ledger's two copies write one file's tables as before

@@ -25,7 +25,8 @@ imports TandemApp's copies; the engine does not.
                                                                   test_the_seed_levels_are_the_conductors
   6  each WP2b copy is TandemApp's module as forked: the same code once the imports are named
      alike, docstrings aside; the ledger's copy adds only the side-shape helpers it took from the
-     conductor's signals, compaction's only its check and the shapes it reads. A change to either
+     conductor's signals, compaction's only its check and the shapes it reads, metrics' GPU gauges
+     read the allocator's nested dict without the engine's hook (FORK_CHANGED). A change to either
      copy fails here until it lands in both
                                                                   test_the_copies_are_the_fork
 
@@ -260,11 +261,17 @@ def test_the_seed_levels_are_the_conductors():
 
 
 #: what the WP2b fork changed in each copy beyond the import lines (ENG-413 WP2b): the ledger took
-#: the conductor's side-shape helpers in, compaction the check and its shapes; nothing else changed
-#: but docstrings and comments
+#: the conductor's side-shape helpers in, compaction the check and its shapes, metrics a GPU gauge
+#: reading; nothing else changed but docstrings, comments and FORK_CHANGED
 FORK_ADDED = {"ledger": {"SIDE_SHAPES", "_text", "side_shape"},
               "compaction": {"COMPACTION_MIN_CHARS", "COMPACTION_SHAPES", "BARE_COMPACTION_CLIENTS",
-                             "_is_tool_response", "compaction_shape", "is_compaction"}}
+                             "_is_tool_response", "compaction_shape", "is_compaction"},
+              # the GPU gauges' reading without the engine's hook: the nested dict, never torch's
+              # flattening readers, which server/ may not call (tests/test_alloc_stats_cycles.py)
+              "metrics": {"_allocator"}}
+#: functions the fork changed on purpose, each in both copies: (module, name) -> why
+FORK_CHANGED = {("metrics", "_gpu_memory"): "reads _allocator without the hook",
+                ("metrics", "_gpu_reserved"): "reads _allocator without the hook"}
 
 
 def _fork_view(path: str, mod: str, engine: bool) -> list[str]:
@@ -281,6 +288,9 @@ def _fork_view(path: str, mod: str, engine: bool) -> list[str]:
     out = []
     for node in tree.body:
         if engine and getattr(node, "name", None) in FORK_ADDED.get(mod, ()):
+            continue
+        if (mod, getattr(node, "name", None)) in FORK_CHANGED:
+            out.append(f"def {node.name}: changed by the fork")
             continue
         if engine and isinstance(node, ast.Assign) and any(
                 getattr(t, "id", None) in FORK_ADDED.get(mod, ()) for t in node.targets):
