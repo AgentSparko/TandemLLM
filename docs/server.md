@@ -293,7 +293,7 @@ Flash-Next as two stages (`engine/models/flashnext/stages.py`, `tail.py`):
 
 Flash-Next with `--stage-caches on` (both stages take the flag):
 
-- The tail runs the server's caches as the one process does: the resident prefix with its end anchor, pin, park and stash, the state store, and the disk tier with `--disk-cache`. They hold the tail's half of a state.
+- The tail runs the server's caches as the one process does: the resident prefix with all it keeps (the end anchor, the pin, the park, the stash), the state store, and the disk tier with `--disk-cache`. They hold the tail's half of a state.
 - The front keeps its half under the same key. The key is a digest of the blocks that wrote the state, computed on each stage from what it ran. The front's rows stay where they are until a pass would write over them; then they are copied out, within `--stage-snapshots-gb`.
 - A state the caches put back whose front half is gone is rebuilt on the front alone: the tail sends its log of blocks again, each as the kind of block it was, and runs none of its own rows again. The tokens are the same; the cost is the front's share of a prefill.
 - With `--stage-cache-dir` the front writes its half of every state the tail's disk tier keeps. After both stages start again a disk hit needs both halves; without the front's file the entry is given up and the prompt runs cold.
