@@ -54,7 +54,8 @@ The normaliser (compare runs it on the raw records, so it can be changed after a
   N6  the journal's requests rows lose the engine's statistics (REQUEST_STATS: blocks, drafts,
       slot, lane, cache figures): how a request was served, not what it answered
   N7  of conductor_events, the router's and the monitor's rows are gated (JOURNAL_GATED, in order,
-      with their hidden texts); the other kinds (config migrations, memory writers, outcomes) run
+      with their hidden texts, N1's keys dropped: a stage writes its time only when it has one);
+      the other kinds (config migrations, memory writers, outcomes) run
       on timers and threads of their own and are info
   N8  the run's own folders (capture's `--strip`, kept in the record) become "<root>" in every
       string: the ledger's path, the tree copy's paths in the flags and the weights list
@@ -513,8 +514,9 @@ class Ordinals:
         return self.seen[key]
 
 
-def normalize(x, ords: Ordinals | None = None, key: str = ""):
-    """N1-N3 on one JSON value (a new value; the input is not changed)."""
+def normalize(x, ords: Ordinals | None = None, key: str = "", drop: bool = False):
+    """N1-N3 on one JSON value (a new value; the input is not changed). `drop`: a volatile key goes
+    altogether, not only its value (the journal's rows, where a stage writes its time when it has one)."""
     ords = ords if ords is not None else Ordinals()
     if isinstance(x, dict):
         out = {}
@@ -522,14 +524,15 @@ def normalize(x, ords: Ordinals | None = None, key: str = ""):
             if k in SHAPE_KEYS:
                 out[k] = _shape(v)
             elif _volatile(k):
-                out[k] = "<v>"
+                if not drop:
+                    out[k] = "<v>"
             elif k in ORDINAL_KEYS and v is not None and not isinstance(v, (dict, list)):
                 out[k] = ords(v)
             else:
-                out[k] = normalize(v, ords, k)
+                out[k] = normalize(v, ords, k, drop)
         return out
     if isinstance(x, list):
-        return [normalize(v, ords, key) for v in x]
+        return [normalize(v, ords, key, drop) for v in x]
     if isinstance(x, str) and ORDINAL_VALUE.match(x):
         return ords(x)
     return x
@@ -609,7 +612,7 @@ def normalize_record(doc: dict) -> dict:
                 r = {k: ("<v>" if table == "requests" and k in REQUEST_STATS else v) for k, v in row.items()}
                 if r.get("hidden_text_id") in texts:
                     r["hidden_text"] = texts[r["hidden_text_id"]]
-                r = normalize(r, ords)
+                r = normalize(r, ords, drop=True)
                 if table == "requests":
                     gate["requests"].append(r)
                 elif row.get("kind") in JOURNAL_GATED:
