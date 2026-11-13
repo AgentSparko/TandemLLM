@@ -798,9 +798,8 @@ class Deployments:
                                    "pack": rec["pack"], "context_length": o.get("ctx") or None,
                                    "nodes": [m["alias"] for m in ms if m["state"] != "leaving"],
                                    "cloud": False}})
-        for m in self.svc.table.listing(created):
-            t = m.get("tandem") or {}
-            if (m["owned_by"], t.get("upstream_id")) in covered:
+        for bid, upstream, m in self.svc.table.listing_rows(created):
+            if (bid, upstream) in covered:
                 continue
             if m["id"] in ids:
                 m = dict(m, id=f"{m['owned_by']}/{m['id']}")

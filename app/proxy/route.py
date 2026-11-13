@@ -119,6 +119,12 @@ class Table:
 
     # ----------------------------------------------------------------- the list
     def listing(self, created: int) -> list[dict]:
+        return [card for _, _, card in self.listing_rows(created)]
+
+    def listing_rows(self, created: int) -> list[tuple[str, str, dict]]:
+        """(backend id, upstream model, card) of each model /v1/models lists. An engine's own
+        card names the engine in owned_by, not the backend, so a caller that needs the backend
+        reads it here (SRV-741: a record's coverage)."""
         s = self.snapshot()
         out = []
         for pub in sorted(s["served"]):
@@ -142,10 +148,11 @@ class Table:
                 own = self.upstream_card(b["id"], m["model"]) \
                     if self.upstream_card is not None and getattr(cls, "cards", False) else None
                 if own is not None:
-                    out.append(dict(own, id=lid))
+                    out.append((b["id"], m["model"], dict(own, id=lid)))
                     continue
-                out.append({"id": lid, "object": "model", "created": created,
-                            "owned_by": b["id"], "tandem": card})
+                out.append((b["id"], m["model"], {"id": lid, "object": "model",
+                                                  "created": created, "owned_by": b["id"],
+                                                  "tandem": card}))
         return out
 
     def card(self, name: str, created: int) -> dict | None:
