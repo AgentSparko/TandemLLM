@@ -30,6 +30,14 @@ classes: a graph's body ends at the cut, the carry enters it through static buff
 the graph's own tensors, and the copy to and from the host runs outside the graph.
 
 `cuts`: every layer boundary.
+
+State beyond the running sequence (ENG-423): a stage built with a store (`open_stage`, a front's)
+keeps its half of a state under the coordinator's key (engine/methods/stage_store.py): its
+sections copied, its cache rows where they are until a pass would write over them. A block run
+again gives the rows it gave (`exact`), so a front that lost its state is rebuilt from the tail's
+log of blocks. A stage built with slots gives each slot its own engine over the same weights
+(`slot`): its own state, row buffers, carry buffers and graphs, so the blocks of a joint round
+run one slot after the other on each stage and each stays pending until its own commit.
 """
 
 from __future__ import annotations
@@ -379,8 +387,10 @@ class FlashNextRowStage(StageAdapter):
 
     family = ARCH.name
     carry_dtype = "bfloat16"
+    exact = True
 
-    def __init__(self, eng: FlashNextStageEngine, cap: int | None = None, graphs: bool = True, serving=None):
+    def __init__(self, eng: FlashNextStageEngine, cap: int | None = None, graphs: bool = True, serving=None,
+                 slots: int = 1, slot_id: int = 0, store: dict | None = None):
         from engine.models.flashnext.serving import FlashNextServing
         c = eng.model_cfg
         if eng.kv_fp8:
@@ -399,6 +409,14 @@ class FlashNextRowStage(StageAdapter):
         self.hidden = self.picks = None
         self._tree = None                    # the rows of the verify block a commit may keep rows of
         self._host = None
+        self.slots, self.slot_id, self._sides, self._serving = int(slots), int(slot_id), {}, serving
+        #: the kept states of this stage's half (a front's): `store` is {"bytes", "dir", "disk_bytes"}
+        self._store_opts = store
+        self.store = None
+        if store is not None and self.role == "front":
+            from engine.methods.stage_store import SideStore
+            self.store = SideStore(self.sv.state, int(store.get("bytes", 0)), store.get("dir") or None,
+                                   int(store.get("disk_bytes", 0)), name=store.get("name", ""))
 
     @property
     def length(self) -> int:
@@ -412,6 +430,47 @@ class FlashNextRowStage(StageAdapter):
     def reset(self) -> None:
         self._base.restart(self.sv)
         self._tree = None
+        if self.store is not None:
+            self.store.reset()
+
+    # ------------------------------------------------------------------ state kept under a key
+    @torch.no_grad()
+    def snapshot(self, key: bytes, keep: bool = False) -> None:
+        """Keep the committed state under `key`: what is pending lands first (`settle`)."""
+        if self.store is None:
+            raise ValueError("this stage keeps no snapshots")
+        self._base.settle(self.sv)               # a tree still pending stays: a verify parks nothing
+        self.store.snapshot(key, self.st.length, keep=keep)
+
+    @torch.no_grad()
+    def restore(self, key: bytes, length: int) -> bool:
+        if self.store is None or length > self.st.cap or not self.store.restore(key, length):
+            return False
+        self._tree = None
+        if length:
+            self._base.resume_at(self.sv, length)        # the PLE context, the length, the pooled keys
+        else:
+            self._base.restart(self.sv)
+        return True
+
+    def drop(self, keys) -> None:
+        if self.store is not None:
+            self.store.drop(keys)
+
+    def slot(self, i: int, cap: int | None = None) -> "FlashNextRowStage":
+        """Slot i's adapter: its own stage engine over this one's weights. `cap`: its window when
+        it is made (the tail's side slots may be shorter than slot 0; a front's are slot 0's)."""
+        if self.slot_id or not 0 < i < self.slots:
+            raise ValueError(f"this stage serves {self.slots if not self.slot_id else 1} slot"
+                             f"{'s' if self.slots > 1 and not self.slot_id else ''}")
+        if i not in self._sides:
+            e = self.eng
+            cap = min(int(cap or self.cap), self.cap)
+            eng = FlashNextStageEngine(e.model_cfg, e.W, e.tables, e.banks, e.lo, e.hi, device=e.device, max_len=cap)
+            store = None if self._store_opts is None else dict(self._store_opts)
+            self._sides[i] = type(self)(eng, cap, self.graphs, self._serving, slots=self.slots, slot_id=i,
+                                        store=store)
+        return self._sides[i]
 
     # ------------------------------------------------------------------ the carry at the cut
     def _take(self, rows: int, carry) -> None:
@@ -429,11 +488,13 @@ class FlashNextRowStage(StageAdapter):
     def rows(self, block: Block, carry):
         if (carry is None) != (self.lo == 0):
             raise ValueError("the front stage takes tokens, a later stage the carry")
-        if block.slot:
-            raise ValueError("a stage serves one slot")
+        if block.slot != self.slot_id:
+            raise ValueError("a stage serves one slot" if self.slots == 1 else "another slot's block")
         eng, st, M = self.eng, self.st, block.rows
         if st.length + M > st.cap:
             raise ValueError(f"{st.length + M} rows exceed the state's capacity {st.cap}")
+        if self.store is not None:
+            self.store.write(st.length, st.length + M)
         if carry is not None:
             carry = carry.to(eng.device)
             if tuple(carry.shape) != (M,) + tuple(self.carry_dims):
@@ -696,33 +757,62 @@ def stage_options(a, lo: int, hi: int) -> dict:
     cut = hi if lo == 0 else lo
     parts = carry_parts(c, cut)
     ple = sorted(c.ple_layers)
-    return {"slots": 1, "graphs": "captured" if getattr(a, "stage_graphs", "on") != "off" else "eager",
-            "caches": "off", "kv_cache": "bf16", "images": "refused", "prefill_chunk": PREFILL_CHUNK,
+    out = {"slots": 1, "graphs": "captured" if getattr(a, "stage_graphs", "on") != "off" else "eager",
+           "caches": "off"}
+    if getattr(a, "stage_caches", "off") == "on":
+        # ENG-423: state kept under keys on both stages: the caches, and a sequence a slot
+        slots = max(1, int(getattr(a, "parallel", 1) or 1))
+        if slots > SLOTS_MAX:
+            raise ValueError(f"--stage serves at most {SLOTS_MAX} slots: --parallel {slots}")
+        keep = getattr(a, "stage_cache_dir", "") or ""
+        out.update(slots=slots, caches="on", snapshots_gb=float(getattr(a, "stage_snapshots_gb", SNAPSHOTS_GB)),
+                   cache_dir="set" if keep else "none",
+                   cache_dir_gb=float(getattr(a, "stage_cache_gb", 0.0) or 0.0) if keep else 0.0,
+                   joint_round="one request a round, each slot's block on its own engine")
+    return {**out, "kv_cache": "bf16", "images": "refused", "prefill_chunk": PREFILL_CHUNK,
             "prefill_window": f"chunk-major (the one process: {LM.ROWS})", "verify_rows_max": 32,
             "max_len": int(a.max_len), "table": LD.TABLE,
             "ple_layers": {"front": [li for li in ple if li < cut], "tail": [li for li in ple if li >= cut]},
             "carry": f"{'H+N' if parts > 1 else 'H'} bf16, {parts * c.hc_count * c.hidden_size * 2} bytes a row"}
 
 
+#: the slots a split serves at most, and the bytes a front slot keeps of states by default (GiB)
+SLOTS_MAX = 8
+SNAPSHOTS_GB = 2.0
+
+
+def store_options(options: dict | None, a=None, seed: bytes = b"") -> dict | None:
+    """The front's store settings from a stage's options and the server's flags (None: no store)."""
+    o = options or {}
+    if o.get("caches") != "on":
+        return None
+    return {"bytes": int(float(o.get("snapshots_gb", SNAPSHOTS_GB)) * (1 << 30)),
+            "dir": getattr(a, "stage_cache_dir", "") or None,
+            "disk_bytes": int(float(o.get("cache_dir_gb", 0.0)) * (1 << 30)), "name": seed.hex()[:32]}
+
+
 def open_stage(path: str, lo: int, hi: int, max_len: int, device="cuda", log=print, options: dict | None = None,
-               serving=None, mtp: bool = False) -> FlashNextRowStage:
+               serving=None, mtp: bool = False, store: dict | None = None) -> FlashNextRowStage:
     """The stage [lo, hi) of the pack at `path`, on the engine's kernels: only its own layers'
     experts and projections are read. `options`: the stage's (`stage_options`; "graphs": "eager"
-    runs every pass without a graph). `serving`: the class behind the adapter (the tail's own),
-    `mtp`: with the draft layer (the tail's)."""
+    runs every pass without a graph; "slots"). `serving`: the class behind the adapter (the tail's
+    own), `mtp`: with the draft layer (the tail's), `store`: a front's kept states
+    (`store_options`)."""
     idx, W, banks, tables, timing = load_stage(path, lo, hi, device, mtp=mtp, log=log)
     eng = FlashNextStageEngine(idx.cfg, W, tables, banks, lo, hi, device=device, max_len=max_len)
-    ad = FlashNextRowStage(eng, graphs=(options or {}).get("graphs", "captured") != "eager", serving=serving)
+    ad = FlashNextRowStage(eng, graphs=(options or {}).get("graphs", "captured") != "eager", serving=serving,
+                           slots=int((options or {}).get("slots", 1)), store=store)
     ad.info = {"pack": path, "load": timing, "notes": list(idx.notes)}
     return ad
 
 
-def stage_adapter(model, lo: int, hi: int, cap: int | None = None, graphs: bool = False) -> StageAdapter:
+def stage_adapter(model, lo: int, hi: int, cap: int | None = None, graphs: bool = False, serving=None,
+                  slots: int = 1, store: dict | None = None) -> StageAdapter:
     """A stage of a model in hand: the reference's (`FlashNextRef`), or for a `FlashNextEngine` a
     stage engine over the same weights (nothing is loaded again), eager unless `graphs`."""
     if isinstance(model, FlashNextEngine):
         cfg = getattr(model, "model_cfg", model.cfg)
         eng = FlashNextStageEngine(cfg, model.W, model.tables, model.banks, lo, hi, device=model.device,
                                    max_len=cap or model.max_len)
-        return FlashNextRowStage(eng, graphs=graphs)
+        return FlashNextRowStage(eng, graphs=graphs, serving=serving, slots=slots, store=store)
     return FlashNextStage(model, lo, hi)
