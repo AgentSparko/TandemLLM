@@ -198,7 +198,7 @@ def serve_stage(a, ctx, stage) -> dict:
     from engine.spec import Relax
     ctx.keys(a.model, [a.model])
     tok = AutoTokenizer.from_pretrained(a.model)
-    ad = stages.open_stage(a.model, stage.lo, stage.hi, a.max_len, log=ctx.log)
+    ad = stages.open_stage(a.model, stage.lo, stage.hi, a.max_len, log=ctx.log, options=stage.options)
     ctx.mark("weights")
     srv = Lfm2MoeSplitServing(stage.attach(ad), a.max_len)
     ctx.mark("engine")

@@ -620,9 +620,11 @@ def stage_options(a, lo: int, hi: int) -> dict:
             "carry": f"H+N bf16, {2 * 2 * c.hidden_size} bytes a row"}
 
 
-def open_stage(path: str, lo: int, hi: int, max_len: int, device="cuda", log=print) -> Lfm2MoeRowStage:
+def open_stage(path: str, lo: int, hi: int, max_len: int, device="cuda", log=print,
+               options: dict | None = None) -> Lfm2MoeRowStage:
     """The stage [lo, hi) of the checkpoint or pack at `path`, on the engine's kernels: only its
-    own layers' weights are read."""
+    own layers' weights are read. `options`: the stage's (`stage_options`); it runs eager whatever
+    they say."""
     from engine.models.lfm2_moe.engine import Lfm2MoeEngine
     idx, W, experts, timing = load_stage(path, lo, hi, device, log=log)
     eng = Lfm2MoeEngine(stage_config(idx.cfg, lo, hi), W, experts, device=device, max_len=max_len)

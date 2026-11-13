@@ -315,7 +315,20 @@ class Follower:
                 elif fr.epoch != link.epoch:
                     _error(link, fr.seq, "epoch", epoch=link.epoch)
                 else:
-                    self._step(link, fr)
+                    try:
+                        self._step(link, fr)
+                    except L.LinkError:
+                        raise
+                    except Exception as e:                  # noqa: BLE001
+                        # the stage's own failure (not a refused block): the tail is told why, and the
+                        # epoch ends here, so nothing of a half-run block is used
+                        why = f"{type(e).__name__}: {e}"[:300]
+                        try:
+                            _error(link, fr.seq, "stage", message=why)
+                        except L.LinkError:
+                            pass
+                        link.down("stage error")
+                        return f"stage error ({why})"
         except L.LinkError as e:
             return e.code
         finally:

@@ -5,6 +5,8 @@
     --link-listen IP:PORT  wait for the other stage on this address, or
     --link-peer IP:PORT    connect to the other stage there (one of the two, on each side)
     --link-key-file PATH   the key both stages share: a file of mode 0600 with at least 32 bytes
+    --stage-graphs on|off  a family whose stage captures graphs for its passes: its own graphs
+                           (on, the default) or every pass eager
 
 The tail is the engine a client talks to: the server as it is, with the family's tail stage as its
 engine (the family's `serve` reads `STATE["stage"]` and asks it for the link, `Stage.attach`). The
@@ -54,6 +56,9 @@ def add_flags(ap) -> None:
                     help="with --stage: wait for the other stage on this address (an IP literal)")
     ap.add_argument("--link-peer", default="", metavar="IP:PORT",
                     help="with --stage: connect to the other stage at this address (an IP literal)")
+    ap.add_argument("--stage-graphs", default="on", choices=("on", "off"),
+                    help="with --stage: a stage whose family captures graphs for its passes captures "
+                         "its own (on), or runs every pass eager (off)")
     ap.add_argument("--link-key-file", default="", metavar="PATH",
                     help="with --stage: the key both stages share, a file of mode 0600 with at "
                          "least 32 bytes")
@@ -369,7 +374,7 @@ def serve_front(a, state: dict, log=print) -> None:
     if st.family is None:
         adapter = FakeStage(st.lo, st.hi)
     else:
-        adapter = st.family.open_stage(a.model, st.lo, st.hi, int(a.max_len), log=log)
+        adapter = st.family.open_stage(a.model, st.lo, st.hi, int(a.max_len), log=log, options=st.options)
         if hasattr(adapter, "warm"):
             adapter.warm()                 # the kernels' first launches, before a deadline counts
     ident = st.identity(adapter)

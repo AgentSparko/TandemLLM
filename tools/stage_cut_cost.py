@@ -1,12 +1,13 @@
 """What cutting a model into two stages costs by itself, in one process and with no link (ENG-307).
 
     python3 tools/stage_cut_cost.py --model PACK --cut K [--runs 20] [--prompt-rows 512]
-            [--steps 64] [--blocks 16] [--block-rows 8] [--max-len 8192] [--out FILE.json]
+            [--steps 64] [--blocks 16] [--block-rows 8] [--max-len 8192] [--graphs on|off] [--out FILE.json]
 
 Arm A runs every block through the whole model, the layers [0, layers) in one pass. Arm B runs the
 same block through the front [0, K), copies the carry to the host and back (the round trip a link
 makes, without the link), and runs the tail [K, layers). Both arms are the family's stage adapters
-over one copy of the weights (engine/models/<family>/stages.py), eager, and take the same tokens:
+over one copy of the weights (engine/models/<family>/stages.py), eager (or with `--graphs on` each
+stage's own captured graphs, for a family whose stage has them), and take the same tokens:
 a prompt chunk, then decode steps, then verify blocks with their commits. The two arms run in
 turn, the first round is a warm-up, and every output of B is compared with A's bit for bit.
 
@@ -43,7 +44,9 @@ def _pct(xs: list, q: float) -> float:
 
 
 def measure(model: str, cut: int, runs: int = 20, prompt_rows: int = 512, steps: int = 64, blocks: int = 16,
-            block_rows: int = 8, max_len: int = 8192, device: str = "cuda", log=print) -> dict:
+            block_rows: int = 8, max_len: int = 8192, device: str = "cuda", log=print, graphs: bool = False) -> dict:
+    import inspect
+
     import torch
 
     from engine.methods import stages as S
@@ -54,11 +57,17 @@ def measure(model: str, cut: int, runs: int = 20, prompt_rows: int = 512, steps:
     fam = S.family_stages(arch)
     layers = int((raw.get("text_config") or raw)["num_hidden_layers"])
     vocab = min(1000, int((raw.get("text_config") or raw)["vocab_size"]))
-    whole = fam.open_stage(model, 0, layers, max_len, device=device, log=log)
+    # a family whose stage captures graphs takes the choice; any other runs eager
+    captures = "graphs" in inspect.signature(fam.stage_adapter).parameters
+    if graphs and not captures:
+        raise SystemExit(f"--graphs on: the {arch.name} stages run eager")
+    opts = {"options": {"graphs": "captured" if graphs else "eager"}} if captures else {}
+    whole = fam.open_stage(model, 0, layers, max_len, device=device, log=log, **opts)
     if not 0 < cut < whole.layers or cut not in whole.cuts:
         raise SystemExit(f"--cut {cut}: this model's cuts are {list(whole.cuts)}")
-    front = fam.stage_adapter(whole.model, 0, cut)
-    tail = fam.stage_adapter(whole.model, cut, whole.layers)
+    kw = {"graphs": graphs} if captures else {}
+    front = fam.stage_adapter(whole.model, 0, cut, **kw)
+    tail = fam.stage_adapter(whole.model, cut, whole.layers, **kw)
     step_tag = getattr(fam, "STEP", 0)
     cuda = str(device).startswith("cuda")
 
@@ -123,12 +132,14 @@ def measure(model: str, cut: int, runs: int = 20, prompt_rows: int = 512, steps:
                     "cut_ms": {"p50": round(b, 4), "p10": round(_pct(tb[k], 0.1), 4), "p90": round(_pct(tb[k], 0.9), 4)},
                     "cut_minus_uncut_ms": round(b - a, 4), "share_of_uncut": round((b - a) / a, 4) if a else None,
                     "carry_bytes": 0 if k == "commit" else rows[k] * front.carry_bytes_per_row}
-    return {"what": "the cost of the cut in one process: eager, host round trip of the carry, no link",
+    return {"what": f"the cost of the cut in one process: {'graphs a stage' if graphs else 'eager'}, host round "
+                    "trip of the carry, no link",
             "label": "one-box emulation, not a link cost and not a serving speed",
             "equal": equal, "first_diff": first_diff, "kinds": kinds,
             "args": {"model": model, "family": arch.name, "layers": whole.layers, "cut": cut, "runs": runs,
                      "warmup_runs": 1, "prompt_rows": prompt_rows, "steps": steps, "blocks": blocks,
-                     "block_rows": block_rows, "max_len": max_len, "device": device, "graphs": "eager", "slots": 1,
+                     "block_rows": block_rows, "max_len": max_len, "device": device,
+                     "graphs": "captured" if graphs else "eager", "slots": 1,
                      "carry_bytes_per_row": front.carry_bytes_per_row, "carry_dtype": front.carry_dtype,
                      "carry_dims": list(front.carry_dims)}}
 
@@ -144,10 +155,12 @@ def main(argv=None) -> int:
     ap.add_argument("--block-rows", type=int, default=8)
     ap.add_argument("--max-len", type=int, default=8192)
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--graphs", default="off", choices=("on", "off"),
+                    help="on: each arm's stages capture their own graphs (a family whose stage has them)")
     ap.add_argument("--out", default="")
     a = ap.parse_args(argv)
     res = measure(a.model, a.cut, a.runs, a.prompt_rows, a.steps, a.blocks, a.block_rows, a.max_len, a.device,
-                  log=lambda line: print(line, file=sys.stderr, flush=True))
+                  log=lambda line: print(line, file=sys.stderr, flush=True), graphs=a.graphs == "on")
     text = json.dumps(res, indent=1)
     if a.out:
         with open(a.out, "w") as f:
