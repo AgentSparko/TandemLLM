@@ -1,9 +1,10 @@
 """The dashboard's files at `/dashboard/`, served by the engine itself.
 
-`npm run build` in `dashboard/` on the Mac writes `dashboard/dist/` -- one `index.html`, hashed
-JS and CSS -- and that directory is committed, so the rsync deploy carries it and the box needs
-no Node. The shell holds no data: every number in it comes from `/v1/dashboard/*`, which needs
-the admin token or the session, so the files themselves are public.
+`dashboard/dist/` holds the built page -- one `index.html`, hashed JS and CSS, and `bundle.json`,
+the bundle's manifest. It is a build output, not a file in git (OPS-246): `tools/dashboard_bundle.py`
+builds it, or fetches a released one against its pinned sha256, on every install path. The shell
+holds no data: every number in it comes from `/v1/dashboard/*`, which needs the admin token or the
+session, so the files themselves are public.
 
     GET /dashboard            301 to /dashboard/
     GET /dashboard/           index.html, Cache-Control: no-cache
@@ -13,8 +14,10 @@ the admin token or the session, so the files themselves are public.
 Fixed content types, `X-Content-Type-Options: nosniff`, the CSP of the dashboard design
 (`default-src 'self'; connect-src 'self'; img-src 'self' data:`; with QSE_STATUS_PORT the status
 responder's port on any host joins connect-src, OPS-175), and no path outside the
-directory: `..`, an absolute path or a symlink out of it is a 404. With no `dist/` at all, a
-one-paragraph placeholder says how to build it.
+directory: `..`, an absolute path or a symlink out of it is a 404. With no built page (no
+`index.html`), a one-paragraph placeholder says how to build or fetch it. Every answer under
+/dashboard/ names the bundle it comes from in `X-Tandem-Bundle` (the first 16 hex digits of its
+content hash, tandemapp/bundle.py; `none` for the placeholder); `bundle_info()` has the rest.
 """
 
 from __future__ import annotations
@@ -41,19 +44,24 @@ PLACEHOLDER = b"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Engine dashboard</title>
 </head><body style="font-family: system-ui, sans-serif; background: #0b0f17; color: #cfd6e4;
 padding: 2rem; line-height: 1.5"><h1 style="font-size: 1.2rem">The dashboard is not built on this
-server</h1><p>Build it on the Mac (<code>cd dashboard &amp;&amp; npm run build</code>), commit
-<code>dashboard/dist/</code> and deploy. The API it reads is already here:
+server</h1><p>The page is a build output, not a file in git. In TandemApp's folder (<code>app/</code>
+of the repository), build it with Node 20.19 or newer: <code>python3 tools/dashboard_bundle.py
+build</code>, or fetch a released bundle against its published sha256: <code>python3
+tools/dashboard_bundle.py fetch --url &lt;bundle&gt; --sha256 &lt;sha256&gt;</code>. Then reload
+this page; no restart is needed. The API it reads is already here:
 <code>/v1/dashboard/summary</code>, with the admin token.</p></body></html>
 """
 
 
 def default_dir() -> str:
     """`dashboard/dist` in a checkout; `proxy/dashboard` beside this package in an installed
-    wheel (the tandemapp wheel puts the built page there)."""
+    wheel (the tandemapp wheel puts the built page there). A checkout with no built page and an
+    installed one: the installed one."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     repo = os.path.join(root, "dashboard", "dist")
     installed = os.path.join(root, "proxy", "dashboard")
-    if not os.path.isdir(repo) and os.path.isfile(os.path.join(installed, "index.html")):
+    if not os.path.isfile(os.path.join(repo, "index.html")) and \
+            os.path.isfile(os.path.join(installed, "index.html")):
         return installed
     return repo
 
@@ -91,12 +99,13 @@ def serve(handler, raw_path: str, root: str | None = None) -> None:
     path = raw_path.split("?", 1)[0]
     if path == "/dashboard":
         return _send(handler, 301, b"", "text/plain", extra=(("Location", "/dashboard/"),))
-    if not os.path.isdir(root):
+    if not os.path.isfile(os.path.join(root, "index.html")):
         return _send(handler, 200, PLACEHOLDER, TYPES[".html"], cache="no-cache",
-                     csp=csp_for(PLACEHOLDER))
+                     csp=csp_for(PLACEHOLDER), extra=(("X-Tandem-Bundle", "none"),))
+    tag = (("X-Tandem-Bundle", bundle_tag(root)),)
     file, _ = resolve(root, path[len("/dashboard/"):])
     if file is None:
-        return _send(handler, 404, b"not found\n", TYPES[".txt"], cache="no-cache")
+        return _send(handler, 404, b"not found\n", TYPES[".txt"], cache="no-cache", extra=tag)
     ext = os.path.splitext(file)[1].lower()
     ctype = TYPES.get(ext, "application/octet-stream")
     if ext == ".html":
@@ -108,7 +117,23 @@ def serve(handler, raw_path: str, root: str | None = None) -> None:
     with open(file, "rb") as f:
         raw = f.read()
     return _send(handler, 200, raw, ctype, cache=cache,
-                 csp=csp_for(raw) if ext == ".html" else CSP)
+                 csp=csp_for(raw) if ext == ".html" else CSP, extra=tag)
+
+
+def bundle_info(root: str | None = None) -> dict:
+    """Which bundle this server serves: {"present", "sha256", "verified", "source", "commit"}
+    (tandemapp/bundle.py), computed once per change of the folder."""
+    from tandemapp import bundle
+    return bundle.info(root or default_dir())
+
+
+def bundle_tag(root: str | None = None) -> str:
+    """The `X-Tandem-Bundle` value: 16 hex digits of the content hash, `modified` appended when the
+    files differ from the manifest, `none` with no page."""
+    i = bundle_info(root)
+    if not i["present"]:
+        return "none"
+    return i["sha256"][:16] + ("" if i["verified"] else " modified")
 
 
 def csp_for(html: bytes) -> str:

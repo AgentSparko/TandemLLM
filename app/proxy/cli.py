@@ -114,8 +114,16 @@ def check(args) -> int:
         return 1
     from tandemapp import static
     dist = args.dashboard_dir or static.default_dir()
-    ok_dist = os.path.exists(os.path.join(dist, "index.html"))
-    _say(f"page    {_tilde(dist)}{'' if ok_dist else ' MISSING: the page shows a placeholder'}")
+    page = static.bundle_info(dist)
+    if not page["present"]:
+        state = (" MISSING: the page shows a placeholder; build it with "
+                 "`python3 tools/dashboard_bundle.py build` in TandemApp's folder, or fetch a "
+                 "released bundle (docs/proxy.md)")
+    elif page["verified"]:
+        state = f" bundle {page['sha256'][:16]} ({page['source'] or 'unrecorded'})"
+    else:
+        state = f" bundle {page['sha256'][:16]} MODIFIED: the files differ from its bundle.json"
+    _say(f"page    {_tilde(dist)}{state}")
     led = args.usage_ledger
     _say(f"ledger  {_tilde(os.path.expanduser(led)) if led != 'off' else 'off'}")
     _say(f"extras  cryptography {'yes' if _has('cryptography') else 'NO (keys cannot be stored)'}"

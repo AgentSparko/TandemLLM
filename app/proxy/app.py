@@ -331,6 +331,8 @@ class Handler(BaseHTTPRequestHandler):
             if STATE["auth"].decide("health_full", self._peer(), self.headers) == "ok":
                 out["backends"] = STATE["svc"].backends_view()
                 out["version"] = STATE.get("version")
+                # OPS-246: the page's bundle this server serves (its content hash and manifest)
+                out["dashboard"] = static.bundle_info(STATE.get("dashboard_dir"))
             return self._json(code, out)
         if path == "/metrics":
             if not self._allowed("metrics"):
