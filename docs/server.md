@@ -255,7 +255,7 @@ Timing (`QSE_PARALLEL_TIMING=1`, for measurements: every joint pass is synchroni
 
 ## One model as two stage processes
 
-`--stage LO:HI` starts the server as one of the two stage processes of a split model (ENG-307, [architecture.md](architecture.md#stages-one-model-in-two-processes)). It serves the layers `[LO, HI)` of `--model`: `0:k` is the front stage, `k:layers` the tail. Built for the `lfm2_moe` family.
+`--stage LO:HI` starts the server as one of the two stage processes of a split model (ENG-307, [architecture.md](architecture.md#stages-one-model-in-two-processes)). It serves the layers `[LO, HI)` of `--model`: `0:k` is the front stage, `k:layers` the tail. Built for the `lfm2_moe` and `qwen4_exp` (Flash-Next) families.
 
 | flag | what |
 |-|-|
@@ -263,6 +263,7 @@ Timing (`QSE_PARALLEL_TIMING=1`, for measurements: every joint pass is synchroni
 | `--link-listen IP:PORT` | wait for the other stage on this address |
 | `--link-peer IP:PORT` | connect to the other stage at this address |
 | `--link-key-file PATH` | the key both stages share |
+| `--stage-graphs on\|off` | Flash-Next: a stage captures its own decode, verify and commit graphs (`on`, the default) or runs every pass eager |
 
 Each side takes one of `--link-listen` and `--link-peer`. Addresses are IP literals, and a wildcard address is refused. The key file must be a regular file of the server's user, mode 0600, with at least 32 bytes. The key appears in no log line, message or route.
 
@@ -272,8 +273,18 @@ Limits of this first version, each refused at the start or at the request, never
 
 - one slot (`--parallel 1`), no KV pool, no disk tier, no prompt caches, no conductor, no backends, not in setup mode;
 - text only: a request with images gets 400 `stage_text_only`;
-- the passes run eager, without captured graphs;
-- `LFM2_KV_FP8` is not served split.
+- `LFM2_KV_FP8` and `FN_KV_FP8` are not served split;
+- LFM2 MoE's passes run eager, without captured graphs.
+
+Flash-Next as two stages (`engine/models/flashnext/stages.py`, `tail.py`):
+
+- The tail holds the last layers, the final mixer, the head, the draft layer and the sampler. The draft layer and its graphs are the one process's.
+- The carry is the 4 streams and the next site's norm of them in bf16: 40,960 bytes a row at hidden 2,560. In front of the PLE layer it is the streams alone, 20,480 bytes a row.
+- The stage that holds the PLE layer reads the n-gram table. The other stage opens the file and reads no row of it.
+- Each stage reads the embedding, the head and the final mixer beside its own layers.
+- A prompt runs chunk-major, one chunk of `FN_PREFILL_CHUNK` rows a round. The layer-major window and the joint prefill are off.
+- The tail loads no vision tower.
+- `/health` lists these limits under `stage.options`.
 
 `/health` on both stages carries a `stage` block: `role`, `lo`, `hi`, `layers`, `cut`, the stage's `options` (its limits) and `link` with `state`, `epoch`, `transport` and the bytes each way. While the link is down the tail's status is `degraded`. A request in flight ends with an error that says `stage_down`, and a new one gets 503 `stage_down` with `Retry-After: 5`. The tail keeps dialing or listening; a new link starts both stages empty under the next epoch, so the next request reads its prompt again.
 
