@@ -236,14 +236,17 @@ class Stage:
 
     def fake_tail(self):
         """`--fake-engine` as a tail: `tick(block)` asks the front for the block's rows and keeps
-        them, so every block the fake writes crosses the link."""
+        them, so every block the fake writes crosses the link: its first token as a decode step
+        (a chain of one row), the rest as a verify block and its commit."""
         co = self.attach(FakeStage(self.lo, self.hi))
 
         def tick(block) -> None:
             toks = [int(t) for t in block]
             if toks:
-                co.verify(toks, list(range(-1, len(toks) - 1)))
-                co.commit(list(range(len(toks))))
+                co.prefill(toks[:1], graph=1)
+            if len(toks) > 1:
+                co.verify(toks[1:], list(range(-1, len(toks) - 2)))
+                co.commit(list(range(len(toks) - 1)))
         return tick
 
     # ------------------------------------------------------------------ what the routes read

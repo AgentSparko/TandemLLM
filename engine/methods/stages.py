@@ -14,7 +14,8 @@ its own layers, and its own pending block until the commit path arrives with the
 A stage reads its model only through a `StageAdapter`, which the model's family provides
 (`engine/models/<family>/stages.py`, found by `family_stages`). This module names no model.
 
-Failure: every receive has a deadline (`STEP_S` for a block, `CHUNK_S` for a prompt chunk). A miss
+Failure: every receive has a deadline (`CHUNK_S` for a prompt chunk, a chain of several rows;
+`STEP_S` for every other request: a verify block, a block of one row, a reset, a sync, a probe). A miss
 takes the link down; the request in flight ends with `StageDown` (code `stage_down`) and so does every
 request after it, until a new link is attached. A new link has a new epoch, and both sides start it
 from an empty state: nothing computed under an older epoch is used. A header whose length is not the
@@ -500,7 +501,9 @@ class Coordinator:
     def _run(self, block: Block, replaying: bool = False):
         ad = self.adapter
         block.pos_class = ad.position_class(ad.length, block.rows)
-        deadline = self.chunk_deadline if block.chain else self.step_deadline
+        # one row is a step whatever kind of block carries it (a decode token is a chain of one row);
+        # only a chain of several rows, a prompt chunk, gets the chunk's time
+        deadline = self.chunk_deadline if block.chain and block.rows > 1 else self.step_deadline
         into = ad.staging(block.rows * ad.carry_bytes_per_row)
         try:
             fr = self._ask(pack_step(OP_STEP, ad.length, block, self._pending), deadline, into)
