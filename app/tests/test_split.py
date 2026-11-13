@@ -740,6 +740,9 @@ def test_split_runs():
         b = next(i for i, t in enumerate(said) if "starts the tail stage" in t)
         assert a < b and _chat(fx, "split-m")[0] == 200, said
         nowhere()
+        # a Split that runs is not deleted: its stages and its key would stay behind
+        st, err = tf.send(fx.px, "DELETE", f"/v1/fleet/deployments/{did}", None)
+        assert st == 409 and "stop it first" in err["error"]["message"], err
         # stop: the tail first, both gone, the key removed from both nodes
         plan = tf.ok(tf.get(fx.px, f"/v1/fleet/deployments/{did}/actions/stop")[1],
                      "deployment-plan")
@@ -762,6 +765,8 @@ def test_split_runs():
         assert not any(key in b or base64.b64encode(key) in b for b in blobs)
         st, err = tf.send(fx.px, "POST", f"/v1/fleet/deployments/{did}/actions/stop", {})
         assert st == 409 and "stopped already" in err["error"]["message"], err
+        st, gone = tf.send(fx.px, "DELETE", f"/v1/fleet/deployments/{did}", None)
+        assert st == 200 and gone["deleted"] == did, gone
     finally:
         fx.close()
         os.unlink(est)
