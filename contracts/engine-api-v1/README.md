@@ -225,14 +225,12 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 
 | engine file | app modules |
 |-|-|
-| `server/app.py` | `proxy.collect_api`, `proxy.config`, `proxy.config_api`, `proxy.hostcollect`, `proxy.route`, `proxy.service`, `tandemapp.activity`, `tandemapp.argloop`, `tandemapp.auth`, `tandemapp.callrepair`, `tandemapp.chat_forward`, `tandemapp.compaction`, `tandemapp.conductor.classify`, `tandemapp.conductor.decisions`, `tandemapp.conductor.hook`, `tandemapp.conductor.incontext`, `tandemapp.conductor.loopescape`, `tandemapp.conductor.memory`, `tandemapp.conductor.memwriter`, `tandemapp.conductor.migrations`, `tandemapp.conductor.modelfit`, `tandemapp.conductor.monitor`, `tandemapp.conductor.monitor.policy`, `tandemapp.conductor.narrator`, `tandemapp.conductor.outcomes`, `tandemapp.conductor.redact`, `tandemapp.conductor.router`, `tandemapp.conductor.routes`, `tandemapp.conductor.schema`, `tandemapp.conductor.shipped`, `tandemapp.conductor.signals`, `tandemapp.conductor.states`, `tandemapp.conductor.store`, `tandemapp.conductor.voice`, `tandemapp.dashboard_api`, `tandemapp.http_body`, `tandemapp.laya_api`, `tandemapp.ledger`, `tandemapp.library_api`, `tandemapp.live`, `tandemapp.logbuf`, `tandemapp.memblock`, `tandemapp.metrics`, `tandemapp.parallel`, `tandemapp.session_tokens`, `tandemapp.static`, `tandemapp.thinking`, `tandemapp.toolcall`, `tandemapp.toolformats`, `tandemapp.usage` |
-| `server/compat.py` | `tandemapp.refusal`, `tandemapp.toolformats` |
+| `server/app.py` | `proxy.collect_api`, `proxy.config`, `proxy.config_api`, `proxy.hostcollect`, `proxy.route`, `proxy.service`, `tandemapp.activity`, `tandemapp.auth`, `tandemapp.chat_forward`, `tandemapp.compaction`, `tandemapp.conductor.classify`, `tandemapp.conductor.decisions`, `tandemapp.conductor.hook`, `tandemapp.conductor.incontext`, `tandemapp.conductor.loopescape`, `tandemapp.conductor.memory`, `tandemapp.conductor.memwriter`, `tandemapp.conductor.migrations`, `tandemapp.conductor.modelfit`, `tandemapp.conductor.monitor`, `tandemapp.conductor.monitor.policy`, `tandemapp.conductor.narrator`, `tandemapp.conductor.outcomes`, `tandemapp.conductor.redact`, `tandemapp.conductor.router`, `tandemapp.conductor.routes`, `tandemapp.conductor.schema`, `tandemapp.conductor.shipped`, `tandemapp.conductor.signals`, `tandemapp.conductor.states`, `tandemapp.conductor.store`, `tandemapp.conductor.voice`, `tandemapp.dashboard_api`, `tandemapp.http_body`, `tandemapp.laya_api`, `tandemapp.ledger`, `tandemapp.library_api`, `tandemapp.live`, `tandemapp.logbuf`, `tandemapp.memblock`, `tandemapp.metrics`, `tandemapp.parallel`, `tandemapp.session_tokens`, `tandemapp.static`, `tandemapp.usage` |
 | `server/conductor/inproc.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.routes`, `tandemapp.conductor.schema` |
 | `server/conductor/residency.py` | `tandemapp.conductor.store` |
 | `server/conductor/shadow.py` | `tandemapp.conductor.incontext`, `tandemapp.conductor.inject`, `tandemapp.conductor.schema` |
 | `server/decider_api.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.schema`, `tandemapp.laya_api` |
 | `server/diskcache.py` | `tandemapp.conductor.transcripts` |
-| `server/endalign.py` | `tandemapp.toolcall` |
 | `server/memory_api.py` | `tandemapp.conductor.notes`, `tandemapp.library_api` |
 | `server/mode.py` | `tandemapp.chat_forward` |
 | `server/probe.py` | `tandemapp.conductor.transcripts`, `tandemapp.ledger` |
@@ -241,9 +239,8 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 | `server/setup/community.py` | `tandemapp.conductor.schema` |
 | `server/setup/knowledge.py` | `tandemapp.conductor.libsearch` |
 | `server/setup/registry.py` | `tandemapp.conductor.schema` |
-| `server/setup/wren.py` | `tandemapp.conductor.schema`, `tandemapp.toolcall` |
+| `server/setup/wren.py` | `tandemapp.conductor.schema` |
 | `server/setup_api.py` | `tandemapp.dashboard_api` |
-| `tools/argloop_fp.py` | `tandemapp.argloop` |
 | `tools/class_core_eval.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.router`, `tandemapp.conductor.schema`, `tandemapp.conductor.signals` |
 | `tools/class_fallback_eval.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.router`, `tandemapp.conductor.signals` |
 | `tools/conductor_contract.py` | `tandemapp.conductor.schema` |
@@ -261,6 +258,8 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 | `tools/stall_replay.py` | `tandemapp.conductor.monitor.policy` |
 | `tools/thought_narrator_measure.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.schema`, `tandemapp.conductor.states`, `tandemapp.conductor.store` |
 | `tools/voice_replay.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.states`, `tandemapp.conductor.voice` |
+
+Since ENG-413 WP2a the wire format is the engine's own: `server/api/` holds its copies of `toolcall`, `toolformats`, `callrepair`, `refusal`, `thinking` and `argloop`, and no engine file imports TandemApp's (`tests/test_api_import_guard.py`). TandemApp keeps its copies for its extension and its controller; both pass `toolcalls/`.
 
 `reverse-deps.json` also lists the engine's reads of app files (`reads`: the knob rows, the manual's generators, the setup knowledge index, the contracts), the engine test files that reach app code (`tests`), the reads the AST cannot see (`not_ast`: install.sh, ops/start.sh and ops/watchdog.sh starting chatd and TandemNode from `app/`, the models' docs links, the Grafana panels, the manual's tables) and the copies both trees keep equal until the split (`copies`: `same_origin`, `TIER_OF`, the `OFF_WHY` texts, the test helpers, `contract_check`, the licenses, the setup fixtures). At the split the engine takes byte copies of what it reads here, its own `/metrics` document and registry, and its own helpers; the app-only tools and tests move to `app/`.
 

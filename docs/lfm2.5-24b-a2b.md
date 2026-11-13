@@ -49,7 +49,7 @@ Switch: `ops/use-profile.sh lfm25-exl3-3.5`, or the Setup Guide (`#/setup`).
 
 - Template: the checkpoint's `chat_template.jinja`. It opens `<think>` at the end of every prompt; the server splits reasoning from the answer as for Qwen ([server.md](server.md#reasoning)).
 - Thinking off (`chat_template_kwargs: {"enable_thinking": false}`, or the conductor's): the server closes the block right after the generation prompt.
-- Tool calls: a Python list between `<|tool_call_start|>` and `<|tool_call_end|>`, for example `<|tool_call_start|>[get_weather(city='Berlin', days=3)]<|tool_call_end|>`. `app/tandemapp/toolcall.py` (`PythonicCalls`) rewrites each block into the JSON tool tier as the text arrives; the client gets OpenAI `tool_calls`. Values are Python literals (and `true`, `false`, `null`), read with `ast.literal_eval`, never run. A block that is not a list of keyword calls stays text.
+- Tool calls: a Python list between `<|tool_call_start|>` and `<|tool_call_end|>`, for example `<|tool_call_start|>[get_weather(city='Berlin', days=3)]<|tool_call_end|>`. `server/api/toolcall.py` (`PythonicCalls`) rewrites each block into the JSON tool tier as the text arrives; the client gets OpenAI `tool_calls`. Values are Python literals (and `true`, `false`, `null`), read with `ast.literal_eval`, never run. A block that is not a list of keyword calls stays text.
 - Sampling default when a request names none: temperature 0.1, top_k 50, repetition penalty 1.05 (`TEMPERATURE`, `TOP_K`, `REP_PENALTY`).
 - Conductor: on by default, with the model fit below ([Conductor](#conductor)).
 

@@ -56,18 +56,18 @@ from server.stream import (  # noqa: E402
     answer_stops, drop_stray_close, off_full, off_split, opens_think, split_full,
 )
 from engine.tree import DraftTree  # noqa: E402
-from tandemapp import toolformats  # noqa: E402  (ENG-407 the forms a model writes calls in)
-from tandemapp import callrepair  # noqa: E402  (SRV-691 argument names matched to the schema)
-from tandemapp.toolcall import (JSON_ANY, OPEN as TOOL_OPEN, ToolCallBuffer,  # noqa: E402
-                             answer_items, parse_tool_calls, rewrite_native, schema_types,
-                             strip_blocks)
+from server.api import toolformats  # noqa: E402  (ENG-407 the forms a model writes calls in)
+from server.api import callrepair  # noqa: E402  (SRV-691 argument names matched to the schema)
+from server.api.toolcall import (JSON_ANY, OPEN as TOOL_OPEN, ToolCallBuffer,  # noqa: E402
+                               answer_items, parse_tool_calls, rewrite_native, schema_types,
+                               strip_blocks)
 from server import compat  # noqa: E402
 from server import sampling_defaults  # noqa: E402  (SPD-245 a request's filters when it names none)
 from server import prefill_burst  # noqa: E402  (SPD-245 the prefills of requests that arrive together)
 from server import roundlog as _roundlog  # noqa: E402  (SPD-187 the round logger, QWEN38_ROUND_LOG)
 from server import round_runner as _round_runner  # noqa: E402  (SPD-201 the runner-owned round)
 from server import health_cache  # noqa: E402  (SPD-249 /health's parts and reuse)
-from tandemapp import thinking as thinking_mod  # noqa: E402
+from server.api import thinking as thinking_mod  # noqa: E402
 from engine import grammar as grammar_mod  # noqa: E402
 from engine.models.adapter import ServeSpec  # noqa: E402  (ENG-406 what the family says about its model)
 from server import logprobs as lp_mod  # noqa: E402
@@ -75,7 +75,7 @@ from tandemapp import metrics  # noqa: E402
 from tandemapp import usage as usage_mod  # noqa: E402
 from tandemapp import ledger as ledger_mod  # noqa: E402
 from server import endalign  # noqa: E402
-from tandemapp import argloop as argloop_mod  # noqa: E402
+from server.api import argloop as argloop_mod  # noqa: E402
 from server import regenerate as regenerate_mod  # noqa: E402
 from server import skillcanon as skillcanon_mod  # noqa: E402
 from tandemapp import dashboard_api  # noqa: E402
@@ -4012,7 +4012,7 @@ def _sp2_block(sup, think, ctx, start: int, n_out: int, new: list, eos, max_new:
 
 
 def _argloop_fired(v, tbuf, sup, rec, cid: str) -> bool:
-    """The loop guard fired on the open call (app/tandemapp/argloop.py). True: the generation stops
+    """The loop guard fired on the open call (server/api/argloop.py). True: the generation stops
     here, the open block is dropped and `v.text` is the sentence the client gets after it; the
     session's next request carries the hidden note (Supervisor.at_request). A held call never
     reaches the client. A call that streamed live (the coding profile's tool gate off: nothing is
@@ -4153,7 +4153,7 @@ def _call_repairs(cid: str, sup, renamed: list) -> None:
 
 
 def _tool_format() -> "toolformats.ToolFormat":
-    """ENG-407: the form the served model writes tool calls in (server/toolformats)."""
+    """ENG-407: the form the served model writes tool calls in (server/api/toolformats)."""
     return toolformats.get(_spec().tool_format)
 
 
@@ -7475,7 +7475,7 @@ def build_prompt(body: dict, client: "thinking_mod.Client | None" = None, *, cou
     Whoever renders the prompt is the only code that can know this, so it is answered here and the
     server puts the tag back.
 
-    `client`: the request's thinking (app/tandemapp/thinking.py), read from the body when not given. Its
+    `client`: the request's thinking (server/api/thinking.py), read from the body when not given. Its
     off forms render the template's own thinking off, and its effort word the template's sentence.
 
     `count`: the prompt's length only, as an int, with no tensor on the device: the router asks
@@ -10190,7 +10190,7 @@ class Handler(BaseHTTPRequestHandler):
         # (Open WebUI's tool loop replays its arguments: 2026-10-06, five byte-identical retries,
         # the prompt 17k -> 46k), is cut down to its head and one marker before anything reads the
         # messages: the model never copies its own loop again, and the router and the monitor read
-        # the retry streak from the markers (app/tandemapp/argloop.py `collapse_history`)
+        # the retry streak from the markers (server/api/argloop.py `collapse_history`)
         if chat and STATE.get("argloop", "on") == "on" and isinstance(body.get("messages"), list):
             body["messages"], cut = argloop_mod.collapse_history(body["messages"])
             if cut:
@@ -10204,7 +10204,7 @@ class Handler(BaseHTTPRequestHandler):
         structured = bool(STATE.get("structured_outputs", True))
         try:
             compat.check(body, chat, structured=structured)
-            # the client's thinking budget, whichever shape it came in (app/tandemapp/thinking.py)
+            # the client's thinking budget, whichever shape it came in (server/api/thinking.py)
             client = thinking_mod.read(body, _effort_caps())
             # the document a request asks for (response_format, structured_outputs); tool_choice
             # required or named is enforced with the same machinery -- the answer as calls to the
@@ -10287,7 +10287,7 @@ class Handler(BaseHTTPRequestHandler):
             word is a ceiling (the owner, 2026-10-03 12:30): the router's level, never above the
             word's cap (0 is no cap); under a profile whose `thinking.client_word` is `ignore`
             (opencode, which sends `medium` every turn) the router's level alone. A client's
-            number always wins (app/tandemapp/thinking.py)."""
+            number always wins (server/api/thinking.py)."""
             if client.asked and client.kind != "number" and plan.decides_effort:
                 rb = plan.think_budget(server_budget)
                 if plan.client_word == "ignore":
@@ -11149,7 +11149,7 @@ class Handler(BaseHTTPRequestHandler):
             # SP4: the conductor's session monitor sees the request before anything is prefilled,
             # and may add a hidden note at the prompt's tail or set the thinking budget
             sup, client_ids = None, None
-            final_ids = None                       # A1's give-up answer (app/tandemapp/argloop.py)
+            final_ids = None                       # A1's give-up answer (server/api/argloop.py)
             # what the replay added to the client's copy, net of the whitespace it aligned
             hidden_prompt = plan_hidden + (int(prompt.numel()) - len(before)
                                            if replayed or aligned else 0)
@@ -11190,7 +11190,7 @@ class Handler(BaseHTTPRequestHandler):
                     sup.memo["loop_escape"] = rec.loop_escape       # SRV-475: the escape note
                 acts = sup.at_request(req_ev)
                 if sup.final_answer:
-                    # A1's give-up after the retries (app/tandemapp/argloop.py): this answer is the
+                    # A1's give-up after the retries (server/api/argloop.py): this answer is the
                     # sentence, served as a replay is, never generated; the client's tool loop
                     # ends on a plain answer
                     eos_t = tok.eos_token_id if isinstance(tok.eos_token_id, int) \
@@ -12961,7 +12961,7 @@ def parser() -> argparse.ArgumentParser:
                          "generation with finish_reason stop). The backstop for a greedy loop the "
                          "penalties cannot break; empty = off")
     ap.add_argument("--argloop", default="on", choices=("on", "log", "off"),
-                    help="the tool-argument loop guard (app/tandemapp/argloop.py): `on` stops a "
+                    help="the tool-argument loop guard (server/api/argloop.py): `on` stops a "
                          "held tool call whose arguments loop and tells the model on its next "
                          "turn; `log` only logs where it would have; `off`")
     ap.add_argument("--default-max-tokens", type=int, default=8192,
@@ -13105,7 +13105,7 @@ def parser() -> argparse.ArgumentParser:
                          "ThinkBudget -- which CHANGES THE ANSWER and is not a speed trick")
     ap.add_argument("--answer-reserve", default=os.environ.get("QSE_ANSWER_RESERVE", "auto"),
                     help="tokens of the output limit kept for the answer when a client asks for a "
-                         "thinking budget in any shape (app/tandemapp/thinking.py): its reasoning "
+                         "thinking budget in any shape (server/api/thinking.py): its reasoning "
                          "closes early enough to leave them. auto = min(2048, a quarter of the "
                          "limit), 0 = none (QSE_ANSWER_RESERVE). A request that asks for no "
                          "budget is never touched")

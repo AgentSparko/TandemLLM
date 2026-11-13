@@ -629,7 +629,7 @@ class Wren:
         sources_out, finish, talked, emitted = [], "stop", False, 0
         said, repairs, unchanged, changed = "", 0, False, False
         names = list(tools.NAMES)
-        from tandemapp.toolcall import parse_tool_calls, schema_types
+        from server.api.toolcall import parse_tool_calls, schema_types
         types = schema_types(tools.definitions(m))
         while True:
             ids, sources = self.prompt(m, messages, page, model, use_tools=use_tools)

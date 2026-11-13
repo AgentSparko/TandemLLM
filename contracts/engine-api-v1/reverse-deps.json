@@ -10,9 +10,7 @@
    "proxy.route",
    "proxy.service:Service",
    "tandemapp.activity",
-   "tandemapp.argloop",
    "tandemapp.auth",
-   "tandemapp.callrepair",
    "tandemapp.chat_forward",
    "tandemapp.compaction",
    "tandemapp.conductor.classify:USER_AGENT",
@@ -54,21 +52,7 @@
    "tandemapp.parallel",
    "tandemapp.session_tokens",
    "tandemapp.static",
-   "tandemapp.thinking",
-   "tandemapp.toolcall:JSON_ANY",
-   "tandemapp.toolcall:OPEN",
-   "tandemapp.toolcall:ToolCallBuffer",
-   "tandemapp.toolcall:answer_items",
-   "tandemapp.toolcall:parse_tool_calls",
-   "tandemapp.toolcall:rewrite_native",
-   "tandemapp.toolcall:schema_types",
-   "tandemapp.toolcall:strip_blocks",
-   "tandemapp.toolformats",
    "tandemapp.usage"
-  ],
-  "server/compat.py": [
-   "tandemapp.refusal:Refusal",
-   "tandemapp.toolformats"
   ],
   "server/conductor/inproc.py": [
    "tandemapp.conductor.narrator",
@@ -91,9 +75,6 @@
   ],
   "server/diskcache.py": [
    "tandemapp.conductor.transcripts:in_repository"
-  ],
-  "server/endalign.py": [
-   "tandemapp.toolcall"
   ],
   "server/memory_api.py": [
    "tandemapp.conductor.notes",
@@ -123,15 +104,10 @@
    "tandemapp.conductor.schema:validate"
   ],
   "server/setup/wren.py": [
-   "tandemapp.conductor.schema",
-   "tandemapp.toolcall:parse_tool_calls",
-   "tandemapp.toolcall:schema_types"
+   "tandemapp.conductor.schema"
   ],
   "server/setup_api.py": [
    "tandemapp.dashboard_api"
-  ],
-  "tools/argloop_fp.py": [
-   "tandemapp.argloop"
   ],
   "tools/class_core_eval.py": [
    "tandemapp.conductor.classify:Qwen",
@@ -238,9 +214,6 @@
   "server/setup/knowledge.py": [
    "app/docs",
    "app/packages"
-  ],
-  "tools/argloop_fp.py": [
-   "app/"
   ],
   "tools/class_core_eval.py": [
    "app/"

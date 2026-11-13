@@ -60,9 +60,9 @@ MAX_TOP_LOGPROBS = 20
 MAX_COMPLETION_LOGPROBS = 5
 
 
-# A request the engine will not serve as asked: a 400 that names the field. TandemApp's thinking
-# read raises it too, so it is TandemApp's (app/tandemapp/refusal.py) until ENG-413 (SRV-747).
-from tandemapp.refusal import Refusal  # noqa: E402,F401
+# A request the engine will not serve as asked: a 400 that names the field. The thinking read
+# raises it too (server/api/refusal.py, ENG-413).
+from server.api.refusal import Refusal  # noqa: E402,F401
 
 
 def _int(body: dict, name: str, lo: int, hi: int, default: int) -> int:
@@ -417,7 +417,7 @@ def tool_constraint(body: dict, fmt=None) -> tuple[str, dict] | None:
     values. One call, unless the request says `parallel_tool_calls: true`: a model forced to call
     when it meant to answer in words otherwise opens call after call (37 in the run).
     Returns (regex, the parameters written as JSON literals per function), or None for auto and
-    none. `fmt`: the model's own form (a `ToolFormat` or its name, server/toolformats; the default
+    none. `fmt`: the model's own form (a `ToolFormat` or its name, server/api/toolformats; the default
     form for None), whose constraint this is (SRV-689)."""
     from engine import grammar
     mode, name = tool_choice(body)
@@ -425,7 +425,7 @@ def tool_constraint(body: dict, fmt=None) -> tuple[str, dict] | None:
         return None
     allowed = [name] if mode == "named" else tool_names(body)
     try:
-        from tandemapp import toolformats
+        from server.api import toolformats
         return toolformats.resolve(fmt).forced_regex(body["tools"], allowed,
                                                      many=body.get("parallel_tool_calls") is True,
                                                      grammar=grammar)
@@ -459,10 +459,10 @@ def answer_constraint(body: dict, chat: bool = True, xml_calls: bool = True,
     token picks (a call's start: the calls; anything else: the document), so an agent loop that asks for its
     final answer as JSON keeps its tools. `xml_calls` false (a model whose calls are not the XML
     format, its `ToolFormat.joins_documents`): the 400 as before. `fmt`: the model's own form (a
-    `ToolFormat` or its name, server/toolformats), whose forced calls and markers tool_choice takes.
+    `ToolFormat` or its name, server/api/toolformats), whose forced calls and markers tool_choice takes.
     """
     from engine import grammar
-    from tandemapp import toolformats
+    from server.api import toolformats
     form = toolformats.resolve(fmt)
     doc = structured_pattern(body)
     forced = tool_constraint(body, form) if chat else None

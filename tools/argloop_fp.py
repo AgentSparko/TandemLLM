@@ -7,7 +7,7 @@ Legit: every `write` content and `edit` newString in the opencode database (any 
 status but the guard's own kind of failure). Loops: the `invalid` tool parts whose text is a
 call cut by the token limit, and the text parts of assistant messages that ended on `length` with
 an open `<tool_call>`. Each text is tokenized with the served tokenizer and streamed through
-`tandemapp.argloop.ArgLoopGuard` token by token, exactly as the server feeds it.
+`server.api.argloop.ArgLoopGuard` token by token, exactly as the server feeds it.
 
 Prints counts and numbers only, never a file's text: per set, how many fire under the defaults,
 and for the legit set the largest periodic stretch (tokens, repeats) and window ratio any check
@@ -34,9 +34,8 @@ import sqlite3
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from tandemapp import argloop  # noqa: E402
+from server.api import argloop  # noqa: E402
 
 OPEN = "<tool_call>"
 

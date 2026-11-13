@@ -9,7 +9,7 @@ that part inside a generation, the place is a tool call's parameter (220) or the
 (34), and in 221 of those 254 the copy differs from what the engine wrote in whitespace alone:
 
   * a parameter value: the model writes `<parameter=oldString>\\n      x = 1\\n\\n</parameter>`;
-    server/toolcall.py hands the client the value trimmed (`x = 1`), and the template renders it
+    server/api/toolcall.py hands the client the value trimmed (`x = 1`), and the template renders it
     back as `<parameter=oldString>\\nx = 1\\n</parameter>` -- the indentation and one newline
     are gone from the copy;
   * the reasoning: the model writes `... done</think>` without a newline; the template writes
@@ -612,7 +612,7 @@ def _canon(v):
 def same_calls(mine: str, theirs: str) -> bool:
     """SRV-679: the two texts of one generation hold the same tool calls (names and arguments as
     values, in order, at least one) and the same text around them, whitespace aside."""
-    from tandemapp import toolcall
+    from server.api import toolcall
     try:
         ca, a = toolcall.parse_tool_calls(mine)
         cb, b = toolcall.parse_tool_calls(theirs)

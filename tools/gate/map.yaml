@@ -86,6 +86,7 @@ rules:
       - 'server/app.py'
       - 'server/stream.py'
       - 'server/compat.py'
+      - 'server/api/**'
       - 'app/tandemapp/toolcall.py'
       - 'app/tandemapp/toolformats/**'
       - 'server/logprobs.py'

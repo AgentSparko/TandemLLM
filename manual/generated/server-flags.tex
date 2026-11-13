@@ -14,7 +14,7 @@
 \texttt{-{}-top-\allowbreak{}k} & \texttt{none} & server default for top\_k (0 is off). \\
 \texttt{-{}-no-\allowbreak{}repeat-\allowbreak{}ngram} & \texttt{0} & forbid the token that would complete an n-gram already seen (HF's no\_repeat\_ngram\_size; 0 = off, must be \textgreater{}= 2). \\
 \texttt{-{}-pattern-\allowbreak{}stop} & \texttt{none} & end a generation that repeats one short pattern forever, as MAX:MIN:COUNT (e.g. 64:1:8, a block of 1..64 tokens repeated 8 times ends the generation with finish\_reason stop). \\
-\texttt{-{}-argloop} & \texttt{on} & the tool-argument loop guard (app/tandemapp/argloop.py): \texttt{on} stops a held tool call whose arguments loop and tells the model on its next turn. One of: on, log, off. \\
+\texttt{-{}-argloop} & \texttt{on} & the tool-argument loop guard (server/api/argloop.py): \texttt{on} stops a held tool call whose arguments loop and tells the model on its next turn. One of: on, log, off. \\
 \texttt{-{}-default-\allowbreak{}max-\allowbreak{}tokens} & \texttt{8192; served:\allowbreak{} 32768} & what a request that does not send max\_tokens gets. \\
 \texttt{-{}-reasoning-\allowbreak{}format} & \texttt{tags} & how the reasoning block reaches the client: inside \textless{}think\textgreater{}\textless{}/think\textgreater{} in content (default, and what Open WebUI folds on), as OpenAI-style reasoning\_content deltas, or both. One of: tags, reasoning\_content, both. \\
 \texttt{-{}-drafter} & \texttt{mtp} & the drafter set. lenrouter, the served one, holds both DFlash2 widths beside the lookup drafter; none decodes one token a step. One of: mtp, router, merged, dflash2, lenrouter, none. \\
@@ -53,7 +53,7 @@
 \texttt{-{}-conductor-\allowbreak{}policy} & \texttt{none} & the monitor's policy file (default app/ops/supervisor.yaml), validated at start against app/ops/supervisor.schema.json. \\
 \texttt{-{}-conductor-\allowbreak{}watch-\allowbreak{}s} & \texttt{30} & with -\kern0pt-conductor shadow or on, how often the stall watchdog's watch looks for sessions whose client has gone. \\
 \texttt{-{}-think-\allowbreak{}budget} & \texttt{0} & default cap on reasoning tokens per request, 0 = uncapped. \\
-\texttt{-{}-answer-\allowbreak{}reserve} & \texttt{auto (QSE\_\allowbreak{}ANSWER\_\allowbreak{}RESERVE)} & tokens of the output limit kept for the answer when a client asks for a thinking budget in any shape (app/tandemapp/thinking.py): its reasoning closes early enough to leave them. auto = min(2048, a quarter of the limit), 0 = none ... \\
+\texttt{-{}-answer-\allowbreak{}reserve} & \texttt{auto (QSE\_\allowbreak{}ANSWER\_\allowbreak{}RESERVE)} & tokens of the output limit kept for the answer when a client asks for a thinking budget in any shape (server/api/thinking.py): its reasoning closes early enough to leave them. auto = min(2048, a quarter of the limit), 0 = none ... \\
 \texttt{-{}-reasoning-\allowbreak{}effort} & \texttt{none; served:\allowbreak{} medium} & default \texttt{reasoning\_\allowbreak{}effort} for the chat template. One of: none, off, low, medium, xhigh. \\
 \texttt{-{}-cache-\allowbreak{}budget-\allowbreak{}gb} & \texttt{2} & RAM budget for the state cache, in GiB (CACHE\_GB). \\
 \texttt{-{}-store-\allowbreak{}entry-\allowbreak{}gb} & \texttt{1} & GiB one state-store snapshot may take (STORE\_ENTRY\_GB), whatever budget is free: 1 GiB is about 7k tokens. \\
