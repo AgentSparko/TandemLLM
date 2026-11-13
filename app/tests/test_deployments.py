@@ -17,9 +17,10 @@ test: tests/owned.py). The engine a box serves on :8000 is never addressed.
      conversation to the other before any byte (failover), a drained member takes no new request
      and no new conversation while what it runs finishes, a constrained request is never
      replayed, a member on another release is a mismatch                  test_replicas
-  4  Gherkin "Split refused without fabric": "no fabric link between Gold and R-1"; with a fabric
-     link it is allowed but not built; its record is stopped, its start and its requests 501;
-     a node that serves something: "needs 98 GiB, Gold has 61 free"; each estimate is its
+  4  a Split is planned when asked for, or when no node holds the model (tests/test_split.py has
+     the plan, SRV-818); engines before engine API 1.2 are not asked and the plan says so; a
+     Split recorded without a plan is kept, stopped, not listed, and does not start (409
+     no_plan); a node that serves something: "needs 98 GiB, Gold has 61 free"; each estimate is its
      engine's Setup Guide's as the agent relays it (source engine), a node whose engine does not
      answer has none and fits nothing, nor does one whose answer the plan cannot read (the plan
      still answers); this machine without an agent asks its own engine, and a local backend URL
@@ -454,38 +455,40 @@ def test_placement_and_split():
         assert all(n["fits"] and n["need_gib"] == 98.0 for n in p["nodes"]), p["nodes"]
         last = fx.nodes["R-1"].srv.fake.last
         assert (last["path"], last["body"]) == ("/v1/setup/estimate", {"selection": sel}), last
+        # a model one node holds is not split unless the body asks for it
         split = next(t for t in p["types"] if t["type"] == "split")
-        assert not split["allowed"] and not split["built"], split
-        assert split["reason"] == "no fabric link between Gold and R-1", split
-        # Gherkin: a Split record is kept, refused at start and at the gateway
+        assert not split["allowed"] and split["built"], split
+        assert split["reason"] == ("Gold holds the model alone: a Split is planned when asked "
+                                   "for (split)"), split
+        # a Split recorded without a plan is kept, and neither starts nor serves
         d = fx.record({"model": "ds", "type": "split", "members": [g, r1],
                        "stages": [{"node": g, "layers": "0-30", "gib": 78.2},
                                   {"node": r1, "layers": "31-60", "gib": 76.5}]})
         assert d["status"] == "stopped" and d["stages"][0]["layers"] == "0-30", d
         plan = tf.ok(tf.get(fx.px, "/v1/fleet/deployments/ds/actions/start")[1],
                      "deployment-plan")
-        assert not plan["allowed"] and "ENG-307" in plan["blocked"], plan
+        assert not plan["allowed"] and "has no plan" in plan["blocked"], plan
         st, err = tf.send(fx.px, "POST", "/v1/fleet/deployments/ds/actions/start", {})
-        assert st == 501 and tf.ok(err, "error")["error"]["type"] == "not_built", err
+        assert st == 409 and tf.ok(err, "error")["error"]["type"] == "no_plan", err
         st, _, raw = fx.chat("ds")
-        assert st == 501 and json.loads(raw)["error"]["code"] == "not_built", raw
+        assert st == 503 and json.loads(raw)["error"]["code"] == "deployment_stopped", raw
         st, _, raw = fx.px.get("/v1/models")
         assert "ds" not in [m["id"] for m in json.loads(raw)["data"]]
         fx.record({"model": "ds3", "type": "split", "members": [g, r1, r2]}, 400)
-        # with a fabric link between them: allowed, not built
+        # asked for: these engines speak an engine API before 1.2, and the plan says so
         for alias, a in addrs.items():
             fx.nodes[alias].agent.addrs = (lambda a=a: a)
         fx.f.placement._fabric.clear()
-        p = tf.send(fx.px, "POST", "/v1/fleet/placement", body)[1]
+        p = tf.ok(tf.send(fx.px, "POST", "/v1/fleet/placement", dict(body, split=True))[1],
+                  "placement")
         split = next(t for t in p["types"] if t["type"] == "split")
-        assert split["allowed"] and not split["built"] and split["nodes"] == [g, r1], split
-        assert [s["node"] for s in split["stages"]] == [g, r1] and "ENG-307" in split["warn"]
-        # without nodes: every node planned; the pair with the fabric is offered
+        assert not split["allowed"] and split["reason"] == (
+            "Gold its engine speaks engine API 1.0: a Split needs 1.2 or later"), split
+        assert fx.nodes["Gold"].srv.fake.last["body"] == {"selection": sel}, "asked for a split"
+        # without nodes: every node planned
         p = tf.send(fx.px, "POST", "/v1/fleet/placement",
                     {k: v for k, v in body.items() if k != "nodes"})[1]
         assert len(p["nodes"]) == 3
-        split = next(t for t in p["types"] if t["type"] == "split")
-        assert split["allowed"] and split["nodes"] == [g, r1], split
         rep = next(t for t in p["types"] if t["type"] == "replicas")
         assert rep["allowed"] and len(rep["nodes"]) == 3, rep
         # a node that serves something keeps it: the new engine must fit in what is free

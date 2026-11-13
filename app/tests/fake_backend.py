@@ -100,6 +100,21 @@ reads of it answer 503 `identity_pending`; `POST /v1/cache/release` answers 200 
 `GET /v1/models/{id}` is the card of a listed id, of an id in `aliases`, else the engine's 404. A
 script's `quiet` is seconds of silence before any byte (a request the engine thinks over without
 a stream, or before its head), its `headers` the answer's own headers.
+
+One stage of a split model (SRV-817, engine API 1.2; contracts/engine-api-v1): `stage` is a
+`Stage` (below). The FRONT serves `/health` with its `stage` block and answers every other route
+409 `stage_front`; the TAIL serves everything, its `/health` says `degraded` and its completions
+503 `stage_down` with `Retry-After: 5` while its link is down. The two talk over a real TCP link
+with a keyed handshake (the key FILE both were given: other keys refuse `auth`; ranges that do not
+meet `stage`, other slots `slots`, other caches `caches`), a heartbeat, and a new epoch at every
+link, the same on both stages; the tail dials again by itself. `POST /fake/link {"cut": true|false}` cuts the link and
+keeps it down, or lets it heal. As a process: the keys of `ops/start.sh` in the environment
+(TANDEM_STAGE, TANDEM_LINK_LISTEN or TANDEM_LINK_PEER, TANDEM_LINK_KEY, TANDEM_STAGE_CACHES,
+QSE_PARALLEL), refused as the engine refuses them: one line `[start] REFUSING: ...` and exit 2, or
+`[stage] REFUSING ...` and exit 1 (a key file that is not 0600, a tail without a front inside
+FAKE_ATTACH_S seconds, a link the front refused). `split` (in a test) is the `split` block
+`POST /v1/setup/estimate` adds to `estimate` when the body asks for one (a dict, or fn(ask)); an ask
+with a field the contract does not have answers 422 `invalid_split`.
 """
 
 from __future__ import annotations
@@ -111,6 +126,7 @@ import os
 import re
 import select
 import socket
+import stat
 import sys
 import threading
 import time
@@ -164,6 +180,283 @@ def _last_user(body: dict) -> str:
     return p if isinstance(p, str) else ""
 
 
+SPLIT_ASK = ("cuts", "caches", "side_window", "table", "snapshots_gb", "front_cache_gb",
+             "tail_disk_gb")
+STAGE_LAYERS = 48
+ATTACH_S = 20.0
+
+
+class Refusal(Exception):
+    """A stage that does not start: the engine's own line and exit code."""
+
+    def __init__(self, code: int, line: str):
+        super().__init__(line)
+        self.code, self.line = code, line
+
+
+def _hostport(text: str) -> tuple[str, int]:
+    host, _, port = text.rpartition(":")
+    return host.strip("[]"), int(port)
+
+
+class Stage:
+    """One stage of a split model: its `/health` block and its end of the link (see the module
+    doc). `rng` is LO:HI; `listen` or `peer` is IP:PORT; `key` the key's bytes."""
+
+    def __init__(self, rng: str, key: bytes, listen: str | None = None, peer: str | None = None,
+                 caches: str = "off", slots: int = 1, layers: int = STAGE_LAYERS):
+        lo, hi = (int(x) for x in rng.split(":"))
+        self.lo, self.hi = lo, hi
+        self.role = "front" if lo == 0 else "tail"
+        self.layers = layers if self.role == "front" else hi
+        self.key, self.listen, self.peer = key, listen, peer
+        self.caches, self.slots = caches, slots
+        self.identity = hashlib.sha256(f"fake:{lo}:{hi}:{caches}:{slots}".encode()
+                                       ).hexdigest()[:16]
+        self.lock = threading.Lock()
+        self.state, self.epoch, self.reason = "down", 0, "no peer yet"
+        self.transport = None
+        self.peer_info = None
+        self.bytes = None
+        self.refused = None            # the reason the other stage refused the link with
+        self.cut = False               # a test's cut: the link stays down until healed
+        self.steps = 0
+        self.sock = None
+        self.srv = None
+        self.closed = False
+
+    # ---- the link
+    def start(self) -> None:
+        if self.listen:
+            host, port = _hostport(self.listen)
+            self.srv = socket.create_server((host, port))
+            self.srv.settimeout(0.2)
+            threading.Thread(target=self._accept, daemon=True).start()
+        else:
+            threading.Thread(target=self._dial, daemon=True).start()
+
+    def close(self) -> None:
+        self.closed = True
+        self._drop("closed")
+        if self.srv is not None:
+            self.srv.close()
+
+    def _mac(self, role: str) -> str:
+        return hashlib.sha256(self.key + role.encode()).hexdigest()
+
+    def _hello(self) -> dict:
+        return {"mac": self._mac(self.role), "role": self.role, "lo": self.lo, "hi": self.hi,
+                "layers": self.layers, "identity": self.identity, "slots": self.slots,
+                "caches": self.caches, "last_epoch": self.epoch}
+
+    def _why_not(self, other: dict) -> str | None:
+        if other.get("mac") != self._mac(str(other.get("role"))):
+            return "auth"
+        f, t = (self, other) if self.role == "front" else (other, self)
+        fhi = f.hi if f is self else f.get("hi")
+        tlo = t.lo if t is self else t.get("lo")
+        if other.get("role") == self.role or fhi != tlo:
+            return "stage"
+        if other.get("caches") != self.caches:
+            return "caches"
+        if other.get("slots") != self.slots:
+            return "slots"
+        return None
+
+    def _up(self, sock, other: dict) -> None:
+        with self.lock:
+            self.sock, self.state, self.reason = sock, "up", None
+            # one epoch a link, the same on both stages: the next after the later of the two
+            # (a stage that started again knows none; the other one's count goes on)
+            last = other.get("last_epoch")
+            self.epoch = max(self.epoch, last if isinstance(last, int) else 0) + 1
+            self.transport = "tcp"
+            self.bytes = {"tx": 0, "rx": 0}
+            self.peer_info = {k: other.get(k) for k in ("role", "lo", "hi", "identity")}
+            if self.role == "front" and isinstance(other.get("layers"), int):
+                self.layers = other["layers"]
+            self.refused = None
+        threading.Thread(target=self._beat, args=(sock,), daemon=True).start()
+
+    def _drop(self, reason: str) -> None:
+        with self.lock:
+            sock, self.sock = self.sock, None
+            if self.state == "up":
+                self.state, self.reason = "down", reason
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass
+
+    def _beat(self, sock) -> None:
+        sock.settimeout(1.5)
+        try:
+            while not self.closed and self.sock is sock:
+                sock.sendall(b"\n")
+                if not sock.recv(64):
+                    return self._drop("peer closed")
+                with self.lock:
+                    if self.bytes is not None:
+                        self.bytes["tx"] += 1
+                        self.bytes["rx"] += 1
+                time.sleep(0.1)
+        except socket.timeout:
+            self._drop("timeout")
+        except OSError:
+            self._drop("closed" if self.cut or self.closed else "peer closed")
+
+    def _accept(self) -> None:
+        while not self.closed:
+            try:
+                sock, _ = self.srv.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            try:
+                sock.settimeout(3.0)
+                other = json.loads(sock.makefile("rb").readline() or b"{}")
+                why = "closed" if self.cut else self._why_not(other)
+                if why is not None:
+                    with self.lock:
+                        if not self.cut:
+                            self.refused, self.reason = why, f"refused ({why})"
+                    sock.sendall(json.dumps({"refused": why}).encode() + b"\n")
+                    sock.close()
+                    continue
+                hello = json.dumps(self._hello()).encode() + b"\n"
+                self._drop("closed")
+                sock.sendall(hello)
+                self._up(sock, other)
+            except (OSError, ValueError):
+                sock.close()
+
+    def _dial(self) -> None:
+        host, port = _hostport(self.peer)
+        while not self.closed:
+            if self.state == "up" or self.cut:
+                time.sleep(0.1)
+                continue
+            try:
+                sock = socket.create_connection((host, port), timeout=2.0)
+                sock.settimeout(3.0)
+                sock.sendall(json.dumps(self._hello()).encode() + b"\n")
+                got = json.loads(sock.makefile("rb").readline() or b"{}")
+                if got.get("refused"):
+                    sock.close()
+                    with self.lock:
+                        if got["refused"] != "closed":
+                            self.refused = got["refused"]
+                            self.reason = f"refused ({got['refused']})"
+                    time.sleep(0.2)
+                    continue
+                why = self._why_not(got)
+                if why is not None:
+                    sock.close()
+                    with self.lock:
+                        self.refused, self.reason = why, f"refused ({why})"
+                    time.sleep(0.2)
+                    continue
+                self._up(sock, got)
+            except (OSError, ValueError):
+                time.sleep(0.2)
+
+    def set_cut(self, cut: bool) -> None:
+        self.cut = bool(cut)
+        if cut:
+            self._drop("closed")
+
+    # ---- what /health says
+    def block(self) -> dict:
+        with self.lock:
+            link = {"state": self.state, "epoch": self.epoch, "reason": self.reason,
+                    "transport": self.transport, "bytes": dict(self.bytes) if self.bytes else None,
+                    "peer": dict(self.peer_info) if self.peer_info else None}
+            ident = self.identity if self.role == "front" or self.epoch else None
+        out = {"shape": 1, "role": self.role, "lo": self.lo, "hi": self.hi,
+               "range": f"{self.lo}:{self.hi}", "layers": self.layers,
+               "cut": self.hi if self.role == "front" else self.lo, "identity": ident,
+               "options": {"slots": self.slots, "caches": self.caches, "graphs": "captured",
+                           "kv_cache": "bf16", "images": "refused", "prefill_chunk": 4096,
+                           "max_len": 40960, "carry": "H+N bf16", "table": "cold",
+                           "ple_layers": {"front": [1]}},
+               "link": link}
+        if self.role == "front":
+            out["steps"] = self.steps
+        return out
+
+
+def stage_from_env(env) -> Stage | None:
+    """The stage the environment names, as `ops/start.sh` reads it; None without TANDEM_STAGE;
+    Refusal with the engine's own line when the keys do not fit."""
+    rng = env.get("TANDEM_STAGE")
+    keys = ("TANDEM_LINK_LISTEN", "TANDEM_LINK_PEER", "TANDEM_LINK_KEY", "TANDEM_STAGE_CACHES")
+    if not rng:
+        for k in keys:
+            if env.get(k):
+                raise Refusal(2, f"[start] REFUSING: {k} needs TANDEM_STAGE (LO:HI)")
+        return None
+    m = re.fullmatch(r"(\d+):(\d+)", rng)
+    if m is None or int(m.group(1)) >= int(m.group(2)):
+        raise Refusal(2, "[start] REFUSING: TANDEM_STAGE takes LO:HI with LO < HI (0:k the "
+                         "front, k:layers the tail)")
+    role = "front" if int(m.group(1)) == 0 else "tail"
+    listen, peer = env.get("TANDEM_LINK_LISTEN"), env.get("TANDEM_LINK_PEER")
+    if listen and peer:
+        raise Refusal(2, f"[start] REFUSING: the {role} stage takes one of TANDEM_LINK_LISTEN "
+                         f"and TANDEM_LINK_PEER, not both")
+    if not listen and not peer:
+        raise Refusal(2, f"[start] REFUSING: the {role} stage needs TANDEM_LINK_LISTEN or "
+                         f"TANDEM_LINK_PEER (IP:PORT)")
+    addr = listen or peer
+    flag = "link-listen" if listen else "link-peer"
+    try:
+        import ipaddress
+        ip = ipaddress.ip_address(_hostport(addr)[0])
+    except ValueError:
+        raise Refusal(2, f"[start] REFUSING: {flag} takes an IP literal and a port (IP:PORT, "
+                         f"[IPv6]:PORT), not '{addr}'") from None
+    if ip.is_unspecified:
+        raise Refusal(2, f"[start] REFUSING: {flag} {addr} is every interface; name one IP")
+    kpath = env.get("TANDEM_LINK_KEY") or ""
+    if not kpath:
+        raise Refusal(2, f"[start] REFUSING: the {role} stage needs TANDEM_LINK_KEY, the path "
+                         f"of the key file (mode 0600)")
+    if not kpath.startswith(("/", "~", ".")):
+        raise Refusal(2, "[start] REFUSING: TANDEM_LINK_KEY names the key file's path, never "
+                         "the key itself")
+    kpath = os.path.expanduser(kpath)
+    if not os.path.isfile(kpath):
+        raise Refusal(2, "[start] REFUSING: TANDEM_LINK_KEY names no file (the key file both "
+                         "stages share, mode 0600)")
+    caches = env.get("TANDEM_STAGE_CACHES") or "off"
+    if caches not in ("on", "off"):
+        raise Refusal(2, "[start] REFUSING: TANDEM_STAGE_CACHES is on or off")
+    if role == "front" and (env.get("QSE_DISK_CACHE") or "off") != "off":
+        raise Refusal(2, "[start] REFUSING: a front stage takes no disk tier: QSE_DISK_CACHE=off "
+                         "(the tail's; the front's half goes to TANDEM_STAGE_CACHE_DIR)")
+    for k in ("TANDEM_STAGE_SNAPSHOTS_GB", "TANDEM_STAGE_CACHE_DIR", "TANDEM_STAGE_CACHE_GB"):
+        if env.get(k) and role == "tail":
+            raise Refusal(2, f"[start] REFUSING: {k} is the front stage's")
+        if env.get(k) and caches != "on":
+            raise Refusal(2, f"[start] REFUSING: {k} needs TANDEM_STAGE_CACHES=on")
+    slots = int(env.get("QSE_PARALLEL") or 1)
+    if caches == "off" and slots != 1:
+        raise Refusal(2, "[start] REFUSING: a stage without caches serves one slot: "
+                         "QSE_PARALLEL=1 (side slots: TANDEM_STAGE_CACHES=on on both stages)")
+    mode = stat.S_IMODE(os.stat(kpath).st_mode)
+    if mode != 0o600:
+        raise Refusal(1, f"[stage] REFUSING: --link-key-file {kpath}: mode {mode:04o}, it must "
+                         f"be 0600")
+    with open(kpath, "rb") as f:
+        key = f.read()
+    if len(key) < 32:
+        raise Refusal(1, f"[stage] REFUSING: --link-key-file {kpath}: shorter than 32 bytes")
+    return Stage(rng, key, listen=listen, peer=peer, caches=caches, slots=slots,
+                 layers=int(env.get("FAKE_STAGE_LAYERS") or STAGE_LAYERS))
+
+
 class Fake:
     def __init__(self, models=("fake-a",), key=None, tps=400.0, dialect=None, name="fake",
                  refuse=None, cache=True):
@@ -180,6 +473,12 @@ class Fake:
         self.tokenize = None            # POST /v1/tokenize: True (count) or an int; None: 404
         self.counted = 0
         self.estimate: dict | bytes | None = None   # POST /v1/setup/estimate's answer; None: 404
+        # SRV-817: the estimate's `split` block when asked for (a dict, or fn(ask) -> dict),
+        # and this engine as one stage of a split model (a Stage; None: a whole model)
+        self.split = None
+        self.stage: Stage | None = None
+        self.front_refused = 0          # requests a front stage answered 409 stage_front
+        self.front_refused_posts = 0    # ... of them POSTs: a request someone routed there
         self.key = key
         self.tps = float(tps)
         self.dialect = dialect
@@ -280,13 +579,27 @@ def make_handler(fake: Fake):
                 return self._json(200, {"requests": fake.requests,
                                         "max_streams": fake.max_streams,
                                         "streams": fake.streams,
-                                        "closed_early": fake.closed_early})
+                                        "closed_early": fake.closed_early,
+                                        "front_refused": fake.front_refused,
+                                        "front_refused_posts": fake.front_refused_posts})
             if p == "/v1/dashboard/live" and fake.live is not None:
                 if "follow=0" not in self.path:
                     return self._json(429, {"error": {"message": "too many live streams"}})
                 return self._json(200, {"requests": fake.live(), "engine": {}})
             if p in ("/health", "/v1/health"):
-                return self._json(200, {"status": "ok", **(fake.health or {})})
+                st = fake.stage
+                if st is None:
+                    return self._json(200, {"status": "ok", **(fake.health or {})})
+                b = st.block()
+                if st.role == "front":           # its small server: no engine_api, the block
+                    return self._json(200, {"status": "ok", "model": fake.models[0],
+                                            "uptime_s": 1.0, "stage": b})
+                return self._json(200, {"status": "ok" if b["link"]["state"] == "up"
+                                        else "degraded", "engine_api": "1.2",
+                                        "model": fake.models[0], **(fake.health or {}),
+                                        "stage": b})
+            if fake.stage is not None and fake.stage.role == "front":
+                return self._stage_front()
             if p == "/v1/replica/identity" and fake.identity is not None:
                 with fake.lock:
                     fake.identity_reads += 1
@@ -334,6 +647,14 @@ def make_handler(fake: Fake):
                                                   "param": "model", "code": "model_not_found"}})
             return self._json(404, {"error": {"message": "no route", "type": "not_found"}})
 
+        def _stage_front(self):
+            with fake.lock:
+                fake.front_refused += 1
+                fake.front_refused_posts += self.command == "POST"
+            return self._json(409, {"error": {
+                "message": "this is the front stage of a split model: it serves /health only",
+                "type": "stage_front", "code": "stage_front"}})
+
         def _card(self, m):
             return {"id": m, "object": "model", "created": 1, "owned_by": fake.name,
                     "max_model_len": 32768, **fake.cards.get(m, {})}
@@ -358,6 +679,13 @@ def make_handler(fake: Fake):
                 body = json.loads(raw or b"{}")
             except ValueError:
                 return self._json(400, {"error": {"message": "bad json"}})
+            if p == "/fake/link":
+                if fake.stage is None:
+                    return self._json(404, {"error": {"message": "no stage"}})
+                fake.stage.set_cut(bool(body.get("cut")))
+                return self._json(200, {"cut": fake.stage.cut})
+            if fake.stage is not None and fake.stage.role == "front":
+                return self._stage_front()
             with fake.lock:
                 fake.requests += 1
                 if not p.startswith("/v1/cache/"):
@@ -391,7 +719,22 @@ def make_handler(fake: Fake):
                     self.end_headers()
                     self.wfile.write(fake.estimate)
                     return
-                return self._json(200, fake.estimate)
+                ask = body.get("split") if isinstance(body, dict) else None
+                if ask is None or fake.split is None:
+                    return self._json(200, fake.estimate)
+                extra = [k for k in ask if k not in SPLIT_ASK] if isinstance(ask, dict) else []
+                if extra or not (ask is True or isinstance(ask, dict)):
+                    f = extra[0] if extra else "split"
+                    return self._json(422, {"error": {
+                        "type": "invalid_split", "message": f"split.{f}: unknown field",
+                        "errors": [{"field": f"split.{f}", "reason": "unknown field"}]}})
+                block = fake.split(ask) if callable(fake.split) else fake.split
+                return self._json(200, dict(fake.estimate, split=block))
+            if fake.stage is not None and fake.stage.block()["link"]["state"] != "up" and \
+                    p.endswith("/completions"):
+                return self._json(503, {"error": {
+                    "message": "the link to the front stage is down",
+                    "type": "stage_down", "code": "stage_down"}}, (("Retry-After", "5"),))
             text = _last_user(body)
             if text.startswith("Memory pass."):
                 # the memory writer's request (proxy/memwriter.py): steered by the session's
@@ -970,12 +1313,43 @@ def main(argv=None):
     ap.add_argument("--name", default="fake")
     # SRV-747: the engine API version /health says (a TandemLLM engine's `engine_api`); none: unsaid
     ap.add_argument("--engine-api", default=None)
+    # SRV-817: a JSON file {"estimate": {...}, "split": {...}}: what POST /v1/setup/estimate
+    # answers, and the block it adds when asked for a split
+    ap.add_argument("--estimate", default=None)
     a = ap.parse_args(argv)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import owned
     owned.watch()              # started by a test: it ends with that test (SRV-732)
+    # SRV-817: one stage of a split model, from the environment as ops/start.sh reads it
+    try:
+        stage = stage_from_env(os.environ)
+    except Refusal as exc:
+        print(exc.line, flush=True)
+        return exc.code
+    if stage is not None:
+        print(f"[start] stage: the {stage.role}, layers {stage.lo}:{stage.hi}", flush=True)
+        stage.start()
+        if stage.role == "tail":
+            # a tail answers /health once it is linked; without a front in time it exits
+            wait = float(os.environ.get("FAKE_ATTACH_S") or ATTACH_S)
+            end = time.monotonic() + wait
+            while stage.state != "up":
+                if stage.refused is not None:
+                    print(f"[stage] REFUSING to start: the other stage refused the link "
+                          f"({stage.refused})", flush=True)
+                    return 1
+                if time.monotonic() > end:
+                    print(f"[stage] REFUSING to start: no front stage at {stage.peer} inside "
+                          f"{wait:g} s (timeout)", flush=True)
+                    return 1
+                time.sleep(0.05)
     srv, port = start(a.port, a.host, models=[m for m in a.models.split(",") if m], key=a.key,
                       tps=a.tps, dialect=a.dialect, name=a.name)
+    srv.fake.stage = stage
+    if a.estimate:
+        with open(a.estimate) as f:
+            doc = json.load(f)
+        srv.fake.estimate, srv.fake.split = doc.get("estimate"), doc.get("split")
     if a.engine_api is not None:
         srv.fake.health = {"engine_api": a.engine_api}
     print(f"[fake-backend] {a.name} on {a.host}:{port}, models {a.models}", flush=True)

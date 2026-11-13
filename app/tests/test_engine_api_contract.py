@@ -565,7 +565,9 @@ def test_node_fixtures():
         assert e["port"] == port and e["kind"] == "tandemllm", e
         assert {v: e.get(v) for v in control["verbs"]} == \
             {v: ["bash", ctl, v] for v in control["verbs"]}, e
-        assert set(e) - {"id", "kind", "port"} == set(control["verbs"]), e
+        # SRV-817: a stage's keys go to the install's run/local.env (control.json `stage`)
+        assert e["local_env"] == os.path.join(tandem, "run", "local.env"), e
+        assert set(e) - {"id", "kind", "port", "local_env"} == set(control["verbs"]), e
         nodeengines.Engine(e, tandem)                      # a valid engine entry
     finally:
         shutil.rmtree(tandem, ignore_errors=True)
