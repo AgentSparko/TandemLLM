@@ -66,6 +66,7 @@ const ICONS: Record<string, TemplateResult> = {
   models: g(svg`<path d="M10 2.5 17 6v8l-7 3.5L3 14V6z"/><path d="M3 6l7 3.5L17 6M10 9.5v8"/>`),
   api: g(svg`<path d="M7 3v4M13 3v4M5 7h10v3a5 5 0 0 1-10 0zM10 15v3"/>`),
   'add-spark': g(svg`<circle cx="10" cy="10" r="7"/><path d="M10 7v6M7 10h6"/>`),
+  start: g(svg`<path d="M4 16V4M4 5h10l-2.5 3L14 11H4"/>`),
   app: g(svg`<circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6"/>`),
   'side-left': g(svg`<rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M7.5 3.5v13"/>`),
   'side-right': g(svg`<rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M12.5 3.5v13"/>`),

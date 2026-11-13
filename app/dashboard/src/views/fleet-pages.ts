@@ -46,6 +46,9 @@ const PAGES: Partial<Record<View, PageDef>> = {
 /** The Add Spark wizard: its own chunk; the element upgrades in place once it has loaded. */
 let wizardChunk: Promise<unknown> | null = null;
 const loadWizard = () => (wizardChunk ??= import('./fleet/wizard'));
+/** Get started (SRV-749): the ways into a fleet and the connect-a-server form, its own chunk */
+let startChunk: Promise<unknown> | null = null;
+const loadStart = () => (startChunk ??= import('./fleet/start'));
 let appChunk: Promise<unknown> | null = null;
 const loadApp = () => (appChunk ??= import('./fleet/app-settings'));
 
@@ -62,6 +65,10 @@ export class QseFleetPage extends LightElement {
     if (this.view === 'add-spark') {
       void loadWizard();
       return html`<qse-add-spark></qse-add-spark>`;
+    }
+    if (this.view === 'start') {
+      void loadStart();
+      return html`<qse-start></qse-start>`;
     }
     if (this.view === 'app') {
       void loadApp();

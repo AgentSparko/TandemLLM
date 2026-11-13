@@ -23,8 +23,9 @@ export type View =
   | 'playground'
   | 'dev'
   | 'add-spark'
+  | 'start'
   | 'app';
-export const VIEWS: View[] = ['chat', 'overview', 'performance', 'usage', 'hardware', 'system', 'events', 'sparks', 'models', 'setup', 'api', 'backends', 'conductor', 'playground', 'dev', 'add-spark', 'app'];
+export const VIEWS: View[] = ['chat', 'overview', 'performance', 'usage', 'hardware', 'system', 'events', 'sparks', 'models', 'setup', 'api', 'backends', 'conductor', 'playground', 'dev', 'add-spark', 'start', 'app'];
 /** the page an unknown or empty hash opens (Usage before VIS-242) */
 export const HOME: View = 'overview';
 

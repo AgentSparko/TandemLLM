@@ -74,11 +74,12 @@ export function takeFormError(url: string): string | null {
   return /^https?:\/\/[^\s/]+/.test(url.trim()) ? null : 'The URL of the controller that runs the fleet now, such as http://192.0.2.40:8080.';
 }
 
-/** Where the first open goes (OPS-234): a page opened without a route on a fleet with no Spark yet
- *  lands on Add Spark; a route given (a bookmark, a link) is kept. */
-export function landing(startHash: string, nodes: readonly unknown[]): 'add-spark' | null {
+/** Where the first open goes (OPS-234, SRV-749): a page opened without a route on a fleet with no
+ *  member yet (no Spark, no backend) lands on Get started, which offers the ways in; a route given
+ *  (a bookmark, a link) is kept. */
+export function landing(startHash: string, nodes: readonly unknown[]): 'start' | null {
   const bare = !startHash || startHash === '#' || startHash === '#/';
-  return bare && nodes.length === 0 ? 'add-spark' : null;
+  return bare && nodes.length === 0 ? 'start' : null;
 }
 
 /** a new admin password: MIN_PASSWORD characters from the browser's random source */

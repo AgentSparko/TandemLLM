@@ -50,7 +50,7 @@ import './ui/workspace';
 import { pageContext } from './ui/page-context';
 import { onFleet, readout, type FleetState } from './lib/fleet-state';
 import { followUrl, landing } from './lib/controller-host';
-import { fleet, type ControllerView } from './api/fleet';
+import { fleet, sparksOf, type ControllerView } from './api/fleet';
 import { watchAlerts } from './lib/alert-notify';
 import { LightElement, type Loadable } from './ui/base';
 import { icon } from './ui/bits';
@@ -108,7 +108,7 @@ function perfTabs(on: 'live' | 'requests' | 'history', parallel: number | null =
   </div>`;
 }
 
-/** the hash the page was opened with: an empty one on a fleet with no Spark opens Add Spark (OPS-234) */
+/** the hash the page was opened with: an empty one on a fleet with no member opens Get started (SRV-749) */
 const START_HASH = location.hash;
 
 @customElement('qse-app')
@@ -516,7 +516,7 @@ export class QseApp extends LightElement {
         this.fleet = f;
         if (f && !this.landed) {
           this.landed = true;
-          if (landing(START_HASH, f.nodes) === 'add-spark') navigate('add-spark');
+          if (landing(START_HASH, f.nodes) === 'start') navigate('start');
           void fleet
             .controller()
             .then((v) => (this.movedTo = v.moved_to))
@@ -707,7 +707,7 @@ export class QseApp extends LightElement {
     const alerts = it.id === 'events' && this.fleet ? readout(this.fleet).alerts : 0;
     const extra =
       cls === 'strip-i'
-        ? html`${alerts ? html`<i class="strip-dot" aria-hidden="true"></i>` : nothing}${it.id === 'sparks' && this.fleet ? html`<i class="strip-nodes" aria-hidden="true">${this.fleet.nodes.map((n) => html`<b style="--c:${nodeColour(n.colour)}"></b>`)}</i>` : nothing}`
+        ? html`${alerts ? html`<i class="strip-dot" aria-hidden="true"></i>` : nothing}${it.id === 'sparks' && this.fleet ? html`<i class="strip-nodes" aria-hidden="true">${sparksOf(this.fleet.nodes).map((n) => html`<b style="--c:${nodeColour(n.colour)}"></b>`)}</i>` : nothing}`
         : html`<span class="nav-label">${it.label}</span>${it.id === 'chat' ? BETA : nothing}${alerts && cls === 'nav-i' ? html`<span class="nav-badge warn-ink num">${alerts}</span>` : nothing}`;
     const href = this.href(it.id);
     return html`<a class="${cls} ${on ? 'is-on' : ''} ${off ? 'is-off' : ''}" href=${href} data-section=${it.id} aria-disabled=${off ? 'true' : nothing} title=${off ? S.setupModeTab : cls === 'strip-i' ? it.label : nothing} aria-label=${cls === 'strip-i' ? it.label : nothing} aria-current=${on ? 'page' : nothing} @click=${(e: Event) => cls === 'more-item' && !off && this.goMore(e, href as string)}>${icon(it.id)}${extra}</a>`;
@@ -715,7 +715,7 @@ export class QseApp extends LightElement {
 
   private renderNav(section: Section, meta: TemplateResult): TemplateResult {
     const own = panelFor(this.route.view);
-    const subs = subPages(this.route, this.fleet?.nodes);
+    const subs = subPages(this.route, sparksOf(this.fleet?.nodes));
     const leftInert = this.wclass === 'phone' && this.drawer !== 'left';
     const panelInert = this.wclass !== 'desk' ? this.drawer !== 'left' : !shownLayout().rail.open;
     return html`<nav class="lnav" aria-label="Main" ?inert=${leftInert}>

@@ -1232,6 +1232,66 @@ qse-topology {
   }
 }
 
+/* ---- Get started (SRV-749): the three ways in, and the connect-a-server form ------------------ */
+.hw-nofig-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 10px;
+}
+.start-paths {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 16px 0;
+}
+.start-paths .ncard {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.start-paths .ncard b {
+  font: 600 var(--fs-lg) / 1.2 var(--font-disp);
+}
+.start-paths .ncard.is-on {
+  border-color: var(--nc);
+}
+.start-form {
+  display: grid;
+  gap: 12px;
+  max-width: 620px;
+}
+.start-form .field input,
+.start-form .field select {
+  width: 100%;
+}
+.start-adv {
+  display: grid;
+  gap: 10px;
+}
+.start-adv > * + * {
+  margin-top: 10px;
+}
+.start-adv summary {
+  cursor: pointer;
+  color: var(--ink-2);
+}
+.start-confirm {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+.start-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@container mon (max-width: 760px) {
+  .start-paths {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .topo .flow {
     animation: none;

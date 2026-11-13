@@ -79,6 +79,8 @@ export interface ModelRow {
 
 export interface Health {
   state: 'up' | 'down' | 'unknown' | 'disabled';
+  /** SRV-749: the server answers and refuses the key */
+  key_rejected?: boolean;
   since: number | null;
   last_check: number | null;
   last_error: string | null;
@@ -198,6 +200,10 @@ export interface TestResult {
   latency_ms: number | null;
   error: string | null;
   models: string[];
+  /** SRV-749: why a test failed: the key was refused, no answer, or an answer that is no model list */
+  reason?: 'key_rejected' | 'unreachable' | 'not_openai' | null;
+  key_rejected?: boolean;
+  routes?: string[];
 }
 
 export interface SeedPrices {
@@ -214,8 +220,12 @@ const encModel = (m: string) => m.split('/').map(enc).join('/');
 
 export const config = {
   overview: () => request<ConfigOverview>('/v1/config'),
-  test: (b: { kind: BackendKind; url?: string; key?: string; id?: string }) => request<TestResult>('/v1/config/test', { method: 'POST', headers: J, body: body(b) }),
+  test: (b: { kind?: BackendKind; url?: string; key?: string; id?: string }) => request<TestResult>('/v1/config/test', { method: 'POST', headers: J, body: body(b) }),
   create: (b: Partial<BackendConfig> & { id: string; kind: BackendKind; key?: string }) => request<BackendConfig>('/v1/config/backends', { method: 'POST', headers: J, body: body(b) }),
+  /** SRV-749: add a server by its URL, tested first: a failed test saves nothing and answers 409
+   *  (`key_rejected`, `unreachable`, `not_openai`, the test in `error.test`) until `confirm` */
+  connect: (b: { url: string; key?: string; label?: string; kind?: BackendKind; confirm?: boolean }) =>
+    request<BackendConfig>('/v1/config/backends', { method: 'POST', headers: J, body: body({ ...b, verify: true }) }),
   update: (id: string, patch: Record<string, unknown>) => request<BackendConfig>(`/v1/config/backends/${enc(id)}`, { method: 'PATCH', headers: J, body: body(patch) }),
   remove: (id: string) => request<void>(`/v1/config/backends/${enc(id)}`, { method: 'DELETE' }, 'none'),
   retest: (id: string) => request<TestResult>(`/v1/config/backends/${enc(id)}/test`, { method: 'POST', headers: J, body: '{}' }),
