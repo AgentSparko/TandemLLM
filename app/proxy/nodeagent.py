@@ -23,6 +23,11 @@ ROUTES (every one behind the caller check below; JSON unless an event stream):
     GET    /node/engines               the engines (proxy/nodeengines.py): state, health, job
     GET    /node/engines/{id}
     POST   /node/engines/{id}/start | stop | restart     202 and the job; 409 not managed or busy
+    PUT    /node/engines/{id}/stage    this engine is one stage of a split model at its next
+                                       start (SRV-817, proxy/nodeengines.py): the link key goes to
+                                       a 0600 file here and nowhere else; the owner or this
+                                       machine's controller only
+    DELETE /node/engines/{id}/stage    the stage's settings and its key file are gone
     GET    /node/engines/{id}/<route>  the engine's /health, /v1/models, /v1/dashboard/live (its live
                                        stream), /v1/dashboard/system, /v1/dashboard/logs, /metrics
     GET    /node/maintenance           the machine's actions (proxy/nodemaint.py): whether reboot and
@@ -1072,6 +1077,15 @@ class Handler(BaseHTTPRequestHandler):
         e = eng.get(rest[0])
         if method == "GET" and len(rest) == 1:
             return self._json(200, eng.view_one(e))
+        if method in ("PUT", "DELETE") and rest[1:] == ["stage"]:
+            if self._role() not in ("owner",) + LOCAL_ROLES:
+                return self._err(403, "forbidden", "the owner sets a stage on this node")
+            if method == "PUT":
+                doc = eng.set_stage(e.id, json.loads(self._body() or b"null"), self._who())
+            else:
+                doc = eng.clear_stage(e.id, self._who())
+            self._audit(f"{'set' if method == 'PUT' else 'clear'} stage on engine {e.id}", 200)
+            return self._json(200, doc)
         if method == "POST" and len(rest) == 2:
             job = eng.act(e.id, rest[1], self._who())
             self._audit(f"{rest[1]} engine {e.id}", 202)
@@ -1114,7 +1128,9 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as exc:
             return self._err(503, "engine_down", f"{e.id} does not answer on :{e.port} "
                                                  f"({type(exc).__name__})")
-        self._pass(st, ctype, conn, r)
+        # an engine's 503 says when to come back (a stage whose link is down: Retry-After 5)
+        extra = tuple((k, r.getheader(k)) for k in ("Retry-After",) if r.getheader(k))
+        self._pass(st, ctype, conn, r, extra)
 
     def _pass(self, st: int, ctype: str, conn, r, extra: tuple = ()) -> None:
         """An upstream answer passed on: whole with its length, or as it arrives (a stream)."""
