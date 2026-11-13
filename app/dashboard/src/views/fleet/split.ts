@@ -11,6 +11,8 @@ import { basisWord, ink, LINK_KIND, linkWords, MEMBER_WORD, memberTone, phaseWor
 import { nodeChip } from '../../ui/node-chip';
 
 const g1 = (v: number | null | undefined) => (v == null ? '—' : v.toFixed(1));
+/** a measured figure: a number, or a range [low, high] */
+const fig = (v: unknown) => (v == null ? '—' : Array.isArray(v) ? v.join(' to ') : String(v));
 
 function stage(s: SplitSide, m: DeploymentMember | undefined, nodes: FleetNode[]): TemplateResult {
   const n = nodes.find((x) => x.id === s.node);
@@ -48,10 +50,16 @@ function advanced(p: SplitPlan): TemplateResult {
       </tbody>
     </table></div>
     <p class="xs muted">Margin: ${p.margin.text}.</p>
+    ${p.measured.length
+      ? html`<div class="dcard-tbl-wrap"><table class="dcard-tbl" data-split-measured>
+          <thead><tr><th>Measured</th><th class="r">GiB</th><th class="r">s</th><th>Cut, date</th></tr></thead>
+          <tbody>${p.measured.map((m) => html`<tr><td class="xs">${String(m.what ?? '')}</td><td class="r num xs">${fig(m.gib)}</td><td class="r num xs">${fig(m.seconds)}</td><td class="num xs muted">${fig(m.cut)}${m.date ? `, ${String(m.date)}` : ''}</td></tr>`)}</tbody>
+        </table></div>
+        <p class="xs faint">measured on one GPU box; every other figure here is computed</p>`
+      : nothing}
     <dl class="kv small">
       <div><dt>shape</dt><dd class="num">${[sh.window ? `window ${sh.window.toLocaleString('en-US')}` : '', sh.slots ? `${sh.slots} slot${sh.slots === 1 ? '' : 's'}` : '', sh.side_window ? `side window ${sh.side_window.toLocaleString('en-US')}` : '', sh.caches ? `caches ${sh.caches}` : '', sh.table ? `table ${sh.table}` : ''].filter(Boolean).join(' · ')}</dd></div>
       <div><dt>link</dt><dd class="num">the front listens on ${p.link.listen}; the tail dials ${p.link.peer}</dd></div>
-      ${p.measured.length ? html`<div><dt>measured</dt><dd><div>${p.measured.map((m) => html`<div class="xs">${String(m.what ?? '')}${m.gib != null ? ` · ${String(m.gib)} GiB` : ''}${m.seconds != null ? ` · ${String(m.seconds)} s` : ''}${m.date ? ` (cut ${String(m.cut ?? '?')}, ${String(m.date)})` : ''}</div>`)}<div class="xs faint">one GPU box; every other figure here is computed</div></div></dd></div>` : nothing}
       ${lost.length ? html`<div><dt>other cuts</dt><dd><details><summary class="xs">${lost.length} not chosen</summary><ul class="xs muted sp-ctx-list">${lost.map((c) => html`<li class="num">cut ${c.cut}: front ${g1(c.front_gib)}, tail ${g1(c.tail_gib)} · ${c.why ?? ''}</li>`)}</ul></details></dd></div>` : nothing}
     </dl>
   </div>`;
