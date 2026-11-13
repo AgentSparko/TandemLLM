@@ -24,7 +24,8 @@ ROUTES (contracts/fleet-v1):
                                                        members?, stages?, role?, role_of?,
                                                        affinity?}
     DELETE /v1/fleet/deployments/{id}                  the record goes; its engines keep running
-                                                       and show as derived Singles again
+                                                       and show as derived Singles again (a Split
+                                                       that runs: 409, stop it first)
     GET    /v1/fleet/deployments/{id}/actions/{action}[?to=&from=&engine=]   what start, stop or
                                                        move would do, whether it may, the confirm
     POST   /v1/fleet/deployments/{id}/actions/{action}  {confirm?, to?, from?, engine?}: the job
@@ -1101,6 +1102,12 @@ class Deployments:
         rec = self.record(did)
         if did in self._running:
             raise DeployError(409, "busy", f"a job runs on {rec['name']}")
+        if rec["type"] == "split" and any((m.get("stage") or {}).get("runs")
+                                          for m in self.members(rec)):
+            # its stages are no whole engines: left running they would serve nothing, and the
+            # link key would stay on both nodes
+            raise DeployError(409, "conflict", f"{rec['name']} runs: stop it first (a Split's "
+                                               f"stages and its link key do not stay behind)")
         self.cfg.delete_deployment(did, who=who)
         with self._lock:
             self._sticky.pop(did, None)
