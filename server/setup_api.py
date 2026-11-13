@@ -255,11 +255,21 @@ def selection_model(body) -> dict:
 def _post(h, app, parts: list[str], body) -> None:
     if parts == ["estimate"]:
         sel = body.get("selection", body) if isinstance(body, dict) else body
+        ask = None
+        if isinstance(body, dict) and body.get("split") is not None:
+            # SRV-817: the split ask, beside the selection or in a bare one (server/setup/split.py)
+            ask = body["split"]
+            if sel is body:
+                sel = {k: v for k, v in body.items() if k != "split"}
         m = selection_model(sel)
         mem = device_mod.meminfo()
-        out = estimate_mod.estimate(m, estimate_mod.check(m, sel),
+        checked = estimate_mod.check(m, sel)
+        out = estimate_mod.estimate(m, checked,
                                     available_gb=round(mem["MemAvailable"], 2)
                                     if "MemAvailable" in mem else None)
+        if ask is not None:
+            from server.setup import split as split_mod
+            out["split"] = split_mod.block(m, checked, ask)
         return h._json(200, out, extra_headers=NO_STORE)
     if parts == ["community", "sync"]:
         from server.setup import community

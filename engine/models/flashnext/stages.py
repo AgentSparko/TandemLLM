@@ -816,3 +816,81 @@ def stage_adapter(model, lo: int, hi: int, cap: int | None = None, graphs: bool 
                                    max_len=cap or model.max_len)
         return FlashNextRowStage(eng, graphs=graphs, serving=serving, slots=slots, store=store)
     return FlashNextStage(model, lo, hi)
+
+
+#: what a split of this family has been measured to cost on a GPU, beside the figures `split_facts` computes
+#: (one box, both stages on one device; the pack named by its weights at that cut)
+MEASURED = (
+    {"what": "a side slot on the tail: memory allocated when it was built", "gib": 0.87, "seconds": 5.2,
+     "cut": 12, "side_window": 16384, "pack": "EXL3 2.05", "date": "2026-11-13"},
+    {"what": "a side slot on the front: built and warmed", "gib": None, "seconds": 0.1,
+     "cut": 12, "side_window": 16384, "pack": "EXL3 2.05", "date": "2026-11-13"},
+    {"what": "the front's start to /health, one slot (weights and engine 11 to 12 s; first launches 0.9 s, "
+             "once 198 s)", "gib": None, "seconds": [14, 213], "cut": 12, "pack": "EXL3 2.05",
+     "date": "2026-11-13"},
+    {"what": "the tail's start to /health (its link up after 227 s), one slot and eight", "gib": None,
+     "seconds": [237, 271], "cut": 12, "pack": "EXL3 2.05", "date": "2026-11-13"},
+)
+
+
+def split_facts(path: str) -> dict:
+    """What a planner needs to choose a cut of the pack at `path`, from its config and its files' headers alone (no
+    weight is read): the legal cuts; each layer's weights by the names `stage_names` reads (an EXL3 projection with
+    its suh and svh, as `check_pack` counts them); what both stages read beside their layers, what the tail alone
+    reads (the draft layer), and the norm a front reads of the layer after its cut; each layer's KV and sections a
+    slot; the carry a row at each cut; the n-gram table's file and the layers that read it. All bytes.
+    `check_pack(path, cut)`'s `stages.<role>.bytes` equal `shared + layers + front_extra[cut]` and
+    `shared + tail_only + layers` at every cut (tests/test_split_estimate.py)."""
+    from engine.models.flashnext.pack import TABLE_FILE, PackIndex, expected_names
+    idx = PackIndex.open(path)
+    idx.audit(mtp=True)
+    c = idx.cfg
+    n = c.num_hidden_layers
+
+    def size(name: str) -> int:
+        parts = [name] + ([name[:-len("trellis")] + s for s in ("suh", "svh")] if name.endswith(".trellis") else [])
+        return sum(idx.tensors[p].nbytes for p in parts)
+
+    layer, shared, draft = [0] * n, 0, 0
+    for name in expected_names(c, mtp=True):
+        if name.startswith("layers."):
+            layer[int(name.split(".")[1])] += size(name)
+        elif name.startswith("mtp."):
+            draft += size(name)
+        else:
+            shared += size(name)
+    front_extra = {}
+    for k in range(1, n):
+        name = f"layers.{k}.attn_hyper_connection.hc_norm.weight"
+        front_extra[k] = idx.tensors[name].nbytes if carry_parts(c, k) > 1 else 0
+    # an attention layer's rows a token: K and V (bf16) and the indexer key; its pooled indexer keys, a row a
+    # block of `indexer_compress_ratio` tokens and the rows a commit may write past the last block (engine.py
+    # `_pool_tensor`, tools/fn_seq_kernels.py OWN = 9)
+    kv_tok = 2 * c.num_key_value_heads * c.head_dim * 2
+    pool_tok, pool_const = 0.0, 0
+    if c.has_indexer:
+        kv_tok += c.indexer_head_dim * 2
+        pool_tok = c.indexer_head_dim * 2 / c.indexer_compress_ratio
+        pool_const = (9 + 1) * c.indexer_head_dim * 2
+    sections = [0] * n
+    for li in range(n):
+        if c.is_linear(li):
+            sections[li] = (c.linear_num_value_heads * c.linear_key_head_dim * c.linear_value_head_dim * 4
+                            + c.conv_dim * (c.linear_conv_kernel_dim - 1) * 2)
+    for li in c.ple_layers:
+        sections[li] += c.hc_hidden * (c.ple_conv_kernel_size - 1) * c.ngram_size * 2
+    return {
+        "layers": n, "cuts": list(range(1, n)),
+        "layer_bytes": layer, "shared_bytes": shared, "tail_only_bytes": draft, "draft_bytes": draft,
+        "front_extra_bytes": front_extra,
+        "attention_layers": list(c.attention_layers),
+        "kv_layer": {"per_token": kv_tok + pool_tok, "const": pool_const},
+        "section_bytes": sections,
+        # the draft layer is one attention layer of its own, with its own cache a slot (the tail's)
+        "draft_attention_layers": 1 if c.mtp_num_hidden_layers else 0,
+        "carry_bytes_per_row": {k: carry_parts(c, k) * c.hc_count * c.hidden_size * 2 for k in range(1, n)},
+        "table": {"bytes": int(idx.files.get(TABLE_FILE, 0)), "layers": sorted(c.ple_layers)} if c.ple_layers else None,
+        "pack_bytes": int(sum(idx.files.values())),
+        "caches": True, "slots_max": SLOTS_MAX, "snapshots_gb": SNAPSHOTS_GB,
+        "measured": [dict(m) for m in MEASURED],
+    }

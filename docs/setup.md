@@ -103,6 +103,26 @@ Rows of the measured table and every `max_window` come from runs on the box only
 - `budget_gb` is the device's memory less the floor (`QSE_PARALLEL_FLOOR_GB`, 15). `fits` is the total at or under the budget, compared to the cent. `fits_worst` asks the same with every slot at its full window; when it is false the engine makes a new request wait for memory instead of running out.
 - `context_tokens_fit` is what the room left after the fixed parts holds, in tokens, over all slots.
 
+### One model as two stages: the `split` block (SRV-817)
+
+`POST /v1/setup/estimate` takes an optional `split` ask beside the selection (`{"selection": {...}, "split": {...}}`, or in a bare selection); without it the answer is the one above, byte for byte. Every field of the ask is optional: `cuts` (a list of layer numbers; every legal cut when left out), `caches` (`on` or `off`, the default), `side_window` (tokens, at most `window`; the window when left out), `table` (`warm` or `cold`; the profile's policy when left out), `snapshots_gb` (the front's kept states a slot, 2), `front_cache_gb` and `tail_disk_gb` (the front's cache folder and the tail's disk tier, 0). A field it does not know, or a value out of range, is 422 `invalid_split`. The selection's `window`, `slots` and `floor_gb` are the shape; a stage keeps its rows in place, so every window is memory at load whatever `kv_pool` says, and without caches a split serves one slot.
+
+The answer is `split` in the estimate's body (`server/setup/split.py`). The facts come from the model's family (`engine/models/<family>/stages.py` `split_facts`), read from the config and the files' headers of the profile's pack on this box: no weight is loaded, and nothing in the request names a path. For each legal cut, `candidates[]` gives the cut's `carry_bytes_per_row`, where the n-gram table sits (`table_on`), and for the `front` and the `tail`: their `layers`, `attention_layers`, `gb`, `headroom_gb` and `fits` against this preset's budget, `slot_gb` (one side slot's KV at the side window, sections and, on the tail, the draft layer's cache), `disk` (`pack_gb`: both stages open the pack's index and table, so each box keeps the whole pack; the front's `cache_dir_gb`, the tail's `disk_tier_gb`) and `parts`, each with its `basis`:
+
+| part | side | basis |
+|-|-|-|
+| `weights`: its layers, what both read (embedding, head, final mixer), the tail's own (the draft layer, the final norm), the norm the front reads of layer k | both | `pack_headers` |
+| `table`: the warm table's file, or the cold table's row cache | the side that holds a layer reading it | `pack_headers` or `registry` |
+| `kv`: slot 0 at the window, each side slot at the side window | both | `config` |
+| `sections`: recurrent and conv states, a slot | both | `config` |
+| `draft_kv`: the draft layer's own cache, a slot | tail | `config` |
+| `snapshots`: `snapshots_gb` a slot, with caches on | front | `ask` |
+| `engine`, `allocator` and the per-window parts | both | `registry_whole_model`: the whole model's figures in one process, put on each stage as an upper bound |
+
+Beside them: `legal_cuts`, `shape` (what was computed), `layer_gb[]`, `shared_gb`, `tail_only_gb`, `kv_bytes_per_token_layer[]`, `section_bytes_layer[]`, `table`, `budget_gb`, `best_cut` (the cut with the largest smaller headroom among those where both sides fit on two boxes of this preset; null when none fits, and a note names the closest and the side that lacks how much), `measured` (what a split of the family has been measured to cost on a GPU, each with its date and conditions) and `notes`. Every other number is computed: `computed` is true. A side slot's graphs and row buffers are not in `slot_gb`.
+
+A model that cannot be split here answers `splittable: false` with `reason` and `message`, never an error: `family` (its engine is not served as two stages), `pack` (the profile's weights are not on this box, or their headers do not read), `cuts` (no asked cut is legal; `legal_cuts` lists them), `caches` (caches asked of a family that keeps no state split: LFM2 MoE) or `slots` (more slots than the family serves split).
+
 `exl3-4.5` with the recommended tools at 4 slots of 262,144: 67.35 GiB of a 106.63 GiB budget, 13.03 of it conversations at 32,768 tokens a slot. Every slot full would take 104.25 GiB of KV, so `fits_worst` is false.
 
 ## Wren

@@ -641,3 +641,62 @@ def stage_adapter(model, lo: int, hi: int, cap: int = 4096) -> StageAdapter:
                           max_len=model.max_len)
         return Lfm2MoeRowStage(eng, lo, hi)
     return Lfm2MoeStage(model, lo, hi, cap)
+
+
+def split_facts(path: str) -> dict:
+    """What a planner needs to choose a cut of the checkpoint or pack at `path`, from its config and its files'
+    headers alone (no weight is read): the legal cuts; each layer's weights by the names `stage_names` reads (an
+    EXL3 projection with its su(h) and sv(h), as `check_pack` counts them); what both stages read beside their layers
+    (the embedding), what the tail alone reads (the final norm and the head, nothing when the head is the embedding)
+    and the norm a front reads of the layer after its cut; each layer's KV and conv state a slot; the carry a row. All
+    bytes. `check_pack(path, cut)`'s `stages.<role>.bytes` equal `shared + layers + front_extra[cut]` and
+    `shared + tail_only + layers` at every cut (tests/test_split_estimate.py). This family keeps no state split and
+    serves one slot a stage (`stage_options`)."""
+    from engine.models.lfm2_moe.pack import PackIndex, plain_names, projections
+    idx = PackIndex.open(path)
+    idx.audit()
+    if idx.is_exl3:
+        idx.check_mul1()
+    c = idx.cfg
+    n = c.num_hidden_layers
+
+    def proj(base: str) -> int:
+        fmt = idx.formats.get(base)
+        if base == "lm_head" and fmt == "tied":
+            return 0
+        if fmt is None:
+            raise ValueError(f"{base} is not in the pack's audit")
+        parts = [base + ".weight"] if fmt != "exl3" else [
+            base + ".trellis", base + (".suh" if base + ".suh" in idx.tensors else ".su"),
+            base + (".svh" if base + ".svh" in idx.tensors else ".sv")]
+        return sum(idx.tensors[p].nbytes for p in parts)
+
+    def of(name: str) -> int:
+        m = _LAYER.match(name)
+        if m is None:
+            raise ValueError(f"{name}: not a layer's tensor")
+        return int(m.group(1))
+
+    layer = [0] * n
+    for base, _, _ in projections(c):
+        layer[of(base)] += proj(base)
+    for name, _ in plain_names(c):
+        if _LAYER.match(name):
+            layer[of(name)] += idx.tensors[name].nbytes
+    embed = idx.tensors["embed_tokens.weight"].nbytes
+    tail_only = idx.tensors["embedding_norm.weight"].nbytes + proj("lm_head")
+    conv = c.conv_state_len * c.hidden_size * 2
+    return {
+        "layers": n, "cuts": list(range(1, n)),
+        "layer_bytes": layer, "shared_bytes": embed, "tail_only_bytes": tail_only, "draft_bytes": 0,
+        "front_extra_bytes": {k: idx.tensors[f"layers.{k}.operator_norm.weight"].nbytes for k in range(1, n)},
+        "attention_layers": list(c.attention_layers),
+        "kv_layer": {"per_token": 2 * c.num_key_value_heads * c.head_dim * 2, "const": 0},
+        "section_bytes": [0 if c.is_attention(li) else conv for li in range(n)],
+        "draft_attention_layers": 0,
+        "carry_bytes_per_row": {k: 2 * 2 * c.hidden_size for k in range(1, n)},
+        "table": None,
+        "pack_bytes": int(sum(idx.files.values())),
+        "caches": False, "slots_max": 1, "snapshots_gb": 0.0,
+        "measured": [],
+    }
