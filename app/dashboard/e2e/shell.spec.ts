@@ -229,9 +229,15 @@ test.describe('TandemApp shell (VIS-242)', () => {
       await expect(page, from).toHaveURL(to);
       await expect(page.locator(sel).first(), from).toBeVisible();
     }
-    // the setup guide's deep link lands on its step
+    // the setup guide's deep link lands on its step: a new browser opens the simple guide, which
+    // has no rail and names its step in the page; the advanced guide's rail marks the step
     await page.goto('./#/setup/qwen3.8-27b/weights');
+    await expect(page.locator('qse-setup .setup-nav-mid')).toHaveText('Step 2 of 3');
+    await page.evaluate(() => localStorage.setItem('tandem.setup.simple', '0'));
+    await page.reload();
+    await expect(page).toHaveURL(/#\/models\/serve\/qwen3\.8-27b\/weights$/);
     await expect(page.locator('qse-setup [aria-current="step"]').first()).toBeVisible();
+    await expect(page.locator('qse-setup [data-rail="weights"] [aria-current="step"]')).toBeVisible();
     // a chat's deep link
     await page.goto('./?chat=mock#/chat/c_sync');
     await expect(page.locator('.ch-now')).toBeVisible();
