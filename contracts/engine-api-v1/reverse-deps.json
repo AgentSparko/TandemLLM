@@ -754,6 +754,12 @@
     "app/pyproject.toml"
    ]
   },
+  "tests/test_engine_ext_contract.py": {
+   "imports": [],
+   "reads": [
+    "app/"
+   ]
+  },
   "tests/test_engine_only.py": {
    "imports": [],
    "reads": [
