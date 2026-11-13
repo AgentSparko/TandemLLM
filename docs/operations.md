@@ -125,6 +125,22 @@ A peer is a second engine run from a checkout of its own (same commit, its own `
 
 `tools/memgate.py` also watches MemAvailable during a run (`--floor-gib`, every 0.2 s) and stops a load driver on a breach. `tools/linkrelay.py` puts a link between two processes on loopback: a TCP relay with a set delay and rate per direction, and a control socket that cuts, stalls (`blackhole`) and heals it. Its stats report its own added latency (`own_us`); measured at delay 0, that is the relay's floor on loopback, not a link cost. Nothing on one box measures speed: both engines share one GPU and one memory bus.
 
+## A split model's two stages
+
+One model can run as two stage processes on two boxes (docs/server.md "One model as two stage processes"). Each box's install serves one stage; the keys go in that install's `run/local.env` (never in the template, so a box without them serves the whole model):
+
+| key | what |
+|-|-|
+| `TANDEM_STAGE=LO:HI` | `0:k` the front stage, `k:layers` the tail |
+| `TANDEM_LINK_LISTEN=IP:PORT` or `TANDEM_LINK_PEER=IP:PORT` | wait for the other stage here, or dial it there; one of the two on each side, an IP literal, never a wildcard |
+| `TANDEM_LINK_KEY=PATH` | the path of the key file both stages share (mode 0600, at least 32 bytes); never the key itself |
+| `TANDEM_STAGE_CACHES=on\|off` | both stages alike, with the same `QSE_PARALLEL` (off: one slot, nothing kept) |
+| `TANDEM_STAGE_SNAPSHOTS_GB`, `TANDEM_STAGE_CACHE_DIR`, `TANDEM_STAGE_CACHE_GB` | the front with caches on: memory for its kept states a slot, its half of the disk tier, that folder's size |
+
+`ops/start.sh` (`ops/engines.sh` `stage_layer`) turns them into the server's flags, runs the engine alone (no conductor, roles, decision models or chatd) with the KV pool off, and refuses a bad combination in one line before anything starts: a link key without a stage, a range that is not `LO:HI`, no link address or both, a wildcard or a name for an address, a key in place of its path, a key file that is not there, a front with a disk tier (`QSE_DISK_CACHE` is the tail's: set it off on the front), the front's keys on a tail or without caches, more than one slot without caches, setup mode. A stage that exits before it answers `/health` ends the start at once with its log's tail. `bin/tandem status` names the stage, its layers and its link.
+
+Start the front first and wait for its `/health` (its weights load in about 12 s for Flash-Next 2.05 at cut 12; its first kernel launches took 0.9 s twice and 198 s once on one box), then the tail, which waits up to 120 s for the link at its start and answers `/health` once linked and warm (about 240 to 270 s for the same pack). Stop the tail first, then the front.
+
 ## While the engine is away (status page)
 
 A stop, a hold or a start takes the engine away for minutes, and whatever sits in front of it used to answer every URL, the dashboard included, with its own fallback text. `ops/engine_status.py` (stdlib, 0.3.41-test, OPS-65) lets the service say what is going on:

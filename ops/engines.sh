@@ -169,3 +169,95 @@ peer_check() {
     fi
     mkdir -p "$REPO/run" && echo "$n" > "$REPO/run/peer"
 }
+
+# stage_layer -- SRV-817: start.sh's settings for one stage of a model split in two processes
+# (docs/server.md "One model as two stage processes", docs/operations.md), from serve.env or run/local.env:
+#   TANDEM_STAGE=LO:HI            0:k the front stage, k:layers the tail
+#   TANDEM_LINK_LISTEN=IP:PORT    wait for the other stage here, or
+#   TANDEM_LINK_PEER=IP:PORT      dial it there (one of the two, on each side)
+#   TANDEM_LINK_KEY=PATH          the key FILE both stages share (mode 0600); never the key itself
+#   TANDEM_STAGE_CACHES=on|off    both stages alike (off: one slot, nothing kept)
+#   TANDEM_STAGE_SNAPSHOTS_GB=G   the front, caches on: memory for its kept states, a slot
+#   TANDEM_STAGE_CACHE_DIR=PATH   the front, caches on: its half of what the tail's disk tier keeps
+#   TANDEM_STAGE_CACHE_GB=G       the front: that folder's size
+# Sets STAGE_ROLE (front or tail) and STAGE_FLAGS (the server's flags), and the engine alone (no conductor,
+# roles, decision models or chatd) with the KV pool off, which a stage does not serve; or prints one line
+# with the reason and returns 2: a link key without a stage, a stage without one of the link addresses or
+# with both, a wildcard address, a key that is not a file's path, a front with a disk tier (QSE_DISK_CACHE
+# is the tail's), the front's keys on a tail or without caches, more than one slot without caches. Without
+# TANDEM_STAGE (and none of its keys) it sets nothing.
+stage_layer() {
+    STAGE_ROLE=""; STAGE_FLAGS=()
+    local st="${TANDEM_STAGE:-}" lo hi k addr flag caches slots
+    local front_keys="TANDEM_STAGE_SNAPSHOTS_GB TANDEM_STAGE_CACHE_DIR TANDEM_STAGE_CACHE_GB"
+    if [ -z "$st" ]; then
+        for k in TANDEM_LINK_LISTEN TANDEM_LINK_PEER TANDEM_LINK_KEY TANDEM_STAGE_CACHES $front_keys; do
+            if [ -n "${!k:-}" ]; then echo "[start] REFUSING: $k needs TANDEM_STAGE (LO:HI)"; return 2; fi
+        done
+        return 0
+    fi
+    if [[ ! "$st" =~ ^[0-9]{1,4}:[0-9]{1,4}$ ]] || [ "$((10#${st%%:*}))" -ge "$((10#${st#*:}))" ]; then
+        echo "[start] REFUSING: TANDEM_STAGE takes LO:HI with LO < HI (0:k the front, k:layers the tail)"; return 2
+    fi
+    lo=$((10#${st%%:*})); hi=$((10#${st#*:}))
+    STAGE_ROLE=tail; [ "$lo" = 0 ] && STAGE_ROLE=front
+    if [ -n "${TANDEM_LINK_LISTEN:-}" ] && [ -n "${TANDEM_LINK_PEER:-}" ]; then
+        echo "[start] REFUSING: the $STAGE_ROLE stage takes one of TANDEM_LINK_LISTEN and TANDEM_LINK_PEER, not both"
+        return 2
+    fi
+    if [ -n "${TANDEM_LINK_LISTEN:-}" ]; then addr="$TANDEM_LINK_LISTEN"; flag=--link-listen
+    elif [ -n "${TANDEM_LINK_PEER:-}" ]; then addr="$TANDEM_LINK_PEER"; flag=--link-peer
+    else
+        echo "[start] REFUSING: the $STAGE_ROLE stage needs TANDEM_LINK_LISTEN or TANDEM_LINK_PEER (IP:PORT)"
+        return 2
+    fi
+    if [[ ! "$addr" =~ ^(\[[0-9a-fA-F:]+\]|[0-9.]+):[0-9]{1,5}$ ]]; then
+        echo "[start] REFUSING: ${flag#--} takes an IP literal and a port (IP:PORT, [IPv6]:PORT), not '$addr'"
+        return 2
+    fi
+    case "${addr%:*}" in
+        0.0.0.0|"[::]") echo "[start] REFUSING: ${flag#--} $addr is every interface; name one IP"; return 2 ;;
+    esac
+    case "${TANDEM_LINK_KEY:-}" in
+        "") echo "[start] REFUSING: the $STAGE_ROLE stage needs TANDEM_LINK_KEY, the path of the key file (mode 0600)"
+            return 2 ;;
+        /*|~/*|./*|../*) ;;
+        *) echo "[start] REFUSING: TANDEM_LINK_KEY names the key file's path, never the key itself"; return 2 ;;
+    esac
+    if [ ! -f "${TANDEM_LINK_KEY/#\~/$HOME}" ]; then
+        echo "[start] REFUSING: TANDEM_LINK_KEY names no file (the key file both stages share, mode 0600)"; return 2
+    fi
+    caches="${TANDEM_STAGE_CACHES:-off}"
+    case "$caches" in on|off) ;; *) echo "[start] REFUSING: TANDEM_STAGE_CACHES is on or off"; return 2 ;; esac
+    if [ "$STAGE_ROLE" = front ] && [ "${QSE_DISK_CACHE:-off}" != off ]; then
+        echo "[start] REFUSING: a front stage takes no disk tier: QSE_DISK_CACHE=off (the tail's; the front's half" \
+             "goes to TANDEM_STAGE_CACHE_DIR)"
+        return 2
+    fi
+    for k in $front_keys; do
+        [ -n "${!k:-}" ] || continue
+        if [ "$STAGE_ROLE" = tail ]; then echo "[start] REFUSING: $k is the front stage's"; return 2; fi
+        if [ "$caches" != on ]; then echo "[start] REFUSING: $k needs TANDEM_STAGE_CACHES=on"; return 2; fi
+    done
+    for k in TANDEM_STAGE_SNAPSHOTS_GB TANDEM_STAGE_CACHE_GB; do
+        if [ -n "${!k:-}" ] && [[ ! "${!k}" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "[start] REFUSING: $k takes GiB (a number)"; return 2
+        fi
+    done
+    slots="${QSE_PARALLEL:-1}"
+    if [ "$caches" = off ] && [ "${slots:-1}" != 1 ]; then
+        echo "[start] REFUSING: a stage without caches serves one slot: QSE_PARALLEL=1 (side slots:" \
+             "TANDEM_STAGE_CACHES=on on both stages)"
+        return 2
+    fi
+    STAGE_FLAGS=(--stage "$st" "$flag" "$addr" --link-key-file "${TANDEM_LINK_KEY/#\~/$HOME}" --stage-caches "$caches")
+    [ -z "${TANDEM_STAGE_SNAPSHOTS_GB:-}" ] || STAGE_FLAGS+=(--stage-snapshots-gb "$TANDEM_STAGE_SNAPSHOTS_GB")
+    [ -z "${TANDEM_STAGE_CACHE_DIR:-}" ] || STAGE_FLAGS+=(--stage-cache-dir "${TANDEM_STAGE_CACHE_DIR/#\~/$HOME}")
+    [ -z "${TANDEM_STAGE_CACHE_GB:-}" ] || STAGE_FLAGS+=(--stage-cache-gb "$TANDEM_STAGE_CACHE_GB")
+    # what a stage does not serve, as the server would refuse it: the engine alone, rows in place
+    QSE_MODE=engine CONDUCTOR=raw QSE_CONDUCTOR_CONFIG=off QSE_CHATD=off QSE_BACKENDS=off ROLES_AUTOLOAD=
+    QWEN38_DECIDER_MODELS= QWEN38_NARRATOR_MODEL= QWEN38_SHADOW_MODEL=
+    QSE_KV_POOL=off; export QSE_KV_POOL
+    echo "[start] stage: the $STAGE_ROLE, layers $st, ${flag#--} $addr, caches $caches, slots $slots" \
+         "(the engine alone, KV pool off)"
+}

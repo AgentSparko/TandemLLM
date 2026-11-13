@@ -947,6 +947,22 @@ chat_auto() {
     chat_up && return 0
     bash "$CHATD" start || echo "[tandem] WARNING: chatd did not start (above); the engine serves without the Chat tab. Log: $REPO/logs/chatd.log" >&2
 }
+# SRV-817: a stage of a split model (TANDEM_STAGE in serve.env or local.env; docs/operations.md) says its role,
+# its layers and its link from /health's stage block
+stage_line() {
+    [ -n "${TANDEM_STAGE:-}" ] || return 0
+    curl -s -m 5 "$URL/health" 2>/dev/null | "$PY" -c '
+import json, sys
+try:
+    s = json.load(sys.stdin).get("stage") or {}
+except ValueError:
+    s = {}
+k = s.get("link") or {}
+why = ", " + str(k["reason"]) if k.get("reason") else ""
+print("[tandem] stage: the %s, layers %s, link %s (epoch %s)%s" % (s.get("role"), s.get("range"), k.get("state"),
+                                                                   k.get("epoch"), why))
+' 2>/dev/null || true
+}
 chat_line() {
     if [ "${QSE_MODE:-}" = engine ] && ! chat_up; then echo "[tandem] chat: off (engine only; QSE_MODE=chat in $RUN/local.env, then restart, turns it on)"; return 0; fi
     if [ "${QSE_CHATD:-on}" = off ] && ! chat_up; then echo "[tandem] chat: off (QSE_CHATD=off)"; return 0; fi
@@ -1045,7 +1061,7 @@ case "${1:-}" in
     restart) bash "$RUN/ops/stop.sh" "${2:-60}"; start ;;
     status)
         rc=0
-        if healthy; then echo "[tandem] healthy on :$PORT"; curl -s -m 5 "$URL/v1/models"; echo
+        if healthy; then echo "[tandem] healthy on :$PORT"; curl -s -m 5 "$URL/v1/models"; echo; stage_line
         elif engine_alive; then echo "[tandem] loading (pid $(cat "$REPO/logs/engine.pid"))"
         else echo "[tandem] not running"; rc=1; fi
         chat_line

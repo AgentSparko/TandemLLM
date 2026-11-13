@@ -12,6 +12,8 @@
 #                                     plain start is setup mode too, with the host the marker names.
 #   QSE_PEER=NAME ops/start.sh        a peer beside the box's engine, from this tree (OPS-197,
 #                                     docs/operations.md): QSE_PEER_PORT, QSE_PEER_NEED_GB required
+#   TANDEM_STAGE=LO:HI ops/start.sh   one stage of a model split in two processes (SRV-817,
+#                                     docs/operations.md): TANDEM_LINK_* and TANDEM_STAGE_* keys
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 set -a; . "$HERE/serve.env"; set +a
@@ -26,7 +28,7 @@ while [ $# -gt 0 ]; do
         --setup) SETUP=1; shift ;;
         --host) [ $# -ge 2 ] || { echo "[start] --host needs an address"; exit 2; }
                 SETUP_HOST="$2"; shift 2 ;;
-        -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
         *) echo "[start] unknown argument $1 (--setup, --host ADDR)"; exit 2 ;;
     esac
 done
@@ -39,6 +41,16 @@ SETUP_HOST="${SETUP_HOST:-127.0.0.1}"
 case "$SETUP_HOST" in
     *[!0-9.:a-fA-F]*|"") echo "[start] --host takes an address, not '$SETUP_HOST'"; exit 2 ;;
 esac
+# SRV-817: one stage of a model split in two processes (TANDEM_STAGE and its keys, ops/engines.sh
+# stage_layer): its flags, or a one-line refusal before anything starts
+STAGE_ROLE=""; STAGE_FLAGS=()
+if [ "$SETUP" = "1" ]; then
+    if [ -n "${TANDEM_STAGE:-}" ]; then
+        echo "[start] REFUSING: TANDEM_STAGE serves a configured engine, not setup mode"; exit 2
+    fi
+else
+    stage_layer || exit 2
+fi
 LOGS="$REPO/logs"; mkdir -p "$LOGS"
 PIDFILE="$LOGS/engine.pid"
 LOG="$LOGS/engine-$(date +%Y%m%d-%H%M%S).log"
@@ -287,6 +299,7 @@ setsid nohup "$PY" -u server/app.py \
     --usage-ledger "${QSE_USAGE_LEDGER:-off}" \
     --conductor-config "${QSE_CONDUCTOR_CONFIG:-off}" --conductor-defaults shipped \
     --backends "${QSE_BACKENDS:-off}" \
+    ${STAGE_FLAGS[@]+"${STAGE_FLAGS[@]}"} \
     --disk-cache "${QSE_DISK_CACHE:-off}" \
     >"$LOG" 2>&1 < /dev/null &
 echo $! > "$PIDFILE"
@@ -296,6 +309,11 @@ echo "[start] pid $(cat "$PIDFILE"), log $LOG"
 # every 2 s (it was every 10 s: an install's job waited up to 10 s more for an engine that answered,
 # VIS-211), 600 s in all
 for i in $(seq 1 300); do
+    # SRV-817: a stage that exits (a refusal, a link the other stage refused) ends the wait at once
+    if [ -n "$STAGE_ROLE" ] && ! kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        status failed --reason "the $STAGE_ROLE stage exited before /health"
+        echo "[start] the $STAGE_ROLE stage exited before /health; tail of $LOG:"; tail -20 "$LOG"; exit 1
+    fi
     if curl -sf -m 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
         echo "[start] healthy after $(( $(date +%s) - T_START ))s"
         status up --took-s "$(( $(date +%s) - T_START ))" --engine-port "$PORT"   # OPS-67: keeps the model list
