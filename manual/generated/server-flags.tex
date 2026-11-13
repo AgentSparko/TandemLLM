@@ -159,5 +159,9 @@
 \texttt{-{}-link-\allowbreak{}listen} & \texttt{none} & with -\kern0pt-stage: wait for the other stage on this address (an IP literal). \\
 \texttt{-{}-link-\allowbreak{}peer} & \texttt{none} & with -\kern0pt-stage: connect to the other stage at this address (an IP literal). \\
 \texttt{-{}-stage-\allowbreak{}graphs} & \texttt{on} & with -\kern0pt-stage: a stage whose family captures graphs for its passes captures its own (on), or runs every pass eager (off). One of: on, off. \\
+\texttt{-{}-stage-\allowbreak{}caches} & \texttt{off} & with -\kern0pt-stage: keep state on both stages under one key: the prefix, session and resident caches, the disk tier and side slots; off: one sequence, nothing kept. One of: on, off. \\
+\texttt{-{}-stage-\allowbreak{}snapshots-\allowbreak{}gb} & \texttt{2} & with -\kern0pt-stage-caches on, the front stage: memory for the states it keeps, a slot. \\
+\texttt{-{}-stage-\allowbreak{}cache-\allowbreak{}dir} & \texttt{none} & with -\kern0pt-stage-caches on, the front stage: the directory for its half of what the tail's disk tier keeps (none: a state read from the tail's disk is rebuilt or missed). \\
+\texttt{-{}-stage-\allowbreak{}cache-\allowbreak{}gb} & \texttt{32} & with -\kern0pt-stage-cache-dir: the directory's size; the files unused longest go first. \\
 \texttt{-{}-link-\allowbreak{}key-\allowbreak{}file} & \texttt{none} & with -\kern0pt-stage: the key both stages share, a file of mode 0600 with at least 32 bytes. \\
 \end{reftable}
