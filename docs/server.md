@@ -264,17 +264,22 @@ Timing (`QSE_PARALLEL_TIMING=1`, for measurements: every joint pass is synchroni
 | `--link-peer IP:PORT` | connect to the other stage at this address |
 | `--link-key-file PATH` | the key both stages share |
 | `--stage-graphs on\|off` | Flash-Next: a stage captures its own decode, verify and commit graphs (`on`, the default) or runs every pass eager |
+| `--stage-caches on\|off` | Flash-Next: keep state on both stages under one key: the prompt caches, the disk tier and side slots (`off`, the default: one sequence, nothing kept) |
+| `--stage-snapshots-gb G` | the front, with `--stage-caches on`: memory for the states it keeps, a slot (2) |
+| `--stage-cache-dir PATH` | the front, with `--stage-caches on`: the folder for its half of what the tail's disk tier keeps |
+| `--stage-cache-gb G` | the front: that folder's size (32) |
 
 Each side takes one of `--link-listen` and `--link-peer`. Addresses are IP literals, and a wildcard address is refused. The key file must be a regular file of the server's user, mode 0600, with at least 32 bytes. The key appears in no log line, message or route.
 
 The tail is the engine clients talk to. It serves the chat and completion routes, and its `GET /v1/replica/identity` names its range in `stage`. The front loads its layers and answers `/health`; every other route answers 409 `stage_front`. Start the front first: the tail waits 120 s for the link, then refuses to start. A link whose two ends differ in key, code, weights, family or layer range is refused, and the start line says which.
 
-Limits of this first version, each refused at the start or at the request, never served another way:
+Limits, each refused at the start or at the request, never served another way:
 
-- one slot (`--parallel 1`), no KV pool, no disk tier, no prompt caches, no conductor, no backends, not in setup mode;
+- without `--stage-caches on`: one slot (`--parallel 1`), no disk tier, no prompt caches;
+- no KV pool, no conductor, no backends, not in setup mode; the session spill is off;
 - text only: a request with images gets 400 `stage_text_only`;
 - `LFM2_KV_FP8` and `FN_KV_FP8` are not served split;
-- LFM2 MoE's passes run eager, without captured graphs.
+- LFM2 MoE's passes run eager, without captured graphs, and it keeps no state split (`--stage-caches on` is refused).
 
 Flash-Next as two stages (`engine/models/flashnext/stages.py`, `tail.py`):
 
@@ -286,9 +291,20 @@ Flash-Next as two stages (`engine/models/flashnext/stages.py`, `tail.py`):
 - The tail loads no vision tower.
 - `/health` lists these limits under `stage.options`.
 
-`/health` on both stages carries a `stage` block: `role`, `lo`, `hi`, `layers`, `cut`, the stage's `options` (its limits) and `link` with `state`, `epoch`, `transport` and the bytes each way. While the link is down the tail's status is `degraded`. A request in flight ends with an error that says `stage_down`, and a new one gets 503 `stage_down` with `Retry-After: 5`. The tail keeps dialing or listening; a new link starts both stages empty under the next epoch, so the next request reads its prompt again.
+Flash-Next with `--stage-caches on` (both stages take the flag):
 
-`tools/stage_cut_cost.py` measures what the cut costs by itself on one device: the same blocks through the whole model and through front, host copy and tail, in one process with no link.
+- The tail runs the server's caches as the one process does: the resident prefix with its end anchor, pin, park and stash, the state store, and the disk tier with `--disk-cache`. They hold the tail's half of a state.
+- The front keeps its half under the same key. The key is a digest of the blocks that wrote the state, computed on each stage from what it ran. The front's rows stay where they are until a pass would write over them; then they are copied out, within `--stage-snapshots-gb`.
+- A state the caches put back whose front half is gone is rebuilt on the front alone: the tail sends its log of blocks again, each as the kind of block it was, and runs none of its own rows again. The tokens are the same; the cost is the front's share of a prefill.
+- With `--stage-cache-dir` the front writes its half of every state the tail's disk tier keeps. After both stages start again a disk hit needs both halves; without the front's file the entry is given up and the prompt runs cold.
+- `--parallel N` (up to 8): each slot is a stage engine of its own over the one copy of the weights, on both stages. The blocks of a joint round cross the link as one request and one carry; on each stage every slot's block then runs on its own engine. A side slot's window is `--side-max-len`, at most slot 0's.
+- When the link comes back the tail keeps its sequence. The front starts empty and is brought back from its own kept states, or from the tail's log, at the next request.
+- `/health` adds `stage.state`: on the tail the snapshots, restores, rebuilds and joint rounds; on the front each slot's kept states and bytes.
+- Not served: images, the session spill, the layer-major window and the joint prefill. A joint round runs each slot's block on its own, so a round of N slots reads the weights N times.
+
+`/health` on both stages carries a `stage` block: `role`, `lo`, `hi`, `layers`, `cut`, the stage's `options` (its limits) and `link` with `state`, `epoch`, `transport` and the bytes each way. While the link is down the tail's status is `degraded`. A request in flight ends with an error that says `stage_down`, and a new one gets 503 `stage_down` with `Retry-After: 5`. The tail keeps dialing or listening. Without `--stage-caches on` a new link starts both stages empty under the next epoch, so the next request reads its prompt again.
+
+`tools/stage_cut_cost.py` measures what the cut costs by itself on one device: the same blocks through the whole model and through front, host copy and tail, in one process with no link. A run reads its blocks once before the clock starts, changes which arm goes first every run, and times the uncut arm a second time; `baseline.clean` says whether that second pass is within 2 % of the first.
 
 ## Qwen3.8-Flash-Next (SRV-87)
 
