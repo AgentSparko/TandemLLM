@@ -1,6 +1,6 @@
 # Engine API contract v1
 
-These files are the truth for what TandemApp (`app/`: the dashboard, the controller, the conductor, chatd and TandemNode) may use of a TandemLLM engine (`engine/`, `server/`): the HTTP routes, the extensions to the OpenAI shapes, and how TandemNode controls an install without importing it. The engine's tests hold its code to them (`tests/test_engine_api_contract.py`, `tests/test_engine_api_live.py`); TandemApp's tests hold its callers to them (`app/tests/test_engine_api_contract.py`). Its version is `1.0`, independent of either release.
+These files are the truth for what TandemApp (`app/`: the dashboard, the controller, the conductor, chatd and TandemNode) may use of a TandemLLM engine (`engine/`, `server/`): the HTTP routes, the extensions to the OpenAI shapes, and how TandemNode controls an install without importing it. The engine's tests hold its code to them (`tests/test_engine_api_contract.py`, `tests/test_engine_api_live.py`); TandemApp's tests hold its callers to them (`app/tests/test_engine_api_contract.py`). Its version is `1.1`, independent of either release.
 
 | file | what |
 |-|-|
@@ -18,7 +18,8 @@ These files are the truth for what TandemApp (`app/`: the dashboard, the control
 - `engine_api` (MAJOR.MINOR, `server/engine_api.py` `VERSION`) is in the full `/health` answer, the setup-mode `/health` and the status responder's `/health`. The open answer, which a caller through a proxy gets, stays `{status}`.
 - MINOR is additive: a new route or a new optional field. MAJOR is a removed or renamed route or field, or a changed meaning.
 - An engine without the field speaks 1.0: every engine up to 0.15.x.
-- TandemApp's `proxy/engineapi.py` (`SPEAKS` 1.0) reads it for an engine of kind `tandemllm`. Another major is not ok: "this engine speaks engine API 2.0; TandemApp 0.15.0 needs 1.x". TandemNode's engine view then says `unhealthy` with that text in `health.api_why`; a deployment member on that engine is `down` with it and takes no request, not as a fallback and not for a model no record names (a derived Single's or a routing rule's: 503 `no_member`); a deployment's start fails at once with it (`start_failed`).
+- A TandemApp on 1.1 takes any 1.x engine. A route added in a minor exists only on an engine that says that minor or later: a caller checks `engine_api` first and treats an older engine as one without the route (`GET /v1/replica/identity` needs 1.1).
+- TandemApp's `proxy/engineapi.py` (`SPEAKS` 1.1) reads it for an engine of kind `tandemllm`. Another major is not ok: "this engine speaks engine API 2.0; TandemApp 0.15.0 needs 1.x". TandemNode's engine view then says `unhealthy` with that text in `health.api_why`; a deployment member on that engine is `down` with it and takes no request, not as a fallback and not for a model no record names (a derived Single's or a routing rule's: 503 `no_member`); a deployment's start fails at once with it (`start_failed`).
 - Not read here yet: chatd's own engine (SRV-735) and backends the controller reaches directly (SRV-749).
 
 ## Routes
@@ -43,6 +44,7 @@ The full answer goes to a loopback caller without proxy headers (TandemNode on i
 | `GET /health`, `/healthz`, `/v1/health` | `proxy/nodeengines.py`, `chatd/engine.py`, `dashboard/src/app.ts`, `dashboard/src/setup/api.ts`, `dashboard/src/setup/install.ts` | `health.schema.json` |
 | `GET /metrics` | `proxy/nodeengines.py`, `proxy/nodesource.py`, `dashboard/src/views/performance.ts` | Prometheus text, the qse_* families (tandemapp/METRICS.md) |
 | `GET /metrics/up` | a Prometheus scrape (the engine's ops/monitoring); no TandemApp file | one number for a scraper: the engine answers |
+| `GET /v1/replica/identity` | a replica check before two engines serve one model; no TandemApp file calls it yet | the identity block (`server/identity.py`, `docs/server.md`), under the caller rule of `/v1/models`; 503 `identity_pending` until it is computed, once after the start. Since 1.1 |
 
 ### 3. Engine dashboard reads
 
@@ -234,4 +236,5 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 
 ## Changes
 
+- v1.1: `GET /v1/replica/identity` (SRV-741).
 - v1.0, first version (SRV-747).

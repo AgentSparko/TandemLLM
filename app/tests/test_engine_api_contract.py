@@ -15,10 +15,10 @@ callers. The engine's side is the repository's tests/test_engine_api_contract.py
                                                                   test_every_literal_is_classified
   3  every route is used: a file of its used_by holds a literal for it, or a relay prefix
      covers it; nodeengines.RELAY is in the routes               test_every_route_is_used
-  4  the version: a missing field reads 1.0 (assumed, ok), 1.4 is ok, 2.0 is not and names 1.x,
-     a value not in the plain MAJOR.MINOR form is not ok and its reason quotes it, another kind
-     is not read; nodeengines.health against fake engines that say nothing, 1.4, 2.0 and
-     garbage; the health example validates against its schema   test_versions
+  4  the version: a missing field reads 1.0 (assumed, ok), 1.0, 1.1 and 1.4 are ok, 2.0 is not
+     and names 1.x, a value not in the plain MAJOR.MINOR form is not ok and its reason quotes
+     it, another kind is not read; nodeengines.health against fake engines that say nothing,
+     1.0, 1.1, 1.4, 2.0 and garbage; the health example validates   test_versions
   5  the node fixtures: nodeengines.default_engine reads node/serve.env.example's port and builds
      node/control.json's verbs; nodeweights reads a folder laid out as
      node/hub_manifest.example.json says (files_of, the sha256 per file, the content id)
@@ -422,6 +422,11 @@ def test_versions():
         {"engine_api": "1.0", "assumed": True, "ok": True, "why": None}
     assert engineapi.read({"status": "ok", "engine_api": "1.4"}, "tandemllm") == \
         {"engine_api": "1.4", "assumed": False, "ok": True, "why": None}
+    # an engine one minor behind (1.0, no identity route) and one on this minor are both ok
+    assert engineapi.ASSUMED == "1.0" and engineapi.SPEAKS != "1.0"
+    for said in ("1.0", engineapi.SPEAKS):
+        assert engineapi.read({"status": "ok", "engine_api": said}, "tandemllm") == \
+            {"engine_api": said, "assumed": False, "ok": True, "why": None}, said
     assert engineapi.read({"engine_api": "2.0"}, "tandemllm") == \
         {"engine_api": "2.0", "assumed": False, "ok": False, "why": why}
     for kind in ("vllm", "sglang", "generic"):
@@ -438,6 +443,8 @@ def test_versions():
                                                           f"sends engine_api {said}")), (got, r)
     # nodeengines.health and the view against engines on loopback
     fakes = {"unsaid": FakeEngine({"status": "ok", "version": "0.15.0"}),
+             "v10": FakeEngine({"status": "ok", "engine_api": "1.0"}),
+             "v11": FakeEngine({"status": "ok", "engine_api": "1.1"}),
              "v14": FakeEngine({"status": "ok", "engine_api": "1.4"}),
              "v20": FakeEngine({"status": "ok", "engine_api": "2.0"}),
              "garbage": FakeEngine(raw=b"<html>not json</html>"),
@@ -449,7 +456,8 @@ def test_versions():
                                  [nodeengines.Engine({"id": "other", "port": fakes["v20"].port,
                                                       "kind": "generic"}, logs)])
         view = {v["id"]: v for v in es.view()}
-        want = {"unsaid": ("up", "1.0", True, True, None), "v14": ("up", "1.4", False, True, None),
+        want = {"unsaid": ("up", "1.0", True, True, None), "v10": ("up", "1.0", False, True, None),
+                "v11": ("up", "1.1", False, True, None), "v14": ("up", "1.4", False, True, None),
                 "v20": ("unhealthy", "2.0", False, False, why),
                 "garbage": ("unhealthy", "1.0", True, True, None),      # no status: not up
                 "setup": ("up", "1.0", False, True, None),
@@ -473,7 +481,7 @@ def test_versions():
         for f in fakes.values():
             f.close()
         shutil.rmtree(logs, ignore_errors=True)
-    return f"read: 1.0 assumed, 1.4 ok, 2.0 names 1.x; {len(want)} engines viewed"
+    return f"read: 1.0 assumed, 1.0, 1.1 and 1.4 ok, 2.0 names 1.x; {len(want)} engines viewed"
 
 
 # ---------------------------------------------------------------------------- the node fixtures

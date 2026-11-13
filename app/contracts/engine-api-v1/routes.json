@@ -1,5 +1,5 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "routes": [
     {
       "method": "POST",
@@ -119,6 +119,16 @@
       "doc": "one number for a scraper: the engine answers",
       "consumer": "a Prometheus scrape (the engine's ops/monitoring); no TandemApp file",
       "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/replica/identity",
+      "aliases": [],
+      "group": 2,
+      "used_by": [],
+      "doc": "the replica identity block (server/identity.py): what two engines compare before they serve one model; 503 identity_pending until it is computed, once after the start. Since 1.1",
+      "consumer": "a replica check before two engines serve one model; no TandemApp file calls it yet",
+      "live": false
     },
     {
       "method": "GET",
