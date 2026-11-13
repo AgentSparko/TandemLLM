@@ -22,6 +22,8 @@ The test matrix:
                                                          test_not_splittable_answers
   6  the ask is checked: an unknown field, caches other than on/off, a side window over the window, a
      cut that is not a number: 422 invalid_split          test_the_ask_is_checked
+  -  every block of 3, 4 and 5 and every ask of 6 the code takes validate against the engine API
+     contract's setup/split.schema.json (1.2); the asks it refuses do not
 
 Run: python tests/test_split_estimate.py
 """
@@ -46,7 +48,19 @@ from server.setup import registry  # noqa: E402
 from server.setup import split as split_mod  # noqa: E402
 
 GIB = float(1 << 30)
+#: the engine API contract (app/contracts/engine-api-v1): the split ask and block (1.2)
+CONTRACT = os.path.join(ROOT, "app", "contracts", "engine-api-v1")
 FN = "qwen3.8-flash-next"
+
+
+def _contract(doc, ref: str = "setup/split.schema.json") -> list:
+    from tools import contract_check
+    return contract_check.validate(doc, {"$ref": ref}, root=CONTRACT)
+
+
+def _valid(b: dict) -> dict:
+    assert not _contract(b), _contract(b)[:5]
+    return b
 LFM = "lfm2.5-24b-a2b"
 
 
@@ -168,8 +182,8 @@ def test_the_flashnext_block():
     path = _fn_pack()
     f = FS.split_facts(path)
     m, sel = _sel(FN, profile="flashnext-2.05", window=8192, slots=2)
-    b = split_mod.block(m, sel, {"caches": "on", "side_window": 4096, "table": "warm", "snapshots_gb": 1.5,
-                                 "front_cache_gb": 8, "tail_disk_gb": 16}, path=path)
+    b = _valid(split_mod.block(m, sel, {"caches": "on", "side_window": 4096, "table": "warm", "snapshots_gb": 1.5,
+                                        "front_cache_gb": 8, "tail_disk_gb": 16}, path=path))
     assert b["splittable"] is True and b["version"] == "1.0" and b["computed"] is True, b
     assert b["legal_cuts"] == f["cuts"] and [c["cut"] for c in b["candidates"]] == f["cuts"]
     assert b["shape"] == {"window": 8192, "slots": 2, "side_window": 4096, "caches": "on", "table": "warm",
@@ -208,7 +222,7 @@ def test_the_flashnext_block():
     fitting = [c for c in b["candidates"] if c["fits"]]
     assert b["best_cut"] == max(fitting, key=lambda c: (c["headroom_gb"], -c["cut"]))["cut"]
     # cold: the row cache of the profile in place of the file; the cuts asked only, a cut not legal said
-    cold = split_mod.block(m, sel, {"table": "cold", "cuts": [1, 3, 99]}, path=path)
+    cold = _valid(split_mod.block(m, sel, {"table": "cold", "cuts": [1, 3, 99]}, path=path))
     assert [c["cut"] for c in cold["candidates"]] == [1, 3] and any("[99]" in n for n in cold["notes"])
     t = [p for c in cold["candidates"] for s in ("front", "tail") for p in c[s]["parts"] if p["id"] == "table"]
     # 2.05 reads its table warm: asked cold, the row cache is the engine's setting (2 GiB by default)
@@ -225,7 +239,7 @@ def test_the_flashnext_block():
     tiny = copy.deepcopy(m)
     tiny["devices"][0]["total_gib"] = 15.0
     _, tsel = tiny, estimate_mod.check(tiny, {"model": FN, "profile": "flashnext-2.05", "window": 8192, "floor_gb": 10})
-    small = split_mod.block(tiny, tsel, {}, path=path)
+    small = _valid(split_mod.block(tiny, tsel, {}, path=path))
     assert small["best_cut"] is None and any("No cut fits" in n for n in small["notes"]), small["notes"]
     return f"{len(b['candidates'])} cuts, best {b['best_cut']}; warm and cold, caches on and off"
 
@@ -234,11 +248,11 @@ def test_the_flashnext_block():
 def test_the_lfm2_block():
     path = _lfm_pack()
     m, sel = _sel(LFM, window=8192, slots=1)
-    b = split_mod.block(m, sel, {}, path=path)
+    b = _valid(split_mod.block(m, sel, {}, path=path))
     assert b["splittable"] is True and b["table"] is None and b["shape"]["table"] is None, b
     for c in b["candidates"]:
         assert c["table_on"] is None and "draft_kv" not in {p["id"] for p in c["tail"]["parts"]}
-    no = split_mod.block(m, sel, {"caches": "on"}, path=path)
+    no = _valid(split_mod.block(m, sel, {"caches": "on"}, path=path))
     assert no["splittable"] is False and no["reason"] == "caches" and "keeps no state split" in no["message"], no
     return f"{len(b['candidates'])} cuts; caches asked: {no['reason']}"
 
@@ -246,12 +260,12 @@ def test_the_lfm2_block():
 # ------------------------------------------------------------------ 5
 def test_not_splittable_answers():
     m, sel = _sel("qwen3.8-27b")
-    b = split_mod.block(m, sel, {})
+    b = _valid(split_mod.block(m, sel, {}))
     assert b["splittable"] is False and b["reason"] == "family" and "not served as two stages" in b["message"], b
     m, sel = _sel(FN, profile="flashnext-2.05", window=8192)
     old_path, split_mod.pack_dir = split_mod.pack_dir, lambda m, s: None
     try:
-        b = split_mod.block(m, sel, {})
+        b = _valid(split_mod.block(m, sel, {}))
         assert b["splittable"] is False and b["reason"] == "pack" and "not on this box" in b["message"], b
     finally:
         split_mod.pack_dir = old_path
@@ -260,12 +274,12 @@ def test_not_splittable_answers():
         fh.write("{}")
     b = split_mod.block(m, sel, {}, path=d)
     assert b["splittable"] is False and b["reason"] == "pack" and "does not read" in b["message"], b
-    b = split_mod.block(m, sel, {"cuts": [0, 999]}, path=_fn_pack())
+    b = _valid(split_mod.block(m, sel, {"cuts": [0, 999]}, path=_fn_pack()))
     assert b["splittable"] is False and b["reason"] == "cuts" and b["legal_cuts"], b
     from engine.models.flashnext import stages as FS
     facts = dict(json.loads(json.dumps(FS.split_facts(_fn_pack()))), slots_max=1)
     m, sel8 = _sel(FN, profile="flashnext-2.05", window=8192, slots=8)
-    b = split_mod.block(m, sel8, {"caches": "on"}, facts=facts)
+    b = _valid(split_mod.block(m, sel8, {"caches": "on"}, facts=facts))
     assert b["splittable"] is False and b["reason"] == "slots", b
     # facts read back from JSON (keys as text) give the same block as the family's own
     one = split_mod.block(m, sel, {"cuts": [2]}, facts=dict(facts, slots_max=8))
@@ -287,6 +301,17 @@ def test_the_ask_is_checked():
     _refused(lambda: split_mod.check_ask({"snapshots_gb": -1}, sel), "split.snapshots_gb")
     _refused(lambda: split_mod.check_ask("all", sel), "an object")
     assert split_mod.check_ask(True, sel)["side_window"] == 8192
+    # the contract's ask: what the code takes validates, what it refuses for a field it does not know does not
+    ask = "setup/split.schema.json#/$defs/ask"
+    for good in (True, {}, {"cuts": [12, 24], "caches": "on", "side_window": 4096, "table": "cold",
+                            "snapshots_gb": 2, "front_cache_gb": 16, "tail_disk_gb": 16}):
+        split_mod.check_ask(good, sel)
+        assert not _contract(good, ask), (good, _contract(good, ask))
+    from tools import contract_check
+    props = contract_check.load("setup/split.schema.json", CONTRACT)["$defs"]["ask"]["properties"]
+    assert set(props) == set(split_mod.ASK), (sorted(props), sorted(split_mod.ASK))
+    for bad in ({"cut": 3}, {"caches": "yes"}, {"table": "hot"}, "all"):
+        assert _contract(bad, ask), bad
     assert split_mod.check_ask({"cuts": [24, 12, 12]}, sel)["cuts"] == [12, 24]
     return "unknown field, caches, side window, cuts, table, a negative size: 422 invalid_split"
 

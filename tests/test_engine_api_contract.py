@@ -20,7 +20,9 @@ tests/test_engine_api_live.py.
   6  node/: ops/serve.env carries PORT= and QSE_STATUS_PORT= as serve.env.example does and
      install.sh writes the status port as PORT + 9; the bin/tandem install.sh writes takes the
      control.json verbs and install.sh its flags; ops/fetch_weights.verify accepts a folder laid
-     out as hub_manifest.example.json says and refuses a changed byte  test_node_fixtures
+     out as hub_manifest.example.json says and refuses a changed byte; control.json's stage keys
+     (1.2) are the ones ops/start.sh and ops/engines.sh read, and its status line is bin/tandem's
+                                                                  test_node_fixtures
   7  the byte copies (test helpers, contract_check, the licenses, the setup fixture) are
      identical                                                    test_byte_copies
 
@@ -394,6 +396,13 @@ def test_node_fixtures():
     flags = set(re.findall(r"(?m)^        (--[a-z-]+)(?:\|-[a-z])?\)", inst))
     assert set(control["install"]["flags"]) <= flags, (control["install"]["flags"], flags)
     os.rmdir(d)
+    # SRV-817 (1.2): a stage's run/local.env keys and bin/tandem status's stage line
+    with open(os.path.join(ROOT, "ops", "engines.sh")) as f, open(os.path.join(ROOT, "ops", "start.sh")) as g:
+        ops = f.read() + g.read()
+    missing = [k for k in control["stage"]["keys"] if "${" + k not in ops]
+    assert not missing, missing
+    assert '"[tandem] stage: the %s, layers %s, link %s (epoch %s)%s"' in script, "bin/tandem status's stage line"
+    assert control["stage"]["status_line"].startswith("[tandem] stage: the <role>, layers <LO:HI>, link ")
     # a folder laid out as the hub manifest example says: each file `size` zero bytes
     sys.path.insert(0, os.path.join(ROOT, "ops"))
     import fetch_weights

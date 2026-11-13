@@ -1,16 +1,18 @@
 # Engine API contract v1
 
-These files are the truth for what TandemApp (`app/`: the dashboard, the controller, the conductor, chatd and TandemNode) may use of a TandemLLM engine (`engine/`, `server/`): the HTTP routes, the extensions to the OpenAI shapes, and how TandemNode controls an install without importing it. The engine's tests hold its code to them (`tests/test_engine_api_contract.py`, `tests/test_engine_api_live.py`); TandemApp's tests hold its callers to them (`app/tests/test_engine_api_contract.py`). Its version is `1.1`, independent of either release.
+These files are the truth for what TandemApp (`app/`: the dashboard, the controller, the conductor, chatd and TandemNode) may use of a TandemLLM engine (`engine/`, `server/`): the HTTP routes, the extensions to the OpenAI shapes, and how TandemNode controls an install without importing it. The engine's tests hold its code to them (`tests/test_engine_api_contract.py`, `tests/test_engine_api_live.py`); TandemApp's tests hold its callers to them (`app/tests/test_engine_api_contract.py`). Its version is `1.2`, independent of either release.
 
 | file | what |
 |-|-|
 | `routes.json` | every route by group with its TandemApp callers (`used_by`, or `consumer` when no TandemApp file calls it), its shape, and `live`: a GET an engine without a model (`--fake-engine`) answers 200; the engine-only screens until ENG-413; TandemApp's routes the engine serves in its process until ENG-413; the controller's own families |
 | `health.schema.json`, `health.example.json` | `GET /health`: the open, full, setup-mode and status responder answers |
+| `health.stage-front.example.json`, `health.stage-tail.example.json` | `GET /health` of the two stage processes of a split model, with the `stage` block (since 1.2) |
 | `setup/estimate-cases.json` | `models/estimate-cases.json` byte for byte: the Setup Guide's estimate formula pinned by cases |
 | `setup/limits.json` | `engine_max_slots`, the registry's `ENGINE_MAX_SLOTS` |
+| `setup/split.schema.json`, `setup/split.example.json`, `setup/split-request.example.json` | `POST /v1/setup/estimate`'s optional `split` ask (`$defs.ask`) and block (since 1.2); the example is a block the engine computed from a real pack's headers |
 | `node/serve.env.example` | the `PORT=` and `QSE_STATUS_PORT=` lines install.sh writes to `run/ops/serve.env` from `ops/serve.env` |
 | `node/hub_manifest.example.json` | the `_hub_manifest.json` `ops/fetch_weights.py` writes beside a pack (here each file is `size` zero bytes) |
-| `node/control.json` | bin/tandem's verbs and the install.sh flags TandemNode and the controller use |
+| `node/control.json` | bin/tandem's verbs and the install.sh flags TandemNode and the controller use; `stage`: the `run/local.env` keys of a split model's stage, the start and stop order and `bin/tandem status`'s stage line (since 1.2) |
 | `reverse-deps.json` | what the engine's tree still takes from TandemApp's: the engine->app imports, the engine test files that reach app code, the reads across the boundary, and the copies both keep equal |
 
 ## The version
@@ -18,8 +20,9 @@ These files are the truth for what TandemApp (`app/`: the dashboard, the control
 - `engine_api` (MAJOR.MINOR, `server/engine_api.py` `VERSION`) is in the full `/health` answer, the setup-mode `/health` and the status responder's `/health`. The open answer, which a caller through a proxy gets, stays `{status}`.
 - MINOR is additive: a new route or a new optional field. MAJOR is a removed or renamed route or field, or a changed meaning.
 - An engine without the field speaks 1.0: every engine up to 0.15.x.
-- A TandemApp on 1.1 takes any 1.x engine. A route added in a minor exists only on an engine that says that minor or later: a caller checks `engine_api` first and treats an older engine as one without the route (`GET /v1/replica/identity` needs 1.1).
-- TandemApp's `proxy/engineapi.py` (`SPEAKS` 1.1) reads it for an engine of kind `tandemllm`. Another major is not ok: "this engine speaks engine API 2.0; TandemApp 0.15.0 needs 1.x". TandemNode's engine view then says `unhealthy` with that text in `health.api_why`; a deployment member on that engine is `down` with it and takes no request, not as a fallback and not for a model no record names (a derived Single's or a routing rule's: 503 `no_member`); a deployment's start fails at once with it (`start_failed`).
+- A TandemApp on 1.2 takes any 1.x engine. A route or field added in a minor exists only on an engine that says that minor or later: a caller checks `engine_api` first and treats an older engine as one without it (`GET /v1/replica/identity` needs 1.1; the estimate's `split` and `/health`'s `stage` need 1.2: an older engine is "not splittable: engine too old"; it answers a `split` beside a `selection` as if the ask were not there, and a `split` inside a bare selection with 422 `unknown_field`, so a caller sends the ask beside the `selection` and only to 1.2 or later).
+- 1.2 is additive: a 1.0 or 1.1 engine's answers still validate against these files (no field became required, no enum value went away), and a body without the `split` ask is answered byte for byte as before on 1.2 too.
+- TandemApp's `proxy/engineapi.py` (`SPEAKS` 1.2) reads it for an engine of kind `tandemllm`. Another major is not ok: "this engine speaks engine API 2.0; TandemApp 0.15.0 needs 1.x". TandemNode's engine view then says `unhealthy` with that text in `health.api_why`; a deployment member on that engine is `down` with it and takes no request, not as a fallback and not for a model no record names (a derived Single's or a routing rule's: 503 `no_member`); a deployment's start fails at once with it (`start_failed`).
 - Not read here yet: chatd's own engine (SRV-735) and backends the controller reaches directly (SRV-749).
 
 ## Routes
@@ -37,7 +40,9 @@ These files are the truth for what TandemApp (`app/`: the dashboard, the control
 
 ### 2. Health and metrics
 
-The full answer goes to a loopback caller without proxy headers (TandemNode on its box) or a caller with the token: `status_port`, `version`, `model`, `base_model`, `weights.name`, `uptime_s`, `max_len`, `default_max_tokens`, `memory`, `parallel`, `engine_api`. `status` is `ok`, `busy`, `draining` (503) or `failed` (500, a GPU context that no longer answers). The setup-mode answer: `mode` setup, `status_port`, `assistant`, `engine_api`. `/metrics` is the `qse_*` families of `tandemapp/METRICS.md`.
+The full answer goes to a loopback caller without proxy headers (TandemNode on its box) or a caller with the token: `status_port`, `version`, `model`, `base_model`, `weights.name`, `uptime_s`, `max_len`, `default_max_tokens`, `memory`, `parallel`, `engine_api`. `status` is `ok`, `busy`, `draining` (503) or `failed` (500, a GPU context that no longer answers); a tail stage says `degraded` (200) while its link is down (since 1.2). The setup-mode answer: `mode` setup, `status_port`, `assistant`, `engine_api`. `/metrics` is the `qse_*` families of `tandemapp/METRICS.md`.
+
+**The `stage` block (since 1.2, optional).** Only a stage process of a split model has it (`health.schema.json` `stage`, `docs/server.md` "The stage block"); any other engine has no `stage` key. Shape 1, every field always present: `shape`, `role` (`front` or `tail`), `lo`, `hi`, `range` (`LO:HI`), `layers`, `cut`, `identity` (16 hex digits, null on the tail before its first link), `options` (the stage's limits: `slots`, `caches`, ...), `link` (`state` up or down, `epoch`, `reason` null while up, `transport`, `bytes`, `peer` with the other stage's `role`, `lo`, `hi`, `identity`); the front adds `steps`, and with caches on both add `state` (live counters). A later field is optional. Nothing in it is measured. The tail is a full engine (its `/health` has `engine_api`); the front runs a small server of its own that answers `/health` with `status`, `stage`, `model` and `uptime_s` only, and 409 `stage_front` on every other route. The front has no `engine_api`: a caller reads its block by its presence, and the link's handshake refuses a front of other code (`refused (code)`), so a front linked to a tail on 1.2 runs the same code. A deployment's checks: both `link.state` up, the same `link.epoch`, each side's `link.peer.identity` the other's `identity`, `front.hi == tail.lo`, `tail.hi == layers`, equal `options.slots` and `options.caches`.
 
 | route | TandemApp's use | shape |
 |-|-|-|
@@ -77,6 +82,8 @@ The full answer goes to a loopback caller without proxy headers (TandemNode on i
 ### 6. Setup Guide 1.0
 
 The dashboard builds these from its base `/v1/setup` (or a node's `/v1/fleet/nodes/{id}/setup`, which TandemNode relays); `proxy/fleetsetup.py` and `proxy/nodeagent.py` relay `/v1/setup/<sub>` as it is (`relay:/v1/setup/`). The field shapes are the engine's `docs/setup.md`.
+
+**The estimate's `split` (since 1.2, optional).** `POST /v1/setup/estimate` takes a `split` ask beside the `selection` (or inside a bare selection; `true` is every default): `cuts`, `caches`, `side_window`, `table`, `snapshots_gb`, `front_cache_gb`, `tail_disk_gb`, each optional (`setup/split.schema.json` `$defs.ask`). The answer then carries a `split` block: `splittable` false with a `reason` (`family`, `pack`, `cuts`, `caches`, `slots`) and a `message`, never an HTTP error; or `splittable` true with each cut's `front` and `tail` memory by part (each part's `basis`: `pack_headers`, `config`, `ask`, `registry`, `setting`, `registry_whole_model`), the carry a row, where the n-gram table sits, a side slot's cost, each side's disk, `fits`, `headroom_gb` and `best_cut`. Every number is computed (`computed: true`) except the `measured` list, which is what a split of the family was measured to cost on a GPU, with dates (informational). `fits` and `best_cut` assume two boxes of the answering box's preset; a planner with two different boxes compares `front.gb` and `tail.gb` with each node's own `budget_gb`, asked of that node's own engine. A node without the pack answers `reason: pack`. An invalid ask is 422 `invalid_split` (`error.errors[].field` `split.<field>`). A body without `split` (or `"split": null` beside a selection) is answered exactly as before.
 
 | route | TandemApp's use | shape |
 |-|-|-|
@@ -129,14 +136,14 @@ The same paths on the status responder's port, answered while the engine is away
 - Request headers: `X-Tandem` (`raw` or `shadow`; nothing on a headless engine), `X-Tandem-Profile`, `X-Tandem-Relay-Id`, `X-Tandem-User`, `X-QSE-Client`, `x-session-id`, `X-Tandem-Cost`, `X-Tandem-Parent-Session`, `X-Tandem-Worker`, `X-Tandem-Memory`.
 - Response fields: `usage.prompt_tokens_details.cached_tokens`, `usage.completion_tokens_details.reasoning_tokens`, `timings`, `tandem`.
 - `Retry-After` on 429 and 503.
-- Error types beside OpenAI's: `engine_failed` (the GPU context failed) and `setup_mode` (a setup-mode server serves no model).
+- Error types beside OpenAI's: `engine_failed` (the GPU context failed) and `setup_mode` (a setup-mode server serves no model). Since 1.2: `invalid_split` (422, the estimate's `split` ask), and on a split model `stage_down` (503 with `Retry-After: 5`, the tail while its link is down), `stage_text_only` (400, images to a split model) and `stage_front` (409, any route but `/health` on the front).
 - `GET /v1/dashboard/parallel`: `lanes[].relay_id` echoes the request's `X-Tandem-Relay-Id`.
 
 ## TandemNode's control (not HTTP)
 
 - A loopback caller without proxy headers is trusted and gets the full `/health`.
 - `run/ops/serve.env` carries `PORT=` (`node/serve.env.example`); `nodeengines.default_engine` reads it.
-- `bin/tandem start|stop|restart`; exit 0 is done (`node/control.json`).
+- `bin/tandem start|stop|restart`; exit 0 is done (`node/control.json`). On a stage (since 1.2) `bin/tandem status` adds `[tandem] stage: the <role>, layers <LO:HI>, link <state> (epoch <n>)`, and a stage's settings are the `run/local.env` keys of `node/control.json` `stage`: start the front, wait for its `/health` (600 s), then the tail (600 s); stop the tail, then the front.
 - `install.sh --dir --ref --runtime-only --yes`. The controller holds the script and its ref: `TANDEM_ENGINE_INSTALL_SH` and `Package.engine_ref()` (`proxy/nodeinstall.py`).
 - A pack's `<weights dir>/_hub_manifest.json` (`node/hub_manifest.example.json`); `proxy/nodeweights.py` reads its sizes and sha256 for a content id.
 - The agent never imports engine code and never runs `python -m server.*`. `app/tests/test_import_boundary.py` enforces this.
@@ -232,9 +239,11 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 - `app/tests/test_engine_api_contract.py` (TandemApp, standard library): routes.json is well formed and its version is `proxy.engineapi.SPEAKS`; every engine path literal in the Python callers and in `dashboard/src` falls in exactly one list (a `${...}` is `{param}`, the query is dropped, a base matches as a prefix, all of it when text follows a `{param}`); every route is used by a file or a relay; `nodeengines.RELAY` is in the routes; the version cases, `nodeengines.health` against fake engines, the health example against its schema, and the node fixtures read by `nodeengines.default_engine` and `nodeweights`.
 - `app/tests/test_node_agent.py` and `app/tests/test_deployments.py`: an engine on engine API 2.0 is `unhealthy` and names 1.x, its member is `down` and takes no request, a start fails within seconds; 1.4 and a missing field work.
 - `tests/test_engine_api_contract.py` (the engine, no torch): every route is dispatched, the version is one, `reverse-deps.json` is the AST inventory, the copies hold equal, the fixtures match the engine's files.
+- `tests/test_stage_contract.py` and `tests/test_split_estimate.py` (the engine, CPU): both stages' real `/health` answers validate against `health.schema.json`, and the split blocks the engine computes (splittable and each not-splittable reason) against `setup/split.schema.json`.
 - `tests/test_engine_api_live.py` (CPU torch): `server/app.py --fake-engine` without a built dashboard answers `/health` with `engine_api` and every live GET route with 200; once more from a copy of the tree without `app/dashboard`.
 
 ## Changes
 
+- v1.2: the optional `split` ask and block of `POST /v1/setup/estimate`, the optional `stage` block of `/health` and the tail's `degraded` status, the error types `invalid_split`, `stage_down`, `stage_text_only`, `stage_front`, and `node/control.json` `stage` (SRV-817). Additive: 1.0 and 1.1 engines stay valid.
 - v1.1: `GET /v1/replica/identity` (SRV-741). TandemApp reads it through TandemNode's relay for a Replicas member whose engine says 1.1 or later, and sends the cache routes and `/v1/tokenize` to a Replicas member (SRV-741, no change to the engine API).
 - v1.0, first version (SRV-747).

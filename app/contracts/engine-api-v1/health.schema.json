@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://qwen38-spark-engine/contract/engine-api-v1/health.schema.json",
   "title": "GET /health (aliases /healthz, /v1/health): the engine's and its status responder's",
-  "description": "The open answer (a proxied caller without the token) is {status} alone. The full answer (a loopback caller without proxy headers, or the token) adds the configuration; the setup-mode answer says mode setup; the status responder (QSE_STATUS_PORT) answers 503 with its state and the facts under engine. engine_api is MAJOR.MINOR; a missing one means 1.0. Further fields may appear: additionalProperties is true.",
+  "description": "The open answer (a proxied caller without the token) is {status} alone. The full answer (a loopback caller without proxy headers, or the token) adds the configuration; the setup-mode answer says mode setup; the status responder (QSE_STATUS_PORT) answers 503 with its state and the facts under engine. engine_api is MAJOR.MINOR; a missing one means 1.0. Since 1.2 a stage process of a split model adds the optional stage block; a front stage's own small server answers status, stage, model and uptime_s only. Further fields may appear: additionalProperties is true.",
   "type": "object",
   "required": [
     "status"
@@ -16,6 +16,7 @@
         "busy",
         "draining",
         "failed",
+        "degraded",
         "starting",
         "up",
         "held",
@@ -23,7 +24,7 @@
         "down",
         "not_answering"
       ],
-      "description": "the engine: ok, busy, draining (503) or failed (500, a GPU context that no longer answers); the status responder: the engine's state from the status file"
+      "description": "the engine: ok, busy, draining (503) or failed (500, a GPU context that no longer answers); a tail stage: degraded (200) while its link is down (since 1.2); the status responder: the engine's state from the status file"
     },
     "engine_api": {
       "type": "string",
@@ -128,6 +129,173 @@
       "type": "object",
       "additionalProperties": true,
       "description": "the status responder: the engine's facts (state, since, reason, expected_s)"
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Since engine API 1.2, optional: present only on a stage process of a split model (docs/server.md \"The stage block\"); a server that is not a stage has no stage key. Shape 1: every field below but steps and state is always present; a field added later is optional. None of it is measured; state holds live counters.",
+      "required": [
+        "shape",
+        "role",
+        "lo",
+        "hi",
+        "range",
+        "layers",
+        "cut",
+        "identity",
+        "options",
+        "link"
+      ],
+      "properties": {
+        "shape": {
+          "type": "integer",
+          "description": "the block's shape: 1"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "front",
+            "tail"
+          ]
+        },
+        "lo": {
+          "type": "integer"
+        },
+        "hi": {
+          "type": "integer",
+          "description": "the layers [lo, hi)"
+        },
+        "range": {
+          "type": "string",
+          "description": "LO:HI"
+        },
+        "layers": {
+          "type": "integer",
+          "description": "the model's layers"
+        },
+        "cut": {
+          "type": "integer",
+          "description": "hi on the front, lo on the tail"
+        },
+        "identity": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "this stage's handshake identity by content, 16 hex digits; null on the tail before its first link"
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "the limits the stage serves with: slots, caches, graphs, kv_cache, images, prefill_chunk, max_len, carry, table, ple_layers; with caches on snapshots_gb, cache_dir (set or none), cache_dir_gb, joint_round; LFM2 MoE: slots, graphs, caches, kv_cache, prefill_chunk, verify_rows_max, attention_chunk, max_len, carry",
+          "properties": {
+            "slots": {
+              "type": "integer"
+            },
+            "caches": {
+              "type": "string",
+              "enum": [
+                "on",
+                "off"
+              ]
+            }
+          }
+        },
+        "link": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "state",
+            "epoch",
+            "reason",
+            "transport",
+            "bytes",
+            "peer"
+          ],
+          "properties": {
+            "state": {
+              "type": "string",
+              "enum": [
+                "up",
+                "down"
+              ]
+            },
+            "epoch": {
+              "type": "integer",
+              "description": "0 before the first link; +1 each link"
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "null while up; down: no peer yet, refused (<reason>) with auth, version, code, weights, family, layers, stage, caches or slots, timeout, closed, peer closed, stage error, ..."
+            },
+            "transport": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "tcp; null before the first link"
+            },
+            "bytes": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true,
+              "description": "tx, rx of the current link; null before the first",
+              "properties": {
+                "tx": {
+                  "type": "integer"
+                },
+                "rx": {
+                  "type": "integer"
+                }
+              }
+            },
+            "peer": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true,
+              "description": "the other stage of the last link; null before the first link",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "front",
+                    "tail"
+                  ]
+                },
+                "lo": {
+                  "type": "integer"
+                },
+                "hi": {
+                  "type": "integer"
+                },
+                "identity": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "equals the other stage's own identity"
+                }
+              }
+            }
+          }
+        },
+        "steps": {
+          "type": "integer",
+          "description": "the front: carries sent"
+        },
+        "state": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "with caches on only: live counters, the tail's (chunks, steps, trees, rounds, round_blocks, round_max, snapshots, restore_hits, restore_misses, quiet_steps, drops, marks, rebuilds, replays, slots) or the front's (snapshots, restores, restore_misses, quiet_steps, rounds, slots: each slot's store report)"
+        }
+      }
     }
   }
 }

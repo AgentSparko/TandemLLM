@@ -6,7 +6,8 @@ The test matrix:
   1  `/health`'s stage block has every field of its documented shape on both stages, before a link and
      with one: `shape`, `role`, `lo`, `hi`, `range`, `layers`, `cut`, `identity`, `options`, `link`
      (`state`, `epoch`, `reason`, `transport`, `bytes`, `peer`); each side's `link.peer.identity` is the
-     other's `identity`; a server that is not a stage adds nothing to `/health`
+     other's `identity`; a server that is not a stage adds nothing to `/health`; both stages' answers
+     validate against the engine API contract's `health.schema.json` (1.2)
                                                          test_the_health_stage_block_has_its_shape
   2  the identity block names `slots` and `caches` only when they are not the defaults, so a default
      stage's block is the one it was; the link compares them: another caches setting refuses it with
@@ -44,6 +45,13 @@ from server import stage  # noqa: E402
 from test_stage_server import KEY, _args, _free_port, _http, _keyfile, _refused, _tmp  # noqa: E402
 
 SHAPE = {"shape", "role", "lo", "hi", "range", "layers", "cut", "identity", "options", "link"}
+#: the engine API contract (app/contracts/engine-api-v1): the stage block is part of its /health schema
+CONTRACT = os.path.join(ROOT, "app", "contracts", "engine-api-v1")
+
+
+def _contract_health(doc: dict) -> list:
+    from tools import contract_check
+    return contract_check.validate(doc, contract_check.load("health", CONTRACT), root=CONTRACT)
 LINK = {"state", "epoch", "reason", "transport", "bytes", "peer"}
 
 
@@ -108,6 +116,7 @@ def test_the_health_stage_block_has_its_shape():
     assert (f["shape"], f["role"], f["range"], f["cut"], f["layers"]) == (1, "front", "0:2", 2, 4), f
     assert f["link"]["state"] == "down" and f["link"]["peer"] is None and f["link"]["reason"] == "no peer yet", f
     assert f["link"]["transport"] is None and f["link"]["bytes"] is None and len(f["identity"]) == 16, f
+    assert not _contract_health(body), _contract_health(body)
     state, tail = _tail(key, link_port)
     tick = tail.fake_tail()
     tick([5, 6, 7])
@@ -120,6 +129,8 @@ def test_the_health_stage_block_has_its_shape():
     assert t["link"]["peer"] == {"role": "front", "lo": 0, "hi": 2, "identity": f["identity"]}, (t, f)
     assert f["link"]["peer"] == {"role": "tail", "lo": 2, "hi": 4, "identity": t["identity"]}, (t, f)
     assert t["identity"] == stage.identity_digest(tail._ident) != f["identity"]
+    full = {"status": "ok", **stage.health(state, "ok")}
+    assert not _contract_health(body) and not _contract_health(full), (_contract_health(body), _contract_health(full))
     # a server that is not a stage: /health gains no key
     assert stage.health({}, "ok") == {} and stage.health({}, "draining") == {}
     assert KEY not in json.dumps(t) + json.dumps(f)

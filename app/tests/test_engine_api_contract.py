@@ -15,11 +15,16 @@ callers. The engine's side is the repository's tests/test_engine_api_contract.py
                                                                   test_every_literal_is_classified
   3  every route is used: a file of its used_by holds a literal for it, or a relay prefix
      covers it; nodeengines.RELAY is in the routes               test_every_route_is_used
-  4  the version: a missing field reads 1.0 (assumed, ok), 1.0, 1.1 and 1.4 are ok, 2.0 is not
-     and names 1.x, a value not in the plain MAJOR.MINOR form is not ok and its reason quotes
+  4  the version: a missing field reads 1.0 (assumed, ok), 1.0, 1.1, 1.2 and 1.4 are ok, 2.0 is
+     not and names 1.x, a value not in the plain MAJOR.MINOR form is not ok and its reason quotes
      it, another kind is not read; nodeengines.health against fake engines that say nothing,
-     1.0, 1.1, 1.4, 2.0 and garbage; the health example validates   test_versions
-  5  the node fixtures: nodeengines.default_engine reads node/serve.env.example's port and builds
+     1.0, 1.1, 1.2, 1.4, 2.0 and garbage; the health example validates   test_versions
+  5  1.2 is additive: the health answers of a 1.0 and a 1.1 engine (no stage block) still
+     validate, and so do the two stages' examples with the stage block and the tail's degraded;
+     a stage block missing a field or with another role does not; the split examples (a request
+     and a block the engine computed) validate, a not-splittable block per reason validates, an
+     unknown ask field or reason does not; control.json's stage keys    test_additive_1_2
+  6  the node fixtures: nodeengines.default_engine reads node/serve.env.example's port and builds
      node/control.json's verbs; nodeweights reads a folder laid out as
      node/hub_manifest.example.json says (files_of, the sha256 per file, the content id)
                                                                   test_node_fixtures
@@ -425,7 +430,7 @@ def test_versions():
         {"engine_api": "1.4", "assumed": False, "ok": True, "why": None}
     # an engine one minor behind (1.0, no identity route) and one on this minor are both ok
     assert engineapi.ASSUMED == "1.0" and engineapi.SPEAKS != "1.0"
-    for said in ("1.0", engineapi.SPEAKS):
+    for said in ("1.0", "1.1", engineapi.SPEAKS):
         assert engineapi.read({"status": "ok", "engine_api": said}, "tandemllm") == \
             {"engine_api": said, "assumed": False, "ok": True, "why": None}, said
     assert engineapi.read({"engine_api": "2.0"}, "tandemllm") == \
@@ -446,6 +451,7 @@ def test_versions():
     fakes = {"unsaid": FakeEngine({"status": "ok", "version": "0.15.0"}),
              "v10": FakeEngine({"status": "ok", "engine_api": "1.0"}),
              "v11": FakeEngine({"status": "ok", "engine_api": "1.1"}),
+             "v12": FakeEngine({"status": "ok", "engine_api": "1.2"}),
              "v14": FakeEngine({"status": "ok", "engine_api": "1.4"}),
              "v20": FakeEngine({"status": "ok", "engine_api": "2.0"}),
              "garbage": FakeEngine(raw=b"<html>not json</html>"),
@@ -458,7 +464,8 @@ def test_versions():
                                                       "kind": "generic"}, logs)])
         view = {v["id"]: v for v in es.view()}
         want = {"unsaid": ("up", "1.0", True, True, None), "v10": ("up", "1.0", False, True, None),
-                "v11": ("up", "1.1", False, True, None), "v14": ("up", "1.4", False, True, None),
+                "v11": ("up", "1.1", False, True, None), "v12": ("up", "1.2", False, True, None),
+                "v14": ("up", "1.4", False, True, None),
                 "v20": ("unhealthy", "2.0", False, False, why),
                 "garbage": ("unhealthy", "1.0", True, True, None),      # no status: not up
                 "setup": ("up", "1.0", False, True, None),
@@ -482,7 +489,63 @@ def test_versions():
         for f in fakes.values():
             f.close()
         shutil.rmtree(logs, ignore_errors=True)
-    return f"read: 1.0 assumed, 1.0, 1.1 and 1.4 ok, 2.0 names 1.x; {len(want)} engines viewed"
+    return f"read: 1.0 assumed, 1.0, 1.1, 1.2 and 1.4 ok, 2.0 names 1.x; {len(want)} engines viewed"
+
+
+def _ex(name: str):
+    with open(os.path.join(CONTRACT, name)) as f:
+        return json.load(f)
+
+
+def test_additive_1_2():
+    health = contract_check.load("health", CONTRACT)
+    split = {"$ref": "setup/split.schema.json"}
+    ask = {"$ref": "setup/split.schema.json#/$defs/ask"}
+
+    def ok(doc, schema):
+        return not contract_check.validate(doc, schema, root=CONTRACT)
+
+    # a 1.0 and a 1.1 engine's full answers (no stage block, no degraded) still validate
+    old = _ex("health.example.json")
+    for said in ("1.0", "1.1"):
+        assert ok(dict(old, engine_api=said), health), said
+    assert ok({"status": "ok"}, health) and "stage" not in old
+    # the two stages: the front's small server and the tail's full answer, the tail degraded
+    front, tail = _ex("health.stage-front.example.json"), _ex("health.stage-tail.example.json")
+    assert ok(front, health) and ok(tail, health)
+    assert "engine_api" not in front and tail["engine_api"] == engineapi.SPEAKS
+    assert tail["status"] == "degraded" and engineapi.read(tail, "tandemllm")["ok"]
+    f, t = front["stage"], tail["stage"]
+    assert (f["role"], t["role"], f["shape"], t["shape"]) == ("front", "tail", 1, 1)
+    assert f["hi"] == t["lo"] == f["cut"] == t["cut"] and t["hi"] == t["layers"]
+    assert f["link"]["peer"]["identity"] == t["identity"] and t["link"]["peer"]["identity"] == f["identity"]
+    for key in ("shape", "role", "range", "identity", "options", "link"):
+        bad = dict(tail, stage={k: v for k, v in t.items() if k != key})
+        assert not ok(bad, health), key
+    assert not ok(dict(tail, stage=dict(t, role="middle")), health)
+    assert not ok(dict(tail, stage=dict(t, link={k: v for k, v in t["link"].items() if k != "epoch"})), health)
+    assert not ok(dict(tail, status="sideways"), health)
+    # the estimate's split: the request, the engine's block from a real pack, each not-splittable reason
+    req, block = _ex("setup/split-request.example.json"), _ex("setup/split.example.json")
+    assert ok(req, {"$ref": "setup/split.schema.json#/$defs/request"}) and ok(req["split"], ask)
+    assert ok(True, ask) and ok({}, ask)
+    assert not ok({"cut": 12}, ask) and not ok({"caches": "maybe"}, ask)
+    assert ok(block, split) and block["splittable"] is True and block["computed"] is True
+    assert block["best_cut"] in [c["cut"] for c in block["candidates"]] and block["measured"]
+    for c in block["candidates"]:
+        for s in ("front", "tail"):
+            assert abs(c[s]["gb"] - sum(p["gb"] for p in c[s]["parts"])) <= 0.01 * len(c[s]["parts"]), c[s]
+    for reason in ("family", "pack", "cuts", "caches", "slots"):
+        assert ok({"version": "1.0", "splittable": False, "reason": reason, "message": "m"}, split), reason
+    assert not ok({"version": "1.0", "splittable": False, "reason": "size", "message": "m"}, split)
+    assert not ok({"version": "1.0", "splittable": True}, split)
+    assert not ok(dict(block, computed=False), split)
+    # node/control.json: the keys a stage's run/local.env takes
+    with open(os.path.join(CONTRACT, "node", "control.json")) as fh:
+        st = json.load(fh)["stage"]
+    assert {"TANDEM_STAGE", "TANDEM_LINK_KEY", "TANDEM_STAGE_CACHES"} <= set(st["keys"])
+    assert (st["start_order"], st["stop_order"]) == (["front", "tail"], ["tail", "front"])
+    return f"1.0 and 1.1 answers valid, both stages, {len(block['candidates'])} cuts, 5 reasons"
 
 
 # ---------------------------------------------------------------------------- the node fixtures
