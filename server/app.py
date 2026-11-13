@@ -71,20 +71,20 @@ from server.api import thinking as thinking_mod  # noqa: E402
 from engine import grammar as grammar_mod  # noqa: E402
 from engine.models.adapter import ServeSpec  # noqa: E402  (ENG-406 what the family says about its model)
 from server import logprobs as lp_mod  # noqa: E402
-from tandemapp import metrics  # noqa: E402
-from tandemapp import usage as usage_mod  # noqa: E402
-from tandemapp import ledger as ledger_mod  # noqa: E402
+from server.api import metrics  # noqa: E402
+from server.api import usage as usage_mod  # noqa: E402
+from server.api import ledger as ledger_mod  # noqa: E402
 from server import endalign  # noqa: E402
 from server.api import argloop as argloop_mod  # noqa: E402
 from server import regenerate as regenerate_mod  # noqa: E402
 from server import skillcanon as skillcanon_mod  # noqa: E402
-from tandemapp import dashboard_api  # noqa: E402
-from tandemapp import live as live_mod  # noqa: E402
+from server.api import dashboard_api  # noqa: E402
+from server.api import live as live_mod  # noqa: E402
 from engine.methods import busy as _busy  # noqa: E402  (SPD-249 the round runner's GPU-wait windows)
-from tandemapp import parallel as parallel_mod  # noqa: E402
-from tandemapp import activity as activity_mod  # noqa: E402
-from tandemapp import logbuf  # noqa: E402
-from tandemapp import auth as auth_mod  # noqa: E402
+from server.api import parallel as parallel_mod  # noqa: E402
+from server.api import activity as activity_mod  # noqa: E402
+from server.api import logbuf  # noqa: E402
+from server.api import auth as auth_mod  # noqa: E402
 from tandemapp import static  # noqa: E402
 from server import images as images_mod  # noqa: E402
 from server import memlimits  # noqa: E402
@@ -132,9 +132,8 @@ from tandemapp.conductor.schema import SIDE_FIRST_MAX_TOKENS  # noqa: E402
 
 from server import slots as slots_mod  # noqa: E402
 
-# SRV-747: TandemApp's live view and GPU gauges run in this process until ENG-413 but never import
-# the engine; the engine hands them the round runner's GPU-wait windows, the allocator's counters
-# and the capture guard
+# The live view and the GPU gauges (server/api, which imports nothing of the engine) get the round
+# runner's GPU-wait windows, the allocator's counters and the capture guard from here
 live_mod.busy = _busy
 metrics.ENGINE_HOOKS.update(cuda_stats=cache.cuda_stats, capture_lock=capture_lock)
 
@@ -1817,7 +1816,7 @@ def _par_side_need(body, client, left_out, max_new, plan, images, lane_kind,
 
 def _queue_why(pool, why: dict, side_need, waited: float, me: dict) -> str:
     """0.8.2: why a queued request waits, in words, for the Lanes view's queued line
-    (app/tandemapp/parallel.py; it said only "Queued" for 6 min 25 s while two side slots were free):
+    (server/api/parallel.py; it said only "Queued" for 6 min 25 s while two side slots were free):
     the slot it waits for and for how long, or what holds slot 0 (`_wait_reason`)."""
     if pool is None:
         return _wait_reason(me)[0]
@@ -7821,7 +7820,7 @@ def _chunk(cid: str, model: str, created: int, delta: dict, finish=None, usage=N
         body["usage"] = usage
     if extra:
         # `usage`, `timings` and `metrics` of the whole request, on the ONE chunk of the
-        # stream that carries them -- see app/tandemapp/usage.py's `placement`.
+        # stream that carries them -- see server/api/usage.py's `placement`.
         body.update(extra)
     if error is not None:
         # Not in the OpenAI schema, and deliberately alongside a real `finish_reason` rather than
@@ -8439,11 +8438,11 @@ def _proxy_backends() -> list | None:
 
 
 # The framing -- BodyError, the body cap, the Content-Length spine, the chunked parser --
-# lives in app/tandemapp/http_body.py, stdlib-only, shared with app/proxy/app.py: the two servers
-# carried it line for line and a fix had to land twice. The cap stays a per-request
+# lives in server/api/http_body.py, stdlib-only; TandemApp's proxy keeps its own copy (ENG-413 WP2b).
+# The two servers had carried it line for line and a fix had to land twice. The cap stays a per-request
 # lookup through the module global (QSE_MAX_BODY_MB at import), and the answer is
 # written with the body either read to its end or the connection closed.
-from tandemapp import http_body  # noqa: E402  (SRV-747: shared with TandemApp's proxy)
+from server.api import http_body  # noqa: E402  (ENG-413 WP2b: the engine's copy)
 
 BodyError = http_body.BodyError
 
@@ -8625,7 +8624,7 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
 
     def _read_body(self) -> bytes:
-        """The request's body, consumed whole or not at all -- app/tandemapp/http_body.py owns
+        """The request's body, consumed whole or not at all -- server/api/http_body.py owns
         the framing, shared with proxy/app.py. An answer written with the body still
         unread is a desync one request away: every path out of here has read to the end
         of the framing, and BodyError (or handle_one_request) closes the connection."""
@@ -8650,7 +8649,7 @@ class Handler(BaseHTTPRequestHandler):
         return (self.client_address or ("",))[0]
 
     def _allowed(self, route: str) -> bool:
-        """The route's policy (app/tandemapp/auth.py); on a refusal the answer is already written."""
+        """The route's policy (server/api/auth.py); on a refusal the answer is already written."""
         verdict = _auth().decide(route, self._peer(), self.headers)
         if verdict == "ok":
             return True
@@ -8779,7 +8778,7 @@ class Handler(BaseHTTPRequestHandler):
             except dashboard_api.ApiError as exc:
                 return self._json(exc.status, exc.body())
         if path == "/v1/dashboard/parallel":
-            # every request in flight, the engine's and the relayed ones (app/tandemapp/parallel.py)
+            # every request in flight, the engine's and the relayed ones (server/api/parallel.py)
             live_registry()
             try:
                 since = float(q["since"]) if q.get("since") else None
@@ -9627,7 +9626,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/metrics":
             # Prometheus, in its own text format. Everything it reports is collected in
-            # app/tandemapp/metrics.py, which wraps this module rather than editing it; see its header.
+            # server/api/metrics.py, which wraps this module rather than editing it; see its header.
             if not self._allowed("metrics"):
                 return
             return metrics.serve(self)
@@ -10110,7 +10109,7 @@ class Handler(BaseHTTPRequestHandler):
             par = self.headers.get(ledger_mod.PARENT_HEADER)
             rec.parent_request = par[:80] if isinstance(par, str) and par else None
         rec.user = getattr(self, "_proxy_user", None)       # the proxy key's label (--backends)
-        # a proxy in front of this engine names its own lane for the request (app/tandemapp/parallel.py)
+        # a proxy in front of this engine names its own lane for the request (server/api/parallel.py)
         rid = self.headers.get("X-Tandem-Relay-Id")
         rec.relay_id = rid[:64] if isinstance(rid, str) and rid else None
         # what the live view links and watches -- the conversation (opencode sends its
@@ -10805,7 +10804,7 @@ class Handler(BaseHTTPRequestHandler):
             if not got and par is not None and par.burst is not None:
                 par.burst.settle(getattr(self, "_burst_tok", None))   # SPD-245: queued, not on its way
             while not got and not micro:
-                # 0.8.2: the Lanes view's queued line says why (app/tandemapp/parallel.py)
+                # 0.8.2: the Lanes view's queued line says why (server/api/parallel.py)
                 rec.queue_why = _queue_why(par, par_why, side_need, time.monotonic() - t_wait, me)
                 if new_wait:
                     # FX17: the side slot first, for SIDE_NEW_WAIT_S; then slot 0 as before

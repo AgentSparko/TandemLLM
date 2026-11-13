@@ -269,7 +269,7 @@ flowchart TB
 | caches | `engine/cache.py`, `engine/disk_cache.py`, `engine/spill.py`, `engine/kvpool.py` | [caches.md](caches.md) |
 | settings registry | `engine/settings.py` | [operations.md](operations.md) |
 | the server | `server/app.py`, `server/stream.py`, `server/api/toolcall.py` | [server.md](server.md) |
-| live activity, metrics, usage | `app/tandemapp/live.py`, `app/tandemapp/activity.py`, `app/tandemapp/metrics.py`, `app/tandemapp/ledger.py` | [dashboard.md](dashboard.md) |
+| live activity, metrics, usage | `server/api/live.py`, `server/api/activity.py`, `server/api/metrics.py`, `server/api/ledger.py` | [dashboard.md](dashboard.md) |
 | the dashboard | `app/dashboard/`, `app/contracts/dashboard-v1/` | [dashboard.md](dashboard.md) |
 | service scripts and gate | `ops/` | [operations.md](operations.md) |
 | measurement tools | `tools/row3.py`, `tools/block_ab.py`, `tools/verify_spec.py`; Flash-Next `tools/fn_*.py` | [measurement.md](measurement.md) |

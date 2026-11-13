@@ -393,7 +393,7 @@ class Run:
             plan += [model.strip()] * int(n or 1)
         for model in dict.fromkeys(plan):
             # two short answers per model first: the board checks that a backend's frames are
-            # tokens before it counts them live (app/tandemapp/parallel.py)
+            # tokens before it counts them live (server/api/parallel.py)
             for k in range(2 * a.warmup):
                 tool = k >= a.warmup          # then two that call a tool (checked on their own)
                 fake = model.startswith("fake")

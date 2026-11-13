@@ -110,6 +110,7 @@ rules:
       - 'engine/models/qwen3_5/round/**'
       - 'server/slots.py'
       - 'app/tandemapp/parallel.py'
+      - 'server/api/parallel.py'
       - 'server/preempt.py'
       - 'server/prefill_burst.py'
       - 'server/round_runner.py'

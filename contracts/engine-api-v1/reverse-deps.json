@@ -9,8 +9,6 @@
    "proxy.hostcollect",
    "proxy.route",
    "proxy.service:Service",
-   "tandemapp.activity",
-   "tandemapp.auth",
    "tandemapp.chat_forward",
    "tandemapp.compaction",
    "tandemapp.conductor.classify:USER_AGENT",
@@ -40,19 +38,11 @@
    "tandemapp.conductor.store:DEFAULT_ROOT",
    "tandemapp.conductor.store:Store",
    "tandemapp.conductor.voice",
-   "tandemapp.dashboard_api",
-   "tandemapp.http_body",
    "tandemapp.laya_api",
-   "tandemapp.ledger",
    "tandemapp.library_api",
-   "tandemapp.live",
-   "tandemapp.logbuf",
    "tandemapp.memblock",
-   "tandemapp.metrics",
-   "tandemapp.parallel",
    "tandemapp.session_tokens",
-   "tandemapp.static",
-   "tandemapp.usage"
+   "tandemapp.static"
   ],
   "server/conductor/inproc.py": [
    "tandemapp.conductor.narrator",
@@ -85,8 +75,7 @@
    "tandemapp.chat_forward"
   ],
   "server/probe.py": [
-   "tandemapp.conductor.transcripts:in_repository",
-   "tandemapp.ledger:next_local"
+   "tandemapp.conductor.transcripts:in_repository"
   ],
   "server/rolemem.py": [
    "tandemapp.conductor.schema"
@@ -105,9 +94,6 @@
   ],
   "server/setup/wren.py": [
    "tandemapp.conductor.schema"
-  ],
-  "server/setup_api.py": [
-   "tandemapp.dashboard_api"
   ],
   "tools/class_core_eval.py": [
    "tandemapp.conductor.classify:Qwen",
@@ -287,11 +273,7 @@
    ]
   },
   "tests/test_activity.py": {
-   "imports": [
-    "tandemapp.activity",
-    "tandemapp.live",
-    "tandemapp.usage"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -315,7 +297,9 @@
    "imports": [
     "tandemapp.conductor.schema"
    ],
-   "reads": []
+   "reads": [
+    "app/tandemapp"
+   ]
   },
   "tests/test_app_hook.py": {
    "imports": [],
@@ -336,29 +320,21 @@
    ]
   },
   "tests/test_auth.py": {
-   "imports": [
-    "tandemapp.auth",
-    "tandemapp.dashboard_api",
-    "tandemapp.logbuf",
-    "tandemapp.metrics"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_budget.py": {
    "imports": [
-    "tandemapp.conductor.schema",
-    "tandemapp.metrics"
+    "tandemapp.conductor.schema"
    ],
    "reads": [
     "app/"
    ]
   },
   "tests/test_cache_peek.py": {
-   "imports": [
-    "tandemapp.usage:RequestRecord"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -379,12 +355,9 @@
    ]
   },
   "tests/test_capture_lock.py": {
-   "imports": [
-    "tandemapp.metrics"
-   ],
+   "imports": [],
    "reads": [
-    "app/",
-    "app/tandemapp"
+    "app/"
    ]
   },
   "tests/test_cards.py": {
@@ -457,25 +430,20 @@
    ]
   },
   "tests/test_client_budgets.py": {
-   "imports": [
-    "tandemapp.logbuf"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_client_cached.py": {
-   "imports": [
-    "tandemapp.usage"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_compaction_continue.py": {
    "imports": [
-    "tandemapp.compaction",
-    "tandemapp.usage"
+    "tandemapp.compaction"
    ],
    "reads": [
     "app/"
@@ -508,18 +476,13 @@
   "tests/test_conductor_journal.py": {
    "imports": [
     "app/tests/test_live.py",
-    "tandemapp.activity",
     "tandemapp.conductor.decisions",
     "tandemapp.conductor.monitor.policy:CONTINUE_HIDDEN",
     "tandemapp.conductor.monitor:Action",
     "tandemapp.conductor.monitor:Journal",
     "tandemapp.conductor.monitor:Monitor",
     "tandemapp.conductor.monitor:RequestEvent",
-    "tandemapp.conductor.signals",
-    "tandemapp.dashboard_api",
-    "tandemapp.ledger",
-    "tandemapp.live",
-    "tandemapp.metrics"
+    "tandemapp.conductor.signals"
    ],
    "reads": [
     "app/",
@@ -580,11 +543,7 @@
   },
   "tests/test_dashboard_api.py": {
    "imports": [
-    "proxy.hostcollect",
-    "tandemapp.auth",
-    "tandemapp.dashboard_api",
-    "tandemapp.ledger",
-    "tandemapp.usage"
+    "proxy.hostcollect"
    ],
    "reads": [
     "app/"
@@ -592,7 +551,6 @@
   },
   "tests/test_decider_api.py": {
    "imports": [
-    "tandemapp.auth:Auth",
     "tandemapp.conductor.routes",
     "tandemapp.conductor.schema"
    ],
@@ -639,8 +597,7 @@
     "tandemapp.conductor.schema",
     "tandemapp.conductor.shipped",
     "tandemapp.conductor.signals",
-    "tandemapp.conductor.store:Store",
-    "tandemapp.metrics"
+    "tandemapp.conductor.store:Store"
    ],
    "reads": [
     "app/",
@@ -650,8 +607,7 @@
   "tests/test_disk_cache_server.py": {
    "imports": [
     "tandemapp.conductor.routes",
-    "tandemapp.conductor.schema",
-    "tandemapp.metrics"
+    "tandemapp.conductor.schema"
    ],
    "reads": [
     "app/",
@@ -685,9 +641,7 @@
    ]
   },
   "tests/test_engine_api_contract.py": {
-   "imports": [
-    "tandemapp.metrics"
-   ],
+   "imports": [],
    "reads": [
     "app/",
     "app/contracts",
@@ -758,12 +712,6 @@
     "app/"
    ]
   },
-  "tests/test_floor_wait.py": {
-   "imports": [
-    "tandemapp.usage"
-   ],
-   "reads": []
-  },
   "tests/test_gate_map.py": {
    "imports": [],
    "reads": [
@@ -801,9 +749,7 @@
    ]
   },
   "tests/test_images.py": {
-   "imports": [
-    "tandemapp.activity"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -843,12 +789,7 @@
    ]
   },
   "tests/test_kvpool_admission.py": {
-   "imports": [
-    "tandemapp.activity",
-    "tandemapp.auth",
-    "tandemapp.parallel",
-    "tandemapp.usage"
-   ],
+   "imports": [],
    "reads": [
     "app/",
     "app/contracts"
@@ -871,7 +812,15 @@
    ]
   },
   "tests/test_ledger.py": {
+   "imports": [],
+   "reads": [
+    "app/"
+   ]
+  },
+  "tests/test_ledger_owners.py": {
    "imports": [
+    "tandemapp.conductor.decisions",
+    "tandemapp.conductor.signals",
     "tandemapp.ledger",
     "tandemapp.usage"
    ],
@@ -914,25 +863,17 @@
    ]
   },
   "tests/test_live_app.py": {
-   "imports": [
-    "tandemapp.auth",
-    "tandemapp.live"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_live_rates.py": {
    "imports": [
-    "app/tests/test_live.py",
-    "tandemapp.activity",
-    "tandemapp.live",
-    "tandemapp.metrics",
-    "tandemapp.usage"
+    "app/tests/test_live.py"
    ],
    "reads": [
     "app/",
-    "app/tandemapp",
     "app/tests"
    ]
   },
@@ -944,10 +885,7 @@
    ]
   },
   "tests/test_logbuf.py": {
-   "imports": [
-    "tandemapp.auth",
-    "tandemapp.logbuf"
-   ],
+   "imports": [],
    "reads": [
     "app/",
     "app/dashboard"
@@ -1018,9 +956,7 @@
   },
   "tests/test_memory_wait.py": {
    "imports": [
-    "tandemapp.activity",
-    "tandemapp.compaction",
-    "tandemapp.usage"
+    "tandemapp.compaction"
    ],
    "reads": [
     "app/contracts"
@@ -1051,26 +987,19 @@
    ]
   },
   "tests/test_metrics.py": {
-   "imports": [
-    "tandemapp.metrics"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_metrics_app.py": {
-   "imports": [
-    "tandemapp.auth",
-    "tandemapp.metrics"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_monitoring.py": {
-   "imports": [
-    "tandemapp.metrics"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1155,12 +1084,6 @@
     "app/tools"
    ]
   },
-  "tests/test_own_eta_solo.py": {
-   "imports": [
-    "tandemapp.usage"
-   ],
-   "reads": []
-  },
   "tests/test_owui_status.py": {
    "imports": [
     "tandemapp.conductor.states"
@@ -1225,9 +1148,7 @@
    ]
   },
   "tests/test_probe_train.py": {
-   "imports": [
-    "tandemapp.ledger:CONDUCTOR_DDL"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1256,10 +1177,7 @@
    "imports": [
     "tandemapp.conductor.classify",
     "tandemapp.conductor.states",
-    "tandemapp.conductor.voice",
-    "tandemapp.ledger",
-    "tandemapp.usage",
-    "tandemapp.usage:RequestRecord"
+    "tandemapp.conductor.voice"
    ],
    "reads": [
     "app/"
@@ -1272,9 +1190,7 @@
    ]
   },
   "tests/test_regenerate.py": {
-   "imports": [
-    "tandemapp.dashboard_api"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1334,11 +1250,7 @@
     "tandemapp.conductor.classify:Answer",
     "tandemapp.conductor.classify:distribution",
     "tandemapp.conductor.router:_code_guard",
-    "tandemapp.conductor.schema",
-    "tandemapp.dashboard_api",
-    "tandemapp.ledger",
-    "tandemapp.live",
-    "tandemapp.usage"
+    "tandemapp.conductor.schema"
    ],
    "reads": [
     "app/",
@@ -1453,33 +1365,25 @@
    ]
   },
   "tests/test_setup_api.py": {
-   "imports": [
-    "tandemapp.auth"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_setup_apply.py": {
-   "imports": [
-    "tandemapp.auth"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_setup_job_stream.py": {
-   "imports": [
-    "tandemapp.auth"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_setup_mode.py": {
-   "imports": [
-    "tandemapp.auth"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1492,41 +1396,31 @@
    ]
   },
   "tests/test_setup_remove.py": {
-   "imports": [
-    "tandemapp.auth"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_setup_reset.py": {
-   "imports": [
-    "tandemapp.auth"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_setup_reset_job_lock.py": {
-   "imports": [
-    "tandemapp.auth"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_setup_retry.py": {
-   "imports": [
-    "tandemapp.auth"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_setup_wren.py": {
-   "imports": [
-    "tandemapp.auth"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1552,12 +1446,6 @@
     "app/"
    ]
   },
-  "tests/test_slot0_wait.py": {
-   "imports": [
-    "tandemapp.activity"
-   ],
-   "reads": []
-  },
   "tests/test_snapshots.py": {
    "imports": [
     "tandemapp.conductor.outcomes",
@@ -1570,16 +1458,9 @@
     "app/contracts"
    ]
   },
-  "tests/test_split_estimate.py": {
-   "imports": [
-    "tandemapp.auth"
-   ],
-   "reads": []
-  },
   "tests/test_state_channel.py": {
    "imports": [
-    "tandemapp.conductor.states",
-    "tandemapp.ledger"
+    "tandemapp.conductor.states"
    ],
    "reads": [
     "app/"
@@ -1588,8 +1469,7 @@
   "tests/test_state_inline.py": {
    "imports": [
     "tandemapp.conductor.narrator",
-    "tandemapp.conductor.states",
-    "tandemapp.ledger"
+    "tandemapp.conductor.states"
    ],
    "reads": [
     "app/"
@@ -1597,7 +1477,6 @@
   },
   "tests/test_static.py": {
    "imports": [
-    "tandemapp.auth",
     "tandemapp.static"
    ],
    "reads": [
@@ -1645,16 +1524,13 @@
   "tests/test_supervisor_views.py": {
    "imports": [
     "app/tests/test_live.py",
-    "tandemapp.activity",
     "tandemapp.conductor.decisions",
     "tandemapp.conductor.monitor.policy:CLOSE_REASONING",
     "tandemapp.conductor.monitor.policy:PASS",
     "tandemapp.conductor.monitor:Action",
     "tandemapp.conductor.monitor:Journal",
     "tandemapp.conductor.monitor:Monitor",
-    "tandemapp.conductor.monitor:RequestEvent",
-    "tandemapp.dashboard_api",
-    "tandemapp.ledger"
+    "tandemapp.conductor.monitor:RequestEvent"
    ],
    "reads": [
     "app/",
@@ -1772,9 +1648,7 @@
    ]
   },
   "tests/test_tools_api.py": {
-   "imports": [
-    "tandemapp.metrics"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1826,9 +1700,7 @@
    ]
   },
   "tests/test_usage.py": {
-   "imports": [
-    "tandemapp.usage"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1949,18 +1821,6 @@
     "app/tandemapp/METRICS.md"
    ],
    "why": "the Grafana panels follow the /metrics document, in text"
-  },
-  {
-   "files": [
-    "tests/test_metrics.py"
-   ],
-   "names": [
-    "app/tandemapp/METRICS.md"
-   ],
-   "marks": [
-    "# app/tandemapp/METRICS.md is the contract"
-   ],
-   "why": "the documented metric families, named in a comment"
   },
   {
    "files": [

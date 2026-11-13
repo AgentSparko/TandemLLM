@@ -46,7 +46,7 @@ The Parallel page of Performance (`#/performance?tab=parallel`) ends with the La
 
 ### Held for memory
 
-A request that waits for memory before its prefill ([parallel-requests.md](parallel-requests.md#waiting-for-memory)) is shown as held, never as a hang. The server writes three lines for it (`app/tandemapp/activity.py` `memory_lines`), and the page shows them as they come:
+A request that waits for memory before its prefill ([parallel-requests.md](parallel-requests.md#waiting-for-memory)) is shown as held, never as a hang. The server writes three lines for it (`server/api/activity.py` `memory_lines`), and the page shows them as they come:
 
 - what the turn needs and why it waits: "This turn needs about <x> GiB to read <n> new tokens; <y> GiB is free, other turns and the caches hold <z> of it, and <g> must stay free for the system". When the check of its pages holds it, the line says "for its pages" and "while it reads" (0.15.4);
 - what happens meanwhile: chats with a higher priority ahead in the line, another chat's turn that is reading and its time left, idle cache being given back, or the time it has waited so far;
@@ -56,7 +56,7 @@ On the Engine page, when the request the Now line follows is held, the line read
 
 ## Where the words come from
 
-Every state and every sentence comes from the server (`app/tandemapp/activity.py`), and the page only formats numbers. Our loop keeps the state it needs anyway, and a sampler reads it once per tick: no statement runs per token for the dashboard's sake. With the activity on and a stream open, the release gate found the text byte-identical and the round time unchanged within noise. `--live-activity off` turns the activity fields off; the counters and rates stay.
+Every state and every sentence comes from the server (`server/api/activity.py`), and the page only formats numbers. Our loop keeps the state it needs anyway, and a sampler reads it once per tick: no statement runs per token for the dashboard's sake. With the activity on and a stream open, the release gate found the text byte-identical and the round time unchanged within noise. `--live-activity off` turns the activity fields off; the counters and rates stay.
 
 A tick costs 410 to 470 µs of CPU at 4 Hz. Each tick is encoded once and sends it to every open stream, and it allows at most 4 streams.
 
@@ -111,7 +111,7 @@ TandemLLM's own calls to itself (the router's question to the engine, `client_ki
 
 ## Usage ledger
 
-`app/tandemapp/ledger.py` writes one SQLite row per request: the model, the kind of client (curl, an OpenAI SDK, opencode, the dashboard), token counts, timings, draft acceptance and the finish reason. It never stores prompt or answer text. Usage and Performance read it through the dashboard API. `--usage-ledger PATH` turns it on, and `--usage-retention-days` bounds it (at least a year plus a margin, so the Usage view has its year). A benchmark server started without the flag writes nothing.
+`server/api/ledger.py` writes one SQLite row per request: the model, the kind of client (curl, an OpenAI SDK, opencode, the dashboard), token counts, timings, draft acceptance and the finish reason. It never stores prompt or answer text. Usage and Performance read it through the dashboard API. `--usage-ledger PATH` turns it on, and `--usage-retention-days` bounds it (at least a year plus a margin, so the Usage view has its year). A benchmark server started without the flag writes nothing.
 
 ## Building and testing
 

@@ -1,14 +1,14 @@
 <!-- engine API contract 1.3 (ENG-427): the engine's /metrics families. metrics-families.json is the
-machine-readable list (name, type, labels, owner); this file says what each family counts. Below this
-note is TandemApp's tandemapp/METRICS.md as of the 1.3 contract, unchanged, until the engine's
-metrics move into engine code (ENG-413 WP2b) and this file becomes the source. The conductor's
-families (owner ext) come from the engine extension and are absent on a headless engine. -->
+machine-readable list (name, type, labels, owner); this file says what each family counts. It began
+as TandemApp's tandemapp/METRICS.md as of the 1.3 contract; since ENG-413 WP2b the engine's metrics
+are engine code (server/api/metrics.py) and this file is their source. The conductor's families
+(owner ext) are counted only when the conductor runs; they move to the engine extension later. -->
 
 # Metrics
 
 The server answers `GET /metrics` in the Prometheus text format. Nothing has to be installed for
 it: `prometheus_client` is not on the board and the interpreter there has no pip, so
-`tandemapp/metrics.py` writes the format out by hand.
+`server/api/metrics.py` writes the format out by hand.
 
 ```bash
 curl -s localhost:8000/metrics | head -40
@@ -350,7 +350,7 @@ Two alerts are worth having before any dashboard: `rate(qse_errors_total[5m]) > 
 
 ## Where the hooks are, and why they are not in the loop
 
-`tandemapp/metrics.py` wraps four things and `server/app.py` carries an import, a route and one
+`server/api/metrics.py` wraps four things and `server/app.py` carries an import, a route and one
 `install()` call:
 
 | wrapped | gives |
@@ -378,7 +378,7 @@ sees them without a scrape. Open WebUI prints the `usage` of a stream merged wit
 `timings` in its (i) tooltip, and adds the token counts of every chunk that carries `usage`,
 so exactly one chunk of a stream carries them (the finish chunk by default, the separate
 `choices: []` chunk when the client sent `include_usage: true`, none on `include_usage: false` or
-`--usage-default off`). `tandemapp/usage.py::RequestRecord` is the one source; the example below has
+`--usage-default off`). `server/api/usage.py::RequestRecord` is the one source; the example below has
 consistent numbers.
 
 ```json

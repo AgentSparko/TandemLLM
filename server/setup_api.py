@@ -96,7 +96,7 @@ def device_facts(app) -> dict:
 def device(app) -> dict:
     sampler = app.STATE.get("gpu_sampler")
     if sampler is None:
-        from tandemapp import dashboard_api
+        from server.api import dashboard_api
         sampler = app.STATE.setdefault("gpu_sampler", dashboard_api.GpuSampler())
     return device_mod.read(app.STATE, inflight=app.INFLIGHT, busy=busy(app),
                            assistant=assistant_status(app), gpu=sampler.sample())

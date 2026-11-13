@@ -357,7 +357,7 @@ class Ring:
                 finally:
                     self._q.task_done()
             if self.clock() >= self._next_prune:
-                from tandemapp.ledger import next_local
+                from server.api.ledger import next_local
                 self._next_prune = next_local(4, self.clock())
                 try:
                     self.prune()
