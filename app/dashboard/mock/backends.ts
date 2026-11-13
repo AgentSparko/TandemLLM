@@ -108,12 +108,30 @@ export const SEED_PRICES = {
   providers: { deepseek: { 'deepseek-chat': { input: 0.27, cached_input: 0.07, cache_write: null, output: 1.1 } } },
 };
 
+const ROUTES = ['/v1/chat/completions', '/v1/completions', '/v1/embeddings', '/v1/responses'];
+
+/** SRV-749: a backend id nobody holds, from the label or the URL's host (proxy/config_api.py free_id) */
+function freeId(have: J[], body: J | null): string {
+  let host = '';
+  try {
+    host = new URL(String(body?.url ?? '')).hostname;
+  } catch {
+    host = '';
+  }
+  const base = String(body?.label || host).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) || 'backend';
+  let id = base;
+  for (let i = 2; have.some((b) => b.id === id); i++) id = `${base}-${i}`;
+  return id;
+}
+
 export class MockBackends {
   backends: J[] = [];
   models: J[] = [];
   rules: J[] = [];
   users: J[] = [];
   off = false;
+  /** SRV-749: the ids of the backends connected from Get started (the fleet's backend members) */
+  connected = new Set<string>();
   private nextUser = 1;
   private nextRule = 1;
 
@@ -123,6 +141,7 @@ export class MockBackends {
 
   reset(): void {
     this.off = false;
+    this.connected.clear();
     this.backends = [
       backend('vllm1', 'vllm', 'http://vllm.local:8000/v1', { label: 'vLLM (Qwen3.5-4B)', host: { mode: 'collector', url: 'http://vllm.local:9108', dcgm_url: null }, harness: { mode: 'on', profile: 'coding' } }),
       backend('sglang1', 'sglang', 'http://127.0.0.1:30000/v1', { label: 'SGLang (Qwen3.5-0.8B)' }),
@@ -147,6 +166,7 @@ export class MockBackends {
   }
 
   empty(): void {
+    this.connected.clear();
     this.backends = [];
     this.models = [];
     this.rules = [];
@@ -188,17 +208,60 @@ export class MockBackends {
     };
   }
 
+  /** SRV-749: what a test of {kind, url, key} says. A URL with `down` (or port 1) does not answer,
+   *  one with `plain` answers without a model list, a key that starts with `wrong` is refused; a
+   *  server in 192.0.2.0/24 lists two small models. */
+  probe(body: J | null): J {
+    const url = String(body?.url ?? '');
+    const fail = (status: number | null, error: string, reason: string): J => ({ ok: false, status, latency_ms: status ? 3.9 : null, error, models: [], reason, key_rejected: reason === 'key_rejected', routes: ROUTES });
+    if (/down|:1\//.test(url)) return fail(null, 'connect to the host failed: Connection refused', 'unreachable');
+    if (/plain/.test(url)) return fail(404, 'HTTP 404', 'not_openai');
+    if (/^wrong/.test(String(body?.key ?? ''))) return fail(401, 'HTTP 401: the key was refused', 'key_rejected');
+    return { ok: true, status: 200, latency_ms: 4.2, error: null, models: body?.kind === 'deepseek' ? ['deepseek-chat', 'deepseek-reasoner'] : /\/\/192\.0\.2\./.test(url) ? ['tiny-a', 'tiny-b'] : ['Qwen/Qwen3.5-4B', 'Qwen/Qwen3.5-9B'], reason: null, key_rejected: false, routes: ROUTES };
+  }
+
+  /** SRV-749: the backends connected from Get started, as the fleet's backend members: each in a
+   *  node's shape (`class` backend), and a derived Single per model (proxy/members.py). */
+  members(now: number, taken: number[] = []): { nodes: J[]; deployments: J[] } {
+    const nodes: J[] = [];
+    const deployments: J[] = [];
+    for (const b of this.backends.filter((x) => this.connected.has(String(x.id)))) {
+      const h = b.health as J;
+      const rejected = !!h.key_rejected;
+      const up = b.enabled && h.state === 'up';
+      const colour = [1, 2, 3, 4, 5, 6, 7, 8].find((c) => !taken.includes(c)) ?? 8;
+      taken = [...taken, colour];
+      const models = this.models.filter((m) => m.backend === b.id && m.enabled && m.present).map((m) => String(m.model));
+      const id = `backend.${b.id}`;
+      let host = '';
+      try {
+        host = new URL(String(b.url)).host;
+      } catch {
+        host = '';
+      }
+      nodes.push({
+        id, alias: b.label, colour, icon: b.cloud ? 'cloud' : 'rack', tags: [], class: 'backend', hw: b.cloud ? 'cloud API' : b.kind === 'tandemllm' ? 'TandemLLM engine by URL' : 'OpenAI-compatible server', dmi: '', owned: true, transport: 'lan', address: host, version: '',
+        status: up ? 'up' : rejected ? 'alert' : 'off', status_text: up ? `up · ${models.length} model${models.length === 1 ? '' : 's'}` : rejected ? 'key rejected: the server answers and refuses the API key' : `down · ${h.last_error ?? 'no answer'}`,
+        since: Math.floor(Number(b.created_at) / 1000), lease_end: null, cost_per_hour: null, inventory: { serial: null, os: null, kernel: null, driver: null, cuda: null, cx7: null, disk: null, nics: null },
+        pairing: { state: 'unpaired', via: null, fingerprint: null, paired_at: null, host_key: null }, drain: null,
+        backend: { id: b.id, kind: b.kind, cloud: b.cloud, url: b.url, key_set: (b.key as J).key_set, state: up ? 'up' : rejected ? 'key_rejected' : 'down', error: h.last_error, latency_ms: h.latency_ms, models, routes: b.routes, figures: 'gateway', engine_api: null },
+      });
+      for (const m of up ? models : []) {
+        deployments.push({ id: m, name: m, model: m, pack: '', type: 'single', members: [id], api_id: m, ctx: 32768, status: 'serving', status_text: 'serving', record: false, state: 'serving', managed: false, job: null,
+          member_states: [{ node: id, alias: b.label, engine: null, backend: b.id, model: m, managed: false, state: 'serving', text: 'serving', routable: true }] });
+      }
+    }
+    void now;
+    return { nodes, deployments };
+  }
+
   /** One /v1/config request: [status, body] (body null for a 204). */
   handle(method: string, path: string, body: J | null): [number, J | null] {
     if (this.off) return [404, { error: { type: 'not_found', message: 'the proxy is off on this server (--backends off)' } }];
     const parts = path.replace(/^\/v1\/config\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
     const bad = (message: string, field?: string, variable?: string, status = 422): [number, J] => [status, { error: { type: 'invalid_config', message, ...(field ? { field } : {}), ...(variable ? { variable } : {}) } }];
     if (!parts.length && method === 'GET') return [200, this.overview()];
-    if (parts[0] === 'test' && method === 'POST') {
-      const url = String(body?.url ?? '');
-      if (/down|:1\//.test(url)) return [200, { ok: false, status: null, latency_ms: null, error: 'connect to the host failed: Connection refused', models: [] }];
-      return [200, { ok: true, status: 200, latency_ms: 4.2, error: null, models: body?.kind === 'deepseek' ? ['deepseek-chat', 'deepseek-reasoner'] : ['Qwen/Qwen3.5-4B', 'Qwen/Qwen3.5-9B'] }];
-    }
+    if (parts[0] === 'test' && method === 'POST') return [200, this.probe(body)];
     if (parts[0] === 'prices' && parts[1] === 'seed') return [200, SEED_PRICES];
     if (parts[0] === 'rules' && method === 'PUT') {
       const rules = (body?.rules ?? []) as J[];
@@ -235,7 +298,11 @@ export class MockBackends {
     }
     if (parts[0] === 'backends') {
       if (parts.length === 1 && method === 'POST') {
-        const id = String(body?.id ?? '');
+        // SRV-749: no id: a free one from the label or the URL's host; `verify`: a failed test
+        // saves nothing (409 with the test) until `confirm`
+        const id = String(body?.id ?? freeId(this.backends, body));
+        const t = this.probe(body);
+        if (body?.verify && !body.confirm && !t.ok) return [409, { error: { type: t.reason, message: t.reason === 'key_rejected' ? 'the server refused the API key; nothing was saved. Fix the key, or confirm to save it as it is' : `the test failed (${t.error}); nothing was saved. Confirm to save it anyway`, test: t } }];
         if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(id)) return bad('id does not match ^[a-z0-9][a-z0-9_-]{0,31}$', 'id');
         if (this.backends.some((b) => b.id === id)) return bad(`a backend '${id}' exists already`, 'id', undefined, 409);
         const kind = (body?.kind ?? 'generic') as Kind;
@@ -246,10 +313,15 @@ export class MockBackends {
           label: body?.label || id, max_inflight: body?.max_inflight ?? null, fallback: body?.fallback ?? [], models: body?.models ?? [],
           harness: { mode: 'off', profile: null, ...((body?.harness ?? {}) as J) },
           key: key ? { key_set: true, last4: key.slice(-4), sha256_6: 'c0ffee', source: 'database', readable: true } : { key_set: false, last4: null, sha256_6: null, source: null, readable: null },
+          ...(t.ok ? {} : { health: { state: 'down', since: Date.now() / 1000, last_check: Date.now() / 1000, last_error: t.error, latency_ms: null, models_at: null, key_rejected: t.reason === 'key_rejected' } }),
         });
         this.backends.push(b);
-        this.models.push(model(id, kind === 'deepseek' ? 'deepseek-chat' : 'Qwen/Qwen3.5-9B'));
-        return [201, { ...this.view(b), test: { state: 'up', latency_ms: 4.2, error: null } }];
+        if (body?.verify) {
+          // connected from Get started: a fleet member with the models its test listed
+          this.connected.add(id);
+          for (const m of t.models as string[]) this.models.push(model(id, m));
+        } else this.models.push(model(id, kind === 'deepseek' ? 'deepseek-chat' : 'Qwen/Qwen3.5-9B'));
+        return [201, { ...this.view(b), test: { state: t.ok ? 'up' : 'down', latency_ms: t.latency_ms, error: t.error } }];
       }
       const b = this.backends.find((x) => x.id === parts[1]);
       if (!b) return [404, { error: { type: 'not_found', message: `no backend '${parts[1]}'` } }];

@@ -472,6 +472,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
     const name = isFleetScenario(c.qse_fleet) ? c.qse_fleet : fleetDefault;
     if (!fleets.has(name)) fleets.set(name, new MockFleet({ seed: seed + 31, scenario: name }));
     const f = fleets.get(name)!;
+    f.extern = (now, taken) => backends.members(now, taken);
     f.discovery.lanMode = c.qse_lan === 'deny' || c.qse_lan === 'allow' ? c.qse_lan : lanDefault;
     return f;
   };

@@ -585,6 +585,13 @@ export class MockFleet {
   readonly app: MockApp;
 
   /** `now` in Unix seconds: the scenario's start */
+  /** SRV-749: the backends on no node (mock/backends.ts members), as the controller lists them */
+  extern: ((now: number, taken: number[]) => { nodes: unknown[]; deployments: unknown[] }) | null = null;
+  private ext(now: number): { nodes: { id: string; alias: string }[]; deployments: FleetDeployment[] } {
+    const taken = this.f.nodes.map((n) => n.node.colour);
+    return (this.extern?.(now, taken) ?? { nodes: [], deployments: [] }) as { nodes: { id: string; alias: string }[]; deployments: FleetDeployment[] };
+  }
+
   constructor(o: { seed?: number; scenario?: FleetScenario; now?: number } = {}) {
     this.scenario = o.scenario ?? 'fleet4';
     this.t0 = Math.floor(o.now ?? Date.now() / 1000);
@@ -1318,16 +1325,35 @@ export class MockFleet {
     if (parts[0] === 'app') return this.app.handle(method, parts, body, now);
     if (parts[0] === 'placement' || parts[0] === 'weights' || (parts[0] === 'deployments' && (parts.length > 1 || method !== 'GET'))) return this.deploy.handle(method, parts, q, body, now);
     if (method === 'GET' && parts[0] === 'nodes' && parts[2] === 'setup-confirm' && parts.length >= 4) return this.setup.plan(this, decodeURIComponent(parts[1]), parts.slice(3).map(decodeURIComponent).join('/'), q, now);
+    // SRV-749: a backend member: its view, a sample that says no host figures, engine series only;
+    // every route that needs a machine answers 409 not_a_node
+    const mem = parts[0] === 'nodes' && parts.length > 1 ? this.ext(now).nodes.find((n) => n.id === decodeURIComponent(parts[1])) : undefined;
+    if (mem) {
+      if (method === 'GET' && parts.length === 2) return { status: 200, body: mem };
+      if (method === 'GET' && parts[2] === 'sample') return { status: 200, body: { contract_version: v, node: mem.id, via: 'none', t: null, age_s: null, sample: null, note: 'no host figures: no TandemNode runs on this backend’s host. Add the machine as a Spark to read its GPU, memory and power' } };
+      return bad(409, 'not_a_node', `${mem.alias} is a backend without TandemNode: only its model list and what this gateway relays are known. Add its machine as a Spark for this`);
+    }
+    if (method === 'GET' && parts.length === 1 && parts[0] === 'metrics') {
+      const src = q.get('source') ?? 'all';
+      const e = this.ext(now);
+      const ids = src.startsWith('node:') ? e.nodes.filter((n) => `node:${n.id}` === src).map((n) => n.id) : src.startsWith('deployment:') ? (e.deployments.find((d) => `deployment:${d.id}` === src)?.members ?? []) : [];
+      const metric = (q.get('metric') ?? '') as MetricKey;
+      const range = (q.get('range') ?? '6h') as Range;
+      if (ids.length && metric in METRICS && range in RANGES) {
+        const { step, t0, count } = window(range, now);
+        return { status: 200, body: { contract_version: v, source: src, metric, unit: METRICS[metric].unit, agg: METRICS[metric].agg, range, step_s: step, t0, cap: null, series: ids.map((node) => ({ node, values: Array.from({ length: count }, () => (metric === 'req' ? 0 : null)) })) } };
+      }
+    }
     if (method === 'GET' && parts.length === 1) {
       switch (parts[0]) {
         case 'nodes':
-          return { status: 200, body: { contract_version: v, nodes: this.nodes(now) } };
+          return { status: 200, body: { contract_version: v, nodes: this.nodes(now), backends: this.ext(now).nodes } };
         case 'links':
           return { status: 200, body: { contract_version: v, links: this.f.links } };
         case 'topology':
           return { status: 200, body: this.topology(now) };
         case 'deployments':
-          return { status: 200, body: { contract_version: v, deployments: this.deployments(now) } };
+          return { status: 200, body: { contract_version: v, deployments: [...this.deployments(now), ...this.ext(now).deployments] } };
         case 'memory':
           return { status: 200, body: { contract_version: v, unit: 'GiB', nodes: this.memory(now) } };
         case 'host':
