@@ -863,12 +863,14 @@ class ConfigDB:
                             json.dumps(p["offpeak"]) if p.get("offpeak") else None, bid, mid))
 
     def sync_models(self, bid: str, found: list[dict] | None, listed: list[str],
-                    mode: str) -> list[str]:
+                    mode: str, trust_new: bool = False) -> list[str]:
         """After a discovery (or a list change): the rows of this backend's models. `found` is
         None when discovery failed: the last list stays. Returns the ids the discovery found that
         the backend never had a row for. After the backend's first discovery, such a new id (DeepSeek's
         `deepseek-v4.1-flash-1017`, in its list for minutes on 2026-10-17) is stored disabled:
-        nothing new reaches the picker until it is turned on under Backends."""
+        nothing new reaches the picker until it is turned on under Backends. `trust_new`
+        (SRV-749, a local server whose list its owner changes): a new id is served at once and
+        is not reported."""
         now = _now_ms()
         new: list[str] = []
         with self._lock:
@@ -881,7 +883,8 @@ class ConfigDB:
                 seen = any(r[1] is not None for r in rows)    # a discovery came before this one
                 for m in found:
                     want.add(m["id"])
-                    if seen and m["id"] not in have and m["id"] not in listed:
+                    if seen and not trust_new and m["id"] not in have and \
+                            m["id"] not in listed:
                         new.append(m["id"])
                         c.execute("INSERT INTO models(backend_id, model_id, source, present, "
                                   "enabled) VALUES (?, ?, 'discovered', 1, 0)", (bid, m["id"]))

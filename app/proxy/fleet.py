@@ -152,6 +152,7 @@ from proxy import fleetops
 from proxy import fleetstore
 from proxy import fleetwatch
 from proxy import hostcollect
+from proxy import members as members_mod
 from proxy import nodemetrics
 from proxy import nodesource
 
@@ -320,6 +321,9 @@ class Fleet:
         self.ops = fleetops.Ops(self)
         svc.drain_of = self.ops.drain_of        # the gateway's question, per request
         from proxy import deployments, fleetweights, placement
+        # SRV-749: the backends on no node, fleet members beside the nodes (proxy/members.py)
+        self.members = members_mod.Members(self)
+        svc.observe = self.members.note
         self.deps = deployments.Deployments(self)
         svc.place, svc.listing, svc.locate = self._place, self._listing, self._locate
         svc.cache_route = self.deps.cache_route
@@ -497,6 +501,13 @@ class Fleet:
                         for k, v in vals.items():
                             if v is not None:
                                 self._ring(("backend", bid, k)).add(t, v)
+        for _row, src in self.members.sources():
+            for bid, pts in src.sample(now, watched=watched)["backends"].items():
+                with self._lock:
+                    for t, vals in pts:
+                        for k, v in vals.items():
+                            if v is not None:
+                                self._ring(("backend", bid, k)).add(t, v)
         try:
             self.watch.observe(now, self.readings(now))
         except Exception as exc:                                     # noqa: BLE001
@@ -546,6 +557,7 @@ class Fleet:
         if now - self._deps_at >= DEPLOYMENTS_EVERY_S:
             self._deps_at = now
             alias = {r["id"]: r["alias"] for r in self.cfg.nodes()}
+            alias.update((r["id"], r["alias"]) for r, _ in self.members.sources())
             deps = [dict(d, on=" on " + ", ".join(alias.get(m, m) for m in d["members"]))
                     for d in self.deployments()]
         updating = self._updater is not None and self._updater.running()
@@ -735,10 +747,32 @@ class Fleet:
         self.ensure_local()
         return [self.node_view(r, now) for r in self.cfg.nodes()]
 
+    def backends(self, now: float) -> list[dict]:
+        """SRV-749: the backends on no node, each in a node's shape (`class` backend)."""
+        self.ensure_local()
+        return self.members.views(now)
+
+    def _member_route(self, method: str, parts: list[str], now: float) -> dict:
+        """/v1/fleet/nodes/{id}[/...] for a backend member: its view and its (empty) sample;
+        whatever needs a TandemNode on the host answers 409 `not_a_node` and says so."""
+        self.ensure_local()
+        got = self.members.find(parts[1])
+        if got is None:
+            raise FleetError(404, f"no node {parts[1]}")
+        if method == "GET" and len(parts) == 2:
+            return self.members._view(*got)
+        if method == "GET" and parts[2:] == ["sample"]:
+            return self.members.sample_view(parts[1], CONTRACT)
+        return self._node_row(parts[1])          # 409 not_a_node
+
     def _node_row(self, nid: str) -> dict:
         self.ensure_local()
         row = self.cfg.node(nid)
         if row is None:
+            got = self.members.find(nid)
+            if got is not None:              # SRV-749: a backend member has no machine to act on
+                raise FleetError(409, f"{got[0]['alias']} {members_mod.NOT_A_NODE}",
+                                 "not_a_node")
             raise FleetError(404, f"no node {nid}")
         return row
 
@@ -793,7 +827,7 @@ class Fleet:
         return self.deps.listing(created)
 
     def _locate(self, bid: str, model: str | None):
-        if not self.cfg.nodes():
+        if not self.cfg.nodes() and not self.members.any():
             return None
         return self.deps.locate(bid, model)
 
@@ -878,6 +912,12 @@ class Fleet:
         srcs = {row["id"]: src for row, src in self.sources()}
         ids = list(srcs)
         engine = metric in DEPLOYMENT_METRICS
+        # SRV-749: a backend member has the engine figures only (its own page's, or what this
+        # gateway measured); a hardware series of one is all null, and `all` leaves it out
+        backs = {row["id"]: src for row, src in self.members.sources()}
+        srcs.update(backs)
+        if engine:
+            ids += list(backs)
 
         def of(node):                            # the rings of a node's figure
             if not engine:
@@ -886,7 +926,7 @@ class Fleet:
             bids = [p.id for p in src.engines()] if hasattr(src, "engines") else []
             return [("backend", b, metric) for b in bids]
         if kind == "node":
-            if sid not in ids:
+            if sid not in srcs:
                 raise FleetError(404, f"no node {sid}")
             keys = [(sid, of(sid))]
         elif kind == "deployment":
@@ -896,7 +936,7 @@ class Fleet:
             except deployments.DeployError as exc:
                 raise FleetError(exc.status, exc.message, exc.kind)
             keys = [(member, [("backend", bid, metric)] if engine else of(member))
-                    for member, bid in members if member in ids]
+                    for member, bid in members if member in ids or member in backs and engine]
         else:
             keys = [(i, of(i)) for i in ids]
         step, t0, count = window(rng, now)
@@ -1178,7 +1218,8 @@ class Fleet:
         if method == "GET" and len(parts) == 1:
             name = parts[0]
             if name == "nodes":
-                return {"contract_version": v, "nodes": self.nodes(now)}
+                return {"contract_version": v, "nodes": self.nodes(now),
+                        "backends": self.backends(now)}
             if name == "links":
                 return {"contract_version": v, "links": self.links_infra()[1]}
             if name == "topology":
@@ -1197,6 +1238,8 @@ class Fleet:
                 return {"contract_version": v, "alerts": self.watch.alerts()}
             if name == "rules":
                 return {"contract_version": v, "rules": self.watch.rules()}
+        if len(parts) >= 2 and parts[0] == "nodes" and members_mod.backend_of(parts[1]):
+            return self._member_route(method, parts, now)
         if method == "GET" and len(parts) == 3 and parts[0] == "nodes" and parts[2] == "sample":
             return self.sample_view(parts[1], now)
         if method == "GET" and len(parts) >= 4 and parts[0] == "nodes" and \

@@ -135,6 +135,9 @@ class Identities:
         last read failed; `why`) or `not_available` (the engine has no route; `why`)."""
         e, n = mv.get("_e"), mv.get("_n")
         src = (n or {}).get("src")
+        if (n or {}).get("backend"):
+            return {"state": "not_available", "block": None,
+                    "why": "identity not available for this backend: it has no TandemNode"}
         if not isinstance(src, nodesource.AgentNode) or not mv.get("engine"):
             return {"state": "not_available", "block": None,
                     "why": "identity not available: no TandemNode agent reads this engine"}
@@ -348,6 +351,15 @@ class Canary:
         ms = [m for m in self.deps.members(rec, canary=False) if m["state"] == "serving"]
         if len(ms) < 2:
             return self._later(did, None, CANARY_EVERY_S)
+        # SRV-749: the canary compares engines that TandemNode reads; a backend member (a server
+        # by URL, a cloud API) is never asked, so it costs it nothing and is never a mismatch
+        out_of = [m["alias"] for m in ms if (m.get("_n") or {}).get("backend")]
+        if out_of:
+            with self._lock:
+                for m in ms:
+                    self._v.pop((did, m["backend"]), None)
+            return self._later(did, f"canary not available for a backend without TandemNode "
+                                    f"({', '.join(out_of)})", CANARY_EVERY_S)
         ref = ms[0]
         try:
             base = self._ask_all(ref)

@@ -249,6 +249,15 @@ class Deployments:
             nodes[row["id"]] = {"row": row, "src": src, "status": st, "text": text,
                                 "probes": src.engines() if hasattr(src, "engines") else [],
                                 "agent": agent}
+        # SRV-749: the backends on no node (proxy/members.py), each in a node's place: one
+        # probe, no agent; a TandemLLM engine reached by URL says its engine API as an agent's
+        # engine view would
+        wall = self.clock()
+        for row, src in f.members.sources():
+            st, text = src.status()
+            nodes[row["id"]] = {"row": row, "src": src, "status": st, "text": text,
+                                "probes": src.engines(), "agent": src.engine_view(wall),
+                                "backend": True}
         ctx = {"nodes": nodes, "by_backend": {p.id: nid for nid, n in nodes.items()
                                               for p in n["probes"]},
                "local": f._local_id}
@@ -277,7 +286,7 @@ class Deployments:
         n = ctx["nodes"].get(nid) if nid else None
         probe = next((p for p in n["probes"] if p.id == bid), None) if n else None
         eid = m.get("engine") or getattr(probe, "via", None)
-        e = n["agent"].get(eid) if n and eid else None
+        e = n["agent"].get(eid) if n and (eid or n.get("backend")) else None
         return {"node": nid, "alias": n["row"]["alias"] if n else (nid or "?"), "engine": eid,
                 "backend": bid, "model": m.get("model") or rec["model"],
                 "managed": bool(e and e.get("managed")), "_n": n, "_e": e}
@@ -369,9 +378,14 @@ class Deployments:
     def _canary_verdicts(self, rec: dict, ms: list[dict]) -> None:
         """The canary's last verdict on each serving member: a `mismatch` takes it out of
         service until a later round passes; a `near_tie` is a warning only."""
+        # SRV-749: no canary runs while a member is a backend without TandemNode
+        none = any((m.get("_n") or {}).get("backend") for m in ms)
         for m in ms:
             v = self.canary.verdict(rec["id"], m["backend"]) if m["backend"] else None
             if v is None:
+                if none and m.get("check") is not None:
+                    m["check"]["canary_text"] = ("canary not available: a member is a backend "
+                                                 "without TandemNode")
                 continue
             m["check"].update(canary=v["verdict"], canary_text=v["text"], canary_at=v["at"])
             if v["verdict"] == "mismatch" and m["state"] == "serving":
@@ -763,7 +777,7 @@ class Deployments:
         another engine API major: refused when it lands on such an engine (a derived Single's
         member reads `down` there), such an engine dropped from its fallbacks. None otherwise, and
         always for a proxy without nodes: a plain proxy's requests never read a machine."""
-        if not self.cfg.nodes():
+        if not self.cfg.nodes() and not self.fleet.members.any():
             return None
         bad = self._no_request(self._context(CTX_TTL_S))
         if not bad:
@@ -849,6 +863,12 @@ class Deployments:
         if n is None:
             raise DeployError(404, "not_found", f"no node {nid}")
         a = n["row"]["alias"]
+        if n.get("backend"):                     # a backend member is its one backend
+            if eid is not None or not n["probes"]:
+                raise DeployError(409, "no_engine", f"{a} is a backend without TandemNode: it "
+                                                    f"has no engine to name" if eid is not None
+                                  else f"{a} is disabled")
+            return {"node": nid, "engine": None, "backend": n["probes"][0].id}
         probes = {getattr(p, "via", None) or p.id: p for p in n["probes"]}
         engines = list(n["agent"]) or list(probes)
         if eid is None:
@@ -1219,6 +1239,10 @@ class Deployments:
             p.update(allowed=False, blocked=f"no node {dst}")
             return "not_found"
         a = n["row"]["alias"]
+        if n.get("backend"):
+            p.update(allowed=False, blocked=f"{a} is a backend without TandemNode: no engine "
+                                            f"can be started on it")
+            return "conflict"
         if n["status"] == "off" or n["row"]["drain"]:
             p.update(allowed=False, blocked=f"{a} is {'off' if n['status'] == 'off' else 'drained'}"
                                             f": it takes nothing new")

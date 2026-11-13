@@ -33,7 +33,8 @@ def probe(backend: dict, key: str | None, log=None) -> dict:
     adapter = adapters_mod.make(backend, log=log)
     pool = http1.Pool(backend["url"], float(backend["timeouts"]["connect"]))
     t0 = time.perf_counter()
-    out = {"ok": False, "status": None, "latency_ms": None, "models": None, "error": None}
+    out = {"ok": False, "status": None, "latency_ms": None, "models": None, "error": None,
+           "key_rejected": False}
     conn = None
     try:
         conn = pool.get()
@@ -54,6 +55,7 @@ def probe(backend: dict, key: str | None, log=None) -> dict:
                 out["error"] = "the /models answer is not JSON"
         elif status in (401, 403):
             out["error"] = f"HTTP {status}: the key was refused"
+            out["key_rejected"] = True
         else:
             out["error"] = f"HTTP {status}"
     except http1.Timeout as t:
@@ -108,7 +110,9 @@ class Health:
         s = self.state.get(bid) or {}
         return {"state": s.get("state", "unknown"), "since": s.get("since"),
                 "last_check": s.get("last_check"), "last_error": s.get("last_error"),
-                "latency_ms": s.get("latency_ms"), "models_at": s.get("models_at")}
+                "latency_ms": s.get("latency_ms"), "models_at": s.get("models_at"),
+                # SRV-749: the server answers and refuses the key (401, 403): reachable, not down
+                "key_rejected": bool(s.get("key_rejected"))}
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -151,7 +155,8 @@ class Health:
         since = prev.get("since") if prev.get("state") == st else now
         cur = {"state": st, "since": since, "last_check": now,
                "last_error": None if r["ok"] else r["error"], "latency_ms": r["latency_ms"],
-               "models_at": prev.get("models_at")}
+               "models_at": prev.get("models_at"),
+               "key_rejected": r.get("status") in (401, 403)}
         if st != prev.get("state"):
             self.svc.log(f"[proxy] backend {bid} is {st}"
                          + (f": {r['error']}" if r["error"] else ""))
@@ -159,7 +164,11 @@ class Health:
             mdue = self._models_due.get(bid, 0.0)
         if now >= mdue or b["models_mode"] == "list":
             found = r["models"] if r["ok"] else None
-            new = self.svc.cfg.sync_models(bid, found, b["models"], b["models_mode"])
+            # SRV-749: a local OpenAI-compatible server's list is its owner's: a model it
+            # serves from now on is served here too (a cloud API's new id still waits)
+            new = self.svc.cfg.sync_models(
+                bid, found, b["models"], b["models_mode"],
+                trust_new=not b["cloud"] and b["kind"] != "tandemllm")
             if new and hasattr(self.svc, "new_models"):
                 self.svc.new_models(bid, new)
             if found is not None:

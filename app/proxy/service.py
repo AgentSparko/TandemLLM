@@ -178,6 +178,8 @@ class Service:
         self.place = None
         self.listing = None
         self.locate = lambda bid, model: None
+        # SRV-749: told of every accounted request (the fleet's backend members' figures)
+        self.observe = None
         # SRV-741: a cache route's (status, answer, headers) on the member that holds the
         # conversation; None: no fleet, the route is not served here
         self.cache_route = None
@@ -446,6 +448,11 @@ class Service:
             self.log(f"[collect] join failed: {type(exc).__name__}: {exc}")
         if self.ledger is not None:
             self.ledger.submit(row)
+        if self.observe is not None:
+            try:
+                self.observe(rec)
+            except Exception:                                      # noqa: BLE001
+                pass
         self.log(f"[proxy] {rec.request_id} {rec.backend}/{rec.backend_model} "
                  f"status={rec.status} finish={rec.finish_reason} "
                  f"tokens={rec.prompt_tokens}/{rec.completion_tokens} "
