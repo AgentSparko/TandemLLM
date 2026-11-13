@@ -10,10 +10,10 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { fleet, sparksOf, type FleetDeployment, type MetricSeries, type NodeMemory } from '../../api/fleet';
+import { fleet, membersWord, sparksOf, type FleetDeployment, type MetricSeries, type NodeMemory } from '../../api/fleet';
 import { openSelection, type ContextContent } from '../../lib/context';
 import { lastValue, shareParts } from '../../lib/monitor';
-import { countWords, depActions, ink, depCounts, managedWords, MEMBER_WORD, memberTone, scoped, setSimpleMode, simpleMode, SPLIT_NO_PLAN, STATUS_GLYPH, statusTone, TYPE_HELP, TYPE_WORD, type DepActionId } from '../../lib/models';
+import { countWords, depActions, ink, depCounts, managedWords, MEMBER_WORD, memberTone, scoped, setSimpleMode, simpleMode, SPLIT_NO_PLAN, STATUS_GLYPH, statusTone, tileFigures, TYPE_HELP, TYPE_WORD, type DepActionId } from '../../lib/models';
 import type { View } from '../../lib/router';
 import { nodeChip } from '../../ui/node-chip';
 import { MonitorPage } from '../monitor/base';
@@ -144,17 +144,20 @@ export class QseModels extends MonitorPage {
     const many = nodes.length > 1;
     const deps = this.deps;
     const c = depCounts(deps);
-    const tps = shareParts(nodes, Object.fromEntries(nodes.map((n) => [n.id, n.status === 'off' ? null : (f.tps[n.id] ?? null)])));
-    const total = tps.some((p) => p.v != null) ? tps.reduce((a, p) => a + (p.v ?? 0), 0) : null;
-    const mems = this.memory.filter((m) => nodes.some((n) => n.id === m.node));
-    const engine = shareParts(nodes, Object.fromEntries(mems.map((m) => [m.node, m.weights + m.kv + m.cache])));
-    const used = mems.length ? mems.reduce((a, m) => a + m.weights + m.kv + m.cache, 0) : null;
-    const cap = mems.reduce((a, m) => a + m.usable, 0) || null;
+    const t = tileFigures(nodes, deps, f.tps, Object.fromEntries(Object.entries(this.figs).map(([k, v]) => [k, v.tps])), this.memory);
+    const tps = shareParts(nodes, t.tps);
+    const engine = shareParts(nodes, t.mem);
+    const sum = (ps: { v: number | null }[]) => (ps.some((p) => p.v != null) ? ps.reduce((a, p) => a + (p.v ?? 0), 0) : null);
+    const total = sum(tps);
+    const used = sum(engine);
+    const cap = t.cap;
+    const na = (names: string[]) => (names.length ? `not available for ${names.join(', ')}` : '');
+    const sub = (...s: string[]) => s.filter(Boolean).join(' · ');
     return html`<div class="mtiles is-4" data-tiles>
-      ${tile({ id: 'tps', label: 'Decode', agg: 'sum', value: fmt(total), unit: 'tok/s', parts: many ? tps : [], sub: many ? 'every Spark in scope, now' : 'now' })}
+      ${tile({ id: 'tps', label: 'Decode', agg: 'sum', value: fmt(total), unit: 'tok/s', parts: many ? tps : [], sub: sub(many ? `every ${membersWord(nodes, 1)} in scope, now` : 'now', na(nodes.filter((n) => n.class === 'backend' && t.tps[n.id] == null).map((n) => n.alias))) })}
       ${tile({ id: 'deps', label: 'Deployments', agg: null, value: String(c.total), sub: c.total ? `${c.serving} serving${c.trouble ? ` · ${c.trouble} not all serving` : ''}${c.stopped ? ` · ${c.stopped} stopped` : ''}` : 'none yet' })}
       ${tile({ id: 'members', label: 'Members serving', agg: null, value: c.members ? `${c.routable}` : '—', unit: c.members ? `/ ${c.members}` : '', sub: 'take requests now' })}
-      ${tile({ id: 'mem', label: 'Engine memory', agg: 'sum', value: fmt(used, 1), unit: cap ? `/ ${fmt(cap, 1)} GiB` : 'GiB', parts: many ? engine : [], cap, fmt: (v) => fmt(v, 1), sub: 'weights, KV and caches' })}
+      ${tile({ id: 'mem', label: 'Engine memory', agg: 'sum', value: fmt(used, 1), unit: cap ? `/ ${fmt(cap, 1)} GiB` : 'GiB', parts: many ? engine : [], cap, fmt: (v) => fmt(v, 1), sub: sub('weights, KV and caches', t.planned ? 'Split stages by plan' : '', na(t.backends)) })}
     </div>`;
   }
 

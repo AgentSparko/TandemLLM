@@ -256,6 +256,49 @@ export function phaseWords(phase: SplitPhase | undefined, front: string, tail: s
   }
 }
 
+export interface TileFigures {
+  tps: Record<string, number | null>;
+  mem: Record<string, number | null>;
+  cap: number | null;
+  /** a running stage counted by its plan's need: the member's reading showed less */
+  planned: boolean;
+  /** the backends in scope: no host, so no memory figure */
+  backends: string[];
+}
+
+/** The Decode and Engine memory tiles' figure of each member in scope (VIS-272). A Split's stages
+ *  count: the decode of the tail, the stage that serves; the memory of each running stage, by its
+ *  plan's need where the member's reading shows less. A backend has no host figures: null, never 0. */
+export function tileFigures(
+  nodes: { id: string; alias: string; status: string; class?: string }[],
+  deps: FleetDeployment[],
+  tps: Record<string, number | null | undefined>,
+  rates: Record<string, Record<string, number | null>>,
+  mems: { node: string; weights: number; kv: number; cache: number; usable: number }[],
+): TileFigures {
+  const t: TileFigures = { tps: {}, mem: {}, cap: null, planned: false, backends: [] };
+  let cap = 0;
+  for (const n of nodes) {
+    const st = deps.flatMap((d) => (d.type === 'split' ? (d.member_states ?? []).filter((m) => m.node === n.id && m.stage?.runs).map((m) => ({ d, s: m.stage! })) : []));
+    const tail = st.find((x) => x.s.role === 'tail');
+    const vs = [n.status === 'off' ? null : tps[n.id], tail ? rates[tail.d.id]?.[n.id] : null].filter((v): v is number => v != null);
+    t.tps[n.id] = vs.length ? Math.max(...vs) : null;
+    if (n.class === 'backend') {
+      t.mem[n.id] = null;
+      t.backends.push(n.alias);
+      continue;
+    }
+    const r = mems.find((m) => m.node === n.id);
+    const read = r ? r.weights + r.kv + r.cache : null;
+    const need = st.reduce((a, x) => a + (x.s.need_gib ?? 0), 0);
+    if (need > (read ?? 0)) t.planned = true;
+    t.mem[n.id] = need > (read ?? 0) ? need : read;
+    cap += r?.usable ?? st[0]?.s.budget_gib ?? 0;
+  }
+  t.cap = cap || null;
+  return t;
+}
+
 const SIMPLE_KEY = 'tandem.models.simple';
 /** the Models page's mode: simple (the default) shows the two stages and the link; advanced adds every number */
 export function simpleMode(): boolean {
