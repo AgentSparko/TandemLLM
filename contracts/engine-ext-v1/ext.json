@@ -1,0 +1,99 @@
+{
+  "name": "engine-ext-v1",
+  "version": "1.0",
+  "about": "The in-process extension interface of a TandemLLM engine (ENG-429). Python, not HTTP. The engine owns it; TandemApp's conductor is its first extension. README.md says it in prose; fake_host.py is the reference host and fake_ext.py the smallest extension. A minor step adds a hook, an argument with a default, a host attribute, an event field or an act kind; a major step removes or renames one or changes a meaning.",
+  "discovery": {
+    "env": "QSE_EXT",
+    "default": "",
+    "headless": "QSE_EXT empty or unset: no extension; the engine serves its own routes only",
+    "module": {
+      "EXT_API": "the interface version the extension was written against, 'MAJOR.MINOR'",
+      "NAME": "a short name, shown in /health extensions",
+      "VERSION": "the extension's own release",
+      "start": "start(host) -> the extension object"
+    },
+    "accepts": "the same MAJOR as the host and a MINOR at or below the host's"
+  },
+  "host": {
+    "ext_api": "the host's engine-ext-v1 version",
+    "engine_api": "the engine API version (server/engine_api.py VERSION)",
+    "mode": "engine, chat or setup",
+    "state": "the server's state mapping (read; the extension writes only keys it owns)",
+    "lock": "the engine lock; a hook never holds it across a call back into the host",
+    "tokenizer": "the served model's tokenizer (encode, decode)",
+    "metrics": "the metrics registry handle: add(family) for the families metrics-families.json lists with owner ext",
+    "ledger_path": "the ledger file; the extension owns its own tables in it (conductor_events, its version row)",
+    "args": "the parsed command line as a mapping, plus QSE_EXT_ARGS",
+    "engine": "the engine-only screens in process: residency_plan, disk, disk_clear, deciders, narrator, shadow (the /v1/engine/* handlers)",
+    "log": "log(line): one line into the engine's log",
+    "Refusal": "the exception plan raises to answer the client with an error: Refusal(status, type, message)"
+  },
+  "extension": {
+    "attributes": {
+      "routes": "[{method, prefix, handler}]: paths the extension serves; handler(request) -> (status, headers, body). A prefix the engine serves itself is refused at start",
+      "models": "[model entry]: added to /v1/models (the TandemLLM alias)",
+      "knobs": "[name]: the QWEN38_* names it reads (knobs.json)"
+    },
+    "hooks": [
+      {"name": "health", "args": [], "returns": "dict", "phase": "serve", "when": "each full /health answer: merged under loaded"},
+      {"name": "plan", "args": ["request"], "returns": "plan or None", "phase": "request", "when": "before the request queues, without the engine lock; None serves the request as a headless engine would"},
+      {"name": "prompt", "args": ["plan", "ids"], "returns": "list[int]", "phase": "request", "when": "the prompt's token ids before prefill (the router's notes replayed)"},
+      {"name": "supervisor", "args": ["plan", "event"], "returns": "supervisor or None", "phase": "request", "when": "once the prompt is built: the object the decode loop asks at the safe points"},
+      {"name": "extras", "args": ["plan", "point", "info"], "returns": "list[dict]", "phase": "request", "when": "point start, block or finish: items {kind, data} the engine puts into the stream (state lines, narrated lines)"},
+      {"name": "follow_ups", "args": ["plan", "outcome"], "returns": "list[dict]", "phase": "request", "when": "the turn's end: own-work requests {kind, what, body} the engine schedules after the client's"},
+      {"name": "finish", "args": ["plan", "row"], "returns": "None", "phase": "request", "when": "the request's ledger row is written: the extension writes its journal rows"},
+      {"name": "stop", "args": [], "returns": "None", "phase": "shutdown", "when": "the engine stops"}
+    ]
+  },
+  "request": {
+    "fields": ["body", "headers", "client_kind", "request_id", "chat", "user", "count_tokens"],
+    "plan_fields": {
+      "active": "bool: the plan changes the request; false hands every step its input back",
+      "body": "dict or None: the body the engine serves in place of the client's"
+    }
+  },
+  "supervisor": {
+    "methods": [
+      {"name": "at_request", "args": ["event"], "returns": "list[act]", "point": "SP4"},
+      {"name": "at_block", "args": ["event", "room"], "returns": "act or None", "point": "SP1"},
+      {"name": "at_tool_call", "args": ["event"], "returns": "act or None", "point": "SP3"},
+      {"name": "at_finish", "args": ["event", "room"], "returns": "act or None", "point": "SP2"},
+      {"name": "done", "args": ["outcome", "detail"], "returns": "None", "point": "end"}
+    ],
+    "events": {
+      "request": ["request_id", "messages", "tools", "tool_choice", "n", "stream", "prompt_tokens", "in_think", "max_tokens", "client_budget", "client", "model", "constrained", "profile", "cls", "tool_format"],
+      "block": ["reasoning_tokens", "inside", "stall", "share", "output_tokens", "pos"],
+      "tool_call": ["name", "arguments", "index", "block", "error", "cut", "stopped", "schema", "final"],
+      "finish": ["kind", "inside", "answer", "reasoning_tokens", "output_tokens", "pos", "calls", "notes", "note_calls"]
+    },
+    "safe_points": {
+      "SP1": {"at": "block", "acts": ["CLOSE_REASONING", "GIVE_UP"]},
+      "SP2": {"at": "finish", "acts": ["CONTINUE_HIDDEN", "GIVE_UP"]},
+      "SP3": {"at": "tool_call", "acts": ["REPAIR_CALL", "REGENERATE_CALL", "GIVE_UP"]},
+      "SP4": {"at": "request", "acts": ["PROMPT_TAIL_NOTE", "SET_THINK_BUDGET"]}
+    },
+    "act": {
+      "fields": ["kind", "task", "text", "ids", "visible", "budget", "detail"],
+      "kinds": ["CLOSE_REASONING", "CONTINUE_HIDDEN", "REPAIR_CALL", "REGENERATE_CALL", "PROMPT_TAIL_NOTE", "SET_THINK_BUDGET", "GIVE_UP"],
+      "executed_by": "the engine, in the decode loop; ids are forwarded, visible (a suffix of ids) reaches the client"
+    }
+  },
+  "order": {
+    "start": ["import", "check EXT_API", "start", "routes", "models", "knobs"],
+    "request": ["plan", "prompt", "supervisor", "at_request", "extras start", "(at_block, extras block)*", "at_tool_call*", "at_finish", "extras finish", "follow_ups", "finish", "done"],
+    "act_loops": {
+      "CONTINUE_HIDDEN": "at_finish -> the engine forwards ids and decodes on -> at_block* -> at_finish again",
+      "REGENERATE_CALL": "at_tool_call -> the engine cuts the call and decodes again from its start -> at_tool_call again",
+      "GIVE_UP": "the engine writes the visible text and ends the turn: at_finish is not asked again"
+    },
+    "shutdown": ["stop"]
+  },
+  "failure": {
+    "rule": "closed at start, open per request",
+    "start": "QSE_EXT names a module that does not import, has no EXT_API or one the host does not accept, lacks a hook, raises in start, or claims an engine path; or chat mode is asked with QSE_EXT empty: the engine does not start and prints one line '[ext] REFUSING: <why>' before the weights load. It never falls back to headless when an extension was asked for",
+    "request": "a hook that raises or returns a value of the wrong shape: the engine logs it, counts it (qse_ext_errors_total{hook}, ENG-413 WP3a) and serves the rest of that request as a headless engine would: plan -> raw, prompt -> the ids as built, supervisor -> none from then on, extras -> none, follow_ups and finish -> skipped. Acts already carried out stay; the next request asks the extension again",
+    "refusal": "plan may raise the host's Refusal(status, type, message): the client gets that error; it is an answer, not a failure",
+    "act_out_of_place": "an act whose kind the safe point does not allow is dropped and counted, as an error of that hook",
+    "route": "a handler of the extension's own route that raises: 500 extension_error for that request; there is no headless answer for a path only the extension serves"
+  }
+}
