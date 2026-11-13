@@ -57,7 +57,8 @@ The normaliser (compare runs it on the raw records, so it can be changed after a
   N7  of conductor_events, the router's and the monitor's rows are gated (JOURNAL_GATED, in order,
       with their hidden texts, N1's keys dropped: a stage writes its time only when it has one);
       the other kinds (config migrations, memory writers, outcomes) run
-      on timers and threads of their own and are info
+      on timers and threads of their own and are info; N3 numbers the gated rows before them, so
+      an info row between two gated rows shifts no gated ordinal
   N8  the run's own folders (capture's `--strip`, kept in the record) become "<root>" in every
       string: the ledger's path, the tree copy's paths in the flags and the weights list
   N9  the engine's moving state is N1's too (engine_busy, a slot's busy, running, the turn's acquires
@@ -613,18 +614,18 @@ def normalize_record(doc: dict) -> dict:
         ords = Ordinals()
         gate, info = {"route_monitor": [], "requests": []}, {"other_events": []}
         texts = {t["id"]: t["text"] for t in doc["rows"].get("conductor_texts", [])}
-        for table in ("conductor_events", "requests"):
-            for row in doc["rows"].get(table, []):
-                r = {k: ("<v>" if table == "requests" and k in REQUEST_STATS else v) for k, v in row.items()}
-                if r.get("hidden_text_id") in texts:
-                    r["hidden_text"] = texts[r["hidden_text_id"]]
-                r = normalize(r, ords, drop=True)
-                if table == "requests":
-                    gate["requests"].append(r)
-                elif row.get("kind") in JOURNAL_GATED:
-                    gate["route_monitor"].append(r)
-                else:
-                    info["other_events"].append(r)
+        events = doc["rows"].get("conductor_events", [])
+        # N3 numbers the gated rows first (the route and monitor rows, then the requests) and the info
+        # rows after them: an info row a timer writes between two gated rows takes no ordinal a gated
+        # id would have had, and an id both share keeps the gated row's number
+        rows = [("route_monitor", r) for r in events if r.get("kind") in JOURNAL_GATED] + \
+            [("requests", r) for r in doc["rows"].get("requests", [])] + \
+            [("other_events", r) for r in events if r.get("kind") not in JOURNAL_GATED]
+        for where, row in rows:
+            r = {k: ("<v>" if where == "requests" and k in REQUEST_STATS else v) for k, v in row.items()}
+            if r.get("hidden_text_id") in texts:
+                r["hidden_text"] = texts[r["hidden_text_id"]]
+            (info if where == "other_events" else gate)[where].append(normalize(r, ords, drop=True))
         meta = {r.get("key"): r.get("value") for r in doc["rows"].get("meta", []) if isinstance(r, dict)}
         gate["schema"] = {k: v for k, v in meta.items() if "version" in str(k)}
         return {"set": kind, "gate": gate, "info": info}

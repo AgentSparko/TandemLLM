@@ -11,6 +11,8 @@ The test matrix:
   3  compare: two equal folders pass; a token that moved fails with its index; a stream's
      chunks that moved are info only; --allow and --additive accept what they name;
      a journal row of the monitor that moved fails, a memory writer's row is info    test_compare_sees_tokens_not_noise
+  3b a memory writer's row between two monitor rows shifts no gated ordinal; an id that
+     moved still fails                                                    test_an_info_row_shifts_no_gated_ordinal
   4  a capture refuses port 8000 (the box's engine) before it opens a socket          test_the_live_port_is_refused
   5  over a socket, the fake engine: B1 and B3 from two fresh engines compare equal;
      the monitor fixtures (B2f) make D1, E1, GIVE_UP, C3 and C4 act, and two fresh
@@ -148,6 +150,41 @@ def test_compare_sees_tokens_not_noise():
         assert rep["files"]["b1.json"]["verdict"] == "MISSING" and rep["gate_fail"] == 1, rep
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_an_info_row_shifts_no_gated_ordinal():
+    """A memory writer's row that one run writes between two monitor rows (its timer, W2a's dry run
+    dry3) is info: the gated rows' ids keep their ordinals; an id that did move still fails."""
+    tmp = tempfile.mkdtemp(prefix="eng413-ord-")
+    try:
+        ev = [{"id": "e1", "kind": "route", "decision": "PLAN", "request_id": "chatcmpl-aaaa1111",
+               "session_key": "s-1"},
+              {"id": "e2", "kind": "monitor", "task": "E1", "decision": "CONTINUE_HIDDEN",
+               "request_id": "chatcmpl-aaaa1111", "hidden_text_id": "t1"},
+              {"id": "e3", "kind": "monitor", "task": "E1", "decision": "GIVE_UP",
+               "request_id": "chatcmpl-bbbb2222", "session_key": "s-1"}]
+        rows = {"conductor_events": ev, "conductor_texts": [{"id": "t1", "text": "go on"}],
+                "requests": [{"id": 1, "request_id": "chatcmpl-aaaa1111", "parent_request": None},
+                             {"id": 2, "request_id": "chatcmpl-bbbb2222",
+                              "parent_request": "chatcmpl-aaaa1111"}]}
+        _write(os.path.join(tmp, "base"), _record(["a"], journal_rows=rows))
+        extra = copy.deepcopy(rows)
+        extra["conductor_events"].insert(1, {"id": "m9", "kind": "memory", "task": "writer",
+                                             "decision": "block", "request_id": "chatcmpl-cccc3333"})
+        _write(os.path.join(tmp, "extra"), _record(["a"], journal_rows=extra))
+        rep = B.compare_dirs(os.path.join(tmp, "base"), os.path.join(tmp, "extra"))
+        e = rep["files"]["journal-chat.json"]
+        assert e["verdict"] == "SAME" and rep["gate_fail"] == 0, e
+        assert len(e["info"]) == 1 and "other_events[0]" in e["info"][0], e
+        moved = copy.deepcopy(extra)
+        moved["requests"][1]["parent_request"] = "chatcmpl-bbbb2222"      # now its own id
+        _write(os.path.join(tmp, "moved"), _record(["a"], journal_rows=moved))
+        rep = B.compare_dirs(os.path.join(tmp, "base"), os.path.join(tmp, "moved"))
+        e = rep["files"]["journal-chat.json"]
+        assert e["verdict"] == "DIFF" and len(e["gate"]) == 1 and "parent_request" in e["gate"][0], e
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return "an info row between monitor rows: gate SAME, info 1; a moved id: DIFF"
 
 
 def test_the_live_port_is_refused():
