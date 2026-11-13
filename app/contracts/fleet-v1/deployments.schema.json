@@ -149,7 +149,8 @@
                     "leaving",
                     "mismatch",
                     "off",
-                    "gone"
+                    "gone",
+                    "waiting"
                   ]
                 },
                 "text": {
@@ -222,6 +223,85 @@
                     "canary",
                     "canary_text",
                     "canary_at"
+                  ],
+                  "additionalProperties": false
+                },
+                "stage": {
+                  "type": "object",
+                  "description": "SRV-817: a Split's stage on this member: its role and layers from the plan, and what its engine's /health stage block says now",
+                  "properties": {
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "front",
+                        "tail"
+                      ]
+                    },
+                    "layers": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "need_gib": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "budget_gib": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "runs": {
+                      "type": "boolean"
+                    },
+                    "link": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "up",
+                        "down",
+                        null
+                      ]
+                    },
+                    "epoch": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "transport": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "identity": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "role",
+                    "layers",
+                    "need_gib",
+                    "runs",
+                    "link",
+                    "epoch",
+                    "reason"
                   ],
                   "additionalProperties": false
                 }
@@ -316,6 +396,474 @@
               "own"
             ],
             "description": "SRV-731: a Replicas' conversation key: root keeps a chat and its workers on one member"
+          },
+          "split": {
+            "type": "object",
+            "description": "SRV-817: the plan of a Split: the cut the planner chose from the engines' own estimates, both sides' numbers (computed unless listed under measured), the link, and every other cut with why it lost",
+            "properties": {
+              "cut": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "layers": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "family": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rule": {
+                "type": "string"
+              },
+              "why": {
+                "type": "string"
+              },
+              "window": {
+                "type": "integer"
+              },
+              "slots": {
+                "type": "integer"
+              },
+              "shape": {
+                "type": "object",
+                "description": "what the engines computed: window, slots, side_window, caches, table, snapshots_gb, front_cache_gb, tail_disk_gb"
+              },
+              "margin": {
+                "type": "object",
+                "properties": {
+                  "slot_factor": {
+                    "type": "number"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "slot_factor",
+                  "text"
+                ],
+                "additionalProperties": false
+              },
+              "front": {
+                "type": "object",
+                "description": "one stage's side of the chosen cut on its node: what it needs against what the node may give",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "alias": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "front",
+                      "tail"
+                    ]
+                  },
+                  "layers": {
+                    "type": "string",
+                    "description": "LO:HI"
+                  },
+                  "need_gib": {
+                    "type": "number",
+                    "description": "the estimate's figure plus the slot margin"
+                  },
+                  "estimate_gib": {
+                    "type": "number",
+                    "description": "the engine's own figure for this side (computed)"
+                  },
+                  "margin_gib": {
+                    "type": "number"
+                  },
+                  "budget_gib": {
+                    "type": "number",
+                    "description": "the node's device memory less its floor; less on a node that keeps serving something"
+                  },
+                  "headroom_gib": {
+                    "type": "number"
+                  },
+                  "fits": {
+                    "type": "boolean"
+                  },
+                  "slot_gib": {
+                    "type": "number"
+                  },
+                  "table": {
+                    "type": "boolean",
+                    "description": "this side holds the n-gram table"
+                  },
+                  "parts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "gib": {
+                          "type": "number"
+                        },
+                        "basis": {
+                          "type": "string",
+                          "description": "pack_headers, config, ask, registry, setting, registry_whole_model (the engine's bases: all computed), or margin (the planner's slot margin)"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "gib",
+                        "basis"
+                      ],
+                      "additionalProperties": true
+                    }
+                  },
+                  "disk": {
+                    "type": "object",
+                    "properties": {
+                      "pack_gib": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "cache_gib": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "free_gib": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "pack_gib",
+                      "cache_gib",
+                      "free_gib"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "node",
+                  "alias",
+                  "role",
+                  "layers",
+                  "need_gib",
+                  "budget_gib",
+                  "headroom_gib",
+                  "fits",
+                  "parts",
+                  "disk"
+                ],
+                "additionalProperties": true
+              },
+              "tail": {
+                "type": "object",
+                "description": "one stage's side of the chosen cut on its node: what it needs against what the node may give",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "alias": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "front",
+                      "tail"
+                    ]
+                  },
+                  "layers": {
+                    "type": "string",
+                    "description": "LO:HI"
+                  },
+                  "need_gib": {
+                    "type": "number",
+                    "description": "the estimate's figure plus the slot margin"
+                  },
+                  "estimate_gib": {
+                    "type": "number",
+                    "description": "the engine's own figure for this side (computed)"
+                  },
+                  "margin_gib": {
+                    "type": "number"
+                  },
+                  "budget_gib": {
+                    "type": "number",
+                    "description": "the node's device memory less its floor; less on a node that keeps serving something"
+                  },
+                  "headroom_gib": {
+                    "type": "number"
+                  },
+                  "fits": {
+                    "type": "boolean"
+                  },
+                  "slot_gib": {
+                    "type": "number"
+                  },
+                  "table": {
+                    "type": "boolean",
+                    "description": "this side holds the n-gram table"
+                  },
+                  "parts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "gib": {
+                          "type": "number"
+                        },
+                        "basis": {
+                          "type": "string",
+                          "description": "pack_headers, config, ask, registry, setting, registry_whole_model (the engine's bases: all computed), or margin (the planner's slot margin)"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "gib",
+                        "basis"
+                      ],
+                      "additionalProperties": true
+                    }
+                  },
+                  "disk": {
+                    "type": "object",
+                    "properties": {
+                      "pack_gib": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "cache_gib": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "free_gib": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "pack_gib",
+                      "cache_gib",
+                      "free_gib"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "node",
+                  "alias",
+                  "role",
+                  "layers",
+                  "need_gib",
+                  "budget_gib",
+                  "headroom_gib",
+                  "fits",
+                  "parts",
+                  "disk"
+                ],
+                "additionalProperties": true
+              },
+              "headroom_gib": {
+                "type": "number"
+              },
+              "carry_bytes_per_row": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "table_on": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cut": {
+                      "type": "integer"
+                    },
+                    "front_gib": {
+                      "type": "number"
+                    },
+                    "tail_gib": {
+                      "type": "number"
+                    },
+                    "headroom_gib": {
+                      "type": "number"
+                    },
+                    "fits": {
+                      "type": "boolean"
+                    },
+                    "chosen": {
+                      "type": "boolean"
+                    },
+                    "why": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "why this cut was not chosen; null for the chosen one"
+                    }
+                  },
+                  "required": [
+                    "cut",
+                    "front_gib",
+                    "tail_gib",
+                    "headroom_gib",
+                    "fits",
+                    "chosen",
+                    "why"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "computed": {
+                "type": "boolean"
+              },
+              "measured": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "what a split of this family was measured to cost on a GPU (the engine's list); every other number is computed"
+              },
+              "notes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "link": {
+                "type": "object",
+                "description": "the interface pair the two stages talk over: explicit IP literals, never a wildcard; a fabric pair first, a LAN pair with a warning",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "fabric",
+                      "lan",
+                      "loopback",
+                      "given"
+                    ]
+                  },
+                  "listen": {
+                    "type": "string",
+                    "description": "IP:PORT the front listens on"
+                  },
+                  "peer": {
+                    "type": "string",
+                    "description": "IP:PORT the tail dials"
+                  },
+                  "front_iface": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "tail_iface": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "warn": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "a LAN or hand-given pair: the data link is neither signed nor encrypted after its handshake"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "up",
+                      "down",
+                      "unknown"
+                    ],
+                    "description": "a deployment's link now"
+                  },
+                  "epoch": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "transport": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "listen",
+                  "peer",
+                  "warn"
+                ],
+                "additionalProperties": false
+              },
+              "built": {
+                "type": "boolean",
+                "description": "a deployment: both stages were up and linked at its last start"
+              },
+              "phase": {
+                "type": "string",
+                "enum": [
+                  "stopped",
+                  "starting-front",
+                  "starting-tail",
+                  "linked",
+                  "degraded",
+                  "partial",
+                  "stopping",
+                  "down"
+                ],
+                "description": "a deployment's phase now"
+              }
+            },
+            "required": [
+              "cut",
+              "layers",
+              "front",
+              "tail",
+              "link",
+              "shape",
+              "candidates",
+              "rule",
+              "margin",
+              "computed",
+              "measured"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [

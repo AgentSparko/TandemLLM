@@ -157,6 +157,10 @@
             "string",
             "null"
           ]
+        },
+        "phase": {
+          "type": "string",
+          "description": "SRV-817: a Split's start or stop: starting-front, starting-tail, linked, stopping"
         }
       },
       "required": [

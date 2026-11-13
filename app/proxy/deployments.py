@@ -17,8 +17,8 @@ ROUTES (contracts/fleet-v1):
 
     GET    /v1/fleet/deployments                       every deployment with its members' states
     POST   /v1/fleet/deployments                       a record: {model, type, members, pack?, name?,
-                                                       id?, api_id?, ctx?, stages?, role?, role_of?,
-                                                       affinity?, state?}
+                                                       id?, api_id?, ctx?, stages?, split?, role?,
+                                                       role_of?, affinity?, state?}
     GET    /v1/fleet/deployments/{id}
     PATCH  /v1/fleet/deployments/{id}                  {name?, api_id?, ctx?, pack?, type?,
                                                        members?, stages?, role?, role_of?,
@@ -33,10 +33,13 @@ TYPES. `single`: one member. `replicas`: two or more members that serve one mode
 each conversation on one member (proxy/affinity.py, SRV-467: the engine's own conversation key, a
 sticky table corrected by the member that served the turn, a rendezvous hash for a new key, the
 fewest requests in flight without a key). `role`: one member, a helper (`role`: what it does) of
-the deployment `role_of` names (SRV-465). `split`: two or four members in pipeline order with a
-stage each ({node, layers, gib}); modelled, planned (proxy/placement.py) and recorded, never
-started: its start answers 501 `not_built` and the gateway 501 until ENG-307 builds the pipeline
-split.
+the deployment `role_of` names (SRV-465). `split` (SRV-817, proxy/splitrun.py): two members, the
+front stage's node and the tail's, with a stage each ({node, layers, gib}) and the planner's plan
+(`split`: the cut, both sides' numbers, the link; proxy/placement.py). Its start hands a link key to
+both node agents, starts the front, then the tail, checks both stages' identities and the link, and
+routes to the tail alone; the front serves no request and is never listed. A link that drops makes
+it `degraded` (requests 503 `stage_down` with Retry-After) until the stages link again by
+themselves. A Split recorded without a plan is kept and does not start (409 `no_plan`).
 
 A MEMBER is {node, engine, backend, model}: the node, the engine on it (its TandemNode agent's
 engine id), the backend through which this gateway reaches that engine (proxy/config.py backends,
@@ -48,15 +51,16 @@ on another release, or with other weights, than the first serving member: G15 fr
 what the controller reads; with engine API 1.1 its identity block differs in a field other than
 `max_len`, or the output canary gave other tokens: SRV-741, proxy/canary.py; it takes no request),
 `off` (its node does not answer), `gone` (its node
-left the fleet). Only `serving` takes requests. A member whose engine speaks another engine API
+left the fleet), and for a Split's stage `waiting` (it runs, the link to the other stage is down).
+Only `serving` takes requests. A member whose engine speaks another engine API
 major (its agent's engine view, proxy/engineapi.py) is `down` with the agent's reason, which names
 the major this TandemApp needs; the gateway sends such an engine no request, not as a fallback and
 not for a model no record names (a derived Single's or a routing rule's): 503 `no_member`.
 
 THE STATUS of a deployment: `serving` when every member serves, `degraded` when some do, `starting`
 while its start runs or a member starts, `down` when none serves, `stopped` when the record says
-so (and a Split: not built). The record's `state` is what should be (serving or stopped); the
-status is what is.
+so. The record's `state` is what should be (serving or stopped); the status is what is. A Split
+also says its `phase` (proxy/splitrun.py).
 
 DERIVED SINGLES. A model an engine on a node serves that no record covers (a backend and the id it
 serves) is a Single derived from what that engine serves: not a record, `record` false, its id the
@@ -77,13 +81,15 @@ fits, else 400 `context_length_exceeded` with the largest window. `POST /v1/cach
 (`cache_route`) and leave its home as it is. A constrained request
 (SRV-467's G20: `structured_outputs`, a `response_format` other than text, a grammar or guided
 field, a forced `tool_choice`) moves on only when the first member never took it. A stopped
-deployment answers 503 `deployment_stopped`, a Split 501 `not_built`.
+deployment answers 503 `deployment_stopped`; a Split whose stages are not linked 503 `stage_down`
+with Retry-After.
 
 JOBS (`fleet_jobs`, kind `deploy`; one per deployment at a time, 409 `busy`):
 
     start   every member's engine started through its agent (one TandemNode did not start: started
             only when it is up already, else refused), its backend's health up, then the warm-up:
-            one token from the model (WARM_WAIT_S). A Split: 501 not_built. An engine on another
+            one token from the model (WARM_WAIT_S). A Split: the front, then the tail, the link and
+            the stages' checks, then the token (proxy/splitrun.py). An engine on another
             engine API major fails the start at the agent's first such answer (start_failed).
     stop    the record stopped first (the gateway takes no new request for it), the requests in
             flight finished (DRAIN_WAIT_S), every member's engine stopped through its agent. A
@@ -113,7 +119,7 @@ import time
 import urllib.error
 import urllib.request
 
-from proxy import affinity, canary as canary_mod, nodesource
+from proxy import affinity, canary as canary_mod, nodesource, splitrun
 
 CONTRACT = "1.0"
 TYPES = ("single", "replicas", "split", "role")
@@ -132,7 +138,7 @@ WARM_UA = "tandem-controller/warm"
 LOG_MAX = 200
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 FIELDS = ("id", "name", "model", "pack", "type", "members", "stages", "api_id", "ctx", "role",
-          "role_of", "affinity", "state")
+          "role_of", "affinity", "state", "split")
 PATCHABLE = ("name", "api_id", "ctx", "pack", "type", "members", "stages", "role", "role_of",
              "affinity")
 # request fields that constrain the output (SRV-467's G20)
@@ -159,9 +165,10 @@ class DeployError(Exception):
 class Refused(Exception):
     """A request the gateway answers itself (a stopped deployment, a Split): an OpenAI error."""
 
-    def __init__(self, status: int, code: str, message: str):
+    def __init__(self, status: int, code: str, message: str, headers: tuple = ()):
         super().__init__(message)
         self.status, self.code, self.message = status, code, message
+        self.headers = tuple(headers)               # a Retry-After, when coming back helps
 
     def body(self) -> dict:
         return {"error": {"message": self.message, "type": "server_busy" if self.status == 503
@@ -219,6 +226,8 @@ class Deployments:
         # SRV-741: the members' identity blocks and the output canary (proxy/canary.py)
         self.identities = canary_mod.Identities(log=fleet.log)
         self.canary = canary_mod.Canary(self)
+        # SRV-817: a Split's two stages (proxy/splitrun.py)
+        self.split = splitrun.Split(self)
 
     # ------------------------------------------------------------------ what the fleet has
     def _context(self, max_age: float = 0.0) -> dict:
@@ -306,6 +315,10 @@ class Deployments:
         identity check, then (unless `canary` is False: the canary's own round) its canary's
         verdicts."""
         ctx = ctx or self._context()
+        if rec["type"] == "split":
+            # two stages, one member to the gateway (the tail); no identity round and no canary
+            # here: a front answers neither, and the stages check each other at their handshake
+            return self.split.members(rec, ctx)
         out = []
         for m in rec["members"]:
             mv = self._member(ctx, m, rec)
@@ -388,7 +401,11 @@ class Deployments:
         ms = self.members(rec, ctx)
         o = rec.get("options") or {}
         job = self.cfg.job("deploy", o.get("job")) if o.get("job") else None
-        status, text = self._status(rec, ms, job)
+        phase = None
+        if rec["type"] == "split":
+            status, text, phase = self.split.status(rec, ms, job)
+        else:
+            status, text = self._status(rec, ms, job)
         out = {"id": rec["id"], "name": rec["name"], "model": rec["model"], "pack": rec["pack"],
                "type": rec["type"], "members": [m["node"] or "?" for m in ms],
                "api_id": o.get("api_id") or rec["id"], "ctx": int(o.get("ctx") or 0),
@@ -398,6 +415,11 @@ class Deployments:
                "job": _job_short(job)}
         if rec["type"] == "split":
             out["stages"] = rec["stages"]
+            plan = self.split.view(rec, ms, phase)
+            if plan is not None:
+                out["split"] = plan
+                if plan["link"].get("warn"):
+                    out["warn"] = plan["link"]["warn"]
         if rec["type"] == "role":
             if o.get("role_of"):
                 out["role_of"] = o["role_of"]
@@ -419,6 +441,8 @@ class Deployments:
                "state": m["state"], "text": m["text"], "routable": m["routable"]}
         if m.get("check") is not None:
             out["check"] = dict(m["check"])
+        if m.get("stage") is not None:
+            out["stage"] = dict(m["stage"])
         return out
 
     @staticmethod
@@ -432,9 +456,6 @@ class Deployments:
         return None
 
     def _status(self, rec: dict, ms: list[dict], job: dict | None) -> tuple[str, str]:
-        if rec["type"] == "split":
-            return "stopped", ("Split: planned and recorded; it runs once the pipeline split "
-                               "(ENG-307) is built")
         if rec["state"] == "stopped":
             up = [m["alias"] for m in ms if m["state"] == "serving"]
             return "stopped", "stopped" + (f" · its engine still answers on {', '.join(up)}"
@@ -472,9 +493,12 @@ class Deployments:
         """What an engine on a node serves that no record covers: a Single each."""
         now = self.clock()
         snap = self.svc.table.snapshot()["by_backend"]
+        fronts = self.split.fronts(ctx)
         items = []
         for nid, n in ctx["nodes"].items():
             for p in n["probes"]:
+                if p.id in fronts:               # a Split's front stage: never a model
+                    continue
                 rows = snap.get(p.id) or {}
                 h = self.svc.health.view(p.id)
                 cards = p.cards(now) if p.kind == "tandemllm" else None
@@ -568,14 +592,13 @@ class Deployments:
         rec = self._by_api().get(model)
         if rec is None:
             return self._table_route(model)
-        if rec["type"] == "split":
-            raise Refused(501, "not_built", f"{rec['name']} runs Split: the pipeline split "
-                                            f"(ENG-307) is not built, so it serves no request yet")
         if rec["state"] == "stopped":
             raise Refused(503, "deployment_stopped", f"{rec['name']} is stopped: start it to "
                                                      f"serve requests")
         ctx = self._context(CTX_TTL_S)
         ms = [m for m in self.members(rec, ctx) if m["state"] != "leaving"]
+        if rec["type"] == "split":
+            ms = self.split.gate(rec, ms)        # the tail of a linked pair, or Refused
         if not ms:
             raise Refused(503, "no_member", f"{rec['name']} has no member that takes requests")
         pin = _header(headers, PIN_HEADER)
@@ -626,7 +649,7 @@ class Deployments:
         r = self.svc.table._route(s, m0["backend"], row, model)
         r.model = m0["model"]
         mine = [(m["backend"], m["model"]) for m in cands[1:]]
-        bad = self._wrong_api(ctx)
+        bad = self._no_request(ctx)
         r.fallbacks = [] if pin else mine + [fb for fb in r.fallbacks
                                              if fb not in mine and fb[0] != m0["backend"]
                                              and fb[0] not in bad]
@@ -741,7 +764,7 @@ class Deployments:
         always for a proxy without nodes: a plain proxy's requests never read a machine."""
         if not self.cfg.nodes():
             return None
-        bad = self._wrong_api(self._context(CTX_TTL_S))
+        bad = self._no_request(self._context(CTX_TTL_S))
         if not bad:
             return None
         r = self.svc.table.resolve(model)            # route.NotFound as the table answers it
@@ -751,6 +774,11 @@ class Deployments:
                                             f"{alias}: {why}")
         r.fallbacks = [fb for fb in r.fallbacks if fb[0] not in bad]
         return r
+
+    def _no_request(self, ctx: dict) -> dict:
+        """{backend id: (node alias, reason)} of every backend the gateway sends nothing: an
+        engine on another engine API major, a Split's front stage."""
+        return {**self._wrong_api(ctx), **self.split.fronts(ctx)}
 
     @staticmethod
     def _wrong_api(ctx: dict) -> dict:
@@ -778,16 +806,19 @@ class Deployments:
 
     def listing(self, created: int) -> list[dict]:
         """/v1/models: each record that may serve once under its API id (a stopped one and a
-        Split are not listed), then the table's models that no record covers; a table id a record
-        took is listed in its prefixed form."""
+        Split without a plan are not listed), then the table's models that no record covers; a
+        table id a record took is listed in its prefixed form. A Split is one model: its tail's;
+        a backend that reaches its front stage lists nothing."""
         ctx = self._context(CTX_TTL_S)
+        fronts = self.split.fronts(ctx)
         out, covered, ids = [], set(), set()
         for rec in self.records():
             ms = self.members(rec, ctx)
             for m in ms:
                 if m["backend"]:
                     covered.add((m["backend"], m["model"]))
-            if rec["type"] == "split" or rec["state"] == "stopped":
+            if rec["state"] == "stopped" or (rec["type"] == "split"
+                                             and self.split.plan_of(rec) is None):
                 continue
             o = rec.get("options") or {}
             api = o.get("api_id") or rec["id"]
@@ -799,7 +830,7 @@ class Deployments:
                                    "nodes": [m["alias"] for m in ms if m["state"] != "leaving"],
                                    "cloud": False}})
         for bid, upstream, m in self.svc.table.listing_rows(created):
-            if (bid, upstream) in covered:
+            if (bid, upstream) in covered or bid in fronts:
                 continue
             if m["id"] in ids:
                 m = dict(m, id=f"{m['owned_by']}/{m['id']}")
@@ -843,6 +874,26 @@ class Deployments:
         self.fleet.log(f"[deploy] the backend {bid} reaches {eid} on {a} (:{e['port']})")
         self._ctx = None
         return {"node": nid, "engine": eid, "backend": bid}
+
+    @staticmethod
+    def _stage_engine(ctx: dict, nid: str) -> str:
+        """The engine a node runs a stage on when the record names none: its only engine, else
+        its only TandemLLM engine TandemNode manages."""
+        n = ctx["nodes"].get(nid)
+        if n is None:
+            raise DeployError(404, "not_found", f"no node {nid}")
+        a = n["row"]["alias"]
+        if len(n["agent"]) == 1:
+            return next(iter(n["agent"]))
+        mine = [eid for eid, e in n["agent"].items() if e.get("kind") == "tandemllm"
+                and e.get("managed")]
+        if len(mine) != 1:
+            raise DeployError(409, "no_engine" if not n["agent"] else "ambiguous_engine",
+                              f"{a} has no engine its TandemNode agent lists: a stage runs on "
+                              f"one" if not n["agent"] else
+                              f"{a} has {len(n['agent'])} engines: name the one that runs the "
+                              f"stage ({', '.join(map(str, n['agent']))})")
+        return mine[0]
 
     def _served_id(self, bid: str, model: str) -> str:
         """The id a backend serves `model` under: the model when it lists it, its one model when
@@ -917,9 +968,13 @@ class Deployments:
             raise DeployError(400, "bad_request", f"a {t.title()} deployment has one member")
         if t == "replicas" and n < 2:
             raise DeployError(400, "bad_request", "a Replicas deployment has two or more members")
-        if t == "split" and n not in (2, 4):
-            raise DeployError(400, "bad_request", "a Split runs over 2 or 4 nodes")
+        if t == "split" and n != 2:
+            raise DeployError(400, "bad_request", "a Split runs over two nodes: the front "
+                                                  "stage's, then the tail's")
         ctx = self._context()
+        # a Split with a plan: the one this body brings, else the record's own
+        has_plan = t == "split" and (d.get("split") is not None or
+                                     (old is not None and self.split.plan_of(old) is not None))
         members = []
         for i, m in enumerate(raw):
             if isinstance(m, str):
@@ -940,12 +995,19 @@ class Deployments:
                 members.append({"node": ctx["by_backend"].get(m["backend"]), "engine": None,
                                 "backend": m["backend"], "model": m.get("model")})
                 continue
-            if t == "split":
+            if t == "split" and (i == 0 or not has_plan):
+                # the front stage has no backend: it serves no request. A Split recorded
+                # without a plan has none either: it is kept and does not start
                 if m["node"] not in ctx["nodes"]:
                     raise DeployError(404, "not_found", f"no node {m['node']}")
-                members.append({"node": m["node"], "engine": m.get("engine"), "backend": None,
+                eid = m.get("engine")
+                if eid is None and has_plan:
+                    eid = self._stage_engine(ctx, m["node"])
+                members.append({"node": m["node"], "engine": eid, "backend": None,
                                 "model": None})
                 continue
+            if t == "split" and m.get("engine") is None:
+                m = dict(m, engine=self._stage_engine(ctx, m["node"]))
             got = self._engine_for(ctx, m["node"], m.get("engine"), who)
             got["model"] = m.get("model") or self._served_id(got["backend"], d["model"])
             members.append(got)
@@ -956,6 +1018,18 @@ class Deployments:
             nodes = [m["node"] for m in members]
             if len(set(nodes)) != n:
                 raise DeployError(400, "bad_request", "a Split's stages run on different nodes")
+            if d.get("split") is not None:
+                plan = self.split.check(d["split"], nodes)
+                o["split"] = plan
+                if "stages" not in b:
+                    d["stages"] = [{"node": plan[r]["node"], "layers": plan[r]["layers"],
+                                    "gib": plan[r]["need_gib"]} for r in splitrun.ROLES]
+                if not ctx_tokens:
+                    ctx_tokens = (plan.get("shape") or {}).get("window") or plan.get("window")
+                    ctx_tokens = ctx_tokens if isinstance(ctx_tokens, int) else None
+            elif has_plan and "members" in b:
+                # the plan names its two nodes: other members need a new plan
+                self.split.check(o["split"], nodes)
             st = d.get("stages") or [{"node": x, "layers": f"stage {i + 1} of {n}", "gib": 0.0}
                                      for i, x in enumerate(nodes)]
             if not isinstance(st, list) or [s.get("node") if isinstance(s, dict) else None
@@ -993,10 +1067,13 @@ class Deployments:
         if t != "role":
             o.pop("role", None)
             o.pop("role_of", None)
+        if t != "split":
+            o.pop("split", None)
         return {"id": old["id"] if old else did, "name": d.get("name") or d["model"],
                 "model": d["model"], "pack": d.get("pack") or "", "type": t, "members": members,
                 "stages": d["stages"] if t == "split" else [], "options": o,
-                "state": "stopped" if t == "split" else d.get("state") or "serving"}
+                "state": (old["state"] if old and old["type"] == "split" else "stopped")
+                if t == "split" else d.get("state") or "serving"}
 
     def create(self, body, who: str, now: float) -> dict:
         doc = self.check(body, who)
@@ -1066,10 +1143,8 @@ class Deployments:
         if action == "start":
             p["title"] = f"Start {name}"
             if rec["type"] == "split":
-                p.update(allowed=False, blocked="a Split runs once the pipeline split (ENG-307) "
-                                                "is built: its record and plan are kept until then")
-                kind = "not_built"
-            for m in ms:
+                kind = self.split.plan_start(rec, ms, p) or kind
+            for m in ms if rec["type"] != "split" else []:
                 if m["state"] == "serving":
                     p["impact"].append(f"{m['alias']}: serves already; warm-up only")
                 elif m["managed"]:
@@ -1082,14 +1157,17 @@ class Deployments:
                     kind = "not_managed"
         elif action == "stop":
             p["title"] = f"Stop {name}"
-            if rec["state"] == "stopped" and not any(m["state"] == "serving" for m in ms):
+            if rec["type"] != "split" and rec["state"] == "stopped" and \
+                    not any(m["state"] == "serving" for m in ms):
                 p.update(allowed=False, blocked=f"{name} is stopped already")
             p["impact"].append(f"{o.get('api_id') or did} takes no new request: the gateway "
                                f"answers 503 deployment_stopped")
             n = sum(self._inflight(m) for m in ms)
             p["impact"].append(f"{n} request{'s' if n != 1 else ''} in flight finish first "
                                f"(at most {DRAIN_WAIT_S:.0f} s)" if n else "nothing is in flight")
-            for m in ms:
+            if rec["type"] == "split":
+                kind = self.split.plan_stop(rec, ms, p) or kind
+            for m in ms if rec["type"] != "split" else []:
                 if m["managed"]:
                     p["impact"].append(f"{m['alias']}: TandemNode stops {m['engine']}")
                 elif m["state"] in ("serving", "starting", "draining") and rec["type"] != "split":
@@ -1112,8 +1190,9 @@ class Deployments:
     def _plan_move(self, rec: dict, ms: list[dict], p: dict, q: dict) -> str | None:
         name = rec["name"]
         if rec["type"] == "split":
-            p.update(allowed=False, blocked="a Split moves with ENG-307")
-            return "not_built"
+            p.update(allowed=False, blocked="a Split's two stages move together: stop it, plan "
+                                            "it on the new nodes (Serve a model) and start it")
+            return "partial_split"
         src, dst = q.get("from"), q.get("to")
         if src is None and len(ms) == 1:
             src = ms[0]["node"]
@@ -1180,7 +1259,7 @@ class Deployments:
         q = {k: body[k] for k in ("to", "from", "engine") if body.get(k)}
         p, kind = self._plan(did, action, now, q)
         if not p["allowed"]:
-            raise DeployError(501 if kind == "not_built" else 400 if kind == "bad_request" else
+            raise DeployError(400 if kind == "bad_request" else
                               404 if kind == "not_found" else 409, kind, p["blocked"])
         if p["destructive"]:
             self._spend(did, action, body.get("confirm"), now)
@@ -1269,6 +1348,8 @@ class Deployments:
             self._ctx = None
 
     def _job_start(self, job: dict, rec: dict, q: dict) -> None:
+        if rec["type"] == "split":
+            return self.split.start(job, rec)
         rec = dict(rec, state="serving")
         self.cfg.put_deployment(rec, who=job["by"])
         threads = []
@@ -1444,6 +1525,8 @@ class Deployments:
         self._step(job, nid, a, "stopped", "stopped")
 
     def _job_stop(self, job: dict, rec: dict, q: dict) -> None:
+        if rec["type"] == "split":
+            return self.split.stop(job, rec)
         rec = dict(rec, state="stopped")
         self.cfg.put_deployment(rec, who=job["by"])
         ms = self.members(rec)
@@ -1501,7 +1584,7 @@ class Deployments:
         [(deployment, answered, why)]."""
         out = []
         for rec in self.records():
-            if rec["type"] == "split" or rec["state"] == "stopped":
+            if rec["state"] == "stopped":
                 continue
             for m in self.members(rec):
                 if m["node"] == nid and m["backend"]:

@@ -471,7 +471,7 @@ class Handler(BaseHTTPRequestHandler):
         except deployments.Refused as exc:         # SRV-731: a stopped deployment, a Split
             svc.account_refusal(self, path, body, exc.status, user=user, finish="refused",
                                 error_type=exc.code)
-            return self._json(exc.status, exc.body())
+            return self._json(exc.status, exc.body(), extra_headers=exc.headers)
         svc.serve(self, path, raw, body, route, user, t_arrival=t_arrival)
 
     def _cache(self, path, body):
@@ -486,7 +486,7 @@ class Handler(BaseHTTPRequestHandler):
         except route_mod.NotFound as exc:
             return self._json(404, exc.body())
         except deployments.Refused as exc:
-            return self._json(exc.status, exc.body())
+            return self._json(exc.status, exc.body(), extra_headers=exc.headers)
         return self._json(st, doc, extra_headers=hdrs)
 
     def _gateway(self, raw: bytes, t_arrival: float) -> None:

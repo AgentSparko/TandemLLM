@@ -28,7 +28,8 @@ THE ORDER (`order`, the same rules as the dashboard's lib/fleet-update.ts):
               rejoined, one node at a time, so the model stays served by the others
     single    a node with a deployment no other node serves: drained (new requests wait, or go to
               its route's fallback), updated, rejoined; the plan names the downtime
-    split     the members of a Split, together in one step: a Split runs one release on every
+    split     the members of a Split, together in one step (after the update its stages are
+              started again in their order, the front first): a Split runs one release on every
               member, so it never updates partly. A Split with a member that cannot be updated
               (off, no agent) is refused and stays as it is; a selection of nodes that takes one
               member of a Split and not another blocks the plan
@@ -444,8 +445,21 @@ class Updater:
             self._send(job, nid)
         for nid in ids:
             self._updated(job, nid)
+        if s["kind"] == "split":
+            self._split_up(job, s)
         for nid in ids:
             self._rejoin(job, nid, s["drain"])
+
+    def _split_up(self, job: dict, s: dict) -> None:
+        """A Split's members updated together: its two stages are brought up again in their
+        order (the front, then the tail), linked and warm, before either node rejoins
+        (proxy/splitrun.py `rejoin`)."""
+        from proxy.deployments import DeployError
+        for did in s["deployments"]:
+            try:
+                self.fleet.deps.split.rejoin(did, lambda text: self._say(job, text))
+            except DeployError as exc:
+                raise UpdateError(exc.status, exc.kind, exc.message)
 
     def _wait_other(self, job: dict, nid: str, dep: str) -> None:
         """A Replicas member drains only while another member serves."""

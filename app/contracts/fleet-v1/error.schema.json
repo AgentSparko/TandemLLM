@@ -36,6 +36,7 @@
             "version_mismatch",
             "preflight_failed",
             "partial_split",
+            "no_plan",
             "password_needed",
             "not_empty",
             "no_engine",

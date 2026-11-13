@@ -211,6 +211,14 @@ class Ops:
         p["impact"].append(f"{_plural(n, 'request')} in flight on {a} finish" if n else
                            f"nothing is in flight on {a}: it is drained at once")
         for d in self._deployments(row["id"]):
+            if d["type"] == "split":
+                # a Split's two stages serve together: a drain of either node takes both
+                other = next((m["alias"] for m in d.get("member_states") or []
+                              if m["node"] != row["id"]), "its other node")
+                p["impact"].append(f"{d['name']} is a Split over {a} and {other}: it takes no "
+                                   f"new request while either is drained (503 with Retry-After "
+                                   f"{DRAIN_RETRY_S} s); the stage on {other} keeps running")
+                continue
             to = self._elsewhere(d, row["id"])
             p["impact"].append(f"{d['name']}: new requests go to {to}" if to
                                else f"{d['name']}: new requests wait, the gateway answers 503 "
