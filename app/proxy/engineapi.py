@@ -1,11 +1,11 @@
 """The engine API version a TandemLLM engine speaks, read from its /health (SRV-747).
 
-The contract is app/contracts/engine-api-v1 (README.md, routes.json; its version is routes.json's
-`version`, equal to SPEAKS). The engine's full /health answer, its setup-mode /health and its status
-responder's /health carry `engine_api` (MAJOR.MINOR). An engine that does not send it (every engine
-up to 0.15.x) speaks 1.0. A MINOR step only adds, so any 1.x is fine here (a 1.0 engine too: it
-lacks only the routes a later minor added); another major is not, and
-the reason names the major this TandemApp needs. Nor is a value outside the plain form (a string of
+The contract is the engine's, copied into contracts/engine-api-v1 at the engine commit its PIN names
+(README.md, routes.json; its version is routes.json's `version`, equal to SPEAKS). The engine's
+full /health answer, its setup-mode /health and its status responder's /health carry `engine_api`
+(MAJOR.MINOR). An engine that does not send it (every engine up to 0.15.x) speaks 1.0. A MINOR step
+only adds, so any 1.x is fine here (a 1.0 engine too: it lacks only the routes a later minor
+added); another major is not, and the reason names the major this TandemApp needs. Nor is a value outside the plain form (a string of
 ASCII digits, a dot, ASCII digits, nothing around it); its reason quotes what the engine sent.
 
     read(doc, kind)   {engine_api, assumed, ok, why} for kind tandemllm; None for any other kind
@@ -22,7 +22,7 @@ import re
 from proxy import _version
 
 #: the engine API version this TandemApp speaks (routes.json `version`)
-SPEAKS = "1.2"
+SPEAKS = "1.3"
 #: what an engine without the field speaks
 ASSUMED = "1.0"
 _FORM = re.compile(r"([0-9]+)\.([0-9]+)")

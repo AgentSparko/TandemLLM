@@ -38,7 +38,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tandemapp import bundle, static  # noqa: E402
 
 TOOL = os.path.join(ROOT, "tools", "dashboard_bundle.py")
-WF = os.path.join(REPO, ".github", "workflows")
+# the workflows: at this tree's root (TandemApp's own repository) or one level up (app/ inside
+# the engine's tree); TOP is that root, the prefix of the paths the workflows name
+TOP = ROOT if os.path.isdir(os.path.join(ROOT, ".github", "workflows")) else REPO
+WF = os.path.join(TOP, ".github", "workflows")
+PFX = os.path.relpath(ROOT, TOP).replace(os.sep, "/") + "/" if TOP != ROOT else ""
 
 # a stand-in for npm: `ci` makes node_modules, `run build [-- --outDir X --emptyOutDir]` writes a
 # page whose asset names are content hashes, as Vite does; FAKE_NPM_SALT changes the content,
@@ -852,7 +856,7 @@ def test_the_ci_workflow_builds_tests_checks_and_uploads():
     p = os.path.join(WF, "dashboard-dist.yml")
     if not os.path.isfile(p):
         from scriptmode import Skip
-        raise Skip("no .github/workflows here (TandemApp's own tree)")
+        raise Skip("no .github/workflows at this root or above it")
     wf = _yaml(p)
     assert "workflow_call" in wf["on"] and "workflow_dispatch" in wf["on"]
     job = wf["jobs"]["build"]
@@ -868,7 +872,7 @@ def test_the_ci_workflow_builds_tests_checks_and_uploads():
     ups = {s["with"]["name"]: s for s in steps
            if s.get("uses", "").startswith("actions/upload-artifact@")}
     assert set(ups) == {"dashboard-dist", "dashboard-bundle"}, ups
-    assert ups["dashboard-dist"]["with"]["path"] == "app/dashboard/dist"
+    assert ups["dashboard-dist"]["with"]["path"] == PFX + "dashboard/dist"
     assert ups["dashboard-dist"]["with"]["if-no-files-found"] == "error"
     assert job["outputs"]["bundle"] and wf["on"]["workflow_call"]["outputs"]["bundle"]
     for s in steps:

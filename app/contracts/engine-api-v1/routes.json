@@ -1,5 +1,5 @@
 {
-  "version": "1.2",
+  "version": "1.3",
   "routes": [
     {
       "method": "POST",
@@ -145,7 +145,7 @@
         "dashboard/src/api/client.ts",
         "dashboard/src/views/live-panel.ts"
       ],
-      "schema": "../dashboard-v1/live.schema.json",
+      "schema": "dashboard/live.schema.json",
       "query": "follow=0",
       "live": true
     },
@@ -160,7 +160,7 @@
         "chatd/engine.py",
         "dashboard/src/api/client.ts"
       ],
-      "schema": "../dashboard-v1/system.schema.json",
+      "schema": "dashboard/system.schema.json",
       "live": true
     },
     {
@@ -174,7 +174,7 @@
         "proxy/nodeagent.py",
         "dashboard/src/api/client.ts"
       ],
-      "schema": "../dashboard-v1/logs-json.schema.json",
+      "schema": "dashboard/logs-json.schema.json",
       "query": "follow=0",
       "live": true
     },
@@ -200,7 +200,7 @@
         "dashboard/src/api/client.ts",
         "dashboard/src/views/parallel.ts"
       ],
-      "schema": "../dashboard-v1/parallel.schema.json",
+      "schema": "dashboard/parallel.schema.json",
       "live": true
     },
     {
@@ -212,7 +212,8 @@
         "dashboard/src/api/client.ts"
       ],
       "doc": "the /metrics text under the dashboard's access rule",
-      "live": true
+      "live": true,
+      "leaves": "2.0: only the dashboard page on the engine's origin reads /metrics this way (its cookie access rule); the page leaves the engine (2026-11-13), callers read GET /metrics. Served through every 1.x"
     },
     {
       "method": "GET",
@@ -222,7 +223,7 @@
       "used_by": [
         "dashboard/src/api/client.ts"
       ],
-      "schema": "../dashboard-v1/summary.schema.json",
+      "schema": "dashboard/summary.schema.json",
       "live": true
     },
     {
@@ -233,7 +234,7 @@
       "used_by": [
         "dashboard/src/api/client.ts"
       ],
-      "schema": "../dashboard-v1/usage.schema.json",
+      "schema": "dashboard/usage.schema.json",
       "live": true
     },
     {
@@ -245,7 +246,7 @@
         "dashboard/src/api/client.ts",
         "tools/tandem_eval.py"
       ],
-      "schema": "../dashboard-v1/requests.schema.json",
+      "schema": "dashboard/requests.schema.json",
       "live": true
     },
     {
@@ -653,7 +654,7 @@
       "used_by": [
         "tandemapp/conductor/classify.py"
       ],
-      "schema": "../conductor-v1/systemone.schema.json",
+      "schema": "decision/systemone.schema.json",
       "live": false
     },
     {
@@ -675,7 +676,8 @@
       "schema": "../conductor-v1/residency-plan.schema.json",
       "handler": "inproc.ROUTES[residency_plan]",
       "tandem_app": "404 not_found, routes.ENGINE_ONLY",
-      "group": 9
+      "group": 9,
+      "after_eng413": "/v1/engine/residency/plan"
     },
     {
       "method": "GET",
@@ -683,7 +685,8 @@
       "schema": "../conductor-v1/memory-disk.schema.json",
       "handler": "inproc.ROUTES[disk]",
       "tandem_app": "404 not_found, routes.ENGINE_ONLY",
-      "group": 9
+      "group": 9,
+      "after_eng413": "/v1/engine/disk"
     },
     {
       "method": "POST",
@@ -691,7 +694,8 @@
       "schema": "../conductor-v1/memory-disk-clear.schema.json",
       "handler": "inproc.ROUTES[disk]",
       "tandem_app": "404 not_found, routes.ENGINE_ONLY",
-      "group": 9
+      "group": 9,
+      "after_eng413": "/v1/engine/disk/clear"
     },
     {
       "method": "*",
@@ -699,21 +703,26 @@
       "schema": "../conductor-v1/deciders-status.schema.json",
       "handler": "inproc.ROUTES[deciders]",
       "tandem_app": "status: 200, enabled false, why routes.DECIDERS_OFF_WHY; the rest 404 not_found with that text",
-      "group": 9
+      "group": 9,
+      "off_why": "this engine serves no decision model: QWEN38_DECIDER_MODELS is empty (set it in ops/serve.env, e.g. laya-english,laya-multilingual,laya-typed-decisions, and restart)",
+      "after_eng413": "/v1/engine/deciders/*"
     },
     {
       "method": "*",
       "path": "/v1/conductor/narrator/*",
       "handler": "the narrator inproc.start_narrator starts (state narrator)",
       "tandem_app": "status: 200, the narrator off; the rest 404 not_found (narrator.OFF_WHY)",
-      "group": 9
+      "group": 9,
+      "after_eng413": "/v1/engine/narrator/*"
     },
     {
       "method": "*",
       "path": "/v1/conductor/shadow/*",
       "handler": "the shadow reader server/conductor/shadow.py start() runs (state shadow)",
       "tandem_app": "status: 200, enabled false, why routes.SHADOW_OFF_WHY; the rest 404 not_found with that text",
-      "group": 9
+      "group": 9,
+      "off_why": "this engine serves no shadow reader: QWEN38_SHADOW_MODEL is empty (set it in ops/serve.env, e.g. qwen3.5-0.8b, and restart)",
+      "after_eng413": "/v1/engine/shadow/*"
     }
   ],
   "app_routes_via_engine": [
@@ -728,67 +737,93 @@
         "/v1/conductor/shadow/*"
       ],
       "contract": "../conductor-v1/",
-      "doc": "TandemApp's conductor, run in the engine's process"
+      "doc": "TandemApp's conductor, run in the engine's process",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
     },
     {
       "path": "/v1/dashboard/session",
       "contract": "../dashboard-v1/session.schema.json",
-      "doc": "the dashboard's sign-in"
+      "doc": "the dashboard's sign-in",
+      "after_eng413": "leaves",
+      "why": "the page's cookie sign-in leaves with the page (2026-11-13); the engine keeps the bearer token and the loopback rule"
     },
     {
       "path": "/v1/config",
       "contract": null,
-      "doc": "the proxy's backends and rules (--backends)"
+      "doc": "the proxy's backends and rules (--backends)",
+      "after_eng413": "leaves",
+      "why": "--backends leaves the engine: other backends sit behind TandemApp's controller (tandem-app), 2026-11-13"
     },
     {
       "path": "/v1/config/*",
       "contract": null,
-      "doc": "the proxy's backends and rules (--backends)"
+      "doc": "the proxy's backends and rules (--backends)",
+      "after_eng413": "leaves",
+      "why": "--backends leaves the engine: other backends sit behind TandemApp's controller (tandem-app), 2026-11-13"
     },
     {
       "path": "/v1/collect/*",
       "contract": null,
-      "doc": "the host collector (--backends)"
+      "doc": "the host collector (--backends)",
+      "after_eng413": "leaves",
+      "why": "--backends leaves the engine: the host collector runs in TandemApp's controller, 2026-11-13"
     },
     {
       "path": "/v1/chat-app",
       "contract": null,
-      "doc": "chatd, the Chat tab's service, through the engine port (tandemapp/chat_forward.py)"
+      "doc": "chatd, the Chat tab's service, through the engine port (tandemapp/chat_forward.py)",
+      "after_eng413": "leaves",
+      "why": "only the page on the engine's origin reaches chatd here; the page leaves (2026-11-13) and TandemApp's controller forwards the Chat tab"
     },
     {
       "path": "/v1/chat-app/*",
       "contract": null,
-      "doc": "chatd, the Chat tab's service, through the engine port (tandemapp/chat_forward.py)"
+      "doc": "chatd, the Chat tab's service, through the engine port (tandemapp/chat_forward.py)",
+      "after_eng413": "leaves",
+      "why": "only the page on the engine's origin reaches chatd here; the page leaves (2026-11-13) and TandemApp's controller forwards the Chat tab"
     },
     {
       "path": "/v1/library*",
       "contract": "../conductor-v1/",
-      "doc": "the package library (library.schema.json)"
+      "doc": "the package library (library.schema.json)",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
     },
     {
       "path": "/v1/laya*",
       "contract": "../conductor-v1/",
-      "doc": "Laya (laya-ask.schema.json)"
+      "doc": "Laya (laya-ask.schema.json)",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
     },
     {
       "path": "/v1/memory",
       "contract": null,
-      "doc": "the model's own memory, under its session's address"
+      "doc": "the model's own memory, under its session's address",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
     },
     {
       "path": "/v1/memory/*",
       "contract": null,
-      "doc": "the model's own memory, under its session's address"
+      "doc": "the model's own memory, under its session's address",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
     },
     {
       "path": "/s/{token}/*",
       "contract": null,
-      "doc": "a session address: /v1/library, /v1/laya and /v1/memory under the session's token (tandemapp/session_tokens.py)"
+      "doc": "a session address: /v1/library, /v1/laya and /v1/memory under the session's token (tandemapp/session_tokens.py)",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
     },
     {
       "path": "/dashboard/*",
       "contract": null,
-      "doc": "the dashboard's built files (the not-built page without them)"
+      "doc": "the dashboard's built files (the not-built page without them)",
+      "after_eng413": "leaves",
+      "why": "the dashboard page leaves the engine: an engine-only install has no web page; TandemApp's controller serves it (2026-11-13)"
     }
   ],
   "app_families": [
@@ -803,5 +838,95 @@
       "routes",
       "app_routes_via_engine"
     ]
-  }
+  },
+  "planned": [
+    {
+      "kind": "field",
+      "what": "/health extensions",
+      "shape": "[{name, version, ext_api}], [] when headless",
+      "lands_with": "ENG-413 WP3a (the extension host)"
+    },
+    {
+      "kind": "answer",
+      "what": "404 no_ui",
+      "paths": [
+        "/dashboard",
+        "/dashboard/*"
+      ],
+      "shape": "error.type no_ui, the message names TandemApp",
+      "lands_with": "ENG-413 WP3a (headless); every engine once the page has left (WP14)"
+    },
+    {
+      "kind": "answer",
+      "what": "404 not_on_engine",
+      "paths": [
+        "/v1/conductor/*",
+        "/v1/chat-app",
+        "/v1/chat-app/*",
+        "/v1/library*",
+        "/v1/laya*",
+        "/v1/memory",
+        "/v1/memory/*",
+        "/s/{token}/*",
+        "/v1/config",
+        "/v1/config/*",
+        "/v1/collect/*",
+        "/v1/dashboard/session"
+      ],
+      "shape": "error.type not_on_engine, the message names TandemApp; only where no extension serves the path",
+      "lands_with": "ENG-413 WP3a"
+    },
+    {
+      "kind": "route",
+      "method": "GET",
+      "path": "/v1/engine/residency/plan",
+      "group": 9,
+      "schema": "../conductor-v1/residency-plan.schema.json",
+      "replaces": "/v1/conductor/residency/plan",
+      "lands_with": "ENG-413 WP5"
+    },
+    {
+      "kind": "route",
+      "method": "GET",
+      "path": "/v1/engine/disk",
+      "group": 9,
+      "schema": "../conductor-v1/memory-disk.schema.json",
+      "replaces": "/v1/conductor/memory/disk",
+      "lands_with": "ENG-413 WP5"
+    },
+    {
+      "kind": "route",
+      "method": "POST",
+      "path": "/v1/engine/disk/clear",
+      "group": 9,
+      "schema": "../conductor-v1/memory-disk-clear.schema.json",
+      "replaces": "/v1/conductor/memory/disk/clear",
+      "lands_with": "ENG-413 WP5"
+    },
+    {
+      "kind": "route",
+      "method": "*",
+      "path": "/v1/engine/deciders/*",
+      "group": 9,
+      "schema": "../conductor-v1/deciders-status.schema.json",
+      "replaces": "/v1/conductor/deciders/*",
+      "lands_with": "ENG-413 WP5"
+    },
+    {
+      "kind": "route",
+      "method": "*",
+      "path": "/v1/engine/narrator/*",
+      "group": 9,
+      "replaces": "/v1/conductor/narrator/*",
+      "lands_with": "ENG-413 WP5"
+    },
+    {
+      "kind": "route",
+      "method": "*",
+      "path": "/v1/engine/shadow/*",
+      "group": 9,
+      "replaces": "/v1/conductor/shadow/*",
+      "lands_with": "ENG-413 WP5"
+    }
+  ]
 }

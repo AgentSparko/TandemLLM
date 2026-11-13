@@ -1,0 +1,51 @@
+{
+  "selection": {
+    "model": "qwen3.8-flash-next",
+    "profile": "flashnext-2.05",
+    "components": {
+      "conductor": false,
+      "narrator": false,
+      "laya": false,
+      "shadow": false,
+      "vision": true,
+      "prompt_cache": true,
+      "state_store": true,
+      "response_cache": false,
+      "disk_tier": true,
+      "nvme_spill": true,
+      "proxy": false,
+      "kv_fp8": false
+    },
+    "slots": 8,
+    "window": 40960,
+    "kv_pool": true,
+    "floor_gb": 15.0,
+    "methods": {
+      "reasoning_effort": "medium",
+      "default_max_tokens": 32768,
+      "request_timeout": 3600,
+      "max_queue": 8,
+      "queue_timeout": 240
+    },
+    "advanced": {
+      "port": 8000,
+      "host": "0.0.0.0",
+      "served_model": "qwen38-spark-engine",
+      "dashboard_login": "off",
+      "admin_password": "keep"
+    },
+    "device": "dgx-spark"
+  },
+  "split": {
+    "cuts": [
+      12,
+      24
+    ],
+    "caches": "on",
+    "side_window": 16384,
+    "table": "cold",
+    "snapshots_gb": 2,
+    "front_cache_gb": 16,
+    "tail_disk_gb": 16
+  }
+}

@@ -1,5 +1,7 @@
-"""The engine API contract v1, TandemApp's side (SRV-748): contracts/engine-api-v1 against TandemApp's
-callers. The engine's side is the repository's tests/test_engine_api_contract.py.
+"""The engine API contract v1, TandemApp's side (SRV-748; 1.3: ENG-427, QA ENG-428): the engine's
+contracts/engine-api-v1, copied here at the commit PIN names (tests/test_contract_pin.py), against
+TandemApp's callers and its own copies. The engine's side is the engine's
+tests/test_engine_api_contract.py.
 
   1  routes.json is well formed: its version is proxy.engineapi.SPEAKS, every route has a method,
      a group, a shape that exists, and callers or a named consumer; the lists are disjoint
@@ -15,10 +17,11 @@ callers. The engine's side is the repository's tests/test_engine_api_contract.py
                                                                   test_every_literal_is_classified
   3  every route is used: a file of its used_by holds a literal for it, or a relay prefix
      covers it; nodeengines.RELAY is in the routes               test_every_route_is_used
-  4  the version: a missing field reads 1.0 (assumed, ok), 1.0, 1.1, 1.2 and 1.4 are ok, 2.0 is
-     not and names 1.x, a value not in the plain MAJOR.MINOR form is not ok and its reason quotes
-     it, another kind is not read; nodeengines.health against fake engines that say nothing,
-     1.0, 1.1, 1.2, 1.4, 2.0 and garbage; the health example validates   test_versions
+  4  the version: a missing field reads 1.0 (assumed, ok), 1.0, 1.1, 1.2, 1.3 and 1.4 are ok, 2.0
+     is not and names 1.x, a value not in the plain MAJOR.MINOR form is not ok and its reason
+     quotes it, another kind is not read; nodeengines.health against fake engines that say
+     nothing, 1.0, 1.1, 1.2, 1.3, 1.4, 2.0 and garbage; the health example validates
+                                                                  test_versions
   5  1.2 is additive: the health answers of a 1.0 and a 1.1 engine (no stage block) still
      validate, and so do the two stages' examples with the stage block and the tail's degraded;
      a stage block missing a field or with another role does not; the split examples (a request
@@ -28,6 +31,16 @@ callers. The engine's side is the repository's tests/test_engine_api_contract.py
      node/control.json's verbs; nodeweights reads a folder laid out as
      node/hub_manifest.example.json says (files_of, the sha256 per file, the content id)
                                                                   test_node_fixtures
+  7  1.3, TandemApp's copies of the engine's values: tandemapp/auth.py same_origin and
+     same_origin_json answer auth.json's cases, tandemapp/usage.py TIER_OF is cache.json's,
+     tandemapp/conductor/routes.py's two OFF_WHY texts are the screens' off_why, the registry of
+     tandemapp/metrics.py names metrics-families.json's families with their types and labels
+                                                                  test_values_1_3
+  8  1.3 is additive and the moved shapes are the same: the 1.2 examples (compat/1.2/) validate,
+     every 1.2 route is still here, contracts/dashboard-v1 keeps byte copies of the engine's
+     dashboard/ files and conductor-v1 of decision/systemone.schema.json, the app routes carry
+     their after-ENG-413 mark and no TandemApp file calls a planned route
+                                                                  test_additive_1_3
 
 Standard library only; the fake engines are threads on loopback ports.
 
@@ -430,7 +443,7 @@ def test_versions():
         {"engine_api": "1.4", "assumed": False, "ok": True, "why": None}
     # an engine one minor behind (1.0, no identity route) and one on this minor are both ok
     assert engineapi.ASSUMED == "1.0" and engineapi.SPEAKS != "1.0"
-    for said in ("1.0", "1.1", engineapi.SPEAKS):
+    for said in ("1.0", "1.1", "1.2", engineapi.SPEAKS):
         assert engineapi.read({"status": "ok", "engine_api": said}, "tandemllm") == \
             {"engine_api": said, "assumed": False, "ok": True, "why": None}, said
     assert engineapi.read({"engine_api": "2.0"}, "tandemllm") == \
@@ -452,6 +465,7 @@ def test_versions():
              "v10": FakeEngine({"status": "ok", "engine_api": "1.0"}),
              "v11": FakeEngine({"status": "ok", "engine_api": "1.1"}),
              "v12": FakeEngine({"status": "ok", "engine_api": "1.2"}),
+             "v13": FakeEngine({"status": "ok", "engine_api": "1.3"}),
              "v14": FakeEngine({"status": "ok", "engine_api": "1.4"}),
              "v20": FakeEngine({"status": "ok", "engine_api": "2.0"}),
              "garbage": FakeEngine(raw=b"<html>not json</html>"),
@@ -465,6 +479,7 @@ def test_versions():
         view = {v["id"]: v for v in es.view()}
         want = {"unsaid": ("up", "1.0", True, True, None), "v10": ("up", "1.0", False, True, None),
                 "v11": ("up", "1.1", False, True, None), "v12": ("up", "1.2", False, True, None),
+                "v13": ("up", "1.3", False, True, None),
                 "v14": ("up", "1.4", False, True, None),
                 "v20": ("unhealthy", "2.0", False, False, why),
                 "garbage": ("unhealthy", "1.0", True, True, None),      # no status: not up
@@ -489,7 +504,7 @@ def test_versions():
         for f in fakes.values():
             f.close()
         shutil.rmtree(logs, ignore_errors=True)
-    return f"read: 1.0 assumed, 1.0, 1.1, 1.2 and 1.4 ok, 2.0 names 1.x; {len(want)} engines viewed"
+    return f"read: 1.0 assumed, 1.0 to 1.4 ok, 2.0 names 1.x; {len(want)} engines viewed"
 
 
 def _ex(name: str):
@@ -593,6 +608,68 @@ def test_node_fixtures():
     finally:
         shutil.rmtree(pack, ignore_errors=True)
     return f"port {port}, verbs {'/'.join(control['verbs'])}, {len(man['files'])} files, {cid[:15]}"
+
+
+
+# ---------------------------------------------------------------------------- 1.3
+
+def test_values_1_3():
+    from tandemapp import auth, metrics, usage
+    from tandemapp.conductor import routes
+
+    def answer(x):
+        return None if x is None else list(x)
+    cases = _ex("auth.json")["same_origin"]
+    for c in cases:
+        assert answer(auth.same_origin(c["headers"])) == c["same_origin"], c
+        assert answer(auth.same_origin_json(c["headers"])) == c["same_origin_json"], c
+    assert usage.TIER_OF == _ex("cache.json")["tier_of"]
+    off = {e["path"]: e.get("off_why") for e in _routes()["engine_screens_until_eng413"]}
+    assert routes.DECIDERS_OFF_WHY == off["/v1/conductor/deciders/*"]
+    assert routes.SHADOW_OFF_WHY == off["/v1/conductor/shadow/*"]
+    fams = {f["name"]: f for f in _ex("metrics-families.json")["families"]}
+    reg = {m.name: m for m in metrics.REGISTRY._metrics}
+    assert set(fams) == set(reg), (sorted(set(fams) - set(reg)), sorted(set(reg) - set(fams)))
+    for name, m in reg.items():
+        assert (fams[name]["type"], fams[name]["labels"]) == (m.kind, list(m.labelnames)), name
+    ext = sorted(n for n, f in fams.items() if f["owner"] == "ext")
+    assert ext and all(n.startswith("qse_conductor_") for n in ext), ext
+    return f"same_origin on {len(cases)} cases, TIER_OF, 2 OFF_WHY, {len(fams)} families ({len(ext)} ext)"
+
+
+def test_additive_1_3():
+    def ok(doc, schema):
+        return not contract_check.validate(doc, schema, root=CONTRACT)
+    health = contract_check.load("health", CONTRACT)
+    old = _ex("compat/1.2/health.example.json")
+    for said in ("1.0", "1.1", "1.2"):
+        assert ok(dict(old, engine_api=said), health) and engineapi.read(dict(old, engine_api=said))["ok"]
+    for name in ("health.stage-front.example.json", "health.stage-tail.example.json"):
+        assert ok(_ex("compat/1.2/" + name), health), name
+    assert ok(_ex("compat/1.2/split.example.json"), {"$ref": "setup/split.schema.json"})
+    now = {(r["method"], r["path"], r.get("port")) for r in _routes()["routes"]}
+    gone = [r["path"] for r in _ex("compat/1.2/routes.json")["routes"]
+            if (r["method"], r["path"], r.get("port")) not in now]
+    assert not gone, gone
+    # the shapes the engine took over stay byte for byte where TandemApp's dashboard reads them
+    dash, pairs = os.path.join(CONTRACT, "dashboard"), 0
+    for name in sorted(os.listdir(dash)):
+        with open(os.path.join(dash, name), "rb") as a, \
+                open(os.path.join(ROOT, "contracts", "dashboard-v1", name), "rb") as b:
+            assert a.read() == b.read(), f"contracts/dashboard-v1/{name} is not the engine's dashboard/{name}"
+        pairs += 1
+    with open(os.path.join(CONTRACT, "decision", "systemone.schema.json"), "rb") as a, \
+            open(os.path.join(ROOT, "contracts", "conductor-v1", "systemone.schema.json"), "rb") as b:
+        assert a.read() == b.read(), "conductor-v1/systemone.schema.json"
+    # what leaves the engine and what an extension serves; no caller of a planned route yet
+    doc = _routes()
+    assert {e["after_eng413"] for e in doc["app_routes_via_engine"]} == {"leaves", "extension"}
+    planned = [p["path"] for p in doc["planned"] if p["kind"] == "route"]
+    callers = [f"{rel}:{ln} {lit}" for rel in list(CLIENTS) + ui_files()
+               for ln, lit in literals_of(rel) if any(lit.startswith(p.rstrip("*")) for p in planned)]
+    assert not callers, callers
+    return f"1.0/1.1/1.2 answers valid, {len(now)} routes, {pairs} dashboard files equal, " \
+           f"{len(planned)} planned routes uncalled"
 
 
 if __name__ == "__main__":

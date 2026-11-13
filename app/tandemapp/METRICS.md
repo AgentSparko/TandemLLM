@@ -2,7 +2,7 @@
 
 The server answers `GET /metrics` in the Prometheus text format. Nothing has to be installed for
 it: `prometheus_client` is not on the board and the interpreter there has no pip, so
-`app/tandemapp/metrics.py` writes the format out by hand.
+`tandemapp/metrics.py` writes the format out by hand.
 
 ```bash
 curl -s localhost:8000/metrics | head -40
@@ -344,7 +344,7 @@ Two alerts are worth having before any dashboard: `rate(qse_errors_total[5m]) > 
 
 ## Where the hooks are, and why they are not in the loop
 
-`app/tandemapp/metrics.py` wraps four things and `server/app.py` carries an import, a route and one
+`tandemapp/metrics.py` wraps four things and `server/app.py` carries an import, a route and one
 `install()` call:
 
 | wrapped | gives |
@@ -372,7 +372,7 @@ sees them without a scrape. Open WebUI prints the `usage` of a stream merged wit
 `timings` in its (i) tooltip, and adds the token counts of every chunk that carries `usage`,
 so exactly one chunk of a stream carries them (the finish chunk by default, the separate
 `choices: []` chunk when the client sent `include_usage: true`, none on `include_usage: false` or
-`--usage-default off`). `app/tandemapp/usage.py::RequestRecord` is the one source; the example below has
+`--usage-default off`). `tandemapp/usage.py::RequestRecord` is the one source; the example below has
 consistent numbers.
 
 ```json

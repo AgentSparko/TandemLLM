@@ -1,0 +1,26 @@
+{
+ "version": "1.0",
+ "about": "The QWEN38_* knobs the engine extension reads (engine-ext-v1 1.0): name -> default. The engine's registry (engine/settings.py KNOBS) carries the same names with the same defaults, its owner an app/... label; TandemApp's tandemapp/knobs.py DEFAULTS is the extension's own copy. A knob the extension starts reading is added here in a minor step.",
+ "prefix": "QWEN38_",
+ "knobs": {
+  "CLIENT_CWD": "note",
+  "CONDUCTOR_FIT": "model",
+  "FAIL_OPEN": "general",
+  "LIBRARY_HOLD": "message",
+  "MEMORY_ROUTES": "auto",
+  "MODEL_NAME": "",
+  "NARRATOR_MODEL": "",
+  "NOTES_HEAD": "off",
+  "NOTES_HEAD_ORDER": "memory",
+  "NOTE_ANCHOR": "on",
+  "NOTE_DEDUP": "parts",
+  "PACKAGE_HOLD": "pick",
+  "SESSION_GENERATIONS": "on",
+  "SHADOW_ASK": "idle",
+  "SHADOW_ASK_IDLE_S": "5",
+  "STATUS_CLIENTS": "open-webui",
+  "TANDEM_SCRATCH": "",
+  "TANDEM_URL": "",
+  "TOOL_FIT": "on"
+ }
+}

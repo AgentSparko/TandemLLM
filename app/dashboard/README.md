@@ -2,7 +2,7 @@
 
 The engine's own web app, served by the engine at `/dashboard/` from the committed `dist/`. The box needs no Node. The standalone proxy serves the same `dist/` (`python -m proxy`), and the Python package carries it as `proxy/dashboard` (`pyproject.toml`), so `pip install` needs no Node either. [docs/dashboard.md](../../docs/dashboard.md) describes what the views show. This page is for working on the app.
 
-The app is built against the dashboard API contract in `app/contracts/dashboard-v1/` (schemas and examples). Every mock response validates against it, and so does every real response in the backend's tests.
+The app is built against the dashboard API contract in `contracts/dashboard-v1/` (schemas and examples). Every mock response validates against it, and so does every real response in the backend's tests.
 
 ## Stack
 
@@ -93,7 +93,7 @@ The model is `mock/setup/qwen3.8-27b.json`, `models/qwen3.8-27b/model.yaml` as `
 
 ### The mock fleet
 
-The mock also answers TandemApp's fleet API (`/v1/fleet/*`, contract in `app/contracts/fleet-v1/`, `mock/fleet.ts`): nodes, links, topology, deployments, per-node metric series, memory, events, alerts with acknowledgement, rules and window layouts. It is seeded (the same seed answers the same at the same instant) and moves with the clock. The scenario is chosen per request, in this order: the `qse_fleet` cookie that `?fleet=<scenario>` on the page URL sets (`/dashboard/?fleet=node-down`), then `POST /__mock/fleet {"scenario": ...}` (`{"reset": true}` starts the scenarios' clocks again), then `TANDEM_MOCK_FLEET=<scenario> npm run dev:mock`, then `fleet4`. A scenario's clock starts at its first request.
+The mock also answers TandemApp's fleet API (`/v1/fleet/*`, contract in `contracts/fleet-v1/`, `mock/fleet.ts`): nodes, links, topology, deployments, per-node metric series, memory, events, alerts with acknowledgement, rules and window layouts. It is seeded (the same seed answers the same at the same instant) and moves with the clock. The scenario is chosen per request, in this order: the `qse_fleet` cookie that `?fleet=<scenario>` on the page URL sets (`/dashboard/?fleet=node-down`), then `POST /__mock/fleet {"scenario": ...}` (`{"reset": true}` starts the scenarios' clocks again), then `TANDEM_MOCK_FLEET=<scenario> npm run dev:mock`, then `fleet4`. A scenario's clock starts at its first request.
 
 | scenario | what it plays |
 |-|-|

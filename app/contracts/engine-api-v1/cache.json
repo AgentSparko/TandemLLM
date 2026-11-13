@@ -1,0 +1,15 @@
+{
+ "version": "1.3",
+ "about": "POST /v1/cache/peek's tier names (server/cache_peek.py TIER_OF; TandemApp reads them in tandemapp/usage.py TIER_OF): the engine's cache name on the left, the tier a caller sees on the right.",
+ "tier_of": {
+  "resident": "resident",
+  "end": "resident",
+  "side": "resident",
+  "park": "ram_park",
+  "pin": "ram_park",
+  "prefix": "ram_snapshot",
+  "spill": "nvme_spill",
+  "disk": "disk_tier",
+  "none": "none"
+ }
+}

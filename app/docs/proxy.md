@@ -36,16 +36,16 @@ Setting the kind and the URL in the environment locks them on the Backends scree
 
 Anyone without a GPU runs the same code as TandemApp, the `tandem-app` command. It needs Python 3.11 or newer, the standard library and `cryptography`, and never pulls torch. A checkout has no built page (see "The built page" below), so build it first, with Node 20.19 or newer, or fetch a released one:
 
-    python3 app/tools/dashboard_bundle.py build     # npm ci and npm run build in app/dashboard
-    pip install ./app                   # or './app[host]': adds psutil and NVML for the System view
+    python3 tools/dashboard_bundle.py build     # npm ci and npm run build in dashboard/
+    pip install .                       # or '.[host]': adds psutil and NVML for the System view
     tandem-app                          # 127.0.0.1:8080, ~/.tandemllm/config.sqlite3
     open http://127.0.0.1:8080/dashboard/
 
-`python -m proxy` in the checkout's `app/` does the same without installing anything but `cryptography`. The page opens on Setup while no backend exists. The engine-only panels (caches, speculation, the conductor, memory) say that this server has no engine.
+`python -m proxy` in the checkout does the same without installing anything but `cryptography`. The page opens on Setup while no backend exists. The engine-only panels (caches, speculation, the conductor, memory) say that this server has no engine.
 
 From a DeepSeek key to a row in the Usage view takes five commands:
 
-    pip install './app[host]'
+    pip install '.[host]'
     printf 'TANDEM_BACKENDS=deepseek\nTANDEM_BACKEND_DEEPSEEK_KIND=deepseek\nTANDEM_BACKEND_DEEPSEEK_KEY=%s\n' "$DEEPSEEK_API_KEY" > app.env && chmod 600 app.env
     tandem-app check --env-file app.env
     tandem-app serve --env-file app.env &
@@ -55,10 +55,10 @@ Then open `http://127.0.0.1:8080/dashboard/#/usage`.
 
 ### In docker
 
-`app/packaging/Dockerfile.app` builds an image of about 70 MB on `python:3.12-slim`, with the page inside and no compiler or torch in it. A Node stage builds the page from `app/dashboard` with the lockfile, so the checkout needs no Node:
+`packaging/Dockerfile.app` builds an image of about 70 MB on `python:3.12-slim`, with the page inside and no compiler or torch in it. A Node stage builds the page from `dashboard/` with the lockfile, so the checkout needs no Node:
 
-    docker build -f app/packaging/Dockerfile.app -t tandemllm-app app
-    cp app/packaging/app.env.example app.env      # fill in; no quotes around values
+    docker build -f packaging/Dockerfile.app -t tandemllm-app .
+    cp packaging/app.env.example app.env          # fill in; no quotes around values
     docker run -d --name tandem-app -p 127.0.0.1:8080:8080 -v tandem-app:/data \
         --env-file app.env tandemllm-app
 
@@ -66,13 +66,13 @@ The config database, the usage ledger and the key file (when `TANDEM_SECRETS_KEY
 
 ### The built page
 
-The page (`app/dashboard/dist/`) is a build output and not in git. CI builds it on every pull request (`.github/workflows/dashboard-dist.yml`: `npm ci`, the type check, vitest, the build, the size budget, a second build that must give the same hash) and hands it to the jobs that package it. `app/tools/dashboard_bundle.py` is the one tool every install path uses:
+The page (`dashboard/dist/`) is a build output and not in git. CI builds it on every pull request (`.github/workflows/dashboard-dist.yml`: `npm ci`, the type check, vitest, the build, the size budget, a second build that must give the same hash) and hands it to the jobs that package it. `tools/dashboard_bundle.py` is the one tool every install path uses:
 
-    python3 app/tools/dashboard_bundle.py build                 # npm ci + npm run build, then dist/bundle.json
-    python3 app/tools/dashboard_bundle.py verify                # the files against their bundle.json
-    python3 app/tools/dashboard_bundle.py fetch --url URL --sha256 SHA256   # a released bundle, checked
-    python3 app/tools/dashboard_bundle.py ensure                # intact, else build (Node), else fetch, else what to do
-    python3 app/tools/dashboard_bundle.py publish --to host:/var/www/tandemapp   # ensure, then rsync
+    python3 tools/dashboard_bundle.py build                 # npm ci + npm run build, then dist/bundle.json
+    python3 tools/dashboard_bundle.py verify                # the files against their bundle.json
+    python3 tools/dashboard_bundle.py fetch --url URL --sha256 SHA256   # a released bundle, checked
+    python3 tools/dashboard_bundle.py ensure                # intact, else build (Node), else fetch, else what to do
+    python3 tools/dashboard_bundle.py publish --to host:/var/www/tandemapp   # ensure, then rsync
 
 `dist/bundle.json` holds the bundle's content hash (the sha256 over each file's path and sha256), every file's sha256, the commit, the lockfile's sha256 and the Node version. The same commit built twice gives the same hash. The server names the bundle it serves: `tandem-app check` prints it on its `page` line, every answer under `/dashboard/` carries `X-Tandem-Bundle` (16 hex digits of the hash, `none` for the "not built" page), and `/health` with the admin token has it under `dashboard`. `pip install` of a checkout without the page stops and says how to get it, `pip install -e` too; with `TANDEM_DASHBOARD_LATER=1` an editable install goes on, and `/dashboard/` says the page is not built until it is. A fetch needs the archive's sha256 from the release and refuses an archive without one, with links, or with a path outside its folder. Releases do not ship the archive yet.
 
@@ -142,7 +142,7 @@ The System view shows the machine each backend runs on, down to the process behi
 
 The server's own process is always listed first, as `engine` in the engine's server and `proxy` in the standalone one. The Backends form sets the host per backend; `TANDEM_BACKEND_<ID>_HOST`, `_HOST_URL` and `_HOST_DCGM_URL` set it from the environment and lock it.
 
-The collector reads psutil and NVML when they are installed (`pip install './app[host]'`), else `/proc` and `nvidia-smi`, and macOS without psutil gives the machine's total memory and load only. The process behind a port is found by its listening socket: psutil, then `/proc/net/tcp` and the processes' file descriptors, then `lsof` or `ss`. A process that belongs to another user stays unreadable without root, and the view says so. Command lines show the home as `~`, and the collector masks the value after any flag whose name holds `key`, `token`, `secret`, `passw` or `auth`.
+The collector reads psutil and NVML when they are installed (`pip install '.[host]'`), else `/proc` and `nvidia-smi`, and macOS without psutil gives the machine's total memory and load only. The process behind a port is found by its listening socket: psutil, then `/proc/net/tcp` and the processes' file descriptors, then `lsof` or `ss`. A process that belongs to another user stays unreadable without root, and the view says so. Command lines show the home as `~`, and the collector masks the value after any flag whose name holds `key`, `token`, `secret`, `passw` or `auth`.
 
 On a GB10 (the DGX Spark) the CPU and the GPU share one memory pool. The driver reports no memory for the GPU itself, so the view shows "unified" there and `MemAvailable` is the figure to watch. The GPU memory of a process is still reported, and it comes out of the same pool as its RSS: the two overlap.
 
@@ -158,7 +158,7 @@ In docker the collector sees the container, not the machine. Run the container w
 
 ## The fleet: `/v1/fleet/*`
 
-TandemApp keeps the registry of the Sparks it manages and answers the fleet API (contract: [`app/contracts/fleet-v1`](../contracts/fleet-v1/README.md), code: `proxy/fleet.py`, `proxy/nodesource.py`, `proxy/fleetstore.py`, `proxy/fleetwatch.py`). The dashboard reads it for the shell's fleet readout, the scope bar, the charts and the windows; the browser talks to `tandem-app` only.
+TandemApp keeps the registry of the Sparks it manages and answers the fleet API (contract: [`contracts/fleet-v1`](../contracts/fleet-v1/README.md), code: `proxy/fleet.py`, `proxy/nodesource.py`, `proxy/fleetstore.py`, `proxy/fleetwatch.py`). The dashboard reads it for the shell's fleet readout, the scope bar, the charts and the windows; the browser talks to `tandem-app` only.
 
 On one box the fleet has one node: the machine `tandem-app` runs on, when it has an NVIDIA GPU or an engine of its own. The first start registers it with its hostname as the alias, the first identity colour and an id from the machine (the DMI serial, else `/etc/machine-id`), never its address. A new address keeps the node and is noted in the log. A machine in front of cloud APIs only is the controller's host and no node. When TandemNode runs on the same machine (below), the controller reads the machine through it, the same path as any other node's; while it does not answer, in-process as before. A node on another machine is read through its TandemNode agent once pairing has given the controller its trust, and is listed `off` until then.
 
@@ -399,7 +399,7 @@ A node and a controller trust each other through pinned certificates; no passwor
 
 ## Add Spark: the wizard
 
-Settings → Add Spark walks Find, Connect, Check, Install, Link, Name and Done (code: `proxy/addspark.py`, `dashboard/src/views/fleet/wizard.ts`; the routes in `app/contracts/fleet-v1`). Its session lives in the config database (`add_sessions`), one active at a time, so a reload, a restart of the controller, or another device opens it at its step. A step with nothing to do is skipped and says why: Install when every device runs the fleet's release already, Link with fewer than two new Sparks on the LAN.
+Settings → Add Spark walks Find, Connect, Check, Install, Link, Name and Done (code: `proxy/addspark.py`, `dashboard/src/views/fleet/wizard.ts`; the routes in `contracts/fleet-v1`). Its session lives in the config database (`add_sessions`), one active at a time, so a reload, a restart of the controller, or another device opens it at its step. A step with nothing to do is skipped and says why: Install when every device runs the fleet's release already, Link with fewer than two new Sparks on the LAN.
 
 - **Find** is discovery (above): the live list, the LAN scan after its question, Add by address, and a rented or remote node from its ssh line, with an optional key file, jump host, lease end and cost per hour.
 - **Connect** pairs by the node's code, or over SSH once with the host key shown and confirmed first. A box with nothing installed is `bare` and goes on to Install.
@@ -416,7 +416,7 @@ Settings → Add Spark walks Find, Connect, Check, Install, Link, Name and Done 
 
 ## TandemApp alone: install, the controller's host, the fleet update
 
-**Install.** TandemApp is the controller and its page, without an engine, torch or a GPU (OPS-234). On a Mac, `brew install ./app/packaging/homebrew/tandemapp.rb` (the formula is in the repository; no tap carries it yet) or, on macOS and Linux alike, `pip install './app[app]'` in a virtual environment (Python 3.11 or newer; the `app` extra adds psutil only). Then:
+**Install.** TandemApp is the controller and its page, without an engine, torch or a GPU (OPS-234). On a Mac, `brew install ./packaging/homebrew/tandemapp.rb` (the formula is in the repository; no tap carries it yet) or, on macOS and Linux alike, `pip install '.[app]'` in a virtual environment (Python 3.11 or newer; the `app` extra adds psutil only). Then:
 
     tandem-app service install --open     # launchd (macOS) or a systemd user unit (Linux); opens the page
     tandem-app service status             # installed, running, its pid, whether it answers /health
@@ -477,8 +477,8 @@ Two more facts from the v0.30.0 source matter for later layers. vLLM removed `gu
 
 The `/metrics` page gives totals. A single request's queue time, its prefill time and whether the scheduler preempted it are not on it. Two small packages in `plugins/` run inside the engine and send those numbers per request to the proxy (layer L2). Install one into the engine's own Python environment; neither has a dependency:
 
-    pip install app/plugins/vllm    # tandemllm-vllm-plugin: vLLM loads it from vllm.stat_logger_plugins
-    pip install app/plugins/sglang  # tandemllm-sglang-plugin: SGLang loads it from sglang.srt.plugins
+    pip install plugins/vllm        # tandemllm-vllm-plugin: vLLM loads it from vllm.stat_logger_plugins
+    pip install plugins/sglang      # tandemllm-sglang-plugin: SGLang loads it from sglang.srt.plugins
 
 The engine needs two variables, `TANDEM_COLLECT_URL` (the proxy's `/v1/collect/<backend id>`) and `TANDEM_COLLECT_TOKEN`. The plugin keeps the last 10,000 finished requests and 300 one-second scheduler samples in memory and posts what is new once a second, or an empty batch every 10 s when the engine is idle. `plugins/README.md` lists what each one reads, the versions it was checked against, and what happens when a release does not fit.
 

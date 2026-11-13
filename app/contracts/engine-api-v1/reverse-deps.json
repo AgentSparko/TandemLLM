@@ -611,6 +611,18 @@
     "app/"
    ]
   },
+  "tests/test_contract_toolcalls.py": {
+   "imports": [
+    "tandemapp.callrepair",
+    "tandemapp.toolcall:ToolCallBuffer",
+    "tandemapp.toolcall:parse_tool_calls",
+    "tandemapp.toolcall:schema_types",
+    "tandemapp.toolformats"
+   ],
+   "reads": [
+    "app/"
+   ]
+  },
   "tests/test_dashboard_api.py": {
    "imports": [
     "proxy.hostcollect",
@@ -719,9 +731,7 @@
   },
   "tests/test_engine_api_contract.py": {
    "imports": [
-    "tandemapp.auth",
-    "tandemapp.conductor.routes",
-    "tandemapp.usage"
+    "tandemapp.metrics"
    ],
    "reads": [
     "app/",
@@ -735,7 +745,6 @@
    "imports": [],
    "reads": [
     "app/",
-    "app/contracts",
     "app/dashboard"
    ]
   },
@@ -743,6 +752,12 @@
    "imports": [],
    "reads": [
     "app/pyproject.toml"
+   ]
+  },
+  "tests/test_engine_ext_contract.py": {
+   "imports": [],
+   "reads": [
+    "app/"
    ]
   },
   "tests/test_engine_only.py": {
@@ -1613,15 +1628,7 @@
    "imports": [
     "tandemapp.auth"
    ],
-   "reads": [
-    "app/contracts"
-   ]
-  },
-  "tests/test_stage_contract.py": {
-   "imports": [],
-   "reads": [
-    "app/contracts"
-   ]
+   "reads": []
   },
   "tests/test_state_channel.py": {
    "imports": [
@@ -2155,34 +2162,124 @@
    "app": "app/contracts/engine-api-v1/setup/estimate-cases.json"
   },
   {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/live.schema.json",
+   "app": "app/contracts/dashboard-v1/live.schema.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/live.example.json",
+   "app": "app/contracts/dashboard-v1/live.example.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/system.schema.json",
+   "app": "app/contracts/dashboard-v1/system.schema.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/system.example.json",
+   "app": "app/contracts/dashboard-v1/system.example.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/logs-json.schema.json",
+   "app": "app/contracts/dashboard-v1/logs-json.schema.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/logs-json.example.json",
+   "app": "app/contracts/dashboard-v1/logs-json.example.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/logs-line.schema.json",
+   "app": "app/contracts/dashboard-v1/logs-line.schema.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/logs-line.example.json",
+   "app": "app/contracts/dashboard-v1/logs-line.example.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/parallel.schema.json",
+   "app": "app/contracts/dashboard-v1/parallel.schema.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/parallel.example.json",
+   "app": "app/contracts/dashboard-v1/parallel.example.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/summary.schema.json",
+   "app": "app/contracts/dashboard-v1/summary.schema.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/summary.example.json",
+   "app": "app/contracts/dashboard-v1/summary.example.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/usage.schema.json",
+   "app": "app/contracts/dashboard-v1/usage.schema.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/usage.example.json",
+   "app": "app/contracts/dashboard-v1/usage.example.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/requests.schema.json",
+   "app": "app/contracts/dashboard-v1/requests.schema.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/requests.example.json",
+   "app": "app/contracts/dashboard-v1/requests.example.json"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/dashboard/logs-export.example.txt",
+   "app": "app/contracts/dashboard-v1/logs-export.example.txt"
+  },
+  {
+   "kind": "file",
+   "engine": "contracts/engine-api-v1/decision/systemone.schema.json",
+   "app": "app/contracts/conductor-v1/systemone.schema.json"
+  },
+  {
    "kind": "value",
    "engine": "server/setup/registry.py ENGINE_MAX_SLOTS",
-   "app": "app/contracts/engine-api-v1/setup/limits.json engine_max_slots"
+   "app": "contracts/engine-api-v1/setup/limits.json engine_max_slots (the engine's own contract since 1.3)"
   },
   {
    "kind": "value",
    "engine": "server/setup_api.py same_origin, same_origin_json",
-   "app": "app/tandemapp/auth.py same_origin, same_origin_json"
+   "app": "app/tandemapp/auth.py same_origin, same_origin_json; both answer contracts/engine-api-v1/auth.json (1.3)"
   },
   {
    "kind": "value",
    "engine": "server/cache_peek.py TIER_OF",
-   "app": "app/tandemapp/usage.py TIER_OF"
+   "app": "app/tandemapp/usage.py TIER_OF; both equal contracts/engine-api-v1/cache.json tier_of (1.3)"
   },
   {
    "kind": "value",
    "engine": "server/decider_api.py OFF_WHY",
-   "app": "app/tandemapp/conductor/routes.py DECIDERS_OFF_WHY"
+   "app": "app/tandemapp/conductor/routes.py DECIDERS_OFF_WHY; both equal routes.json off_why (1.3)"
   },
   {
    "kind": "value",
    "engine": "server/conductor/shadow.py OFF_WHY",
-   "app": "app/tandemapp/conductor/routes.py SHADOW_OFF_WHY"
+   "app": "app/tandemapp/conductor/routes.py SHADOW_OFF_WHY; both equal routes.json off_why (1.3)"
   },
   {
    "kind": "value",
    "engine": "server/engine_api.py VERSION, ops/engine_status.py ENGINE_API",
-   "app": "app/proxy/engineapi.py SPEAKS"
+   "app": "app/proxy/engineapi.py SPEAKS: the version of the contract TandemApp pinned, the same major, not newer (1.3)"
   }
  ]
 }

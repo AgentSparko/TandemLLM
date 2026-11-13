@@ -1,0 +1,460 @@
+{
+ "version": "1.3",
+ "form": "xml",
+ "about": "callrepair's argument renames and tool mappings (engine API 1.3), on calls in the xml form: check.py runs them with repair on; both copies must answer every case's want.",
+ "tool_sets": {
+  "coding": [
+   {
+    "type": "function",
+    "function": {
+     "name": "read",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "filePath": {
+        "type": "string"
+       },
+       "offset": {
+        "type": "number"
+       },
+       "limit": {
+        "type": "number"
+       }
+      },
+      "required": [
+       "filePath"
+      ]
+     }
+    }
+   },
+   {
+    "type": "function",
+    "function": {
+     "name": "write",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "content": {
+        "type": "string"
+       },
+       "filePath": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "content",
+       "filePath"
+      ]
+     }
+    }
+   },
+   {
+    "type": "function",
+    "function": {
+     "name": "bash",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "command": {
+        "type": "string"
+       },
+       "description": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "command"
+      ]
+     }
+    }
+   },
+   {
+    "type": "function",
+    "function": {
+     "name": "grep",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "pattern": {
+        "type": "string"
+       },
+       "path": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "pattern"
+      ]
+     }
+    }
+   }
+  ],
+  "bash_only": [
+   {
+    "type": "function",
+    "function": {
+     "name": "bash",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "command": {
+        "type": "string"
+       },
+       "description": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "command"
+      ]
+     }
+    }
+   }
+  ],
+  "two_paths": [
+   {
+    "type": "function",
+    "function": {
+     "name": "copy",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "src_path": {
+        "type": "string"
+       },
+       "dst_path": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "src_path",
+       "dst_path"
+      ]
+     }
+    }
+   }
+  ]
+ },
+ "cases": [
+  {
+   "id": "path-to-filePath",
+   "text": "<tool_call>\n<function=read>\n<parameter=path>\n/tmp/proj/src/config.py\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "coding",
+   "names": true,
+   "types": "schema",
+   "repair": true,
+   "stream": [
+    1,
+    5,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "read",
+      "arguments": "{\"filePath\": \"/tmp/proj/src/config.py\"}"
+     }
+    ],
+    "renames": [
+     {
+      "kind": "argument",
+      "tool": "read",
+      "from": "path",
+      "to": "filePath"
+     }
+    ],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "read",
+       "arguments": "{\"filePath\": \"/tmp/proj/src/config.py\"}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "case-and-underscore",
+   "text": "<tool_call>\n<function=read>\n<parameter=file_path>\n/a.py\n</parameter>\n<parameter=offset>\n10\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "coding",
+   "names": true,
+   "types": "schema",
+   "repair": true,
+   "stream": [
+    1,
+    5,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "read",
+      "arguments": "{\"filePath\": \"/a.py\", \"offset\": 10}"
+     }
+    ],
+    "renames": [
+     {
+      "kind": "argument",
+      "tool": "read",
+      "from": "file_path",
+      "to": "filePath"
+     }
+    ],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "read",
+       "arguments": "{\"filePath\": \"/a.py\", \"offset\": 10}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "synonyms",
+   "text": "<tool_call>\n<function=write>\n<parameter=text>\nhi\n</parameter>\n<parameter=path>\n/b.txt\n</parameter>\n</function>\n</tool_call><tool_call>\n<function=bash>\n<parameter=cmd>\nls -la\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "coding",
+   "names": true,
+   "types": "schema",
+   "repair": true,
+   "stream": [
+    1,
+    5,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "write",
+      "arguments": "{\"content\": \"hi\", \"filePath\": \"/b.txt\"}"
+     },
+     {
+      "name": "bash",
+      "arguments": "{\"command\": \"ls -la\"}"
+     }
+    ],
+    "renames": [
+     {
+      "kind": "argument",
+      "tool": "write",
+      "from": "text",
+      "to": "content"
+     },
+     {
+      "kind": "argument",
+      "tool": "write",
+      "from": "path",
+      "to": "filePath"
+     },
+     {
+      "kind": "argument",
+      "tool": "bash",
+      "from": "cmd",
+      "to": "command"
+     }
+    ],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "write",
+       "arguments": "{\"content\": \"hi\", \"filePath\": \"/b.txt\"}"
+      },
+      {
+       "name": "bash",
+       "arguments": "{\"command\": \"ls -la\"}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "gate-missing-required",
+   "text": "<tool_call>\n<function=write>\n<parameter=text>\nhi\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "coding",
+   "names": true,
+   "types": "schema",
+   "repair": true,
+   "stream": [
+    1,
+    5,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "write",
+      "arguments": "{\"text\": \"hi\"}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "write",
+       "arguments": "{\"content\": \"hi\"}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "ambiguous-target",
+   "text": "<tool_call>\n<function=copy>\n<parameter=path>\n/a\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "two_paths",
+   "names": true,
+   "types": "schema",
+   "repair": true,
+   "stream": [
+    1,
+    5,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "copy",
+      "arguments": "{\"path\": \"/a\"}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "copy",
+       "arguments": "{\"path\": \"/a\"}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "tool-mapped-to-offered",
+   "text": "<tool_call>\n<function=search>\n<parameter=pattern>\nTODO\n</parameter>\n<parameter=path>\nsrc\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "coding",
+   "names": true,
+   "types": "schema",
+   "repair": true,
+   "stream": [
+    1,
+    5,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "grep",
+      "arguments": "{\"pattern\": \"TODO\", \"path\": \"src\"}"
+     }
+    ],
+    "renames": [
+     {
+      "kind": "tool",
+      "tool": "search",
+      "from": "search",
+      "to": "grep"
+     }
+    ],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "grep",
+       "arguments": "{\"pattern\": \"TODO\", \"path\": \"src\"}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "search-as-bash",
+   "text": "<tool_call>\n<function=grep>\n<parameter=pattern>\nTODO\n</parameter>\n<parameter=path>\nsrc\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "bash_only",
+   "names": true,
+   "types": "schema",
+   "repair": true,
+   "stream": [
+    1,
+    5,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "bash",
+      "arguments": "{\"command\": \"grep -rn -- TODO src\"}"
+     }
+    ],
+    "renames": [
+     {
+      "kind": "tool",
+      "tool": "grep",
+      "from": "grep",
+      "to": "bash",
+      "command": "grep -rn -- TODO src"
+     }
+    ],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "bash",
+       "arguments": "{\"command\": \"grep -rn -- TODO src\"}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "unknown-tool-untouched",
+   "text": "<tool_call>\n<function=paint>\n<parameter=color>\nred\n</parameter>\n</function>\n</tool_call>",
+   "eos": true,
+   "tools": "coding",
+   "names": true,
+   "types": "schema",
+   "repair": true,
+   "stream": [
+    1,
+    5,
+    0
+   ],
+   "want": {
+    "content": "",
+    "calls": [
+     {
+      "name": "paint",
+      "arguments": "{\"color\": \"red\"}"
+     }
+    ],
+    "renames": [],
+    "stream": {
+     "content": "",
+     "calls": [
+      {
+       "name": "paint",
+       "arguments": "{\"color\": \"red\"}"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

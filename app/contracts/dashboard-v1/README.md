@@ -19,6 +19,8 @@ These files are the truth for `/v1/dashboard/*`. Every response the server sends
 | `error.schema.json` | every 401, 400, 404 and 429 body |
 | `tandem-eval.schema.json` | not an endpoint: the report `tools/tandem_eval.py` writes (`~/pub-results/tandem-eval/<night>/report.json`) and keeps on the box for the Conductor view's Compare screen (`POST /v1/conductor/evals`, listed by `GET /v1/conductor/evals`) |
 
+Since engine API 1.3 (ENG-427) the engine owns the shapes of its own reads: `live`, `system`, `logs-json`, `logs-line`, `parallel`, `summary`, `usage` and `requests` (schema and example each) and `logs-export.example.txt` are byte copies of `../engine-api-v1/dashboard/`, the engine's, copied at the commit `../engine-api-v1/PIN` names. `tests/test_engine_api_contract.py` holds them equal, so a change to one of them starts in the engine's contract. This contract's own files are `session`, `gap`, `tandem-eval` and `error`.
+
 Each `*.example.json` is a valid instance with consistent numbers (`tandem-eval.example.json` is made up, not a measurement; its `harness` says so). The request example is one finished request: 1,959 prompt tokens of which 1,536 came from the cache, 412 completion tokens of which 230 were reasoning, and a TTFT of 2,240.1 ms (0.4 ms in the queue, 2,239.7 ms of prompt).
 
 The schemas use the JSON Schema 2020-12 subset that the backend's standard-library validator supports: `type`, `required`, `properties`, `additionalProperties`, `items`, `enum`, nullable through type arrays, and `minimum`. `additionalProperties` is `false` everywhere except `flags.args` and `caches`. Those two are the engine's own objects, the parsed command line and the `/v1/cache/stats` body.
