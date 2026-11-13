@@ -1,6 +1,6 @@
 """ENG-407 (ENG-E17): every tool-call form behind one interface, the contract each must keep.
 
-For every registered `ToolFormat` (server/toolformats) and every family's `ServeSpec.tool_format`:
+For every registered `ToolFormat` (server/api/toolformats) and every family's `ServeSpec.tool_format`:
 
   1  the family's form is registered; the default is the XML form
   2  a call rendered in the form parses back to the same name and arguments: whole (`rewrite` +
@@ -26,8 +26,8 @@ sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: Tande
 
 from engine import grammar as G  # noqa: E402
 from engine.models import REGISTRY  # noqa: E402
-from tandemapp import toolformats  # noqa: E402
-from tandemapp.toolcall import ToolCallBuffer, diagnose, parse_tool_calls  # noqa: E402
+from server.api import toolformats  # noqa: E402
+from server.api.toolcall import ToolCallBuffer, diagnose, parse_tool_calls  # noqa: E402
 
 TOOLS = [{"type": "function", "function": {"name": "write_file", "parameters": {
     "type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"},

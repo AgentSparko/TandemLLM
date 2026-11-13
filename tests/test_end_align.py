@@ -3,7 +3,7 @@
 THE MEASUREMENT (the box's suffix store, 2026-10-03, the last 4,000 documents, token ids only).
 Of the follow-ups whose copy parted inside the previous generation, 220 parted in a tool call's
 parameter and 34 at `</think>`; 221 of those 254 differ from what the engine wrote in whitespace
-alone: server/toolcall.py trims a parameter value (an `oldString`'s indentation, the newline the
+alone: server/api/toolcall.py trims a parameter value (an `oldString`'s indentation, the newline the
 model wrote before `</parameter>`), and the template writes `reasoning|trim + "\\n</think>"`.
 Such a turn resumed at the previous prompt's last 1,024 line and re-read the whole generation.
 

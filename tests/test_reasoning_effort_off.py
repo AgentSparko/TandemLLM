@@ -27,7 +27,7 @@ sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: Tande
 sys.path.insert(0, HERE)
 
 from server import app, fake_engine  # noqa: E402
-from tandemapp import thinking  # noqa: E402
+from server.api import thinking  # noqa: E402
 
 OFF = "<|im_start|>assistant\n<think>\n\n</think>\n\n"
 ON = "<|im_start|>assistant\n<think>\n"

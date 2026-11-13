@@ -25,9 +25,9 @@ sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 
-from tandemapp import callrepair as CR  # noqa: E402
-from tandemapp import toolformats  # noqa: E402
-from tandemapp.toolcall import ToolCallBuffer, schema_types  # noqa: E402
+from server.api import callrepair as CR  # noqa: E402
+from server.api import toolformats  # noqa: E402
+from server.api.toolcall import ToolCallBuffer, schema_types  # noqa: E402
 
 OC = json.load(open(os.path.join(HERE, "fixtures", "opencode_tools.json")))["tools"]
 SCHEMAS = CR.schemas_of(OC)

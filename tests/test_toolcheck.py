@@ -42,8 +42,8 @@ from engine.models.adapter import ServeSpec  # noqa: E402
 from tandemapp.conductor.monitor import Journal, Monitor, Policy, RequestEvent  # noqa: E402
 from tandemapp.conductor.monitor import policy as policy_mod  # noqa: E402
 from tandemapp.conductor.monitor.toolcheck import schema_problems, tool_history  # noqa: E402
-from tandemapp.toolcall import (ToolCallBuffer, answer_items, diagnose, parse_tool_calls,  # noqa: E402
-                             repair, strip_blocks)
+from server.api.toolcall import (ToolCallBuffer, answer_items, diagnose, parse_tool_calls,  # noqa: E402
+                               repair, strip_blocks)
 
 READ = {"type": "function", "function": {"name": "read", "parameters": {
     "type": "object", "properties": {"filePath": {"type": "string"},

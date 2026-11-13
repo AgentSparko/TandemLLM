@@ -20,7 +20,7 @@ sys.path.insert(0, HERE)
 
 from server import app  # noqa: E402
 from engine.models.adapter import ServeSpec  # noqa: E402
-from tandemapp.toolcall import parse_tool_calls  # noqa: E402
+from server.api.toolcall import parse_tool_calls  # noqa: E402
 from test_toolcheck import Req, serve  # noqa: E402
 
 TEMPLATE = os.path.join(HERE, "fixtures", "nemotron_h", "lightning-chat_template.jinja")

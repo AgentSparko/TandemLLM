@@ -4,7 +4,7 @@ The Hermes agent (Nous Research's hermes-agent, its `custom` provider for an Ope
 endpoint) sends top-level `reasoning_effort` -- `medium` when the user set none, `none` for
 thinking off -- and `max_tokens` when one is configured. The server read that word as a template
 sentence only, so the reasoning ran until the output limit ended the turn inside the block, and
-Hermes showed "Thinking Budget Exhausted" with no answer. server/thinking.py reads every shape
+Hermes showed "Thinking Budget Exhausted" with no answer. server/api/thinking.py reads every shape
 into one budget; server/app.py closes the reasoning early enough to leave the answer a reserve.
 
 The test matrix:
@@ -42,7 +42,8 @@ from test_conductor_router import body as rbody  # noqa: E402
 
 from engine.spec import ThinkBudget  # noqa: E402
 from server import app, compat  # noqa: E402
-from tandemapp import logbuf, thinking  # noqa: E402
+from tandemapp import logbuf  # noqa: E402
+from server.api import thinking  # noqa: E402
 
 PHRASE = "Considering the limited time by the user"
 P = len(frame.MonTok().encode(ThinkBudget.PHRASE))     # the closing phrase, in test tokens
@@ -320,7 +321,7 @@ def test_the_reserve_flag_parses():
 # ------------------------------------------------------------------ 7. no field, no change
 
 def _legacy_kwargs(b: dict, server_effort) -> dict:
-    """build_prompt's template arguments before server/thinking.py, line for line."""
+    """build_prompt's template arguments before server/api/thinking.py, line for line."""
     kwargs = dict(b.get("chat_template_kwargs") or {})
     kwargs.setdefault("enable_thinking", True)
     if b.get("tools"):

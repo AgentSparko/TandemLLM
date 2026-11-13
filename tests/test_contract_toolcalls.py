@@ -4,8 +4,8 @@ contracts/engine-api-v1/toolcalls/ holds cases in each form a model writes its c
 argkey, pythonic) and the argument renames and tool mappings (repair.json); check.py there runs a
 case and says what "passes" means. TandemApp runs the same files against its copy of the parser
 (its tests/test_contract_toolcalls.py), so the two copies answer the same text the same way. Until
-ENG-413 WP2a the engine's parser is TandemApp's modules through server/__init__.py's finder; WP2a
-switches API below to the engine's own copy and nothing else here changes.
+ENG-413 WP2a the engine's parser was TandemApp's modules through server/__init__.py's finder; since
+WP2a it is the engine's own copy, server/api (`api` below).
 
   1  every form registered for a family has a fixture file, and every file names a form
                                                                   test_every_form_has_fixtures
@@ -45,8 +45,8 @@ def _check():
 
 def api() -> dict:
     """The engine's parser (ENG-413 WP2a: server/api's copy)."""
-    from tandemapp import callrepair, toolformats
-    from tandemapp.toolcall import ToolCallBuffer, parse_tool_calls, schema_types
+    from server.api import callrepair, toolformats
+    from server.api.toolcall import ToolCallBuffer, parse_tool_calls, schema_types
     return {"parse_tool_calls": parse_tool_calls, "get_format": toolformats.get,
             "ToolCallBuffer": ToolCallBuffer, "repair_calls": callrepair.repair_calls,
             "schemas_of": callrepair.schemas_of, "schema_types": schema_types}
@@ -54,7 +54,7 @@ def api() -> dict:
 
 def test_every_form_has_fixtures():
     from engine.models import REGISTRY
-    from tandemapp import toolformats
+    from server.api import toolformats
     check = _check()
     toolformats.get(None)
     forms = set(toolformats.FORMATS)

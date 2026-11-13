@@ -451,9 +451,9 @@ def test_the_tool_call_language():
 def test_the_tool_call_language_in_the_argkey_form():
     """SRV-689: tool_choice's calls in Flint's arg-key form, the values exactly as written; the
     form's tags may be the model's own ids, and the calls parse back to the arguments."""
-    from tandemapp.toolcall import ToolCallBuffer
-    from tandemapp.toolformats import argkey
-    from tandemapp.toolformats.argkey import argkey_calls
+    from server.api.toolcall import ToolCallBuffer
+    from server.api.toolformats import argkey
+    from server.api.toolformats.argkey import argkey_calls
     pat, typed = argkey.forced_regex(TOOLS, ["read_file", "set", "now"], grammar=G)
     assert typed == {"set": {"n", "tags"}}
     d = G.compile_regex(pat)
@@ -514,7 +514,7 @@ def test_the_tool_constraint_is_exact_under_speculation():
 
 
 def test_the_handler_forces_the_call():
-    from tandemapp.toolcall import parse_tool_calls  # noqa: F401 -- the path under test
+    from server.api.toolcall import parse_tool_calls  # noqa: F401 -- the path under test
     seen = {}
     for label, extra, allowed in (("required", {"tool_choice": "required"}, {"pick", "stop"}),
                                   ("named", {"tool_choice": {"type": "function",

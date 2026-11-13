@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from tandemapp import activity, live, usage  # noqa: E402
-from tandemapp.toolcall import ToolCallBuffer  # noqa: E402
+from server.api.toolcall import ToolCallBuffer  # noqa: E402
 
 
 class Think:
@@ -535,7 +535,7 @@ def test_stamps_grow_with_transitions_not_tokens():
                   "</function>\n</tool_call>")
     assert len(tbuf.events) == 16                                # capped
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    src = open(os.path.join(root, "app", "tandemapp", "toolcall.py")).read()
+    src = open(os.path.join(root, "server", "api", "toolcall.py")).read()
     feed = src.split("    def feed(self, piece: str)")[1].split("    def _credit_streamed")[0]
     assert feed.count("self._event(") == 2, "an open and a close, both outside the piece loop"
 

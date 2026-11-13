@@ -1,4 +1,4 @@
-"""The tool-argument loop guard (server/argloop.py).
+"""The tool-argument loop guard (server/api/argloop.py).
 
 The 2026-10-04 16:18 shape: a `write` whose content falls into one 97-character tile-map row
 repeated until the token limit (65,536 tokens, 327 s, nothing written). Here:
@@ -42,7 +42,7 @@ sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: Tande
 sys.path.insert(0, HERE)
 
 from server import app  # noqa: E402
-from tandemapp import argloop  # noqa: E402
+from server.api import argloop  # noqa: E402
 from test_toolcheck import SYSTEM, ask, ctx_text, policy, rows, serve  # noqa: E402
 
 # opencode's system prompt is longer than the monitor's lineage window: one session

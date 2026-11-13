@@ -290,12 +290,10 @@
    "imports": [
     "tandemapp.activity",
     "tandemapp.live",
-    "tandemapp.toolcall:ToolCallBuffer",
     "tandemapp.usage"
    ],
    "reads": [
-    "app/",
-    "app/tandemapp"
+    "app/"
    ]
   },
   "tests/test_adapter_guards.py": {
@@ -320,23 +318,13 @@
    ]
   },
   "tests/test_argkey_calls.py": {
-   "imports": [
-    "tandemapp.toolcall:ToolCallBuffer",
-    "tandemapp.toolcall:call_format",
-    "tandemapp.toolcall:diagnose",
-    "tandemapp.toolcall:parse_tool_calls",
-    "tandemapp.toolformats.argkey:ArgKeyCalls",
-    "tandemapp.toolformats.argkey:argkey_calls",
-    "tandemapp.toolformats.argkey:rewrite_argkey"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
   },
   "tests/test_argloop.py": {
-   "imports": [
-    "tandemapp.argloop"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -379,12 +367,7 @@
    ]
   },
   "tests/test_callrepair.py": {
-   "imports": [
-    "tandemapp.callrepair",
-    "tandemapp.toolcall:ToolCallBuffer",
-    "tandemapp.toolcall:schema_types",
-    "tandemapp.toolformats"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -469,8 +452,7 @@
   },
   "tests/test_client_budgets.py": {
    "imports": [
-    "tandemapp.logbuf",
-    "tandemapp.thinking"
+    "tandemapp.logbuf"
    ],
    "reads": [
     "app/"
@@ -585,13 +567,7 @@
    ]
   },
   "tests/test_contract_toolcalls.py": {
-   "imports": [
-    "tandemapp.callrepair",
-    "tandemapp.toolcall:ToolCallBuffer",
-    "tandemapp.toolcall:parse_tool_calls",
-    "tandemapp.toolcall:schema_types",
-    "tandemapp.toolformats"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -813,12 +789,7 @@
    ]
   },
   "tests/test_grammar.py": {
-   "imports": [
-    "tandemapp.toolcall:ToolCallBuffer",
-    "tandemapp.toolcall:parse_tool_calls",
-    "tandemapp.toolformats.argkey",
-    "tandemapp.toolformats.argkey:argkey_calls"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1120,9 +1091,7 @@
    ]
   },
   "tests/test_nemotron_h_api.py": {
-   "imports": [
-    "tandemapp.toolcall:parse_tool_calls"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1291,9 +1260,7 @@
    ]
   },
   "tests/test_reasoning_effort_off.py": {
-   "imports": [
-    "tandemapp.thinking"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1786,25 +1753,14 @@
     "tandemapp.conductor.monitor:Monitor",
     "tandemapp.conductor.monitor:Policy",
     "tandemapp.conductor.monitor:RequestEvent",
-    "tandemapp.conductor.schema",
-    "tandemapp.toolcall:ToolCallBuffer",
-    "tandemapp.toolcall:answer_items",
-    "tandemapp.toolcall:diagnose",
-    "tandemapp.toolcall:parse_tool_calls",
-    "tandemapp.toolcall:repair",
-    "tandemapp.toolcall:strip_blocks"
+    "tandemapp.conductor.schema"
    ],
    "reads": [
     "app/"
    ]
   },
   "tests/test_toolformats.py": {
-   "imports": [
-    "tandemapp.toolcall:ToolCallBuffer",
-    "tandemapp.toolcall:diagnose",
-    "tandemapp.toolcall:parse_tool_calls",
-    "tandemapp.toolformats"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]

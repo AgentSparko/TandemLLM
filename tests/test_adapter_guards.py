@@ -350,7 +350,7 @@ NAMESPACE = re.compile(r"qwen38", re.I)
 SHARED_GLOBS = ("server/**/*.py", "app/proxy/**/*.py", "app/tandemapp/**/*.py", "engine/*.py",
                 "engine/methods/*.py", "engine/drafters/*.py")
 #: the format modules and the model packages are where those names belong
-OWN_PLACES = ("app/tandemapp/toolformats/",)
+OWN_PLACES = ("app/tandemapp/toolformats/", "server/api/toolformats/")
 
 #: the ratchet: v0.14.0's counts a file may keep (ENG-E17 lowers them; a count may only go down, and a file
 #: at 0 leaves the table). Each line says why the rest stays.
