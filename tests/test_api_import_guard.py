@@ -3,7 +3,8 @@ the engine's own code.
 
 server/api holds the engine's copies of the modules it took from TandemApp: toolcall, toolformats,
 callrepair, refusal, thinking, argloop (WP2a); metrics, usage, ledger, live, parallel, activity,
-logbuf, dashboard_api, http_body, auth (WP2b). Only TandemApp's own tree (app/, the extension side)
+logbuf, dashboard_api, http_body, auth and compaction (WP2b; compaction because it runs with the
+conductor off, tests/test_compaction_trace.py). Only TandemApp's own tree (app/, the extension side)
 imports TandemApp's copies; the engine does not.
 
   1  no engine file outside app/ imports one of those modules from TandemApp, by import statement,
@@ -24,7 +25,8 @@ imports TandemApp's copies; the engine does not.
                                                                   test_the_seed_levels_are_the_conductors
   6  each WP2b copy is TandemApp's module as forked: the same code once the imports are named
      alike, docstrings aside; the ledger's copy adds only the side-shape helpers it took from the
-     conductor's signals. A change to either copy fails here until it lands in both
+     conductor's signals, compaction's only its check and the shapes it reads. A change to either
+     copy fails here until it lands in both
                                                                   test_the_copies_are_the_fork
 
 CPU, standard library only. Run: python tests/test_api_import_guard.py
@@ -47,7 +49,7 @@ sys.path.insert(0, HERE)
 #: TandemApp's module -> the engine's copy (ENG-413 WP2a, then WP2b)
 WP2A = ("toolcall", "toolformats", "callrepair", "refusal", "thinking", "argloop")
 WP2B = ("metrics", "usage", "ledger", "live", "parallel", "activity", "logbuf", "dashboard_api",
-        "http_body", "auth")
+        "http_body", "auth", "compaction")
 MOVED = {f"tandemapp.{m}": f"server.api.{m}" for m in WP2A + WP2B}
 #: the engine's tree (app/ is TandemApp's)
 ENGINE_DIRS = ("bench", "engine", "manual", "models", "ops", "server", "tests", "tools")
@@ -63,6 +65,8 @@ ALLOWED = {
     "tools/ledger_synth.py": "TandemApp's tool (plan 3.7: it moves to TandemApp, WP10); it reads "
                              "TandemApp's ledger, the one its controller writes",
     "tools/ledger_migrate_check.py": "TandemApp's tool (plan 3.7: it moves to TandemApp, WP10)",
+    "tools/memory_measure.py": "TandemApp's tool (plan 3.7: it moves to TandemApp, WP10); it measures "
+                               "the conductor's notes",
     "tools/app_split_check.sh": "follows the history of TandemApp's own tandemapp/ledger.py in the "
                                 "split; it reads no module",
 }
@@ -210,8 +214,8 @@ CHILD = """
 import sys
 sys.path.insert(0, sys.argv[1])
 from server.api import argloop, callrepair, refusal, thinking, toolcall, toolformats
-from server.api import (activity, auth, dashboard_api, http_body, ledger, live, logbuf, metrics,
-                        parallel, usage)
+from server.api import (activity, auth, compaction, dashboard_api, http_body, ledger, live, logbuf,
+                        metrics, parallel, usage)
 from server import compat, endalign
 assert compat.Refusal is refusal.Refusal
 toolformats.get(None)
@@ -256,8 +260,11 @@ def test_the_seed_levels_are_the_conductors():
 
 
 #: what the WP2b fork changed in each copy beyond the import lines (ENG-413 WP2b): the ledger took
-#: the conductor's side-shape helpers in; nothing else changed but docstrings and comments
-FORK_ADDED = {"ledger": {"SIDE_SHAPES", "_text", "side_shape"}}
+#: the conductor's side-shape helpers in, compaction the check and its shapes; nothing else changed
+#: but docstrings and comments
+FORK_ADDED = {"ledger": {"SIDE_SHAPES", "_text", "side_shape"},
+              "compaction": {"COMPACTION_MIN_CHARS", "COMPACTION_SHAPES", "BARE_COMPACTION_CLIENTS",
+                             "_is_tool_response", "compaction_shape", "is_compaction"}}
 
 
 def _fork_view(path: str, mod: str, engine: bool) -> list[str]:

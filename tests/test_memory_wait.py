@@ -726,7 +726,7 @@ def test_a_compaction_after_a_turn_that_thought_is_never_priced_under_its_forwar
     first forward raises nothing. The chat's own head and system text are the copy's here, the closest a compaction
     can come to the chat."""
     from server import endalign
-    from tandemapp import compaction
+    from server.api import compaction
     body = {"messages": [{"role": "system", "content": "Summarize."},
                          {"role": "user", "content": "<conversation>\n[User]: what the user asked\n</conversation>\n"
                                                      "The instructions."}]}

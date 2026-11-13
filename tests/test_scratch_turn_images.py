@@ -42,7 +42,7 @@ import torch  # noqa: E402
 
 from engine import cache  # noqa: E402
 from server import app  # noqa: E402
-from tandemapp import compaction  # noqa: E402
+from server.api import compaction  # noqa: E402
 from test_cache import tokens  # noqa: E402
 
 GIB = 1 << 30

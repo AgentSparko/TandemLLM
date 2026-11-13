@@ -52,7 +52,7 @@ sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 import test_compaction_continue as C  # noqa: E402  (sets the CPU environment first)
 
 from server import app  # noqa: E402
-from tandemapp import compaction  # noqa: E402
+from server.api import compaction  # noqa: E402
 from tandemapp.conductor.hook import Conductor  # noqa: E402
 from test_cache import tokens  # noqa: E402
 from test_end_anchor import _state  # noqa: E402
