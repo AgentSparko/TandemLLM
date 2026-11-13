@@ -33,6 +33,7 @@ const NOT_READ = 'not read from this Spark';
 
 @customElement('qse-spark-node')
 export class QseSparkNode extends MonitorPage {
+  protected machines = true;
   protected readonly view: View = 'sparks';
   @property({ type: String }) nodeId = '';
   @state() private range: Range = '1h';

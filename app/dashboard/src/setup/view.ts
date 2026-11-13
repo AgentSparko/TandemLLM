@@ -28,6 +28,7 @@ import { LightElement, type Loadable } from '../ui/base';
 import { emptyState as emptyPanel, errorState, icon, skeleton } from '../ui/bits';
 import { isCancelled, setConfirmer, setSetupNode, setupApi } from './api';
 import { fleetNow } from '../lib/fleet-state';
+import { sparksOf } from '../api/fleet';
 import { nodeChip } from '../ui/node-chip';
 import './node-confirm';
 import type { QseSetupConfirm } from './node-confirm';
@@ -204,7 +205,7 @@ export class QseSetup extends LightElement {
       const d = describeError(e);
       // VIS-252: a controller without an engine of its own (TandemApp on a Mac) has no /v1/setup:
       // the guide is its first Spark's, through the controller
-      const n = !this.node && d.status === 404 ? fleetNow()?.nodes.find((x) => x.status !== 'off') : null;
+      const n = !this.node && d.status === 404 ? sparksOf(fleetNow()?.nodes).find((x) => x.status !== 'off') : null;
       if (n) {
         location.replace(`${SERVE}${this.path.length ? `/${this.path.map(encodeURIComponent).join('/')}` : ''}?node=${encodeURIComponent(n.id)}`);
         return;
@@ -646,8 +647,8 @@ export class QseSetup extends LightElement {
         ${n ? nodeChip(n, { lg: true }) : html`<b>${this.node}</b>`}
         ${n && n.status === 'off' ? html`<span class="small warn-ink">${n.status_text}</span>` : html`<span class="xs muted">through TandemApp’s controller; each change is said before it goes</span>`}
         <span class="setup-node-sp"></span>
-        ${f && f.nodes.length > 1
-          ? html`<label class="small setup-node-pick"><span class="muted">Spark</span><select data-setup-node-pick aria-label="Set up another Spark" @change=${(e: Event) => go((e.target as HTMLSelectElement).value)}>${f.nodes.map((x) => html`<option value=${x.id} ?selected=${x.id === this.node}>${x.alias}</option>`)}</select></label>`
+        ${f && sparksOf(f.nodes).length > 1
+          ? html`<label class="small setup-node-pick"><span class="muted">Spark</span><select data-setup-node-pick aria-label="Set up another Spark" @change=${(e: Event) => go((e.target as HTMLSelectElement).value)}>${sparksOf(f.nodes).map((x) => html`<option value=${x.id} ?selected=${x.id === this.node}>${x.alias}</option>`)}</select></label>`
           : nothing}
         <a class="btn btn-sm btn-ghost" href="#/models/place" data-back-placement>← Serve a model</a>
       </div>

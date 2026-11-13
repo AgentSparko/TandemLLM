@@ -6,11 +6,12 @@
 // page's own /v1 (the data plane) reaches the controller is asked once (SRV-733, `gateway`).
 
 import type { FleetAlert, FleetDeployment, FleetNode } from '../api/fleet';
-import { fleet, gatewayHere } from '../api/fleet';
+import { fleet, gatewayHere, sparksOf } from '../api/fleet';
 import { describeError } from '../api/client';
 import { poll, type Poller } from './poll';
 
 export interface FleetState {
+  /** the fleet's members: the Sparks, then the backends on no node (SRV-749, `class` backend) */
   nodes: FleetNode[];
   deployments: FleetDeployment[];
   alerts: FleetAlert[];
@@ -33,7 +34,7 @@ async function loadFleet(): Promise<void> {
   try {
     const [n, d, a, gw] = await Promise.all([fleet.nodes(), fleet.deployments(), fleet.alerts(), state ? state.gateway : gatewayHere()]);
     const first = !state;
-    state = { nodes: n.nodes, deployments: d.deployments, alerts: a.alerts, tps: state?.tps ?? {}, gateway: gw };
+    state = { nodes: [...n.nodes, ...(n.backends ?? [])], deployments: d.deployments, alerts: a.alerts, tps: state?.tps ?? {}, gateway: gw };
     emit();
     // the rates wait for the Sparks they belong to
     if (first) void fast?.refresh();
@@ -81,6 +82,9 @@ export function onFleet(fn: (s: FleetState | null) => void): () => void {
   };
 }
 
+/** The fleet with its Sparks only: for a page that reads or acts on a machine (SRV-749). */
+export const sparksOnly = (f: FleetState | null): FleetState | null => f && { ...f, nodes: sparksOf(f.nodes) };
+
 /** Asks the controller again now (an alert acknowledged). */
 export function refreshFleet(): void {
   void slow?.refresh();
@@ -109,7 +113,9 @@ export function readout(s: FleetState): Readout {
   const alerts = activeAlerts(s);
   const rates = s.nodes.map((n) => s.tps[n.id]).filter((v): v is number => v != null);
   const tps = rates.length ? rates.reduce((a, b) => a + b, 0) : null;
-  const sparks = `${s.nodes.length} Spark${s.nodes.length === 1 ? '' : 's'}`;
+  const ns = sparksOf(s.nodes).length;
+  const nb = s.nodes.length - ns;
+  const sparks = `${ns} Spark${ns === 1 ? '' : 's'}${nb ? `, ${nb} backend${nb === 1 ? '' : 's'}` : ''}`;
   const al = alerts.length ? `${alerts.length} active alert${alerts.length === 1 ? '' : 's'}` : 'no alerts';
   const mixed = s.alerts.find((a) => a.id === 'version-mismatch:all')?.title ?? null;
   return {

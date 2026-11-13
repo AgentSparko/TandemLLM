@@ -26,7 +26,7 @@ import { describeError } from '../../api/client';
 import { fleet, type AppView, type ControllerView, type ImportMode, type ImportPlan, type MoveJob, type MovePlan } from '../../api/fleet';
 import { applyLabel, browserNotify, exportName, importGroups, kindWord, passwordBlocked, passwordError, passwordStatus, permRows, planSummary, readConfig, resultWords, updateLine, type BrowserNotify, type PermRow } from '../../lib/app-settings';
 import { apiOf, followUrl, hostChoices, MIN_PASSWORD, moveFormError, moveWords, newPassword, planGroups, takeFormError } from '../../lib/controller-host';
-import { onFleet, refreshFleet, type FleetState } from '../../lib/fleet-state';
+import { onFleet, refreshFleet, sparksOnly, type FleetState } from '../../lib/fleet-state';
 import { poll, type Poller } from '../../lib/poll';
 import { LightElement } from '../../ui/base';
 import { nodeChip } from '../../ui/node-chip';
@@ -85,7 +85,7 @@ export class QseAppSettings extends LightElement {
 
   connectedCallback(): void {
     super.connectedCallback();
-    this.unsub = onFleet((f) => (this.fleetState = f));
+    this.unsub = onFleet((f) => (this.fleetState = sparksOnly(f)));
     this.poller = poll(() => this.load(), 2000);
     this.poller.start();
     this.appPoller = poll(() => this.loadApp(), 15000);

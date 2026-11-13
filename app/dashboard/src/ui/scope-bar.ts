@@ -7,7 +7,7 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { RANGES, RANGE_KEYS, type FleetDeployment, type FleetNode, type Range } from '../api/fleet';
+import { membersWord, RANGES, RANGE_KEYS, type FleetDeployment, type FleetNode, type Range } from '../api/fleet';
 import { currentScope, onScope, resolveScope, scopeChoices, setScope, type Scope } from '../lib/scope';
 import { LightElement } from './base';
 import { nodeChip, nodeColour, isHollow, statusWords } from './node-chip';
@@ -95,17 +95,17 @@ export class QseScopeBar extends LightElement {
       const d = this.deployments.find((x) => x.id === s.id);
       if (d) return html`${typeBadge(d)} <span class="scope-dep">${d.name}</span>`;
     }
-    return html`${swatches(this.nodes)}<span>All Sparks</span>${this.nodes.length ? html` <span class="scope-n num">${this.nodes.length}</span>` : nothing}`;
+    return html`${swatches(this.nodes)}<span>All ${membersWord(this.nodes, 2)}</span>${this.nodes.length ? html` <span class="scope-n num">${this.nodes.length}</span>` : nothing}`;
   }
 
   private options(): TemplateResult {
     let group: string | null = null;
     return html`${scopeChoices(this, this.scope).map((c) => {
-      const n = c.group === 'Sparks' ? this.nodes.find((x) => x.id === c.id) : undefined;
+      const n = c.scope.kind === 'node' ? this.nodes.find((x) => x.id === c.id) : undefined;
       const d = c.group === 'Deployments' ? this.deployments.find((x) => x.id === c.id) : undefined;
       const head = c.group !== group ? html`<div class="scope-sec eyebrow">${c.group}</div>` : nothing;
       group = c.group;
-      const body = n ? nodeChip(n, { status: false }) : d ? html`${typeBadge(d)} <span class="scope-dep">${d.name}</span>` : html`<b>All Sparks</b>`;
+      const body = n ? nodeChip(n, { status: false }) : d ? html`${typeBadge(d)} <span class="scope-dep">${d.name}</span>` : html`<b>All ${membersWord(this.nodes, 2)}</b>`;
       const meta = n ? statusWords(n) : d ? d.members.map((m) => this.nodes.find((x) => x.id === m)?.alias ?? m).join(' + ') : `${this.nodes.length} nodes`;
       return html`${head}<button type="button" class="scope-opt ${c.on ? 'is-on' : ''}" role="option" aria-selected=${c.on} data-scope=${c.id ?? 'all'} @click=${() => {
           this.sheet = false;

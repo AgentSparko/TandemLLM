@@ -14,7 +14,7 @@ import { fleet, METRICS, METRIC_KEYS, type FleetLogLine, type FleetMemory, type 
 import '../charts/fleet-chart';
 import type { ChartEvent } from '../charts/fleet-chart';
 import type { NodeSeries } from '../charts/modes';
-import { onFleet, type FleetState } from '../lib/fleet-state';
+import { onFleet, sparksOnly, type FleetState } from '../lib/fleet-state';
 import { currentScope, onScope, resolveScope, scopeSource, type Scope } from '../lib/scope';
 import { icon } from '../ui/bits';
 import { nodeChip, statusWords } from '../ui/node-chip';
@@ -40,7 +40,7 @@ class FleetBody extends WindowBody {
   private offFleet: (() => void) | null = null;
   connectedCallback(): void {
     super.connectedCallback();
-    this.offFleet = onFleet((f) => (this.fleetState = f));
+    this.offFleet = onFleet((f) => (this.fleetState = sparksOnly(f)));
   }
   disconnectedCallback(): void {
     this.offFleet?.();

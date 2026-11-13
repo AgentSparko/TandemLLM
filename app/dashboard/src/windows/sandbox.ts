@@ -16,7 +16,7 @@ import '../chat/panes';
 import type { OpenPane } from '../chat/panes';
 import type { Conversation, ConversationSummary, PaneRef } from '../chat/types';
 import '../styles/chat.css';
-import { onFleet, type FleetState } from '../lib/fleet-state';
+import { onFleet, sparksOnly, type FleetState } from '../lib/fleet-state';
 import { icon } from '../ui/bits';
 import { Feed, WindowBody } from './base';
 import { onNode } from './kinds';
@@ -56,7 +56,7 @@ export class QseWinSandbox extends WindowBody {
 
   connectedCallback(): void {
     super.connectedCallback();
-    this.offFleet = onFleet((f) => (this.fleetState = f));
+    this.offFleet = onFleet((f) => (this.fleetState = sparksOnly(f)));
     void chatBackend().then(({ backend, down }) => {
       this.backend = backend;
       this.down = down;

@@ -20,7 +20,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { api, describeError } from '../api/client';
-import { fleet, METRICS, type FleetNode, type MetricKey, type MetricSeries } from '../api/fleet';
+import { memberHref, membersWord, fleet, METRICS, type FleetNode, type MetricKey, type MetricSeries } from '../api/fleet';
 import type { Usage } from '../api/types';
 import type { ChartEvent } from '../charts/fleet-chart';
 import '../charts/fleet-chart';
@@ -150,7 +150,7 @@ export class QseFleetLive extends ScopedPart {
     return html`<div class="fl-scope fl-live" data-fleet-live>
       <section class="panel fl-now" data-fleet-now>
         <div class="fl-now-num">
-          <div class="eyebrow">Decode now · Σ ${nodes.length} Spark${nodes.length === 1 ? '' : 's'}${what ? ` · ${what}` : ''}</div>
+          <div class="eyebrow">Decode now · Σ ${nodes.length} ${membersWord(nodes)}${what ? ` · ${what}` : ''}</div>
           <div class="fl-big num" data-fleet-total>${fmt(total)}<span class="u">tok/s</span></div>
           <p class="small muted fl-now-sub"><b class="num">${fmt(inFlight)}</b> in flight · <b class="num">${decoding}</b> of ${nodes.length} decoding${this.error ? html` · <span class="warn-ink">${this.error}</span>` : nothing}</p>
           <p class="xs faint">The fleet store's samples: every request each engine served, through this endpoint or not. A Split's tokens count once.</p>
@@ -173,7 +173,7 @@ export class QseFleetLive extends ScopedPart {
     const k = Math.max(0, Math.round(req ?? 0));
     return html`<div class="fl-strip ${n.status === 'off' ? 'is-off' : ''}" data-strip=${n.id}>
       <div class="fl-strip-who">
-        ${nodeChip(n, { href: `#/sparks/${encodeURIComponent(n.id)}` })}
+        ${nodeChip(n, { href: memberHref(n) })}
         <div class="fl-strip-deps xs">${deps.length ? deps.map((d) => html`<span>${typeBadge(d.type)} ${d.name}</span>`) : html`<span class="faint">serves nothing</span>`}</div>
       </div>
       <div class="fl-strip-chart">${sparkline(values, n.colour, 40, `${n.alias} decode, last 5 minutes`)}</div>
@@ -355,7 +355,7 @@ export class QseUsageFleet extends ScopedPart {
           <tbody>
             ${rows.map(
               (r) => html`<tr data-node=${r.node.id}>
-                <td>${nodeChip(r.node, { href: `#/sparks/${encodeURIComponent(r.node.id)}` })}</td>
+                <td>${nodeChip(r.node, { href: memberHref(r.node) })}</td>
                 <td class="cell-wrap small">${f.deployments.filter((d) => d.members.includes(r.node.id)).map((d) => d.name).join(', ') || html`<span class="muted">nothing</span>`}</td>
                 <td class="num-col num">${exact(r.usage.totals.requests)}</td>
                 <td class="num-col num" title=${exact(r.usage.totals.total_tokens)}>${compact(r.usage.totals.total_tokens)}</td>
@@ -368,7 +368,7 @@ export class QseUsageFleet extends ScopedPart {
               </tr>`,
             )}
           </tbody>
-          <tfoot><tr><td>Σ ${rows.length} Spark${rows.length === 1 ? '' : 's'}</td><td></td><td class="num-col num">${exact(reqs)}</td><td class="num-col num">${compact(tokens)}</td><td class="num-col num">100 %</td><td></td><td></td><td class="num-col num">${kwh == null ? '—' : fixed(kwh, 2)}</td><td></td><td class="num-col num">${kwh ? compact(tokE / kwh) : '—'}</td></tr></tfoot>
+          <tfoot><tr><td>Σ ${rows.length} ${membersWord(rows.map((r) => r.node))}</td><td></td><td class="num-col num">${exact(reqs)}</td><td class="num-col num">${compact(tokens)}</td><td class="num-col num">100 %</td><td></td><td></td><td class="num-col num">${kwh == null ? '—' : fixed(kwh, 2)}</td><td></td><td class="num-col num">${kwh ? compact(tokE / kwh) : '—'}</td></tr></tfoot>
         </table></div>
       </section>
     </section>`;

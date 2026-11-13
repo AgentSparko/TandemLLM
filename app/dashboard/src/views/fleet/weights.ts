@@ -24,6 +24,7 @@ type Pack = WeightsMatrix['packs'][number];
 
 @customElement('qse-weights')
 export class QseWeights extends MonitorPage {
+  protected machines = true;
   protected readonly view: View = 'models';
   @state() private m: WeightsMatrix | null = null;
   @state() private err = '';

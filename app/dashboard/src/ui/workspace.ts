@@ -16,7 +16,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import type { FleetNode, LayoutWindow, WindowKind } from '../api/fleet';
+import { sparksOf, type FleetNode, type LayoutWindow, type WindowKind } from '../api/fleet';
 import { onFleet } from '../lib/fleet-state';
 import { toggleSidebar, sidebarShown } from '../lib/context';
 import { allTo, activate, close, dockOf, move, open, place, restore, setDockF, setRef, tile, type DockSide, type Ref, type Where } from '../lib/wm';
@@ -84,7 +84,7 @@ export class QseWorkspace extends LightElement {
     super.connectedCallback();
     this.unsub.push(
       onWorkspace(() => this.requestUpdate()),
-      onFleet((f) => (this.nodes = f?.nodes ?? [])),
+      onFleet((f) => (this.nodes = sparksOf(f?.nodes))),
     );
     window.addEventListener('pointermove', this.onMove);
     window.addEventListener('pointerup', this.onUp);

@@ -7,7 +7,7 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { fleet, METRICS, type FleetEvent, type FleetLink, type FleetTopology, type MetricKey, type MetricSeries, type NodeMemory } from '../../api/fleet';
+import { fleet, isSpark, memberHref, membersWord, METRICS, NO_FIGURES, type FleetEvent, type FleetLink, type FleetTopology, type MetricKey, type MetricSeries, type NodeMemory } from '../../api/fleet';
 import type { Summary } from '../../api/types';
 import type { ChartEvent } from '../../charts/fleet-chart';
 import '../../charts/fleet-chart';
@@ -139,7 +139,7 @@ export class QseOverview extends MonitorPage {
         ${sec(
           'Sparks',
           html`<div class="ctx-nodes">${f.nodes.map(
-            (n) => html`<a class="mini-now" href=${`#/sparks/${encodeURIComponent(n.id)}`} data-node=${n.id}><span>${nodeChip(n)}<span class="mini-dep">${f.deployments.filter((d) => d.members.includes(n.id)).map((d) => d.name).join(' · ')}</span></span><span class="num small">${fmt(this.now.tps?.[n.id] ?? f.tps[n.id])} <span class="muted">tok/s</span></span></a>`,
+            (n) => html`<a class="mini-now" href=${memberHref(n)} data-node=${n.id}><span>${nodeChip(n)}<span class="mini-dep">${f.deployments.filter((d) => d.members.includes(n.id)).map((d) => d.name).join(' · ')}</span></span><span class="num small">${fmt(this.now.tps?.[n.id] ?? f.tps[n.id])} <span class="muted">tok/s</span></span></a>`,
           )}</div>`,
         )}`,
     };
@@ -183,9 +183,9 @@ export class QseOverview extends MonitorPage {
     const mixed = f.alerts.find((a) => a.id === 'version-mismatch:all') ?? null;
     const lease = f.nodes.map((n) => n.lease_end).filter((v): v is number => v != null);
     const sc = this.resolved;
-    const scopeName = sc.kind === 'node' ? (f.nodes.find((n) => n.id === sc.id)?.alias ?? sc.id) : sc.kind === 'deployment' ? (f.deployments.find((d) => d.id === sc.id)?.name ?? sc.id) : 'All Sparks';
+    const scopeName = sc.kind === 'node' ? (f.nodes.find((n) => n.id === sc.id)?.alias ?? sc.id) : sc.kind === 'deployment' ? (f.deployments.find((d) => d.id === sc.id)?.name ?? sc.id) : `All ${membersWord(f.nodes, 2)}`;
     return html`<div class="panel health-strip fleet-health" data-fleet-health>
-      <span class="ok-ink"><span aria-hidden="true">●</span> ${up} Spark${up === 1 ? '' : 's'} up</span>
+      <span class="ok-ink"><span aria-hidden="true">●</span> ${up} ${membersWord(f.nodes, up)} up</span>
       ${off.map((n) => html`<span class="err-ink"><span aria-hidden="true">○</span> ${n.alias} ${n.status_text}</span>`)}
       ${hot.map((n) => html`<span class="warn-ink small"><span aria-hidden="true">⚠</span> ${n.alias}: ${n.status_text}</span>`)}
       <span class="faint" aria-hidden="true">·</span>
@@ -195,7 +195,7 @@ export class QseOverview extends MonitorPage {
       ${alerts.length ? html`<a class="warn-ink" href="#/events"><span aria-hidden="true">⚠</span> ${alerts.length} alert${alerts.length === 1 ? '' : 's'}: ${(alerts.find((a) => a !== mixed) ?? alerts[0]).title}</a>` : html`<span class="ok-ink">no alerts</span>`}
       ${lease.length ? html`<span class="faint" aria-hidden="true">·</span><span class="muted">leases end in ${span(Math.min(...lease) - Date.now() / 1000)}</span>` : nothing}
       <span class="grow"></span>
-      <span class="muted small">scope: ${scopeName} · ${nodes.length} Spark${nodes.length === 1 ? '' : 's'}</span>
+      <span class="muted small">scope: ${scopeName} · ${nodes.length} ${membersWord(nodes)}</span>
     </div>`;
   }
 
@@ -287,18 +287,19 @@ export class QseOverview extends MonitorPage {
     const f = this.fleetState!;
     const nodes = this.inScope;
     return html`<section class="mon-sec" data-panel="cards">
-      <div class="mon-sec-h"><span class="eyebrow">Sparks in scope</span><a class="small" href="#/sparks">Sparks table</a></div>
+      <div class="mon-sec-h"><span class="eyebrow">${membersWord(nodes, 2)} in scope</span><a class="small" href="#/sparks">Sparks table</a></div>
       <div class="ncards ${nodes.length === 1 ? 'is-one' : ''}">
         ${nodes.map((n) => {
           const v = (k: MetricKey) => this.nowOf(k)[n.id] ?? null;
           const alert = n.status === 'alert';
-          return html`<a class="ncard ${alert ? 'is-alert' : ''} ${n.status === 'off' ? 'is-off' : ''}" href=${`#/sparks/${encodeURIComponent(n.id)}`} style=${`--nc:var(--n${((n.colour - 1) % 4) + 1})`} data-node=${n.id}>
+          const be = !isSpark(n);
+          return html`<a class="ncard ${alert ? 'is-alert' : ''} ${n.status === 'off' ? 'is-off' : ''}" href=${memberHref(n)} style=${`--nc:var(--n${((n.colour - 1) % 4) + 1})`} data-node=${n.id}>
             <div class="ncard-h">${nodeChip(n, { lg: true })}<span class="small ${alert ? 'warn-ink' : n.status === 'off' ? 'err-ink' : 'muted'}">${n.status === 'up' ? 'up' : n.status_text}</span></div>
             <div class="ncard-serves small">${serves(n, f.deployments)}</div>
-            ${memBar(this.memory.find((m) => m.node === n.id), true)}
+            ${be ? html`<p class="xs muted" data-no-figures>${NO_FIGURES}</p>` : memBar(this.memory.find((m) => m.node === n.id), true)}
             <div class="ncard-nums"><span>tok/s<b class="num" data-num="tps">${fmt(v('tps'))}</b></span><span>GPU °C<b class="num ${(v('temp') ?? 0) >= 85 ? 'warn-ink' : ''}" data-num="temp">${fmt(v('temp'))}</b></span><span>W<b class="num" data-num="power">${fmt(v('power'))}</b></span></div>
             ${sparkline(this.spark[n.id] ?? [], n.colour, 30, `${n.alias} decode, last 3 minutes`)}
-            <div class="ncard-foot xs muted"><span>${n.owned ? `owned · ${n.address}` : `rented${n.lease_end ? ` · lease ${span(n.lease_end - Date.now() / 1000)}` : ''}`}</span><span class="num">v${n.version || '—'}</span></div>
+            <div class="ncard-foot xs muted"><span>${be ? `${n.hw} · ${n.address}` : n.owned ? `owned · ${n.address}` : `rented${n.lease_end ? ` · lease ${span(n.lease_end - Date.now() / 1000)}` : ''}`}</span><span class="num">${be ? '' : `v${n.version || '—'}`}</span></div>
             ${alert ? html`<div class="alert-line small"><span aria-hidden="true">⚠</span><span>${n.status_text}</span></div>` : nothing}
           </a>`;
         })}

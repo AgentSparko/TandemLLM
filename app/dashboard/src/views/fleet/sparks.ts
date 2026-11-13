@@ -55,6 +55,7 @@ const KIND_OPTS: [KindFilter, string][] = [
 
 @customElement('qse-sparks')
 export class QseSparks extends MonitorPage {
+  protected machines = true;
   protected readonly view: View = 'sparks';
   /** `list` or `topology` */
   @property({ type: String }) tab: 'list' | 'topology' = 'list';

@@ -10,7 +10,7 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { fleet, type FleetDeployment, type MetricSeries, type NodeMemory } from '../../api/fleet';
+import { fleet, sparksOf, type FleetDeployment, type MetricSeries, type NodeMemory } from '../../api/fleet';
 import { openSelection, type ContextContent } from '../../lib/context';
 import { lastValue, shareParts } from '../../lib/monitor';
 import { countWords, depActions, ink, depCounts, managedWords, MEMBER_WORD, memberTone, scoped, setSimpleMode, simpleMode, SPLIT_NO_PLAN, STATUS_GLYPH, statusTone, TYPE_HELP, TYPE_WORD, type DepActionId } from '../../lib/models';
@@ -135,7 +135,7 @@ export class QseModels extends MonitorPage {
   }
 
   private act(d: FleetDeployment, id: DepActionId): void {
-    void this.updateComplete.then(() => this.dialog?.open(d, id, this.fleetState?.nodes ?? []));
+    void this.updateComplete.then(() => this.dialog?.open(d, id, sparksOf(this.fleetState?.nodes)));
   }
 
   private tiles(): TemplateResult {

@@ -5,7 +5,7 @@
 import { state } from 'lit/decorators.js';
 import type { FleetNode } from '../../api/fleet';
 import { refreshContext, registerContext, type ContextContent } from '../../lib/context';
-import { onFleet, type FleetState } from '../../lib/fleet-state';
+import { onFleet, sparksOnly, type FleetState } from '../../lib/fleet-state';
 import { poll, type Poller } from '../../lib/poll';
 import type { View } from '../../lib/router';
 import { currentScope, onScope, resolveScope, type Scope } from '../../lib/scope';
@@ -16,6 +16,8 @@ export abstract class MonitorPage extends LightElement {
   @state() protected scope: Scope = currentScope();
   protected abstract readonly view: View;
   protected every = 10_000;
+  /** a page about machines (Sparks, a Spark's sheet, weights): it never sees a backend by URL */
+  protected machines = false;
   private poller: Poller | null = null;
   private unsub: (() => void)[] = [];
 
@@ -24,7 +26,7 @@ export abstract class MonitorPage extends LightElement {
     this.unsub.push(
       onFleet((f) => {
         const first = !this.fleetState && f;
-        this.fleetState = f;
+        this.fleetState = this.machines ? sparksOnly(f) : f;
         if (first) void this.poller?.refresh();
         refreshContext();
       }),

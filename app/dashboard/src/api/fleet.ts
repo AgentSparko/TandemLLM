@@ -33,7 +33,9 @@ export interface FleetNode {
   colour: number;
   icon: 'desk' | 'cloud' | 'rack';
   tags: string[];
-  class: 'spark';
+  /** `backend` (SRV-749): a server reached by URL with no TandemNode on its host; `backend` says more */
+  class: 'spark' | 'backend';
+  backend?: BackendMember;
   hw: string;
   dmi: string;
   owned: boolean;
@@ -52,6 +54,33 @@ export interface FleetNode {
   /** maintenance (VIS-250): no new requests through the gateway; null when the node takes them */
   drain: NodeDrain | null;
 }
+
+/** SRV-749: the backend behind a member of class `backend`. Never its API key. */
+export interface BackendMember {
+  id: string;
+  kind: string;
+  cloud: boolean;
+  url: string;
+  key_set: boolean;
+  state: 'up' | 'down' | 'key_rejected' | 'unknown' | 'disabled';
+  error: string | null;
+  latency_ms: number | null;
+  models: string[];
+  routes: string[];
+  /** its own metrics page, or what the gateway measured (requests in flight and TTFT only) */
+  figures: 'own' | 'gateway';
+  engine_api: { engine_api: string; assumed: boolean; ok: boolean; why: string | null } | null;
+}
+
+/** a member with a machine TandemNode reads: a Spark, not a backend by URL */
+export const isSpark = (n: { class?: string }) => n.class !== 'backend';
+export const sparksOf = <T extends { class?: string }>(ns: readonly T[] | null | undefined): T[] => (ns ?? []).filter(isSpark);
+/** what a list of members is called: Sparks, or members once a backend is among them */
+export const membersWord = (ns: readonly { class?: string }[], n = ns.length) => `${ns.every(isSpark) ? 'Spark' : 'member'}${n === 1 ? '' : 's'}`;
+/** a member's own page: a Spark's sheet, or the Backends screen for a backend */
+export const memberHref = (n: { id: string; class?: string }) => (isSpark(n) ? `#/sparks/${encodeURIComponent(n.id)}` : '#/api/backends');
+/** SRV-749: what a page says where a backend has no machine figures */
+export const NO_FIGURES = 'No host figures: no TandemNode runs on this backend’s host.';
 
 /** A drained node: `draining` while requests are in flight, `drained` once none are. */
 export interface NodeDrain {
@@ -1291,7 +1320,7 @@ export async function gatewayHere(): Promise<boolean> {
 }
 
 export const fleet = {
-  nodes: () => request<{ contract_version: string; nodes: FleetNode[] }>('/v1/fleet/nodes'),
+  nodes: () => request<{ contract_version: string; nodes: FleetNode[]; backends?: FleetNode[] }>('/v1/fleet/nodes'),
   node: (id: string) => request<FleetNode>(`/v1/fleet/nodes/${encodeURIComponent(id)}`),
   patchNode: (id: string, p: NodePatch) =>
     request<FleetNode>(`/v1/fleet/nodes/${encodeURIComponent(id)}`, {

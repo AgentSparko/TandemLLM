@@ -11,7 +11,7 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { fleet, METRICS, type FleetHost, type FleetNode, type FleetSample, type MetricKey, type MetricSeries, type NodeMemory, type NodeSample } from '../../api/fleet';
+import { fleet, isSpark, METRICS, sparksOf, type FleetHost, type FleetNode, type FleetSample, type MetricKey, type MetricSeries, type NodeMemory, type NodeSample } from '../../api/fleet';
 import type { ChartEvent } from '../../charts/fleet-chart';
 import '../../charts/fleet-chart';
 import type { ChartMode, NodeSeries } from '../../charts/modes';
@@ -49,14 +49,15 @@ export class QseHardware extends MonitorPage {
     if (!f) return null;
     const sc = this.resolved;
     if (sc.kind === 'node') return f.nodes.find((n) => n.id === sc.id) ?? null;
-    return f.nodes.length === 1 && sc.kind === 'all' ? f.nodes[0] : null;
+    const sp = sparksOf(f.nodes);
+    return sp.length === 1 && sc.kind === 'all' ? sp[0] : null;
   }
 
   protected async load(isCurrent: () => boolean): Promise<void> {
     const s = this.resolved;
     const sheet = this.sheetNode;
     const src = sheet ? `node:${sheet.id}` : scopeSource(s);
-    const nodes = this.inScope;
+    const nodes = sparksOf(this.inScope);
     const one = !!sheet;
     const metrics = one ? (Object.keys(METRICS) as MetricKey[]) : HW_GROUPS.map((g) => g.metric);
     const [answers, samples, mem, host, rtt] = await Promise.all([
@@ -218,6 +219,17 @@ export class QseHardware extends MonitorPage {
     </section>`;
   }
 
+  /** SRV-749: the members of the scope that are backends by URL: nothing reads their machines */
+  private noFigures(ns: FleetNode[]): TemplateResult | typeof nothing {
+    if (!ns.length) return nothing;
+    const local = ns.filter((n) => !n.backend?.cloud);
+    return html`<section class="panel" data-no-figures>
+      <header class="panel-head"><div class="panel-titles"><h2 class="panel-title">No host figures</h2><p class="panel-sub">${ns.map((n) => nodeChip(n))}</p></div></header>
+      <p class="small">GPU, memory, power and temperature are read by TandemNode on the machine itself. ${ns.length === 1 ? `${ns[0].alias} is` : 'These are'} reached by URL only, so no host figures are available. What the gateway measures for a backend (requests and time to first token) is on <a href="#/performance">Performance</a>.</p>
+      ${local.length ? html`<p class="small hw-nofig-act"><a class="btn btn-sm" href="#/add-spark" data-install-node>Install TandemNode on ${local.length === 1 ? 'its machine' : 'their machines'}</a> <span class="muted">Add Spark installs it and pairs the machine; its figures then show here.</span></p>` : html`<p class="small muted">A cloud API has no machine to read.</p>`}
+    </section>`;
+  }
+
   // ---- scope All: the matrix ----------------------------------------------------------------------
   private matrix(nodes: FleetNode[]): TemplateResult {
     const sc = this.resolved;
@@ -336,11 +348,13 @@ export class QseHardware extends MonitorPage {
 
   // ---- the sidebar -------------------------------------------------------------------------------
   protected context(): ContextContent {
-    const f = this.fleetState;
+    const all = this.fleetState;
+    // the inspector reads a machine: the Sparks only (SRV-749)
+    const f = all && { ...all, nodes: sparksOf(all.nodes) };
     if (!f || !f.nodes.length) return { title: 'Node inspector', body: html`<p class="muted small">The node inspector shows a Spark of the fleet once TandemApp’s controller answers on this server.</p>` };
     const sc = this.resolved;
     const id = this.inspected && f.nodes.some((n) => n.id === this.inspected) ? this.inspected : sc.kind === 'node' ? sc.id! : (this.inScope[0]?.id ?? f.nodes[0].id);
-    const n = f.nodes.find((x) => x.id === id)!;
+    const n = f.nodes.find((x) => x.id === id) ?? f.nodes[0];
     const now = Object.fromEntries((['tps', 'temp', 'power', 'gpu'] as MetricKey[]).map((k) => [k, this.sample(n.id)?.node?.[k] ?? lastValue(this.series[k]?.series.find((x) => x.node === n.id)?.values ?? [])]));
     if (now.tps == null) now.tps = f.tps[n.id] ?? null;
     return {
@@ -356,10 +370,11 @@ export class QseHardware extends MonitorPage {
     const head = html`<header class="page-head" data-page="hardware">
       <div class="eyebrow">Monitor</div>
       <h1>Hardware</h1>
-      <p class="page-sub">${one && f && f.nodes.length === 1 ? html`${one.alias}, the fleet’s one Spark: every figure it gives, and the machine the controller runs on.` : one ? html`${one.alias}: the full sheet. Pick All Sparks in the scope bar for the matrix.` : 'Every metric group for the scope. Each chart has its own Total · Stacked · Lines · Split · Table switch; a cell opens that Spark’s sheet.'} <a href="#/hardware/system">System</a> keeps this server’s engine, memory plan and limits.</p>
+      <p class="page-sub">${one && !isSpark(one) ? html`${one.alias} is a backend reached by its URL: there is no machine to read.` : one && f && sparksOf(f.nodes).length === 1 ? html`${one.alias}, the fleet’s one Spark: every figure it gives, and the machine the controller runs on.` : one ? html`${one.alias}: the full sheet. Pick All Sparks in the scope bar for the matrix.` : 'Every metric group for the scope. Each chart has its own Total · Stacked · Lines · Split · Table switch; a cell opens that Spark’s sheet.'} <a href="#/hardware/system">System</a> keeps this server’s engine, memory plan and limits.</p>
     </header>`;
     if (!f) return html`${head}<div class="skeleton" style="height:240px"></div>`;
-    const nodes = this.inScope;
-    return html`${head}${one ? this.sheet(one) : this.matrix(nodes)}${this.hostSection()}`;
+    const nodes = sparksOf(this.inScope);
+    const backs = this.inScope.filter((n) => !isSpark(n));
+    return html`${head}${this.noFigures(backs)}${one && isSpark(one) ? this.sheet(one) : nodes.length ? this.matrix(nodes) : nothing}${this.hostSection()}`;
   }
 }

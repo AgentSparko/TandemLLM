@@ -17,7 +17,7 @@ import { describeError, request } from '../../api/client';
 import { fleet, type DeploymentJob, type DeploymentType, type FleetDeployment, type FleetNode, type Placement, type PlacementNode } from '../../api/fleet';
 import type { SetupModel, SetupModelsList } from '../../api/types';
 import { refreshContext, registerContext, type ContextContent } from '../../lib/context';
-import { onFleet, refreshFleet, type FleetState } from '../../lib/fleet-state';
+import { onFleet, refreshFleet, sparksOnly, type FleetState } from '../../lib/fleet-state';
 import { membersFor, newDeployment, pickType, placeBar, setSimpleMode, simpleMode, SOURCE_WORD, TYPE_HELP, TYPE_WORD } from '../../lib/models';
 import { onRoute, parseHash, setParams } from '../../lib/router';
 import { LightElement } from '../../ui/base';
@@ -68,7 +68,7 @@ export class QseServe extends LightElement {
     this.unsub.push(
       onFleet((f) => {
         const first = !this.f && f;
-        this.f = f;
+        this.f = sparksOnly(f);
         if (first) void this.loadList();
         refreshContext();
       }),
