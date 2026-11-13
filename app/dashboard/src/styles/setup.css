@@ -1797,10 +1797,6 @@ a.ccard-license:hover {
 .seg-wrap {
   flex-wrap: wrap;
 }
-.seg-rec {
-  margin-left: 3px;
-  color: var(--cobalt-hi);
-}
 .win-ctl {
   display: flex;
   flex-wrap: wrap;

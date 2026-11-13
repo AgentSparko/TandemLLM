@@ -489,9 +489,6 @@ textarea {
   background: var(--bg-2);
   overflow: hidden;
 }
-.stats-5 {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
 .stat {
   padding: 14px 16px 12px;
   min-width: 0;
@@ -1748,15 +1745,6 @@ mark {
   .grid-3 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .stats-5 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .stats-5 .stat:nth-child(n + 4) {
-    border-top: 1px solid var(--rule);
-  }
-  .stats-5 .stat:nth-child(4) {
-    border-left: 0;
-  }
   .grid-2-wide {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1771,8 +1759,7 @@ mark {
   .grid-2-tight {
     grid-template-columns: minmax(0, 1fr);
   }
-  .stats,
-  .stats-5 {
+  .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .stats .stat:nth-child(n + 3) {
@@ -1782,9 +1769,6 @@ mark {
     border-left: 0;
   }
   .stats .stat:nth-child(even) {
-    border-left: 1px solid var(--rule);
-  }
-  .stats-5 .stat:nth-child(4) {
     border-left: 1px solid var(--rule);
   }
   .hero-main {
@@ -1831,16 +1815,13 @@ mark {
   }
 }
 @media (max-width: 480px) {
-  .stats,
-  .stats-5 {
+  .stats {
     grid-template-columns: minmax(0, 1fr);
   }
-  .stats .stat,
-  .stats-5 .stat {
+  .stats .stat {
     border-left: 0 !important;
   }
-  .stats .stat + .stat,
-  .stats-5 .stat + .stat {
+  .stats .stat + .stat {
     border-top: 1px solid var(--rule);
   }
   .seg-btn {
@@ -2093,24 +2074,6 @@ mark {
   font-size: 11px;
   line-height: 1;
 }
-.phase-decode {
-  color: var(--orange-hi);
-}
-.phase-decode .phase-glyph {
-  animation: pulse 1s ease-in-out infinite;
-}
-.phase-prefill {
-  color: var(--cobalt-hi);
-}
-.phase-queued {
-  color: var(--ink-3);
-}
-.phase-done {
-  color: var(--ok);
-}
-.phase-failed {
-  color: var(--err);
-}
 .live-cards {
   display: none;
 }
@@ -2218,11 +2181,6 @@ mark {
     border-top: 1px solid var(--rule);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .phase-decode .phase-glyph {
-    animation: none;
-  }
-}
 
 /* ---- the live activity: the Now line, activity cells, timelines, the last 20 ---------- */
 /* one tone per state; colour is never the only signal (every state has a glyph and a word) */
@@ -2319,9 +2277,6 @@ mark {
   font-size: var(--fs-md);
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
-}
-.now-sep {
-  color: var(--ink-3);
 }
 .now-warning {
   display: flex;

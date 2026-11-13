@@ -76,6 +76,10 @@
 // sources.
 // 618 KB with a Split on the Models pages (VIS-272, 2026-11-13: 616.3 KB, 631,140 bytes, from 613.9): its two
 // stage bars, the link, the plan before the start with every part's basis, the phases in words.
+// 619 KB with Get started and the backends as fleet members (SRV-749, 2026-11-13: 618.3 KB, 633,106 bytes, from 613.9):
+// the first-open page with its connect-a-server form (a chunk of its own, loaded when it opens), a backend's place
+// in the scope bar and on Overview, Hardware's no-host-figures state. Room looked for first: eleven style rules no
+// page used went (167 bytes gzip); the form is already its own chunk, but the budget counts every file.
 // OPS-246: dist/ is a build output; CI runs this after the build and a total over the budget fails
 // the job. An optional argument names another folder (the size test's fixture).
 import { existsSync } from 'node:fs';

@@ -937,10 +937,6 @@ qse-fleet-page {
   color: var(--ink-2);
   font-size: var(--fs-sm);
 }
-.fleet-charts {
-  display: grid;
-  gap: 16px;
-}
 
 /* ---- the bottom bar and the menu sheet: a phone's only ------------------------------------------- */
 .bottombar,
