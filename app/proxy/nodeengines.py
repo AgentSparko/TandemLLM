@@ -33,7 +33,7 @@ after the grace). `restart` runs its own command, else stop then start. Each act
 agent's log with the caller.
 
 RELAY. GET only, these routes: /health, /v1/models, /v1/dashboard/live, /v1/dashboard/system,
-/v1/dashboard/logs, /metrics. The agent calls the engine on loopback without proxy headers, where
+/v1/dashboard/logs, /metrics, /v1/replica/identity (a Replicas member's identity, SRV-741). The agent calls the engine on loopback without proxy headers, where
 the engine trusts its caller (server/auth.py); an event stream is passed on as it arrives.
 """
 
@@ -50,7 +50,7 @@ import time
 from proxy import engineapi
 
 RELAY = ("/health", "/v1/models", "/v1/dashboard/live", "/v1/dashboard/system",
-         "/v1/dashboard/logs", "/metrics")
+         "/v1/dashboard/logs", "/metrics", "/v1/replica/identity")
 HEALTH_TIMEOUT_S = 2.0
 STOP_GRACE_S = 30.0
 COMMAND_TIMEOUT_S = 600.0

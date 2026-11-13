@@ -178,6 +178,9 @@ class Service:
         self.place = None
         self.listing = None
         self.locate = lambda bid, model: None
+        # SRV-741: a cache route's (status, answer, headers) on the member that holds the
+        # conversation; None: no fleet, the route is not served here
+        self.cache_route = None
         # the monitor's policy: its stall watchdog's ntfy settings carry the push of a new model
         self.monitor_base = monitor_base
         self.notifier = None                   # notify.send; a test puts its own here

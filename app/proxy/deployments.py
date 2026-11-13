@@ -45,7 +45,9 @@ serves the model under. A member's state: `serving` (its backend answers and, af
 move or a rejoin, its warm-up answered one token), `starting`, `down`, `draining` (its node is
 drained), `leaving` (a move takes it out: it takes no new request), `mismatch` (a Replicas member
 on another release, or with other weights, than the first serving member: G15 from SRV-467, on
-what the controller reads; it takes no request), `off` (its node does not answer), `gone` (its node
+what the controller reads; with engine API 1.1 its identity block differs in a field other than
+`max_len`, or the output canary gave other tokens: SRV-741, proxy/canary.py; it takes no request),
+`off` (its node does not answer), `gone` (its node
 left the fleet). Only `serving` takes requests. A member whose engine speaks another engine API
 major (its agent's engine view, proxy/engineapi.py) is `down` with the agent's reason, which names
 the major this TandemApp needs; the gateway sends such an engine no request, not as a fallback and
@@ -67,7 +69,12 @@ THE GATEWAY. `place` routes a request for a record's `api_id` (or its id): the m
 (a Replicas' conversation home first, then the other serving members as fallbacks, then the
 backend's own fallbacks); a drained, leaving, mismatched or down member is never first. The relay
 (proxy/relay.py) tries them on a failure before any byte, as it does a route's fallbacks, and puts
-`X-Tandem-Node` (the alias) and `X-Tandem-Deployment` (the id) on the answer. A constrained request
+`X-Tandem-Node` (the alias) and `X-Tandem-Deployment` (the id) on the answer. Members whose
+engines say different windows (`max_len`, SRV-741): a request whose prompt (counted by the first
+member's engine, `POST /v1/tokenize`) plus `max_tokens` exceeds a member's window goes to one that
+fits, else 400 `context_length_exceeded` with the largest window. `POST /v1/cache/peek`,
+`/prewarm` and `/release` for a deployment's model go to the member that holds the conversation
+(`cache_route`) and leave its home as it is. A constrained request
 (SRV-467's G20: `structured_outputs`, a `response_format` other than text, a grammar or guided
 field, a forced `tool_choice`) moves on only when the first member never took it. A stopped
 deployment answers 503 `deployment_stopped`, a Split 501 `not_built`.
@@ -106,7 +113,7 @@ import time
 import urllib.error
 import urllib.request
 
-from proxy import affinity, nodesource
+from proxy import affinity, canary as canary_mod, nodesource
 
 CONTRACT = "1.0"
 TYPES = ("single", "replicas", "split", "role")
@@ -134,6 +141,11 @@ CONSTRAINED = ("structured_outputs", "guided_json", "guided_regex", "guided_choi
 SELF = "self"                                   # SRV-467's member for this machine's engine
 # VIS-254: a request pinned to one member (the Playground's A/B of a deployment's members)
 PIN_HEADER = "X-Tandem-Pin"
+# SRV-741: the engine routes the gateway calls on a member itself
+TOKENIZE_PATH = "/v1/tokenize"
+TOKENIZE_TIMEOUT_S = 5.0
+CACHE_PATHS = ("/v1/cache/peek", "/v1/cache/prewarm", "/v1/cache/release")
+CACHE_TIMEOUT_S = 30.0
 
 
 class DeployError(Exception):
@@ -204,6 +216,9 @@ class Deployments:
         # when the config changes (a backend made for a new member)
         self._index: tuple[float, int, dict, dict] | None = None
         self._interrupted = False
+        # SRV-741: the members' identity blocks and the output canary (proxy/canary.py)
+        self.identities = canary_mod.Identities(log=fleet.log)
+        self.canary = canary_mod.Canary(self)
 
     # ------------------------------------------------------------------ what the fleet has
     def _context(self, max_age: float = 0.0) -> dict:
@@ -286,8 +301,10 @@ class Deployments:
             return "down", f"down · {h['last_error'] or 'no answer'}"
         return "starting", "waiting for the first health check"
 
-    def members(self, rec: dict, ctx: dict | None = None) -> list[dict]:
-        """A record's members with their state and whether they take requests."""
+    def members(self, rec: dict, ctx: dict | None = None, canary: bool = True) -> list[dict]:
+        """A record's members with their state and whether they take requests; a Replicas'
+        identity check, then (unless `canary` is False: the canary's own round) its canary's
+        verdicts."""
         ctx = ctx or self._context()
         out = []
         for m in rec["members"]:
@@ -297,9 +314,54 @@ class Deployments:
             out.append(mv)
         if rec["type"] == "replicas":
             self._identity(out)
+            self._full_identity(out)
+            self.canary.observe(rec["id"], out)
+            if canary:
+                self._canary_verdicts(rec, out)
         for mv in out:
             mv["routable"] = mv["state"] == "serving"
         return out
+
+    def _full_identity(self, ms: list[dict]) -> None:
+        """SRV-741: each serving member's identity block against the first serving member's:
+        every field but `max_len`; a member that differs is a mismatch that names the field. An
+        engine without the route keeps the light check (`_identity`) alone."""
+        for m in ms:
+            got = self.identities.read(m, m["state"] == "serving")
+            m["check"] = {"identity": got["state"], "identity_text": got["why"] or "read",
+                          "field": None, "window": None, "canary": None, "canary_text": None,
+                          "canary_at": None}
+            m["_block"] = got["block"]
+            w = (got["block"] or {}).get(canary_mod.WINDOW)
+            m["check"]["window"] = w if isinstance(w, int) and not isinstance(w, bool) else None
+        ref = next((m for m in ms if m["state"] == "serving"), None)
+        if ref is None or ref["_block"] is None:
+            return
+        for m in ms:
+            if m is ref or m["state"] != "serving" or m["_block"] is None:
+                continue
+            d = canary_mod.differs(ref["_block"], m["_block"])
+            if d is None:
+                m["check"]["identity_text"] = f"same identity as {ref['alias']}"
+                continue
+            field, a, b = d
+            m["check"].update(identity="mismatch", field=field,
+                              identity_text=f"{field}: {canary_mod.short(b)}, {ref['alias']} "
+                                            f"{canary_mod.short(a)}")
+            m["state"], m["text"] = "mismatch", (f"its identity differs from {ref['alias']}'s in "
+                                                 f"{field}: {canary_mod.short(b)} vs "
+                                                 f"{canary_mod.short(a)}")
+
+    def _canary_verdicts(self, rec: dict, ms: list[dict]) -> None:
+        """The canary's last verdict on each serving member: a `mismatch` takes it out of
+        service until a later round passes; a `near_tie` is a warning only."""
+        for m in ms:
+            v = self.canary.verdict(rec["id"], m["backend"]) if m["backend"] else None
+            if v is None:
+                continue
+            m["check"].update(canary=v["verdict"], canary_text=v["text"], canary_at=v["at"])
+            if v["verdict"] == "mismatch" and m["state"] == "serving":
+                m["state"], m["text"] = "mismatch", f"canary: {v['text']}"
 
     @staticmethod
     def _identity(ms: list[dict]) -> None:
@@ -343,16 +405,21 @@ class Deployments:
                 out["role"] = o["role"]
         if rec["type"] == "replicas":
             out["affinity"] = o.get("affinity") or "root"
-            warn = self._wan_warning(ms)
+            warn = [w for w in [self._wan_warning(ms)] if w]
+            warn += [f"{m['alias']}: {m['check']['canary_text']}" for m in ms
+                     if (m.get("check") or {}).get("canary") == "near_tie"]
             if warn:
-                out["warn"] = warn
+                out["warn"] = " · ".join(warn)
         return out
 
     @staticmethod
     def _member_view(m: dict) -> dict:
-        return {"node": m["node"] or "?", "alias": m["alias"], "engine": m["engine"],
-                "backend": m["backend"], "model": m["model"], "managed": m["managed"],
-                "state": m["state"], "text": m["text"], "routable": m["routable"]}
+        out = {"node": m["node"] or "?", "alias": m["alias"], "engine": m["engine"],
+               "backend": m["backend"], "model": m["model"], "managed": m["managed"],
+               "state": m["state"], "text": m["text"], "routable": m["routable"]}
+        if m.get("check") is not None:
+            out["check"] = dict(m["check"])
+        return out
 
     @staticmethod
     def _wan_warning(ms: list[dict]) -> str | None:
@@ -492,9 +559,10 @@ class Deployments:
                 out[api] = r
         return out
 
-    def place(self, model, body, headers):
+    def place(self, model, body, headers, windows: bool = True):
         """The route of a request for a record's model; for any other model the table's route
-        without the engines on another engine API major, or None (the table routes it)."""
+        without the engines on another engine API major, or None (the table routes it). A
+        Replicas' members with mixed windows: one that fits the request first (`_fitting`)."""
         if not isinstance(model, str) or not model:
             return None
         rec = self._by_api().get(model)
@@ -551,6 +619,8 @@ class Deployments:
         if not cands:
             raise Refused(503, "no_member", f"{rec['name']}: no backend reaches its members' "
                                             f"engines")
+        if rec["type"] == "replicas" and windows and not pin:
+            cands = self._fitting(rec, cands, body)
         m0 = cands[0]
         row = self.svc.table._row(s, m0["backend"], m0["model"])
         r = self.svc.table._route(s, m0["backend"], row, model)
@@ -565,6 +635,104 @@ class Deployments:
         if key is not None:
             r.on_served = lambda got, did=rec["id"], k=key: self._served(did, k, got)
         return r
+
+    @staticmethod
+    def _window(m: dict) -> int | None:
+        return (m.get("check") or {}).get("window")
+
+    def _fitting(self, rec: dict, cands: list[dict], body) -> list[dict]:
+        """SRV-741, mixed windows: when the routable members' engines say more than one
+        `max_len`, the request's prompt (counted by the first candidate's engine) plus its
+        `max_tokens` decides: the members whose window holds it, in their order, else a 400
+        that names the largest window. One window (or none read): the order as it is, and the
+        engine's own 400 for a request past it."""
+        known = {self._window(m) for m in cands if m["routable"]} - {None}
+        if len(known) < 2 or not isinstance(body, dict):
+            return cands
+        need = self._need(cands[0], body)
+        if need is None:
+            return cands
+        fit = [m for m in cands if (self._window(m) or 0) >= need]
+        if fit:
+            return fit
+        raise Refused(400, "context_length_exceeded",
+                      f"the prompt and max_tokens need {need} tokens; the largest window of "
+                      f"{rec['name']} is {max(known)} tokens")
+
+    def _need(self, m: dict, body: dict) -> int | None:
+        """The prompt's tokens by the member's engine (`POST /v1/tokenize`) plus `max_tokens`;
+        None when the engine does not count it."""
+        b = self.cfg.backend(m["backend"])
+        if b is None:
+            return None
+        st, doc = self._call(b, TOKENIZE_PATH, dict(body, model=m["model"], stream=False),
+                             TOKENIZE_TIMEOUT_S)
+        n = (doc or {}).get("tokens") if st == 200 and isinstance(doc, dict) else None
+        if not isinstance(n, int) or isinstance(n, bool):
+            return None
+        mt = body.get("max_tokens", body.get("max_completion_tokens"))
+        return n + (mt if isinstance(mt, int) and not isinstance(mt, bool) and mt > 0 else 0)
+
+    def _call(self, b: dict, path: str, body: dict, timeout: float) -> tuple[int, dict | None]:
+        """One JSON POST to an engine route on a backend: (status, answer); 502 and the reason
+        when it does not answer."""
+        h = {"Content-Type": "application/json", "User-Agent": WARM_UA}
+        try:
+            key = self.cfg.key_for(b["id"])
+        except Exception:                                            # noqa: BLE001
+            key = None
+        if key:
+            h["Authorization"] = f"Bearer {key}"
+        req = urllib.request.Request(canary_mod.engine_url(b["url"], path),
+                                     data=json.dumps(body).encode(), headers=h, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                st, raw = r.status, r.read()
+        except urllib.error.HTTPError as exc:
+            st, raw = exc.code, exc.read()
+        except Exception as exc:                                     # noqa: BLE001
+            return 502, {"error": {"type": "upstream_error",
+                                   "message": f"{type(exc).__name__}: {exc}"[:200]}}
+        try:
+            doc = json.loads(raw or b"null")
+        except ValueError:
+            doc = None
+        return st, doc if isinstance(doc, dict) else None
+
+    def cache_route(self, path: str, body, headers) -> tuple[int, dict, tuple]:
+        """SRV-741: `POST /v1/cache/peek`, `/prewarm` and `/release` for a deployment's model on
+        the member that holds the conversation (its `session`, else the conversation key the
+        gateway reads): the sticky member, as the conversation's next turn would go; the
+        conversation's home is not moved. (status, answer, headers)."""
+        if path not in CACHE_PATHS:
+            raise Refused(404, "not_found", f"no route {path}")
+        if not isinstance(body, dict):
+            raise Refused(400, "bad_request", "the body is a JSON object")
+        model = body.get("model")
+        if not isinstance(model, str) or not model:
+            raise Refused(400, "model_required", "model names the deployment whose member "
+                                                 "holds the conversation")
+        q = dict(body)
+        sess = body.get("session")
+        if isinstance(sess, str) and sess and not affinity.conversation_key(body, None):
+            q["conversation_id"] = sess
+        r = self.place(model, q, headers, windows=False)
+        if r is None:
+            r = self.svc.table.resolve(model)
+        b = self.cfg.backend(r.backend)
+        if b is None:
+            raise Refused(503, "no_member", f"{model}: no backend reaches its engine")
+        st, doc = self._call(b, path, dict(body, model=r.model), CACHE_TIMEOUT_S)
+        hdrs = []
+        got = self.locate(r.backend, r.model)
+        if got is not None:
+            hdrs.append(("X-Tandem-Node", got[1]))
+        if getattr(r, "deployment", None):
+            hdrs.append(("X-Tandem-Deployment", r.deployment))
+        if doc is None:
+            st, doc = 502, {"error": {"type": "upstream_error",
+                                      "message": f"the engine answered HTTP {st} without JSON"}}
+        return st, doc, tuple(hdrs)
 
     def _table_route(self, model: str):
         """The table's route for a model no record names, when an engine of the fleet speaks

@@ -322,6 +322,7 @@ class Fleet:
         from proxy import deployments, fleetweights, placement
         self.deps = deployments.Deployments(self)
         svc.place, svc.listing, svc.locate = self._place, self._listing, self._locate
+        svc.cache_route = self.deps.cache_route
         self.placement = placement.Planner(self)
         self.weights = fleetweights.Weights(self)
         from proxy import fleetsetup
@@ -501,6 +502,10 @@ class Fleet:
         except Exception as exc:                                     # noqa: BLE001
             self.log(f"[fleet] the alert rules did not run: {type(exc).__name__}: {exc}")
         self.ops.refresh()
+        try:
+            self.deps.canary.tick()              # SRV-741: a due Replicas canary, on its thread
+        except Exception as exc:                                     # noqa: BLE001
+            self.log(f"[fleet] the canary did not start: {type(exc).__name__}: {exc}")
         if self.store.due(now):
             self.store.flush(now)
 

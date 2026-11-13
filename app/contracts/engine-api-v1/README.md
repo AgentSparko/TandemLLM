@@ -28,7 +28,7 @@ These files are the truth for what TandemApp (`app/`: the dashboard, the control
 
 | route | TandemApp's use | shape |
 |-|-|-|
-| `POST /v1/chat/completions` | `proxy/service.py`, `tandemapp/conductor/classify.py`, `chatd/engine.py`, `chatd/agent.py`, `chatd/service.py`, `dashboard/src/api/client.ts`, `dashboard/src/views/playground.ts` | OpenAI chat completions; the extensions below |
+| `POST /v1/chat/completions` | `proxy/service.py`, `proxy/canary.py`, `tandemapp/conductor/classify.py`, `chatd/engine.py`, `chatd/agent.py`, `chatd/service.py`, `dashboard/src/api/client.ts`, `dashboard/src/views/playground.ts` | OpenAI chat completions; the extensions below |
 | `POST /v1/completions` | `proxy/service.py` | OpenAI completions |
 | `POST /v1/embeddings` | `proxy/service.py`, `proxy/relay.py` | OpenAI embeddings |
 | `POST /v1/responses` | `proxy/service.py` | OpenAI responses |
@@ -44,7 +44,7 @@ The full answer goes to a loopback caller without proxy headers (TandemNode on i
 | `GET /health`, `/healthz`, `/v1/health` | `proxy/nodeengines.py`, `chatd/engine.py`, `dashboard/src/app.ts`, `dashboard/src/setup/api.ts`, `dashboard/src/setup/install.ts` | `health.schema.json` |
 | `GET /metrics` | `proxy/nodeengines.py`, `proxy/nodesource.py`, `dashboard/src/views/performance.ts` | Prometheus text, the qse_* families (tandemapp/METRICS.md) |
 | `GET /metrics/up` | a Prometheus scrape (the engine's ops/monitoring); no TandemApp file | one number for a scraper: the engine answers |
-| `GET /v1/replica/identity` | a replica check before two engines serve one model; no TandemApp file calls it yet | the identity block (`server/identity.py`, `docs/server.md`), under the caller rule of `/v1/models`; 503 `identity_pending` until it is computed, once after the start. Since 1.1 |
+| `GET /v1/replica/identity` | `proxy/canary.py`, `proxy/nodeengines.py` (TandemNode's relay) | the identity block (`server/identity.py`, `docs/server.md`), under the caller rule of `/v1/models`; 503 `identity_pending` until it is computed, once after the start. Since 1.1 |
 
 ### 3. Engine dashboard reads
 
@@ -68,10 +68,10 @@ The full answer goes to a loopback caller without proxy headers (TandemNode on i
 
 | route | TandemApp's use | shape |
 |-|-|-|
-| `POST /v1/tokenize` | `chatd/agent.py` | the exact prompt tokens of a request (the model's own template) |
-| `POST /v1/cache/peek` | `chatd/service.py` | where a prompt's prefix is cached (tier per tandemapp/usage.py TIER_OF) |
-| `POST /v1/cache/prewarm` | `chatd/service.py` | load a prompt's prefix ahead of its request |
-| `POST /v1/cache/release` | `chatd/engine.py` | the engine gives back memory it holds |
+| `POST /v1/tokenize` | `chatd/agent.py`, `proxy/deployments.py` | the exact prompt tokens of a request (the model's own template) |
+| `POST /v1/cache/peek` | `chatd/service.py`, `proxy/deployments.py` | where a prompt's prefix is cached (tier per tandemapp/usage.py TIER_OF) |
+| `POST /v1/cache/prewarm` | `chatd/service.py`, `proxy/deployments.py` | load a prompt's prefix ahead of its request |
+| `POST /v1/cache/release` | `chatd/engine.py`, `proxy/deployments.py` | the engine gives back memory it holds |
 | `POST /v1/cache/clear` | `tools/tandem_eval.py` | the prefix store emptied (the admin bearer) |
 
 ### 6. Setup Guide 1.0
@@ -236,5 +236,5 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 
 ## Changes
 
-- v1.1: `GET /v1/replica/identity` (SRV-741).
+- v1.1: `GET /v1/replica/identity` (SRV-741). TandemApp reads it through TandemNode's relay for a Replicas member whose engine says 1.1 or later, and sends the cache routes and `/v1/tokenize` to a Replicas member (SRV-741, no change to the engine API).
 - v1.0, first version (SRV-747).

@@ -152,6 +152,73 @@
           },
           "routable": {
             "type": "boolean"
+          },
+          "check": {
+            "description": "SRV-741: a Replicas member's checks: its identity block against the first serving member's (every field but max_len), its window, the output canary's last verdict",
+            "type": "object",
+            "properties": {
+              "identity": {
+                "type": "string",
+                "enum": [
+                  "read",
+                  "pending",
+                  "failed",
+                  "not_available",
+                  "mismatch"
+                ]
+              },
+              "identity_text": {
+                "type": "string"
+              },
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "the first identity field that differs"
+              },
+              "window": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "the engine's max_len"
+              },
+              "canary": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "pass",
+                  "mismatch",
+                  "near_tie",
+                  null
+                ]
+              },
+              "canary_text": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "canary_at": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "identity",
+              "identity_text",
+              "field",
+              "window",
+              "canary",
+              "canary_text",
+              "canary_at"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [

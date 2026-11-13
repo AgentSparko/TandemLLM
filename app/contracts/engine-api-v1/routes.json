@@ -8,6 +8,7 @@
       "group": 1,
       "used_by": [
         "proxy/service.py",
+        "proxy/canary.py",
         "tandemapp/conductor/classify.py",
         "chatd/engine.py",
         "chatd/agent.py",
@@ -125,9 +126,11 @@
       "path": "/v1/replica/identity",
       "aliases": [],
       "group": 2,
-      "used_by": [],
+      "used_by": [
+        "proxy/canary.py",
+        "proxy/nodeengines.py"
+      ],
       "doc": "the replica identity block (server/identity.py): what two engines compare before they serve one model; 503 identity_pending until it is computed, once after the start. Since 1.1",
-      "consumer": "a replica check before two engines serve one model; no TandemApp file calls it yet",
       "live": false
     },
     {
@@ -251,7 +254,8 @@
       "aliases": [],
       "group": 5,
       "used_by": [
-        "chatd/agent.py"
+        "chatd/agent.py",
+        "proxy/deployments.py"
       ],
       "doc": "the exact prompt tokens of a request (the model's own template)",
       "live": false
@@ -262,7 +266,8 @@
       "aliases": [],
       "group": 5,
       "used_by": [
-        "chatd/service.py"
+        "chatd/service.py",
+        "proxy/deployments.py"
       ],
       "doc": "where a prompt's prefix is cached (tier per tandemapp/usage.py TIER_OF)",
       "live": false
@@ -273,7 +278,8 @@
       "aliases": [],
       "group": 5,
       "used_by": [
-        "chatd/service.py"
+        "chatd/service.py",
+        "proxy/deployments.py"
       ],
       "doc": "load a prompt's prefix ahead of its request",
       "live": false
@@ -284,7 +290,8 @@
       "aliases": [],
       "group": 5,
       "used_by": [
-        "chatd/engine.py"
+        "chatd/engine.py",
+        "proxy/deployments.py"
       ],
       "doc": "the engine gives back memory it holds",
       "live": false

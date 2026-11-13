@@ -50,6 +50,7 @@ from urllib.parse import parse_qs, parse_qsl, unquote, urlencode, urlsplit
 
 from proxy import config as proxy_config
 from proxy import config_api
+from proxy import deployments
 from proxy import fleet as fleet_mod
 from proxy import hostcollect
 from proxy import nodesource
@@ -440,6 +441,8 @@ class Handler(BaseHTTPRequestHandler):
             return config_api.handle(self, STATE["svc"], "POST", path, body)
         if path in PROXY_PATHS:
             return self._complete(path, raw, body, t_arrival)
+        if path in deployments.CACHE_PATHS and STATE["svc"].cache_route is not None:
+            return self._cache(path, body)
         if path.startswith("/v1/conductor/"):
             return self._conductor("POST", body)
         if path == "/v1/laya/ask" and STATE.get("laya") is not None:
@@ -468,6 +471,21 @@ class Handler(BaseHTTPRequestHandler):
                                 error_type=exc.code)
             return self._json(exc.status, exc.body())
         svc.serve(self, path, raw, body, route, user, t_arrival=t_arrival)
+
+    def _cache(self, path, body):
+        """SRV-741: a cache route on the member of a deployment that holds the conversation,
+        under the rule of the completions (the proxy's API keys when users exist)."""
+        svc: Service = STATE["svc"]
+        ok, _user = svc.authorize(self)
+        if not ok:
+            return
+        try:
+            st, doc, hdrs = svc.cache_route(path, body, self.headers)
+        except route_mod.NotFound as exc:
+            return self._json(404, exc.body())
+        except deployments.Refused as exc:
+            return self._json(exc.status, exc.body())
+        return self._json(st, doc, extra_headers=hdrs)
 
     def _gateway(self, raw: bytes, t_arrival: float) -> None:
         """`POST /v1/fleet/gateway/chat/completions` (VIS-254): the page's own JSON POST, then the
