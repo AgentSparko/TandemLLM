@@ -96,6 +96,11 @@ def test_identity_fields():
             c = ms[a]["check"]
             assert (c["identity"], c["window"], c["field"]) == ("read", 32768, None), ms[a]
         assert ms["R-1"]["check"]["identity_text"] == "same identity as Gold", ms
+        # the record lists its engines' model once, under its API id: an engine's own card
+        # (owned_by the engine, not the backend) is covered too
+        st, _, raw = fx.px.get("/v1/models")
+        ids = [m["id"] for m in json.loads(raw)["data"]]
+        assert st == 200 and ids == ["qwen-r"], ids
         # one window on both: the gateway counts no prompt
         fx.nodes["Gold"].srv.fake.tokenize = True
         assert fx.chat("qwen-r", conv="w-1", extra={"max_tokens": 50})[0] == 200
