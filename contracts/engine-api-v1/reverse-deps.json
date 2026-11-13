@@ -311,6 +311,12 @@
     "app/"
    ]
   },
+  "tests/test_api_import_guard.py": {
+   "imports": [
+    "tandemapp.conductor.schema"
+   ],
+   "reads": []
+  },
   "tests/test_app_hook.py": {
    "imports": [],
    "reads": [
