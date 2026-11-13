@@ -723,7 +723,8 @@ class Coordinator:
         self._tokens: list = []          # the committed sequence, for a replay
         self._pending = None             # the commit path the front has not seen yet
         self._block = None               # the tree block a commit may keep rows of
-        self._root = _Node(None, root_key(getattr(adapter, "seed", b"")), 0)
+        # the empty sequence: one key for every slot of a link (the seed is slot 0's adapter's)
+        self._root = _Node(None, root_key(getattr(adapter, "seed", b"")), 0) if main is None else main._root
         self._node = self._root          # the log's end: the committed state's key and length
         #: key -> [the log's node, the slots whose front holds it, kept in the front's directory]; one
         #: table a link: a state marked on one slot can be put back on another (its front is rebuilt)

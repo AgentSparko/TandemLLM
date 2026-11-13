@@ -15,8 +15,10 @@ buffers, until the running sequence is about to write over it; then it is copied
 copied back, or the restore is a miss and nothing changed. A miss costs the coordinator a rebuild
 of the front, never an answer.
 
-`budget_bytes` bounds the copies (sections and copied-out rows); the least recently used state goes
-first, and a state whose segment is gone is a miss. With a directory, a state the coordinator asks
+`budget_bytes` bounds the copies (sections and copied-out rows). The least recently used state gives
+up its sections first: it can no longer be restored to, but while its segment is in place it stays
+a link of the chain, at no cost, so a long conversation's later states still restore. A segment
+that was copied out goes next, and then every state above it is a miss. With a directory, a state the coordinator asks
 to `keep` is also written there with every segment of its chain, one file a state, named by the
 key: token ids are not in it, only the stage's own tensors. A file is written to a temporary name,
 synced and renamed, carries a checksum and its layout, and is read back only into buffers of that
@@ -38,11 +40,13 @@ _HDR = struct.Struct("<8sI")
 
 
 class _Kept:
-    __slots__ = ("key", "parent", "start", "length", "sections", "rows", "on_disk", "nbytes")
+    __slots__ = ("key", "parent", "start", "length", "sections", "rows", "on_disk", "disk_sections", "nbytes")
 
     def __init__(self, key, parent, start, length, sections, rows=None, on_disk=False):
         self.key, self.parent, self.start, self.length = key, parent, start, length
+        #: `sections` None: a link of a chain (its rows count, it cannot be restored to)
         self.sections, self.rows, self.on_disk = sections, rows, on_disk
+        self.disk_sections = on_disk and sections is not None      # its file holds its sections too
         self.nbytes = 0
 
 
@@ -111,6 +115,11 @@ class SideStore:
     def snapshot(self, key: bytes, length: int, keep: bool = False) -> None:
         key = bytes(key)
         e = self.entries.get(key)
+        if e is not None and e.sections is None:
+            # a link of a chain whose sections went: it is this state again, with its sections
+            e.sections = tuple(t.clone() for t in self.state.sections().values())
+            e.nbytes += _nb(e.sections)
+            self.bytes += _nb(e.sections)
         if e is None:
             parent, start = self.base
             if length < start:
@@ -162,9 +171,12 @@ class SideStore:
         it is not kept whole (a segment or a file is gone, another length, another layout), and
         nothing changed."""
         key = bytes(key)
+        e = self.entries.get(key)
+        if e is not None and e.sections is None and e.on_disk and e.disk_sections:
+            self._forget(key)                    # its sections went from memory: its file has them
         chain = self._chain(key)
         live = list(self.state.sections().values())
-        if (chain is None or chain[-1].length != length
+        if (chain is None or chain[-1].length != length or chain[-1].sections is None
                 or [(t.shape, t.dtype) for t in chain[-1].sections] != [(t.shape, t.dtype) for t in live]
                 or any(e.rows is None and not self._in_place(e) for e in chain)):
             self.stats["misses"] += 1
@@ -209,19 +221,26 @@ class SideStore:
             self.top = max((end for end, _ in self.place.values()), default=0)
 
     def _evict(self) -> None:
-        if self.bytes <= self.budget:
-            return
+        """Under the budget again, the least recently used state first: its sections go (it stays a
+        link of its chain while its segment is in place), then its rows when they were copied out."""
         for key in list(self.entries):
             if self.bytes <= self.budget:
-                break
+                return
+            e = self.entries[key]
             if key in self._pinned:
                 continue
-            self._forget(key)
-            self.stats["evicted"] += 1
+            if e.sections is not None:
+                freed = _nb(e.sections)
+                e.sections = None
+                e.nbytes -= freed
+                self.bytes -= freed
+                self.stats["evicted"] += 1
+            if (e.rows is not None and self.bytes > self.budget) or (e.rows is None and not self._in_place(e)):
+                self._forget(key)
 
     def report(self) -> dict:
-        out = {"states": len(self.entries), "bytes": self.bytes, "budget": self.budget,
-               "in_place": len(self.place), **self.stats}
+        out = {"states": len(self.entries), "links": sum(1 for e in list(self.entries.values()) if e.sections is None),
+               "bytes": self.bytes, "budget": self.budget, "in_place": len(self.place), **self.stats}
         if self.dir:
             out["files"] = sum(1 for f in os.listdir(self.dir) if f.endswith(".seg"))
         return out
@@ -238,8 +257,7 @@ class SideStore:
         views = self._views()
         names = list(self.state.sections())
         for e in chain:
-            if e.on_disk or os.path.exists(self._path(e.key)):
-                e.on_disk = True
+            if e.on_disk and (e.sections is None or e.disk_sections):
                 continue
             if e.rows is not None:
                 rows = e.rows
@@ -247,11 +265,12 @@ class SideStore:
                 rows = tuple(t.narrow(ax, e.start, e.length - e.start) for t, ax in views)
             else:
                 return
-            parts = [_raw(t) for t in e.sections] + [_raw(t) for t in rows]
+            secs = e.sections or ()              # a link of the chain: its rows alone
+            parts = [_raw(t) for t in secs] + [_raw(t) for t in rows]
             head = json.dumps({
                 "key": e.key.hex(), "parent": e.parent.hex() if e.parent else None, "start": e.start,
                 "length": e.length, "crc": zlib.crc32(b"".join(parts)),
-                "sections": [[n, str(t.dtype), list(t.shape)] for n, t in zip(names, e.sections)],
+                "sections": [[n, str(t.dtype), list(t.shape)] for n, t in zip(names, secs)],
                 "rows": [[str(t.dtype), list(t.shape), ax] for t, (_, ax) in zip(rows, views)]}).encode()
             tmp = self._path(e.key) + ".tmp"
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -265,7 +284,7 @@ class SideStore:
             finally:
                 os.close(fd)
             os.replace(tmp, self._path(e.key))
-            e.on_disk = True
+            e.on_disk, e.disk_sections = True, bool(secs)
             self.stats["files_written"] += 1
         self._sweep(keep={e.key.hex() for e in chain})
 
@@ -305,8 +324,9 @@ class SideStore:
             if magic != MAGIC or head["key"] != key.hex() or zlib.crc32(body) != head["crc"]:
                 raise ValueError("checksum")
             rows_n = head["length"] - head["start"]
-            if ([[nm, dt, sh] for nm, dt, sh in head["sections"]]
-                    != [[nm, str(t.dtype), list(t.shape)] for nm, t in live.items()]):
+            link = not head["sections"]              # a link of a chain: rows alone
+            if not link and ([[nm, dt, sh] for nm, dt, sh in head["sections"]]
+                             != [[nm, str(t.dtype), list(t.shape)] for nm, t in live.items()]):
                 raise KeyError("layout")
             want = []
             for t, ax in views:
@@ -316,7 +336,8 @@ class SideStore:
             if head["rows"] != want:
                 raise KeyError("layout")
             at, got = 0, []
-            for t, shape in [(t, list(t.shape)) for t in live.values()] + [(t, w[1]) for (t, _), w in zip(views, want)]:
+            for t, shape in ([] if link else [(t, list(t.shape)) for t in live.values()]) + \
+                    [(t, w[1]) for (t, _), w in zip(views, want)]:
                 n = t.element_size()
                 for d in shape:
                     n *= d
@@ -336,10 +357,10 @@ class SideStore:
             except OSError:
                 pass
             return None
-        ns = len(live)
+        ns = 0 if link else len(live)
         e = _Kept(key, bytes.fromhex(head["parent"]) if head["parent"] else None, int(head["start"]),
-                  int(head["length"]), tuple(got[:ns]), tuple(got[ns:]), on_disk=True)
-        e.nbytes = _nb(e.sections) + _nb(e.rows)
+                  int(head["length"]), None if link else tuple(got[:ns]), tuple(got[ns:]), on_disk=True)
+        e.nbytes = _nb(e.sections or ()) + _nb(e.rows)
         self.entries[key] = e
         self.bytes += e.nbytes
         self.stats["files_read"] += 1
