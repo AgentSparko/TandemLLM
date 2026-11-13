@@ -514,6 +514,9 @@ class Fake:
         self.identity_pending = 0
         self.identity_reads = 0
         self.releases = 0               # POST /v1/cache/release calls (answered 200)
+        # SRV-750: every path asked, with its count (query left out): a test of a plain
+        # OpenAI-compatible backend checks that nothing but the OpenAI surface was asked
+        self.seen: dict[str, int] = {}
 
     def prompt_tokens(self, body: dict) -> tuple[int, int]:
         """(prompt tokens, cached) with the prefix cache: the longest earlier message prefix."""
@@ -571,8 +574,15 @@ def make_handler(fake: Fake):
                                        "code": "invalid_api_key"}})
             return False
 
+        def _saw(self):
+            with fake.lock:
+                p = self.path.split("?")[0]
+                fake.seen[p] = fake.seen.get(p, 0) + 1
+
         def do_GET(self):
             p = self.path.split("?")[0]
+            if not p.startswith("/fake/"):
+                self._saw()
             if p == "/fake/last":
                 return self._json(200, fake.last or {})
             if p == "/fake/stats":
@@ -660,6 +670,7 @@ def make_handler(fake: Fake):
                     "max_model_len": 32768, **fake.cards.get(m, {})}
 
         def do_POST(self):
+            self._saw()
             rid = self.headers.get("X-Tandem-Relay-Id")
             if rid:
                 with fake.lock:

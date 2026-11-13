@@ -322,13 +322,20 @@ def test_a_mac_in_front_of_clouds():
     with Proxy(env={"TANDEM_BACKENDS": "cloud", "TANDEM_BACKEND_CLOUD_KIND": "openai",
                     "TANDEM_BACKEND_CLOUD_KEY": "sk-fixture-ABCDEFGH1234"}) as px:
         fleet_on(px, local_node(fake_root(), h=host(gpu=False)))
-        assert ok(get(px, "/v1/fleet/nodes")[1], "nodes")["nodes"] == []
+        d = ok(get(px, "/v1/fleet/nodes")[1], "nodes")
+        assert d["nodes"] == []
+        # SRV-749: the machine is no node, and the cloud API is a fleet member without a machine
+        assert [(b["id"], b["class"], b["hw"], b["status"], b["status_text"])
+                for b in d["backends"]] == [("backend.cloud", "backend", "cloud API", "off",
+                                             "waiting for the first check")], d["backends"]
         assert ok(get(px, "/v1/fleet/deployments")[1], "deployments")["deployments"] == []
         topo = ok(get(px, "/v1/fleet/topology")[1], "topology")
         assert [i["kind"] for i in topo["infra"]] == ["host", "lan", "internet"], topo
         assert ok(get(px, "/v1/fleet/memory")[1], "memory")["nodes"] == []
         m = ok(get(px, "/v1/fleet/metrics?metric=tps&range=5m")[1], "metrics")
-        assert m["series"] == []
+        assert [x["node"] for x in m["series"]] == ["backend.cloud"] and \
+            set(m["series"][0]["values"]) == {None}, m["series"]
+        assert ok(get(px, "/v1/fleet/metrics?metric=gpu&range=5m")[1], "metrics")["series"] == []
 
 
 def test_alias_and_colour():
