@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://qwen38-spark-engine/contract/fleet-v1/placement-request.schema.json",
-  "title": "The body of POST /v1/fleet/placement: a Setup Guide model, one of its packs, the context a lane holds, the lanes and the nodes (in pipeline order for a Split)",
+  "title": "The body of POST /v1/fleet/placement: a Setup Guide model, one of its packs, the context a lane holds, the lanes, the nodes (a Split: the front stage's node, then the tail's) and the Split's ask",
   "type": "object",
   "properties": {
     "model": {
@@ -26,6 +26,75 @@
         "type": "string"
       },
       "uniqueItems": true
+    },
+    "split": {
+      "description": "SRV-817: plan a Split: true (every default), or the engine's ask (contracts/engine-api-v1/setup/split.schema.json $defs.ask) with the planner's own cut (one cut, not the planner's choice) and link (the addresses by hand)",
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cuts": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "caches": {
+              "type": "string",
+              "enum": [
+                "on",
+                "off"
+              ]
+            },
+            "side_window": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "table": {
+              "type": "string",
+              "enum": [
+                "warm",
+                "cold"
+              ]
+            },
+            "snapshots_gb": {
+              "type": "number",
+              "minimum": 0
+            },
+            "front_cache_gb": {
+              "type": "number",
+              "minimum": 0
+            },
+            "tail_disk_gb": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cut": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "link": {
+              "type": "object",
+              "properties": {
+                "listen": {
+                  "type": "string"
+                },
+                "peer": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "listen"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "required": [

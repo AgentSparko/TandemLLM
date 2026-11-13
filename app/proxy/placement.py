@@ -2,7 +2,7 @@
 may serve it there.
 
     planner = Planner(fleet)                     one per Fleet (fleet.placement)
-    POST /v1/fleet/placement {model, pack, ctx, slots?, nodes?}   (proxy/fleet.py)
+    POST /v1/fleet/placement {model, pack, ctx, slots?, nodes?, split?}   (proxy/fleet.py)
 
 THE INPUTS. `model` and `pack` are a Setup Guide model and one of its weight profiles (the
 engine's `GET /v1/setup/models` and `/v1/setup/models/{id}`), `ctx` the context window a lane
@@ -28,14 +28,18 @@ THE TYPES:
     replicas   two or more nodes that fit and run one release; a member reached through a tunnel
                beside one on the LAN adds the WAN warning
     role       one node that fits, beside the deployment it helps
-    split      2 or 4 nodes in the order given, each joined to the next by a fabric link (both
-               ends' ConnectX interfaces up in one subnet, from their agents' link-test info), one
-               release, and each stage's share fitting: the weights and the KV divided by the
-               stages, every other part whole on each. Planned and recorded only: a Split runs
-               once ENG-307 builds the pipeline split (`built` false). Without `nodes` the first
-               fabric-joined pair that fits is offered.
+    split      two nodes, the front stage's first: one model cut between two layers (SRV-817,
+               proxy/splitplan.py). Planned when the body asks (`split`: true or the ask) or when
+               no node fits the model alone. Each node's engine (engine API 1.2) answers its own
+               estimate with the `split` block; the plan compares each side of each legal cut with
+               its node's budget, takes the cut whose smaller headroom is largest and says every
+               number, which are computed and which measured, and why each other cut lost. The
+               nodes need an interface pair in one subnet: a fabric pair first, a LAN pair with a
+               warning (`warn`), explicit IP literals always. Without `nodes` every ordered pair
+               is planned and the best one offered. `built` is true: a Split starts and serves.
 
-A type that may not serve says why in `reason` (`no fabric link between Gold and R-1`,
+A type that may not serve says why in `reason` (`no interface pair in one subnet between Gold
+and R-1`,
 `needs two nodes that fit: only Gold fits`, `R-1 runs 0.15.1, Gold 0.15.0`).
 """
 
@@ -47,7 +51,7 @@ import math
 import threading
 import time
 
-from proxy import fleetsetup, linktest, nodesource
+from proxy import fleetsetup, nodesource, splitplan
 
 CONTRACT = "1.0"
 FABRIC_TTL_S = 60.0
@@ -109,11 +113,13 @@ class Planner:
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ one node
-    def _estimate(self, row: dict, src, sel: dict) -> tuple[dict | None, str | None, str]:
-        """(estimate, why not, source) of a selection on one node."""
+    def _estimate(self, row: dict, src, sel: dict, split=None) -> tuple[dict | None, str | None,
+                                                                          str]:
+        """(estimate, why not, source) of a selection on one node; `split`: the ask sent beside
+        the selection (an engine on API 1.2 or later only)."""
         if isinstance(src, nodesource.AgentNode):
-            st, doc = src.post("/node/setup/estimate", {"selection": sel},
-                               timeout=ESTIMATE_TIMEOUT_S)
+            body = {"selection": sel} if split is None else {"selection": sel, "split": split}
+            st, doc = src.post("/node/setup/estimate", body, timeout=ESTIMATE_TIMEOUT_S)
             if st != 200:
                 return None, _message(doc) or f"its agent answered HTTP {st}", "none"
             bad = _unusable(doc)
@@ -187,8 +193,9 @@ class Planner:
             out["fits"] = True
         return out
 
-    # ------------------------------------------------------------------ the fabric
+    # ------------------------------------------------------------------ the interfaces
     def _interfaces(self, nid: str, src) -> list:
+        """A node's interfaces that are up and have an address (its agent's link-test info)."""
         now = time.monotonic()
         with self._lock:
             got = self._fabric.get(nid)
@@ -199,7 +206,7 @@ class Planner:
             try:
                 st, doc = src.client.json("GET", "/node/linktest/info", timeout=5.0)
                 if st == 200 and isinstance(doc, dict):
-                    ifs = [i for i in doc.get("interfaces") or [] if i.get("kind") == "fabric"
+                    ifs = [i for i in doc.get("interfaces") or [] if isinstance(i, dict)
                            and i.get("state") == "up" and i.get("addrs")]
             except Exception:                                        # noqa: BLE001
                 ifs = []
@@ -207,20 +214,22 @@ class Planner:
             self._fabric[nid] = (now, ifs)
         return ifs
 
-    def fabric_between(self, a: tuple, b: tuple) -> bool:
-        """A fabric link joins two nodes: a ConnectX interface up on each, in one subnet."""
-        ia, ib = self._interfaces(*a), self._interfaces(*b)
-        for x in ia:
-            for y in ib:
-                if linktest._match(x["addrs"], y["addrs"]):
-                    return True
-        return False
+    @staticmethod
+    def _machine(src) -> str | None:
+        """What two nodes of one machine share: the machine's serial (a virtual node is a second
+        agent on a machine); None when the agent does not say."""
+        try:
+            ident = src.identity() if hasattr(src, "identity") else None
+        except Exception:                                            # noqa: BLE001
+            ident = None
+        return (ident or {}).get("serial") or None
 
     # ------------------------------------------------------------------ the plan
     def plan(self, body, now: float) -> dict:
         if not isinstance(body, dict):
-            raise PlanError(400, "bad_request", "the body is {model, pack, ctx, slots?, nodes?}")
-        extra = [k for k in body if k not in ("model", "pack", "ctx", "slots", "nodes")]
+            raise PlanError(400, "bad_request", "the body is {model, pack, ctx, slots?, nodes?, "
+                                                "split?}")
+        extra = [k for k in body if k not in ("model", "pack", "ctx", "slots", "nodes", "split")]
         if extra:
             raise PlanError(400, "bad_request", f"placement: unknown field {extra[0]!r}")
         model, pack, ctx = body.get("model"), body.get("pack"), body.get("ctx")
@@ -231,6 +240,11 @@ class Planner:
         for k, v in (("ctx", ctx), ("slots", slots)):
             if not isinstance(v, int) or isinstance(v, bool) or v < 1:
                 raise PlanError(400, "bad_request", f"{k} is a whole number of at least 1")
+        asked = body.get("split") not in (None, False)
+        try:
+            ask, opts = splitplan.check_ask(body.get("split") if asked else None, slots)
+        except splitplan.AskError as exc:
+            raise PlanError(400, "bad_request", str(exc))
         f = self.fleet
         f.ensure_local()
         srcs = {row["id"]: (row, src) for row, src in f.sources()}
@@ -248,7 +262,8 @@ class Planner:
         sel = {"model": model, "profile": pack, "window": ctx, "slots": slots}
         nodes = [self._node(*srcs[n], sel, busy) for n in order]
         types = [self._single(nodes, "single"), self._replicas(nodes),
-                 self._single(nodes, "role"), self._split(nodes, srcs, want is not None)]
+                 self._single(nodes, "role"),
+                 self._split(nodes, srcs, want is not None, sel, ask, opts, asked, busy)]
         for n in nodes:
             n.pop("_est", None)
         return {"contract_version": CONTRACT, "model": model, "pack": pack, "ctx": ctx,
@@ -290,59 +305,113 @@ class Planner:
                            f"internet")
         return out
 
-    def _stage_fits(self, n: dict, k: int) -> tuple[bool, float | None]:
-        """One stage of `k` on node `n`: (fits, the stage's GiB)."""
-        est = n.get("_est")
-        if est is None:
-            return False, None
-        weights, kv = _part(est, "weights"), _part(est, "kv")
-        need = n["need_gib"] - weights - kv + (weights + kv) / k
-        if n["serving"] and n["free_gib"] is not None:
-            return need + est["floor_gb"] <= n["free_gib"], round(need, 2)
-        return need + _part(est, "os") <= est["budget_gb"], round(need, 2)
+    # ------------------------------------------------------------------ the Split
+    def _stage_engine(self, src) -> tuple[dict | None, str | None]:
+        """(the engine a node would run a stage on, None) or (None, why not): its TandemLLM engine
+        as its agent lists it, on engine API 1.2 or later."""
+        if not isinstance(src, nodesource.AgentNode):
+            return None, "has no TandemNode agent: a stage is started by its node's agent"
+        e = next((x for x in src.agent_engines() if x.get("kind") == "tandemllm"), None)
+        if e is None:
+            return None, "has no TandemLLM engine"
+        api = (e.get("health") or {}).get("engine_api")
+        if (e.get("health") or {}).get("api_assumed") or not splitplan.api_ok(api):
+            return None, (f"its engine speaks engine API {api or 'none it says'}: a Split needs "
+                          f"{'.'.join(map(str, splitplan.NEEDS_API))} or later")
+        return e, None
 
-    def _split(self, nodes: list[dict], srcs: dict, given: bool) -> dict:
-        out = {"type": "split", "allowed": False, "built": False, "nodes": [], "reason": None,
-               "warn": "planned and recorded only: a Split runs once the pipeline split "
-                       "(ENG-307) is built", "stages": []}
-        if given:
-            sets = [nodes]
-        else:
-            sets = [[a, b] for i, a in enumerate(nodes) for b in nodes[i + 1:]]
-        reason = None
-        for s in sets:
-            why = self._split_set(s, srcs)
-            if why is None:
-                k = len(s)
-                out.update(allowed=True, nodes=[n["node"] for n in s],
-                           stages=[{"node": n["node"], "layers": f"stage {i + 1} of {k}",
-                                    "gib": self._stage_fits(n, k)[1] or 0.0}
-                                   for i, n in enumerate(s)])
-                return out
-            reason = reason or why
-        out["reason"] = reason or "a Split runs over 2 or 4 nodes: the fleet has fewer"
+    def _split_node(self, n: dict, row: dict, src, sel: dict, ask: dict, busy: set) -> dict:
+        """One node for a Split: its split block from its own engine, the budget a stage has
+        there, its interfaces; `why` when it cannot hold a stage."""
+        a = n["alias"]
+        out = {"node": n["node"], "alias": a, "block": None, "why": None, "budget_gib": None,
+               "disk_free_gib": None, "interfaces": [], "machine": None}
+        if n["status"] == "off":
+            out["why"] = f"{a} is off"
+            return out
+        if row["drain"]:
+            out["why"] = f"{a} is drained: it takes nothing new"
+            return out
+        _e, why = self._stage_engine(src)
+        if why is not None:
+            out["why"] = f"{a} {why}"
+            return out
+        est, why, _source = self._estimate(row, src, sel, split=ask)
+        if est is None:
+            out["why"] = f"{a} has no estimate: {why}"
+            return out
+        block, why = splitplan.read_block(est)
+        if block is None:
+            out["why"] = f"{a}: {why}"
+            return out
+        budget = block["budget_gb"]
+        free = est.get("available_gb")
+        if n["node"] in busy and free is not None:
+            # it keeps what it serves: a stage must fit in what is free now, above the floor
+            budget = min(budget, max(0.0, round(free - block["floor_gb"], 2)))
+        try:
+            st, doc = src.client.json("GET", "/node/weights", timeout=5.0)
+            store = doc.get("store") if st == 200 and isinstance(doc, dict) else None
+            if isinstance(store, dict) and _num(store.get("free_gib")):
+                out["disk_free_gib"] = store["free_gib"]
+        except Exception:                                            # noqa: BLE001
+            pass
+        out.update(block=block, budget_gib=budget, machine=self._machine(src),
+                   interfaces=self._interfaces(n["node"], src))
         return out
 
-    def _split_set(self, s: list[dict], srcs: dict) -> str | None:
-        if len(s) not in (2, 4):
-            return f"a Split runs over 2 or 4 nodes, not {len(s)}"
-        for a, b in zip(s, s[1:]):
-            if not self.fabric_between((a["node"], srcs[a["node"]][1]),
-                                       (b["node"], srcs[b["node"]][1])):
-                return f"no fabric link between {a['alias']} and {b['alias']}"
+    def _split(self, nodes: list[dict], srcs: dict, given: bool, sel: dict, ask: dict,
+               opts: dict, asked: bool, busy: set) -> dict:
+        out = {"type": "split", "allowed": False, "built": True, "nodes": [], "reason": None,
+               "warn": None, "stages": []}
+        fit = [n["alias"] for n in nodes if n["fits"]]
+        if not asked and fit:
+            out["reason"] = (f"{fit[0]} holds the model alone: a Split is planned when asked "
+                             f"for (split)")
+            return out
+        if given and len(nodes) != 2:
+            out["reason"] = f"a Split runs over two nodes (the front stage's first), not " \
+                            f"{len(nodes)}"
+            return out
+        if len(nodes) < 2:
+            out["reason"] = "a Split runs over two nodes: the fleet has fewer"
+            return out
         from proxy.deployments import release
-        rels = {release(n["version"]) for n in s}
-        if len(rels) > 1:
-            return (", ".join(f"{n['alias']} runs {release(n['version']) or '?'}" for n in s)
-                    + ": a Split's stages run one release")
-        for n in s:
-            if n["status"] == "off" or n.get("_est") is None:
-                return n["reason"] or f"{n['alias']} has no estimate"
-            ok, gib = self._stage_fits(n, len(s))
-            if not ok:
-                return (f"a stage needs {gib:.0f} GiB, {n['alias']} has "
-                        f"{max(0.0, (n['free_gib'] or 0) - n['_est']['floor_gb']):.0f} free"
-                        if n["serving"] else
-                        f"a stage needs {gib:.0f} GiB, more than {n['alias']}'s budget")
-        return None
-
+        got = {n["node"]: self._split_node(n, *srcs[n["node"]], sel, ask, busy) for n in nodes}
+        pairs = [(nodes[0], nodes[1])] if given else \
+            [(a, b) for a in nodes for b in nodes if a is not b]
+        plans, reason = [], None
+        for a, b in pairs:
+            fa, ta = got[a["node"]], got[b["node"]]
+            why = fa["why"] or ta["why"]
+            if why is None and release(a["version"]) != release(b["version"]):
+                why = (f"{a['alias']} runs {release(a['version']) or '?'}, {b['alias']} "
+                       f"{release(b['version']) or '?'}: a Split's stages run one release")
+            if why is not None:
+                reason = reason or why
+                continue
+            link = splitplan.link_between(fa, ta, given=opts["link"])
+            if link.get("reason"):
+                reason = reason or link["reason"]
+                continue
+            p = splitplan.pair(fa, ta, sel["slots"], cut=opts["cut"])
+            if not p["allowed"]:
+                reason = reason or p["reason"]
+                continue
+            if link["warn"] == "loopback":
+                link["warn"] = splitplan.LOOP_WARNING.format(
+                    gib=p["front"]["need_gib"] + p["tail"]["need_gib"])
+            p["link"] = link
+            plans.append(p)
+        if not plans:
+            out["reason"] = reason or "no pair of nodes can hold the two stages"
+            return out
+        best = max(plans, key=lambda p: (p["link"]["kind"] == "fabric", p["headroom_gib"]))
+        best.pop("allowed", None)
+        best.pop("reason", None)
+        best["window"], best["slots"] = sel["window"], sel["slots"]
+        out.update(allowed=True, nodes=[best["front"]["node"], best["tail"]["node"]],
+                   warn=best["link"]["warn"], split=best,
+                   stages=[{"node": best[r]["node"], "layers": best[r]["layers"],
+                            "gib": best[r]["need_gib"]} for r in ("front", "tail")])
+        return out
