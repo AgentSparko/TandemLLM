@@ -458,7 +458,8 @@ def load_stage(path: str, lo: int, hi: int, device="cuda", dtype=torch.bfloat16,
     """(idx, W, experts, timing) of the layers [lo, hi) of the checkpoint or pack at `path`, in the
     forms `load.load` gives the whole model (its fused launches and expert banks, statement for
     statement). The front also reads the embedding and layer hi's operator norm (the N of its
-    carry), the tail the final norm and the head."""
+    carry), the tail the final norm, the head and the embedding too: the head is the embedding
+    when the pack ties them, and the engine names the embedding whenever it asks for the head."""
     import time
 
     from tools.exl3_linear import EXL3Block
@@ -485,7 +486,7 @@ def load_stage(path: str, lo: int, hi: int, device="cuda", dtype=torch.bfloat16,
             W[base + ".weight"] = _proj(idx, base, device, dtype)
     tied = idx.formats.get("lm_head") == "tied"
     keep = {f"layers.{hi}.operator_norm.weight"}
-    if lo == 0 or (last and tied):
+    if lo == 0 or last:
         keep.add("embed_tokens.weight")
     if last:
         keep.add("embedding_norm.weight")
@@ -535,6 +536,68 @@ def load_stage(path: str, lo: int, hi: int, device="cuda", dtype=torch.bfloat16,
     if log:
         log(f"[lfm-load] {path}: layers [{lo}, {hi}): {timing}")
     return idx, W, experts, timing
+
+
+def stage_names(cfg, lo: int, hi: int) -> tuple:
+    """(projection bases, plain tensor names) `load_stage` reads for the layers [lo, hi): the
+    stage's own layers, with the experts of its MoE layers, and what the first and the last stage
+    read beside them."""
+    from engine.models.lfm2_moe.pack import plain_names, projections
+    last = hi == cfg.num_hidden_layers
+
+    def own(name: str) -> bool:
+        m = _LAYER.match(name)
+        return m is not None and lo <= int(m.group(1)) < hi
+    keep = {f"layers.{hi}.operator_norm.weight"}
+    if lo == 0 or last:
+        keep.add("embed_tokens.weight")
+    if last:
+        keep.add("embedding_norm.weight")
+    return ([b for b, _, _ in projections(cfg) if own(b)] + (["lm_head"] if last else []),
+            [n for n, _ in plain_names(cfg) if own(n) or n in keep])
+
+
+def check_pack(path: str, cut: int) -> dict:
+    """The checkpoint or pack at `path` against what the two stages of a cut at `cut` will read,
+    from the files' headers alone (no weight is loaded): the whole pack's audit (every tensor of
+    the layout, its shape, the EXL3 parts and rates), then per stage every name its loader asks
+    for, present in the form the loader reads. ValueError names the first thing missing. Returns
+    what the pack is: its head, its formats, and each stage's tensors and bytes."""
+    from engine.models.lfm2_moe.pack import PackIndex
+    idx = PackIndex.open(path)
+    idx.audit()
+    if idx.is_exl3:
+        idx.check_mul1()
+    c = idx.cfg
+    layers = c.num_hidden_layers
+    if not 0 < cut < layers:
+        raise ValueError(f"no cut at {cut} in a model of {layers} layers")
+    head = idx.formats["lm_head"]
+    out = {"layers": layers, "cut": cut, "head": head, "exl3": idx.is_exl3, "notes": list(idx.notes),
+           "hidden": c.hidden_size, "vocab": c.vocab_size, "stages": {}}
+    for role, lo, hi in (("front", 0, cut), ("tail", cut, layers)):
+        bases, plain = stage_names(c, lo, hi)
+        n = nbytes = 0
+        for base in bases:
+            fmt = idx.formats.get(base)
+            if base == "lm_head" and fmt == "tied":
+                continue
+            if fmt is None:
+                raise ValueError(f"{role}: {base} is not in the pack's audit")
+            parts = [base + ".weight"] if fmt != "exl3" else [
+                base + ".trellis", base + (".suh" if base + ".suh" in idx.tensors else ".su"),
+                base + (".svh" if base + ".svh" in idx.tensors else ".sv")]
+            for name in parts:
+                if name not in idx.tensors:
+                    raise ValueError(f"{role}: {name} is missing from the pack")
+                n, nbytes = n + 1, nbytes + idx.tensors[name].nbytes
+        for name in plain:
+            if name not in idx.tensors:
+                raise ValueError(f"{role}: {name} is missing from the pack")
+            n, nbytes = n + 1, nbytes + idx.tensors[name].nbytes
+        out["stages"][role] = {"layers": [lo, hi], "projections": len(bases), "plain": len(plain), "tensors": n,
+                               "bytes": nbytes}
+    return out
 
 
 def stage_options(a, lo: int, hi: int) -> dict:
