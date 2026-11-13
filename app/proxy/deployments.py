@@ -1037,6 +1037,11 @@ class Deployments:
             raise DeployError(400, "bad_request", "each member once")
         if t == "split":
             nodes = [m["node"] for m in members]
+            back = next((ctx["nodes"][x]["row"]["alias"] for x in nodes
+                         if (ctx["nodes"].get(x) or {}).get("backend")), None)
+            if back is not None:                 # SRV-749's members: no agent sets a stage
+                raise DeployError(409, "not_a_node", f"{back} is a backend without TandemNode: "
+                                                     f"a Split's stages run on nodes")
             if len(set(nodes)) != n:
                 raise DeployError(400, "bad_request", "a Split's stages run on different nodes")
             if d.get("split") is not None:
