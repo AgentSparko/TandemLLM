@@ -10,7 +10,6 @@
    "proxy.route",
    "proxy.service:Service",
    "tandemapp.chat_forward",
-   "tandemapp.compaction",
    "tandemapp.conductor.classify:USER_AGENT",
    "tandemapp.conductor.decisions:Journal",
    "tandemapp.conductor.hook:Conductor",
@@ -32,7 +31,6 @@
    "tandemapp.conductor.schema",
    "tandemapp.conductor.schema:SIDE_FIRST_MAX_TOKENS",
    "tandemapp.conductor.shipped",
-   "tandemapp.conductor.signals",
    "tandemapp.conductor.states",
    "tandemapp.conductor.store:ConfigError",
    "tandemapp.conductor.store:DEFAULT_ROOT",
@@ -442,11 +440,17 @@
    ]
   },
   "tests/test_compaction_continue.py": {
-   "imports": [
-    "tandemapp.compaction"
-   ],
+   "imports": [],
    "reads": [
     "app/"
+   ]
+  },
+  "tests/test_compaction_trace.py": {
+   "imports": [
+    "tandemapp.conductor.signals"
+   ],
+   "reads": [
+    "app/tandemapp"
    ]
   },
   "tests/test_compaction_turns.py": {
@@ -955,9 +959,7 @@
    ]
   },
   "tests/test_memory_wait.py": {
-   "imports": [
-    "tandemapp.compaction"
-   ],
+   "imports": [],
    "reads": [
     "app/contracts"
    ]
@@ -977,7 +979,6 @@
   },
   "tests/test_memory_writer.py": {
    "imports": [
-    "tandemapp.compaction",
     "tandemapp.conductor.classify:Answer",
     "tandemapp.conductor.hook:Conductor",
     "tandemapp.conductor.memwriter"
@@ -1288,9 +1289,7 @@
    "reads": []
   },
   "tests/test_scratch_turn_images.py": {
-   "imports": [
-    "tandemapp.compaction"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]

@@ -105,7 +105,7 @@ from tandemapp import chat_forward  # noqa: E402
 from server import memory_api  # noqa: E402
 from server import mode as mode_mod  # noqa: E402  (OPS-260 engine or chat, and what runs beside the engine)
 from tandemapp import memblock  # noqa: E402
-from tandemapp import compaction as compaction_mod  # noqa: E402
+from server.api import compaction as compaction_mod  # noqa: E402
 from tandemapp import session_tokens as session_tokens_mod  # noqa: E402
 from server import preempt  # noqa: E402
 from server import queue_wait as qwait  # noqa: E402
@@ -2966,7 +2966,7 @@ def _generate_stream(prompt: torch.Tensor, max_new: int, eos: set[int], think=No
     -- its client, the notes spliced into its prompt, where its last user message starts. The
     tier itself is `STATE["disk_cache"]`; None (`--disk-cache off`) is the prefill without it.
 
-    `pos_delta`, `end_mm` (app/tandemapp/compaction.py): a text prompt that continues a
+    `pos_delta`, `end_mm` (server/api/compaction.py): a text prompt that continues a
     conversation with images: the rotary offset its rows take and leave to the end anchor kept
     after those images. `scratch`: a summary prepared in the background, whose rows are nobody's.
 
@@ -4210,7 +4210,7 @@ def _remember_turn(prompt_ids: list[int], out_ids: list[int], conv_id: str | Non
     (`ResidentPrefix.keep_end`): `hidden` are the spans of the served prompt the client did not
     send (the end anchor's replay, SP4's note), with the generation's own (`_force_close`). For a
     request with images the end is kept with its rotary offset and offered only to a
-    compaction served as the conversation's continuation (app/tandemapp/compaction.py); `delta` is that
+    compaction served as the conversation's continuation (server/api/compaction.py); `delta` is that
     offset for a continuation's own generation, which wrote its rows after the images.
 
     The loop's invariant at the end of a generation is `kv.length == len(ctx) - 1` -- the last
@@ -5286,7 +5286,7 @@ def _gate_record(res, r, ids: list[int]) -> None:
 def _compaction_plan(body: dict, conv_id: str | None, kind: str | None, n_client: int,
                      row: dict | None) -> dict | None:
     """A compaction request served as the continuation of the conversation the engine
-    holds for its session (app/tandemapp/compaction.py), or None to serve it as the client sent it. Under
+    holds for its session (server/api/compaction.py), or None to serve it as the client sent it. Under
     the engine lock: the record is the rows in place or an entry on the NVMe."""
     cfg, prep = STATE.get("compaction"), STATE.get("prepared")
     if cfg is None or prep is None:
@@ -5449,7 +5449,7 @@ def _box_unlock(fd) -> None:
 
 
 def prepare_once() -> str:
-    """One look of the preparer (app/tandemapp/compaction.py): when the engine has been idle for
+    """One look of the preparer (server/api/compaction.py): when the engine has been idle for
     `idle_s`, no hold or box lock is on, and the resident conversation is an opencode session's of
     at least `min_tokens` whose summary at its end anchor is not written yet, write it now as the
     conversation's continuation, in scratch rows, and stop at the first request that waits.
@@ -6245,13 +6245,13 @@ def shadow_drain() -> None:
 def _compacting(plan, body: dict, client_kind: str | None = None) -> bool:
     """Is this the session's compaction? opencode's request has no tools, no system text and the
     history as one user message; the conductor's router classes it `summarize` on that shape
-    (structurally), and without a conductor the shape alone says it."""
+    (structurally), and without a conductor the shape alone says it (server/api/compaction.py
+    `is_compaction`, the engine's own check: it runs with the conductor off, ENG-413 WP2b)."""
     row = plan.row if plan is not None else None
     if row is not None and row.get("source") == "structural" and row.get("class_id") == "summarize":
         return True
     try:
-        from tandemapp.conductor import signals
-        return bool(signals.shape(body, client_kind=client_kind).compaction)
+        return bool(compaction_mod.is_compaction(body, client_kind))
     except Exception:                                              # noqa: BLE001
         return False
 
@@ -13169,7 +13169,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--compaction", default=os.environ.get("QSE_COMPACTION", "continue"),
                     choices=("continue", "client"),
                     help="a client's compaction request (QSE_COMPACTION, 0.3.23-test, "
-                         "app/tandemapp/compaction.py): continue = served as the continuation of "
+                         "server/api/compaction.py): continue = served as the continuation of "
                          "the conversation the engine holds for its session (the prefill reads "
                          "only the instructions); client = as the client sent it (its text "
                          "history read cold)")
