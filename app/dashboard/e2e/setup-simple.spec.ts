@@ -20,12 +20,12 @@ test('a new browser opens simple: three pages, the open review fold, and a Finis
   await expect(sw.getByRole('button', { name: 'Advanced', exact: true })).toHaveAttribute('aria-pressed', 'false');
 
   await page.locator(`.mtile[data-model="${MODEL}"]`).click();
-  await expect(page).toHaveURL(new RegExp(`#/setup/${MODEL}/weights$`));
+  await expect(page).toHaveURL(new RegExp(`#/models/serve/${MODEL}/weights$`));
   await expect(page.locator('.wcard.is-selected')).toBeVisible();
   await expect(page.locator('.setup-nav-mid')).toContainText('Step 2 of 3');
 
   await page.locator('.setup-next').click();
-  await expect(page).toHaveURL(new RegExp(`#/setup/${MODEL}/review$`));
+  await expect(page).toHaveURL(new RegExp(`#/models/serve/${MODEL}/review$`));
   await expect(page.locator('.setup-folds details.setup-fold').first()).toBeVisible();
   // the review fold is the one that must never hide a reason: it opens on its own
   await expect(page.locator('details[data-fold="review"]')).toHaveAttribute('open', '');
