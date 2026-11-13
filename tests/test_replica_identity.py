@@ -131,7 +131,7 @@ def test_identity_module_imports_no_proxy_and_no_app():
             names += [a.name for a in n.names]
         elif isinstance(n, ast.ImportFrom):
             names += [n.module or ""] + [f"{n.module}.{a.name}" for a in n.names]
-    bad = [x for x in names if x.split(".")[0] in ("proxy", "app")
+    bad = [x for x in names if x.split(".")[0] in ("proxy", "tandemapp", "chatd", "app")
            or x.startswith(("server.app", "server.proxy", "app."))]
     assert not bad, bad
     assert "server.diskcache" in names       # the rows' fingerprint, as the disk tier keys them
