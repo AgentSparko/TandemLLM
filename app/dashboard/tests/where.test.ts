@@ -177,6 +177,7 @@ describe("the mock's two ledgers and its gateway", () => {
     expect([stranger.status, (stranger.body as { error: { code: string } }).error.code]).toEqual([409, 'not_a_member']);
     expect((await send(undefined, 'nope')).status).toBe(404);
     const split = await call('POST', '/v1/fleet/gateway/chat/completions', 'qse_fleet=fleet4', { model: 'deepseek-v4.1-flash', messages: [] }, page);
-    expect([split.status, (split.body as { error: { code: string } }).error.code]).toEqual([501, 'not_built']);
+    // the Split is recorded and stopped until it is started (SRV-817)
+    expect([split.status, (split.body as { error: { code: string } }).error.code]).toEqual([503, 'deployment_stopped']);
   });
 });

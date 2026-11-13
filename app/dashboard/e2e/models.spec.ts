@@ -2,12 +2,13 @@
 // Desk + R-3, DeepSeek-V4.1-Flash as a Split over R-1 + R-2, Wren a Role on Desk, a copy of DeepSeek's
 // pack R-1 → Desk running). The two Gherkin scenarios of the ticket as the mock can hold them:
 // "Placement shows fit" (with DeepSeek stopped through its plan, a 120B model: every Spark's memory
-// bar, Single refused on Desk for memory, a Split over R-1 → R-2 allowed but not built, a Split with
-// Desk refused for the fabric) and "Copy weights" (a pack on Desk only copied to R-3: the progress,
+// bar, Single refused on Desk for memory, a Split over R-1 → R-2 allowed with its plan, a Split with
+// Desk refused for the missing subnet) and "Copy weights" (a pack on Desk only copied to R-3: the progress,
 // then R-3's cell present with the same content id). Besides: the cards and the scope, a start after
 // Serve, each Spark's Setup Guide through the controller with a write said before it goes, the
-// delete refused while a pack serves, and the phone. Mock tier only. PW_SHOTS=<dir> keeps a
-// screenshot of each page.
+// delete refused while a pack serves, and the phone. VIS-273: a Split's two stage bars and its link,
+// Simple and Advanced, its start and stop as one action, and the degraded and half-running states in
+// plain words. Mock tier only. PW_SHOTS=<dir> keeps a screenshot of each page.
 import { expect, test, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
 import { IS_MOCK, setMode } from './helpers';
 
@@ -39,7 +40,7 @@ test.describe('Models pages', () => {
     await fresh(request);
   });
 
-  test('Deployments: a card per deployment with its type, members and their states; a Split not built; the scope narrows it', async ({ page }, info) => {
+  test('Deployments: a card per deployment with its type, members and their states; a Split as two stages; the scope narrows it', async ({ page }, info) => {
     await open(page, '#/models');
     await expect(page.locator('.page-head[data-page="models"] .page-sub')).toContainText('3 deployments behind one API');
     await expect(page.locator('.dcard')).toHaveCount(3);
@@ -49,7 +50,8 @@ test.describe('Models pages', () => {
     await expect(q.locator('tr[data-member="r3"] [data-member-state]')).toHaveText('serving');
     await expect(q.locator('.dcard-m')).toHaveText('managed');
     await expect(q.locator('.dcard-warn')).toContainText('Each conversation stays on one member');
-    await expect(card(page, 'dsv41').locator('[data-not-built]')).toContainText('not built yet (ENG-307)');
+    await expect(card(page, 'dsv41').locator('[data-split]')).toHaveAttribute('data-phase', 'stopped');
+    await expect(card(page, 'dsv41').locator('[data-stage]')).toHaveCount(2);
     await expect(card(page, 'dsv41').locator('[data-dep-act="move"]')).toBeDisabled();
     await expect(page.locator('[data-tiles] [data-tile="tps"]')).toBeVisible();
     expect(await noSideScroll(page)).toBe(true);
@@ -62,15 +64,15 @@ test.describe('Models pages', () => {
     if (info.project.name === 'chromium-desktop') {
       // a card's head opens its members and last job in the right sidebar
       await card(page, 'dsv41').locator('.dcard-h').click();
-      await expect(page.locator('.ctx [data-selection]')).toContainText('Split · one model across 2 or 4 Sparks');
+      await expect(page.locator('.ctx [data-selection]')).toContainText('Split · one model cut across two Sparks');
     }
   });
 
-  test('Placement shows fit: every Spark’s bar, Single refused on Desk for memory, a Split over R-1 → R-2 allowed but not built, one with Desk refused for the fabric; Serve creates and starts', async ({ page }, info) => {
+  test('Placement shows fit: every Spark’s bar, Single refused on Desk for memory, a Split over R-1 → R-2 allowed with its plan, one with Desk refused for the subnet; Serve creates and starts', async ({ page }, info) => {
     test.setTimeout(90_000);
     await open(page, '#/models');
-    // DeepSeek's Split over R-1 and R-2 is recorded, stopped until ENG-307: their memory is free
-    await expect(card(page, 'dsv41')).toContainText('not built yet (ENG-307)');
+    // DeepSeek's Split over R-1 and R-2 is recorded and stopped: their memory is free
+    await expect(card(page, 'dsv41').locator('[data-split]')).toHaveAttribute('data-phase', 'stopped');
     await expect(card(page, 'dsv41').locator('[data-dep-act="stop"]')).toHaveCount(0);
     // Serve a model: a 120B model, one lane of 32k
     await open(page, '#/models/place');
@@ -90,14 +92,29 @@ test.describe('Models pages', () => {
     await expect(page.locator('[data-place-node="r1"]')).toHaveAttribute('data-fits', 'true');
     const split = page.locator('.ptype[data-type="split"]');
     await expect(split).toHaveAttribute('data-allowed', 'true');
-    await expect(split.locator('[data-not-built]')).toHaveText('not built yet (ENG-307)');
     await expect(split).toContainText('R-1 → R-2');
     await shot(page, info, 'placement');
-    // Desk and R-1, in that order: no fabric between them
+    // the Split picked: its plan before the start, the cut, both stages and the link
+    await split.click();
+    const sp = page.locator('[data-panel="split-plan"]');
+    await expect(sp).toContainText(/Cut at layer \d+ of 48: the front stage on R-1, the tail on R-2/);
+    await expect(sp.locator('[data-stage="front"] .pbar')).toBeVisible();
+    await expect(sp.locator('[data-stage="tail"]')).toContainText(/needs [\d.]+ of [\d.]+ GiB/);
+    await expect(sp.locator('[data-link]')).toContainText('fabric pair');
+    await expect(sp.locator('[data-split-advanced]')).toHaveCount(0);
+    await sp.locator('[data-models-mode="advanced"]').click();
+    await expect(sp.locator('[data-split-advanced]')).toContainText(/Why this cut: cut \d+ leaves the larger of the smaller headrooms/);
+    await expect(sp.locator('[data-split-advanced]')).toContainText('computed');
+    await expect(sp.locator('[data-split-advanced]')).toContainText('measured');
+    await expect(sp.locator('[data-split-advanced]')).toContainText('Margin: each side slot is counted once more');
+    await shot(page, info, 'split-plan');
+    await sp.locator('[data-models-mode="simple"]').click();
+    expect(await noSideScroll(page)).toBe(true);
+    // Desk and R-1, in that order: no subnet they share
     await page.locator('[data-pick="desk"]').check();
     await page.locator('[data-pick="r1"]').check();
     await expect(split).toHaveAttribute('data-allowed', 'false');
-    await expect(split).toContainText('no fabric link between Desk and R-1');
+    await expect(split).toContainText('no interface pair in one subnet between Desk and R-1');
     // R-1 alone: a Single there
     await page.locator('[data-pick="desk"]').uncheck();
     await expect(page.locator('[data-place-node]')).toHaveCount(4);
@@ -113,6 +130,79 @@ test.describe('Models pages', () => {
     await page.locator('[data-sv-done]').click();
     await expect(card(page, 'nemotron-super')).toBeVisible();
     await expect(card(page, 'nemotron-super').locator('tr[data-member="r1"]')).toBeVisible();
+  });
+
+  test('VIS-273: a Split starts and stops as one; its two stage bars, the link, and the degraded and half-running states in words', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await open(page, '#/models?scope=deployment:dsv41');
+    const c = card(page, 'dsv41');
+    const front = c.locator('[data-stage="front"]');
+    const tail = c.locator('[data-stage="tail"]');
+    await expect(front).toContainText('R-1');
+    await expect(front).toContainText(/layers 0:\d+/);
+    await expect(tail).toContainText('R-2');
+    await expect(front.locator('.pbar')).toBeVisible();
+    await expect(tail.locator('.pbar')).toBeVisible();
+    await expect(front.locator('[data-member-state]')).toHaveText('down');
+    await expect(c.locator('[data-link]')).toContainText('link not up yet · fabric pair');
+    // Advanced, by the keyboard: every number with its basis, why the cut, the other cuts
+    await page.locator('[data-models-mode="advanced"]').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[data-models-mode="advanced"]')).toHaveAttribute('aria-pressed', 'true');
+    const adv = c.locator('[data-split-advanced]');
+    await expect(adv).toContainText(/Why this cut: cut \d+ leaves the larger of the smaller headrooms/);
+    await expect(adv.locator('tr', { hasText: 'weights' })).toContainText('computed');
+    await expect(adv.locator('tr', { hasText: 'slot margin' })).toContainText('margin');
+    await expect(adv).toContainText('measured');
+    await expect(adv).toContainText('the front listens on 10.77.0.1:7740');
+    await expect(adv.locator('summary')).toContainText('not chosen');
+    expect(await noSideScroll(page)).toBe(true);
+    await shot(page, info, 'split-advanced');
+    await page.locator('[data-models-mode="simple"]').click();
+    await expect(adv).toHaveCount(0);
+    // Start: one action for the pair, the front first
+    const d = await dialogFor(page, 'dsv41', 'start');
+    await expect(d).toContainText('R-1: TandemNode starts the front stage');
+    await expect(d).toContainText('R-2: TandemNode starts the tail stage');
+    await expect(d).toContainText('a new link key goes to both nodes');
+    await d.locator('[data-act-go]').click();
+    await expect(c.locator('[data-split]')).toHaveAttribute('data-phase', /starting-(front|tail)/, { timeout: 15_000 });
+    await expect(c.locator('[data-split-phase]')).toContainText(/Starting the (front|tail)/);
+    await expect(c.locator('[data-split]')).toHaveAttribute('data-phase', 'linked', { timeout: 30_000 });
+    if (await page.locator('qse-deploy-action dialog[open]').count()) await page.keyboard.press('Escape');
+    await expect(front.locator('[data-member-state]')).toHaveText('serving');
+    await expect(tail.locator('[data-member-state]')).toHaveText('serving · takes the requests');
+    await expect(c.locator('[data-link]')).toHaveAttribute('data-link', 'up');
+    await expect(c.locator('[data-link]')).toContainText('link up · epoch 1 · tcp · fabric pair');
+    await expect(c.locator('[data-dep-status]')).toHaveAttribute('data-dep-status', 'serving');
+    await shot(page, info, 'split-linked');
+    // the link drops: degraded, in plain words, and it heals by itself
+    const knob = (mock: string) => page.request.post('/v1/fleet/deployments/dsv41/actions/start', { data: { mock } });
+    expect((await knob('link-down')).ok()).toBeTruthy();
+    await expect(c.locator('[data-split]')).toHaveAttribute('data-phase', 'degraded', { timeout: 20_000 });
+    await expect(c.locator('[data-split-phase]')).toContainText('Degraded.');
+    await expect(c.locator('[data-split-phase]')).toContainText('Requests get a 503 with Retry-After');
+    await expect(c.locator('[data-link]')).toContainText('link down (peer closed)');
+    await expect(tail.locator('[data-member-state]')).toHaveText('waiting for the link');
+    await shot(page, info, 'split-degraded');
+    expect((await knob('link-up')).ok()).toBeTruthy();
+    await expect(c.locator('[data-link]')).toContainText('link up · epoch 2', { timeout: 20_000 });
+    // one stage stops: half running; Start brings it back
+    expect((await knob('front-stop')).ok()).toBeTruthy();
+    await expect(c.locator('[data-split-phase]')).toContainText('Half running.', { timeout: 20_000 });
+    await expect(c.locator('[data-split-phase]')).toContainText('Start brings the other one back');
+    const again = await dialogFor(page, 'dsv41', 'start');
+    await expect(again).toContainText('R-2: the tail stage runs already');
+    await again.locator('[data-act-go]').click();
+    await expect(c.locator('[data-split]')).toHaveAttribute('data-phase', 'linked', { timeout: 30_000 });
+    if (await page.locator('qse-deploy-action dialog[open]').count()) await page.keyboard.press('Escape');
+    // Stop: the tail first, both gone
+    const s = await dialogFor(page, 'dsv41', 'stop');
+    await expect(s).toContainText('R-2: TandemNode stops the tail stage first');
+    await s.locator('[data-act-go]').click();
+    await expect(c.locator('[data-split]')).toHaveAttribute('data-phase', 'stopped', { timeout: 20_000 });
+    await expect(front.locator('[data-member-state]')).toHaveText('down');
+    expect(await noSideScroll(page)).toBe(true);
   });
 
   test('each Spark’s Setup Guide through the controller: its own Spark named, a write said by the plan before it goes', async ({ page }, info) => {

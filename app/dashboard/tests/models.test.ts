@@ -14,7 +14,7 @@ import { MockFleet } from '../mock/fleet.ts';
 import { createMockMiddleware } from '../mock/server.ts';
 import { bound, writeOf } from '../mock/setup-relay.ts';
 import type { FleetDeployment, Placement, PlacementNode, SetupConfirm, WeightsCopyJob, WeightsMatrix } from '../src/api/fleet.ts';
-import { copyWords, countWords, depActions, depCounts, managedWords, membersFor, newDeployment, pickType, placeBar, scoped, shortId, sizeWords, weightsCell } from '../src/lib/models.ts';
+import { basisWord, copyWords, countWords, depActions, depCounts, linkWords, managedWords, MEMBER_WORD, membersFor, memberTone, newDeployment, phaseWords, pickType, placeBar, scoped, setSimpleMode, shortId, simpleMode, sizeWords, SPLIT_MOVE, SPLIT_NO_PLAN, stageBar, weightsCell } from '../src/lib/models.ts';
 import { isCancelled, setConfirmer, setSetupNode, setupApi, setupBase } from '../src/setup/api.ts';
 
 const FDIR = join(__dirname, '..', '..', 'contracts', 'fleet-v1');
@@ -60,10 +60,16 @@ describe('a deployment card', () => {
     expect(managedWords(dep({ managed: false })).label).toBe('unmanaged');
     expect(managedWords(dep({})).text).toContain('TandemNode starts and stops');
   });
-  it('a Split does not start or move: not built yet (ENG-307); a running job holds every action', () => {
-    const split = depActions(dep({ type: 'split', state: 'stopped', status: 'stopped', member_states: [] }));
-    expect(split.find((a) => a.id === 'start')!.why).toContain('ENG-307');
-    expect(split.find((a) => a.id === 'move')!.why).toBe('a Split moves with ENG-307');
+  it('VIS-273: a Split starts and stops as one and does not move; one without a plan does not start; a running job holds every action', () => {
+    const bare = depActions(dep({ type: 'split', state: 'stopped', status: 'stopped', member_states: [] }));
+    expect(bare.find((a) => a.id === 'start')!.why).toBe(SPLIT_NO_PLAN);
+    expect(bare.find((a) => a.id === 'move')!.why).toBe(SPLIT_MOVE);
+    const fleet = new MockFleet({ scenario: 'fleet4', now: T0 });
+    const planned = (fleet.handle('GET', '/v1/fleet/deployments/dsv41', new URLSearchParams(), null, T0 * 1000).body as FleetDeployment);
+    expect(depActions(planned).map((a) => [a.id, a.why])).toEqual([['start', null], ['move', SPLIT_MOVE], ['edit', null], ['delete', null]]);
+    // half running: the record is stopped but a stage still runs, so Stop is offered beside Start
+    const half = { ...planned, member_states: planned.member_states!.map((m, i) => (i ? { ...m, stage: { ...m.stage!, runs: true } } : m)) };
+    expect(depActions(half).map((a) => a.id)).toEqual(['start', 'stop', 'move', 'edit', 'delete']);
     const busy = depActions(dep({ job: { id: 'j', action: 'move', state: 'running', started_at: T0, ended_at: null, text: '', error: null } }));
     expect(busy.every((a) => a.why === 'a job runs: wait for it')).toBe(true);
   });
@@ -130,21 +136,72 @@ describe('Serve a model: the placement plan', () => {
     const t = pickType(p, null);
     expect(t).toBe(p.types.find((x) => x.allowed && x.type !== 'role')!.type);
     const split = p.types.find((x) => x.type === 'split')!;
-    expect(split.built).toBe(false);
-    // Desk has no fabric: a Split picked over Desk and R-1 is refused in words
-    const refused = valid<Placement>('placement', m.handle('POST', '/v1/fleet/placement', new URLSearchParams(), { model: 'qwen3.8-27b', pack: 'exl3-4.0', ctx: 32768, nodes: ['desk', 'r1'] }, T0 * 1000).body);
-    expect(refused.types.find((x) => x.type === 'split')!.reason).toBe('no fabric link between Desk and R-1');
+    expect(split.built).toBe(true);
+    // Desk and a rented Spark share no subnet: a Split picked over Desk and R-1 is refused in words
+    const refused = valid<Placement>('placement', m.handle('POST', '/v1/fleet/placement', new URLSearchParams(), { model: 'qwen3.8-27b', pack: 'exl3-4.0', ctx: 32768, nodes: ['desk', 'r1'], split: true }, T0 * 1000).body);
+    expect(refused.types.find((x) => x.type === 'split')!.reason).toMatch(/^no interface pair in one subnet between Desk and R-1/);
     const fit = p.nodes.filter((n) => n.fits).map((n) => n.node);
     expect(membersFor(p, 'single', [])).toEqual([fit[0]]);
     if (p.types.find((x) => x.type === 'replicas')!.allowed) expect(membersFor(p, 'replicas', [fit[1], fit[0]])).toEqual([fit[1], fit[0]]);
     const body = valid('deployment-new', newDeployment(p, 'single', [fit[0]], { name: ' Q ', api_id: 'q27' }));
     expect(body).toEqual({ model: 'qwen3.8-27b', pack: 'exl3-4.0', type: 'single', members: [fit[0]], ctx: 32768, name: 'Q', api_id: 'q27' });
-    const fab = valid<Placement>('placement', m.handle('POST', '/v1/fleet/placement', new URLSearchParams(), { model: 'qwen3.8-27b', pack: 'exl3-4.0', ctx: 8192, nodes: ['r1', 'r2'] }, T0 * 1000).body);
-    if (fab.types.find((x) => x.type === 'split')!.allowed) {
-      const sb = valid<{ state: string; stages: unknown[] }>('deployment-new', newDeployment(fab, 'split', ['r1', 'r2']));
-      expect(sb.state).toBe('stopped');
-      expect(sb.stages).toHaveLength(2);
-    }
+    const fab = valid<Placement>('placement', m.handle('POST', '/v1/fleet/placement', new URLSearchParams(), { model: 'qwen3.8-27b', pack: 'exl3-4.0', ctx: 8192, nodes: ['r1', 'r2'], split: true }, T0 * 1000).body);
+    const tp = fab.types.find((x) => x.type === 'split')!;
+    expect(tp.allowed).toBe(true);
+    // the body that records a Split carries the plan as the planner gave it, and no state: Serve starts it
+    const sb = valid<{ state?: string; stages: unknown[]; split: unknown }>('deployment-new', newDeployment(fab, 'split', ['r1', 'r2']));
+    expect(sb.state).toBeUndefined();
+    expect(sb.stages).toEqual(tp.stages);
+    expect(sb.split).toEqual(tp.split);
+  });
+});
+
+describe('VIS-273: a Split on the Models pages', () => {
+  const m = new MockFleet({ scenario: 'fleet4', now: T0 });
+  const d = m.handle('GET', '/v1/fleet/deployments/dsv41', new URLSearchParams(), null, T0 * 1000).body as FleetDeployment;
+  const plan = d.split!;
+  it('a stage bar: its parts against its Spark’s budget, the budget marked, the words', () => {
+    const b = stageBar(plan.front);
+    expect(b.segs.map((s) => s.id)).toEqual(plan.front.parts.map((p) => p.id));
+    expect(b.segs.find((s) => s.id === 'slot_margin')!.label).toBe('slot margin');
+    expect(b.segs.reduce((a, s) => a + s.f, 0)).toBeCloseTo(plan.front.need_gib / plan.front.budget_gib, 2);
+    expect([b.budgetAt, b.over]).toEqual([1, false]);
+    expect(b.text).toBe(`needs ${plan.front.need_gib.toFixed(1)} of ${plan.front.budget_gib.toFixed(1)} GiB · ${plan.front.headroom_gib.toFixed(1)} headroom`);
+    const over = stageBar({ ...plan.tail, need_gib: 120, budget_gib: 100, headroom_gib: -20, fits: false });
+    expect([over.over, over.budgetAt, over.text]).toEqual([true, 100 / 120, 'needs 120.0 of 100.0 GiB · 20.0 short']);
+  });
+  it('the link in words: up with its epoch and transport, down with the reason, a fabric or a LAN pair', () => {
+    expect(linkWords({ ...plan.link, state: 'up', epoch: 2, transport: 'tcp' })).toEqual({ tone: 'ok', text: 'link up · epoch 2 · tcp · fabric pair' });
+    expect(linkWords({ ...plan.link, kind: 'lan', state: 'down', epoch: 2, reason: 'peer closed', transport: 'tcp' })).toEqual({ tone: 'err', text: 'link down (peer closed) · epoch 2 · tcp · LAN pair' });
+    expect(linkWords(plan.link)).toEqual({ tone: 'muted', text: 'link not up yet · fabric pair' });
+    expect(linkWords({ ...plan.link, kind: 'loopback', state: 'unknown' }).text).toBe('link not up yet · loopback, one machine');
+  });
+  it('the phases in plain words: what it is, and what to do or not to do', () => {
+    expect(phaseWords('linked', 'R-1', 'R-2')).toBeNull();
+    expect(phaseWords('stopped', 'R-1', 'R-2')).toBeNull();
+    expect(phaseWords('starting-front', 'R-1', 'R-2')).toEqual({ tone: 'warn', title: 'Starting the front', text: 'The front stage loads on R-1. The tail on R-2 starts once it answers.' });
+    expect(phaseWords('starting-tail', 'R-1', 'R-2')!.text).toBe('The front is up. The tail stage loads on R-2 and links to it.');
+    const deg = phaseWords('degraded', 'R-1', 'R-2')!;
+    expect([deg.tone, deg.title]).toEqual(['warn', 'Degraded']);
+    expect(deg.text).toContain('503 with Retry-After');
+    expect(deg.text).toContain('nothing to do');
+    const half = phaseWords('partial', 'R-1', 'R-2')!;
+    expect([half.tone, half.title]).toEqual(['err', 'Half running']);
+    expect(half.text).toBe('Only one of the two stages runs, so nothing is served. Start brings the other one back; Stop ends the one that runs.');
+    expect(phaseWords('stopping', 'R-1', 'R-2')!.text).toBe('The tail on R-2 stops first, then the front on R-1.');
+    expect(phaseWords('down', 'R-1', 'R-2')!.tone).toBe('err');
+  });
+  it('computed or margin, the waiting stage, and the mode kept', () => {
+    expect(['pack_headers', 'config', 'registry_whole_model', 'margin'].map(basisWord)).toEqual(['computed', 'computed', 'computed', 'margin']);
+    expect([MEMBER_WORD.waiting, memberTone('waiting')]).toEqual(['waiting for the link', 'warn']);
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) });
+    expect(simpleMode()).toBe(true);
+    setSimpleMode(false);
+    expect([simpleMode(), store.get('tandem.models.simple')]).toEqual([false, '0']);
+    setSimpleMode(true);
+    expect(simpleMode()).toBe(true);
+    vi.unstubAllGlobals();
   });
 });
 
@@ -209,7 +266,7 @@ describe('the Setup Guide relay in the mock', () => {
     expect(a.impact).toContain('Qwen3.8-27B: new requests go to R-3, another member');
     expect(a.allowed && !!a.confirm).toBe(true);
     expect(plan('assistant/load').title).toBe('Wake Wren on Desk');
-    // the Split over R-1 + R-2 is recorded, not running (ENG-307): R-1 serves nothing to take away
+    // the Split over R-1 + R-2 is recorded and stopped: R-1 serves nothing to take away
     const r1 = valid<SetupConfirm>('setup-confirm', m.handle('GET', '/v1/fleet/nodes/r1/setup-confirm/apply', new URLSearchParams('model=m&profile=p'), null, T0 * 1000).body);
     expect(r1.impact).toContain('R-1 serves nothing through this gateway now');
     // a Single only Desk serves does not answer while Desk's engine restarts

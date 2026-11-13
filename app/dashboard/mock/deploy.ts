@@ -4,16 +4,21 @@
 // own deployments (Qwen3.8-27B Replicas on Desk + R-3, DeepSeek-V4.1-Flash Split over R-1 + R-2, Wren
 // a Role on Desk; fleet4 starts with a copy of DeepSeek's pack R-1 → Desk running). Jobs run on the clock, a function of the time since they started:
 //
-//   start   START_S per member; a Split's start is 501 not_built (ENG-307): it is recorded stopped,
-//           as on the controller; its stop says it is stopped already, its move is refused
-//   stop    STOP_S; the record turns stopped at once, the status after the job
+//   start   START_S per member. A Split (SRV-817): the front stage in the first half, the tail in the
+//           second, then linked; one without a plan does not start (409 no_plan); its move is 409
+//           partial_split
+//   stop    STOP_S; the record turns stopped at once, the status after the job (a Split: the tail first)
 //   move    MOVE_S; the new member joins halfway, the old one leaves at the end; the API id stays
 //   copy    the bytes at COPY_GBPS; done and verified (the source's content id) at the end
 //
 // The planner's figures are a model of the Setup Guide's estimate: the weights (parameters x bits of
 // the pack), the KV of the window, 12 GiB of the engine's fixed parts and 10 of the OS; a node that
-// serves something has what its memory split leaves free. R-1, R-2 and R-3 share the fabric switch;
-// Desk has no fabric cable: a Split with Desk is refused "no fabric link between Desk and R-1".
+// serves something has what its memory split leaves free. A Split's plan is a model of the
+// controller's (proxy/splitplan.py): each side's parts a cut, the slot margin, the cut whose smaller
+// headroom is largest. R-1, R-2 and R-3 share the fabric switch (a fabric pair); two Sparks on one
+// LAN are a LAN pair with the warning; Desk on the LAN and a rented Spark share no subnet: refused.
+// A mock's own knob, for a Split that runs: POST .../actions/start {"mock": "link-down" | "link-up" |
+// "front-stop"} drops the link (degraded), heals it, or stops the front stage (partial).
 
 import type {
   DeploymentAction,
@@ -27,6 +32,9 @@ import type {
   Placement,
   PlacementNode,
   PlacementType,
+  SplitPhase,
+  SplitPlan,
+  SplitSide,
   WeightsCopyJob,
   WeightsMatrix,
   WeightsOnNode,
@@ -57,8 +65,63 @@ const PARAMS: Record<string, number> = {
 /** the nodes on the fabric switch (fleet4) or the direct cable (fleet2-split) */
 const FABRIC = [['r1', 'r2', 'r3'], ['s1', 's2']];
 
+const NO_PLAN = 'this Split has no plan: plan it again on Serve a model (the planner picks the cut and the link)';
+const SPLIT_MOVE = "a Split's two stages move together: stop it, plan it on the new nodes (Serve a model) and start it";
+const LAN_WARN = (a: string, b: string) => `no fabric link: the stages talk over the LAN pair ${a} and ${b}. The data link is neither signed nor encrypted after its handshake: use it on a private network only`;
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
+/** A Split's plan as the controller's planner answers it, modelled: `layers` layers, a cut every
+ *  `layers / 12`, each side's parts (computed), the slot margin, the cut with the largest smaller
+ *  headroom. null when no cut fits both budgets. */
+export function mockSplitPlan(front: { id: string; alias: string; budget?: number }, tail: { id: string; alias: string; budget?: number }, o: { weights: number; kv: number; slots: number; window: number; layers?: number; kind?: 'fabric' | 'lan'; n?: number }): SplitPlan | null {
+  const L = o.layers ?? 48;
+  const side = (role: 'front' | 'tail', k: number, n: { id: string; alias: string; budget?: number }): SplitSide => {
+    const f = role === 'front' ? k / L : (L - k) / L;
+    const slot = r2((o.kv / o.slots) * f * 0.4);
+    const parts = [
+      { id: 'weights', gib: r2(o.weights * f + (role === 'front' ? 1.5 : 2.1)), basis: 'pack_headers' },
+      ...(role === 'front' ? [{ id: 'table', gib: 2, basis: 'setting' }, { id: 'snapshots', gib: 2 * o.slots, basis: 'ask' }] : [{ id: 'draft_kv', gib: 0.34, basis: 'config' }]),
+      { id: 'kv', gib: r2(o.kv * f), basis: 'config' },
+      { id: 'engine', gib: 5.69, basis: 'registry_whole_model' },
+      { id: 'allocator', gib: 2.3, basis: 'registry_whole_model' },
+      ...(o.slots > 1 ? [{ id: 'slot_margin', gib: r2(slot * (o.slots - 1)), basis: 'margin' }] : []),
+    ];
+    const need = r2(parts.reduce((a, x) => a + x.gib, 0));
+    const budget = n.budget ?? BUDGET;
+    return { node: n.id, alias: n.alias, role, layers: role === 'front' ? `0:${k}` : `${k}:${L}`, need_gib: need, estimate_gib: r2(need - (o.slots > 1 ? slot * (o.slots - 1) : 0)), margin_gib: o.slots > 1 ? r2(slot * (o.slots - 1)) : 0, budget_gib: budget, headroom_gib: r2(budget - need), fits: need <= budget, slot_gib: slot, table: role === 'front', parts, disk: { pack_gib: r2(o.weights * 1.02), cache_gib: 16, free_gib: null } };
+  };
+  const rows = Array.from({ length: 11 }, (_, i) => Math.round(((i + 1) * L) / 12)).map((k) => {
+    const f = side('front', k, front);
+    const t = side('tail', k, tail);
+    return { k, f, t, fits: f.fits && t.fits, head: r2(Math.min(f.headroom_gib, t.headroom_gib)) };
+  });
+  const fit = rows.filter((r) => r.fits);
+  if (!fit.length) return null;
+  const best = fit.reduce((a, r) => (r.head > a.head ? r : a));
+  const n = o.n ?? 1;
+  const kind = o.kind ?? 'fabric';
+  const listen = kind === 'fabric' ? `10.77.0.${n}:7740` : `192.168.1.${10 + n}:7740`;
+  return {
+    cut: best.k, layers: L, family: 'mock', rule: 'the cut whose smaller headroom is largest among the cuts where both sides fit; a tie goes to the smaller carry, then the smaller cut',
+    why: `cut ${best.k} leaves the larger of the smaller headrooms: ${best.head.toFixed(2)} GiB (${front.alias} ${best.f.headroom_gib.toFixed(2)}, ${tail.alias} ${best.t.headroom_gib.toFixed(2)}); ${fit.length} of ${rows.length} cuts fit`,
+    window: o.window, slots: o.slots,
+    shape: { window: o.window, slots: o.slots, side_window: Math.min(o.window, 16384), caches: 'on', table: 'cold', snapshots_gb: 2, front_cache_gb: 16, tail_disk_gb: 16, kv_pool: false },
+    margin: { slot_factor: 1, text: "each side slot is counted once more than the estimate's slot figure: its graphs and row buffers are not in the estimate (measured once: 0.87 GiB against 0.44)" },
+    front: best.f, tail: best.t, headroom_gib: best.head, carry_bytes_per_row: 40960, table_on: 'front',
+    candidates: rows.map((r) => ({ cut: r.k, front_gib: r.f.need_gib, tail_gib: r.t.need_gib, headroom_gib: r.head, fits: r.fits, chosen: r === best, why: r === best ? null : !r.fits ? `the ${r.f.fits ? 'tail' : 'front'} needs ${(r.f.fits ? r.t : r.f).need_gib.toFixed(1)} GiB, ${(r.f.fits ? r.t : r.f).alias} has ${(r.f.fits ? r.t : r.f).budget_gib.toFixed(1)}: ${(-(r.f.fits ? r.t : r.f).headroom_gib).toFixed(1)} short` : `smaller headroom (${r.head.toFixed(2)} GiB) than cut ${best.k} (${best.head.toFixed(2)})` })),
+    computed: true,
+    measured: [{ what: 'a side slot on the tail: memory allocated when it was built', gib: 0.87, seconds: 5.2, cut: 12, side_window: 16384, pack: 'EXL3 2.05', date: '2026-11-13' }],
+    notes: ['A stage keeps its rows in place (no KV pool): every window takes its memory at load.'],
+    link: { kind, listen, peer: listen, front_iface: kind === 'fabric' ? 'enp1s0f0np0' : 'enP7s7', tail_iface: kind === 'fabric' ? 'enp1s0f0np0' : 'enP7s7', warn: kind === 'lan' ? LAN_WARN(`${front.alias} ${listen.split(':')[0]}`, `${tail.alias} 192.168.1.${11 + n}`) : null },
+  };
+}
+
 interface Overlay {
   state: 'serving' | 'stopped';
+  /** a Split that runs (the mock's knob): its link dropped, its front stage stopped; the link's epoch */
+  link?: 'down';
+  front?: 'down';
+  epoch?: number;
   members?: string[];
   name?: string;
   api_id?: string;
@@ -74,6 +137,8 @@ interface Job {
   from: string | null;
   to: string | null;
   members: string[];
+  /** a Split's plan when the job started: its steps are the front's, then the tail's */
+  split?: SplitPlan;
 }
 
 interface Pack {
@@ -127,14 +192,15 @@ export class MockDeploy {
     const members = mv ? (half ? [...mv.members, mv.to!] : mv.members) : (o?.members ?? d0.members);
     const d: FleetDeployment = { ...d0, ...(o?.name ? { name: o.name } : {}), ...(o?.api_id ? { api_id: o.api_id } : {}), ...(o?.ctx != null ? { ctx: o.ctx } : {}), ...(o?.pack != null ? { pack: o.pack } : {}), members };
     const by = new Map(nodes.map((n) => [n.id, n]));
+    if (d.type === 'split' && d.split) return this.splitView(d, by, now);
     const leaving = mv && half ? [mv.from!] : [];
     const ms: DeploymentMember[] = members.map((m) => {
       const n = by.get(m);
       const starting = j && j.job.action === 'start' && now - j.start < j.span;
-      // a Split serves nothing until ENG-307: its stages are down, whatever their nodes do
+      // a Split recorded without a plan does not run: its stages are down, whatever their nodes do
       const unbuilt = d.type === 'split';
       const state = !n ? 'gone' : n.status === 'off' ? 'off' : unbuilt ? 'down' : leaving.includes(m) ? 'leaving' : n.status === 'draining' ? 'draining' : starting ? 'starting' : 'serving';
-      const text = { gone: 'no longer in the fleet', off: n?.status_text ?? 'off', down: 'not built yet (ENG-307)', leaving: 'moving away: no new requests', draining: `${n?.alias} is drained`, starting: 'its engine e starts', serving: 'serving' }[state];
+      const text = { gone: 'no longer in the fleet', off: n?.status_text ?? 'off', down: 'the stage does not run', leaving: 'moving away: no new requests', draining: `${n?.alias} is drained`, starting: 'its engine e starts', serving: 'serving' }[state];
       // the first Spark's engine is the server this page talks to: its own backend `engine`, the
       // main model under the server's own name (TandemLLM), as the box's engine serves it
       const here = m === this.fleet.hereId();
@@ -146,7 +212,7 @@ export class MockDeploy {
     let statusText = d0.status_text;
     if (state === 'stopped' && (!stopping || now - j!.start >= j!.span)) {
       status = 'stopped';
-      statusText = d.type === 'split' ? 'stopped · not built yet (ENG-307)' : 'stopped';
+      statusText = d.type === 'split' ? 'Split: recorded without a plan. Plan it again on Serve a model to start it' : 'stopped';
     } else if (j && j.job.action === 'start' && now - j.start < j.span) {
       status = 'starting';
       statusText = `start: ${this.jobLine(j, now)}`;
@@ -166,6 +232,60 @@ export class MockDeploy {
       member_states: ms,
       job: j ? this.jobShort(j, now) : null,
       ...(d.type === 'replicas' ? { affinity: 'root' as const } : {}),
+    };
+  }
+
+  /** a Split with a plan: its phase from the record, its job and the mock's knobs; the two stages */
+  private splitView(d: FleetDeployment, by: Map<string, FleetNode>, now: number): FleetDeployment {
+    const o = this.over.get(d.id);
+    const j = this.jobs.get(d.id);
+    const plan = d.split!;
+    const t = j ? now - j.start : 0;
+    const run = !!j && t < j.span;
+    const state = o?.state ?? d.state ?? 'stopped';
+    const phase: SplitPhase = run && j!.job.action === 'start' ? (t < j!.span / 2 ? 'starting-front' : 'starting-tail') : run && j!.job.action === 'stop' ? 'stopping' : state === 'stopped' ? 'stopped' : o?.front === 'down' ? 'partial' : o?.link === 'down' ? 'degraded' : 'linked';
+    const epoch = o?.epoch ?? 1;
+    const up = phase === 'linked';
+    const fa = plan.front.alias;
+    const ta = plan.tail.alias;
+    const frontRuns = phase === 'starting-tail' || phase === 'linked' || phase === 'degraded' || phase === 'stopping';
+    const tailRuns = phase === 'linked' || phase === 'degraded' || phase === 'partial' || phase === 'stopping';
+    const one = (role: 'front' | 'tail'): DeploymentMember => {
+      const s = plan[role];
+      const n = by.get(s.node);
+      const runs = role === 'front' ? frontRuns : tailRuns;
+      const starting = phase === `starting-${role}`;
+      const mstate: DeploymentMember['state'] = !n ? 'gone' : n.status === 'off' ? 'off' : starting ? 'starting' : !runs ? 'down' : up ? 'serving' : 'waiting';
+      const text = { gone: 'no longer in the fleet', off: n?.status_text ?? 'off', starting: 'its engine engine starts', down: `the ${role} stage does not run`, serving: `linked (epoch ${epoch})`, waiting: `its stage runs; the link is down (${role === 'front' && !tailRuns ? 'no peer yet' : 'peer closed'})` }[mstate as 'gone' | 'off' | 'starting' | 'down' | 'serving' | 'waiting'];
+      const here = s.node === this.fleet.hereId();
+      return {
+        node: s.node, alias: n?.alias ?? s.node, engine: 'engine', backend: role === 'front' ? null : here ? 'engine' : `${s.node}-engine`, model: d.api_id, managed: true, state: mstate, text, routable: role === 'tail' && up,
+        stage: { role, layers: s.layers, need_gib: s.need_gib, budget_gib: s.budget_gib, runs, link: runs ? (up ? 'up' : 'down') : null, epoch: runs ? epoch : null, reason: runs && !up ? (role === 'front' && !tailRuns ? 'no peer yet' : 'peer closed') : null, transport: runs ? 'tcp' : null },
+      };
+    };
+    const ms = [one('front'), one('tail')];
+    const status: FleetDeployment['status'] = phase === 'linked' ? 'serving' : phase === 'degraded' ? 'degraded' : phase === 'partial' ? 'down' : phase.startsWith('starting') ? 'starting' : 'stopped';
+    const text: Record<SplitPhase, string> = {
+      stopped: 'stopped',
+      'starting-front': `start: ${fa}: TandemNode starts the front stage`,
+      'starting-tail': `start: ${ta}: TandemNode starts the tail stage`,
+      linked: `serving · the front on ${fa}, the tail on ${ta}, link up (epoch ${epoch})`,
+      degraded: `the link between ${fa} and ${ta} is down (peer closed): requests get 503 with Retry-After 5 s. The stages link again by themselves; nothing to do`,
+      partial: `only the tail runs (on ${ta}); the front on ${fa} does not (the front stage does not run). Start brings it back, Stop ends the tail`,
+      stopping: `stopping: ${ta}: TandemNode stops the tail stage`,
+      down: 'neither stage runs: Start starts the front, then the tail',
+    };
+    return {
+      ...d,
+      status,
+      status_text: text[phase],
+      record: true,
+      state,
+      managed: true,
+      member_states: ms,
+      ...(plan.link.warn ? { warn: plan.link.warn } : {}),
+      split: { ...plan, phase, built: up, link: { ...plan.link, state: up ? 'up' : frontRuns || tailRuns ? 'down' : 'unknown', epoch: frontRuns || tailRuns ? epoch : null, reason: up ? null : frontRuns || tailRuns ? 'peer closed' : null, transport: frontRuns || tailRuns ? 'tcp' : null } },
+      job: j ? this.jobShort(j, now) : null,
     };
   }
 
@@ -191,7 +311,7 @@ export class MockDeploy {
     const n = members.length;
     if ((x.type === 'single' || x.type === 'role') && n !== 1) return bad(400, 'bad_request', `a ${x.type[0].toUpperCase()}${x.type.slice(1)} deployment has one member`);
     if (x.type === 'replicas' && n < 2) return bad(400, 'bad_request', 'a Replicas deployment has two or more members');
-    if (x.type === 'split' && n !== 2 && n !== 4) return bad(400, 'bad_request', 'a Split runs over 2 or 4 nodes');
+    if (x.type === 'split' && n !== 2) return bad(400, 'bad_request', "a Split runs over two nodes: the front stage's, then the tail's");
     const nodes = new Set(this.nodes(now).map((y) => y.id));
     const missing = members.find((m) => !nodes.has(m));
     if (missing) return bad(404, 'not_found', `no node ${missing}`);
@@ -211,6 +331,7 @@ export class MockDeploy {
       status: 'serving',
       status_text: 'serving',
       ...(x.type === 'split' ? { stages: x.stages ?? members.map((m, i) => ({ node: m, layers: `stage ${i + 1} of ${n}`, gib: 0 })) } : {}),
+      ...(x.type === 'split' && x.split ? { split: { ...x.split, built: false } } : {}),
       ...(x.type === 'role' && x.role ? { role: x.role } : {}),
       ...(x.type === 'role' && x.role_of ? { role_of: x.role_of } : {}),
     };
@@ -264,11 +385,17 @@ export class MockDeploy {
     const ms = d.member_states ?? [];
     if (this.running(id, now)) Object.assign(p, { allowed: false, blocked: `a job runs on ${d.name}: wait for it` });
     else if (a === 'start') {
-      if (d.type === 'split' && d.state === 'stopped') Object.assign(p, { allowed: false, blocked: 'a Split runs once the pipeline split (ENG-307) is built: its record and plan are kept until then' });
-      else for (const m of ms) p.impact.push(m.state === 'serving' ? `${m.alias}: serves already; warm-up only` : `${m.alias}: TandemNode starts ${m.engine}, then one token warms it up`);
+      if (d.type === 'split' && !d.split) Object.assign(p, { allowed: false, blocked: NO_PLAN });
+      else if (d.split) {
+        const sp = d.split;
+        for (const m of ms) p.impact.push(m.stage?.runs ? `${m.alias}: the ${m.stage.role} stage runs already` : `${m.alias}: TandemNode starts the ${m.stage!.role} stage (layers ${sp[m.stage!.role].layers}, ${sp[m.stage!.role].need_gib.toFixed(1)} GiB)${m.stage!.role === 'tail' ? ', after the front answers' : ''}; up to 600 s`);
+        p.impact.push(`a new link key goes to both nodes' agents; requests go to the tail on ${sp.tail.alias}`, ...(sp.link.warn ? [sp.link.warn] : []));
+      } else for (const m of ms) p.impact.push(m.state === 'serving' ? `${m.alias}: serves already; warm-up only` : `${m.alias}: TandemNode starts ${m.engine}, then one token warms it up`);
     } else if (a === 'stop') {
       if (d.state === 'stopped') Object.assign(p, { allowed: false, blocked: `${d.name} is stopped already` });
-      p.impact.push(`${d.api_id} takes no new request: the gateway answers 503 deployment_stopped`, 'what is in flight finishes first (at most 600 s)', ...ms.map((m) => `${m.alias}: TandemNode stops ${m.engine}`));
+      p.impact.push(`${d.api_id} takes no new request: the gateway answers 503 deployment_stopped`, 'what is in flight finishes first (at most 600 s)');
+      if (d.split) p.impact.push(`${ms[1].alias}: TandemNode stops the tail stage first`, `${ms[0].alias}: TandemNode stops the front stage`, 'the link key is removed from both nodes');
+      else p.impact.push(...ms.map((m) => `${m.alias}: TandemNode stops ${m.engine}`));
       p.keeps.push('the record, its members and the weights on every node');
     } else {
       const from = q.get('from') ?? (ms.length === 1 ? ms[0].node : null);
@@ -276,7 +403,7 @@ export class MockDeploy {
       Object.assign(p, { from, to });
       const nodes = this.nodes(now);
       const dst = nodes.find((n) => n.id === to);
-      if (d.type === 'split') Object.assign(p, { allowed: false, blocked: 'a Split moves with ENG-307' });
+      if (d.type === 'split') Object.assign(p, { allowed: false, blocked: SPLIT_MOVE });
       else if (!from || !to) Object.assign(p, { allowed: false, blocked: 'name the node it moves from (from) and to (to)' });
       else if (!d.members.includes(from)) Object.assign(p, { allowed: false, blocked: `${from} is no member of ${d.name}` });
       else if (d.members.includes(to)) Object.assign(p, { allowed: false, blocked: `${to} is a member of ${d.name} already` });
@@ -298,12 +425,25 @@ export class MockDeploy {
   }
 
   act(id: string, action: string, body: unknown, now: number): Reply {
-    const b = (body && typeof body === 'object' ? body : {}) as { confirm?: string; from?: string; to?: string };
+    const b = (body && typeof body === 'object' ? body : {}) as { confirm?: string; from?: string; to?: string; mock?: string };
+    if (b.mock) {
+      // the mock's own knob: what happens to a Split that runs, without a controller to make it happen
+      const sp = this.find(id, now);
+      const o0 = this.over.get(id);
+      if (!sp?.split || !o0 || o0.state !== 'serving') return bad(409, 'conflict', 'the mock knob needs a Split that runs');
+      if (b.mock === 'link-down') o0.link = 'down';
+      else if (b.mock === 'front-stop') o0.front = 'down';
+      else if (b.mock === 'link-up') {
+        if (o0.link === 'down') o0.epoch = (o0.epoch ?? 1) + 1;
+        delete o0.link;
+      } else return bad(400, 'bad_request', 'mock is link-down, link-up or front-stop');
+      return ok({ contract_version: FLEET_CONTRACT, ...this.find(id, now)! });
+    }
     const q = new URLSearchParams(Object.entries({ from: b.from, to: b.to }).filter((e): e is [string, string] => !!e[1]));
     const r = this.plan(id, action, q, now);
     if (r.status !== 200) return r;
     const p = r.body as DeploymentPlan;
-    if (!p.allowed) return bad(/ENG-307/.test(p.blocked ?? '') ? 501 : 409, /ENG-307/.test(p.blocked ?? '') ? 'not_built' : /a job runs/.test(p.blocked ?? '') ? 'busy' : 'conflict', p.blocked ?? '');
+    if (!p.allowed) return bad(409, p.blocked === NO_PLAN ? 'no_plan' : p.blocked === SPLIT_MOVE ? 'partial_split' : /a job runs/.test(p.blocked ?? '') ? 'busy' : 'conflict', p.blocked ?? '');
     if (p.destructive) {
       if (p.confirm) this.tokens.delete(p.confirm);
       if (!b.confirm) return bad(428, 'confirm_required', `${action} needs the confirm of its plan (GET .../actions/${action})`);
@@ -316,15 +456,23 @@ export class MockDeploy {
     const j: Job = {
       job: { id: `deploy-${id}-${now}-${++this.seq}`, kind: 'deploy', deployment: id, action: a, by: 'admin', started_at: now, error: null, from: p.from, to: p.to },
       start: now,
-      span: a === 'start' ? START_S : a === 'stop' ? STOP_S : MOVE_S,
+      span: a === 'start' ? START_S * (d.split ? 2 : 1) : a === 'stop' ? STOP_S : MOVE_S,
       from: p.from,
       to: p.to,
       members: d.members,
+      ...(d.split ? { split: d.split } : {}),
     };
     this.jobs.set(id, j);
     const o = this.over.get(id) ?? { state: 'serving' as const };
     if (a === 'stop') o.state = 'stopped';
     if (a === 'start') o.state = 'serving';
+    if (d.split) {
+      // a start brings back what was down; a link after a restart is a new epoch
+      if (a === 'start' && (o.front === 'down' || o.link === 'down')) o.epoch = (o.epoch ?? 1) + 1;
+      delete o.front;
+      delete o.link;
+      if (a === 'stop') delete o.epoch;
+    }
     if (a === 'move') o.members = d.members.filter((m) => m !== p.from).concat(p.to!);
     this.over.set(id, o);
     const words = a === 'move' ? `${d.name} moves ${p.from} → ${p.to}` : `${d.name} ${a === 'start' ? 'starts' : 'stops'}`;
@@ -341,6 +489,14 @@ export class MockDeploy {
     const t = now - j.start;
     const done = t >= j.span;
     const alias = (id: string) => this.nodes(now).find((n) => n.id === id)?.alias ?? id;
+    const sp = j.split;
+    if (sp && j.members.length === 2 && j.job.action !== 'move') {
+      const [f, tl] = j.members;
+      const row = (node: string, phase: DeploymentJob['steps'][number]['phase'], text: string) => ({ node, alias: alias(node), phase, text });
+      if (j.job.action === 'stop') return done ? [row(tl, 'stopped', 'stopped'), row(f, 'stopped', 'stopped')] : t < j.span / 2 ? [row(tl, 'stop', 'TandemNode stops the tail stage')] : [row(tl, 'stopped', 'stopped'), row(f, 'stop', 'TandemNode stops the front stage')];
+      const front = row(f, t < j.span / 2 ? 'start' : 'serving', t < j.span / 2 ? 'TandemNode starts the front stage' : `the front stage, layers ${sp.front.layers}: ${done ? 'linked' : 'up'}`);
+      return t < j.span / 2 ? [front] : [front, row(tl, done ? 'serving' : 'start', done ? `the tail stage, layers ${sp.tail.layers}: linked and warm; it takes the requests` : 'TandemNode starts the tail stage')];
+    }
     if (j.job.action === 'start') return j.members.map((m) => ({ node: m, alias: alias(m), phase: done ? 'serving' : t < j.span / 2 ? 'start' : 'warm', text: done ? 'warm: serves' : t < j.span / 2 ? 'TandemNode starts engine' : 'its engine answers; warming up with one token' }));
     if (j.job.action === 'stop') return j.members.map((m) => ({ node: m, alias: alias(m), phase: done ? 'stopped' : 'stop', text: done ? 'stopped' : 'TandemNode stops engine' }));
     return [
@@ -370,7 +526,7 @@ export class MockDeploy {
   }
 
   placement(body: unknown, now: number): Reply {
-    const b = body as { model?: unknown; pack?: unknown; ctx?: unknown; slots?: unknown; nodes?: unknown } | null;
+    const b = body as { model?: unknown; pack?: unknown; ctx?: unknown; slots?: unknown; nodes?: unknown; split?: unknown } | null;
     if (!b || typeof b.model !== 'string' || typeof b.pack !== 'string' || !b.model || !b.pack) return bad(400, 'bad_request', 'model and pack are a Setup Guide model and one of its weight profiles');
     const ctx = b.ctx;
     const slots = b.slots ?? 1;
@@ -415,24 +571,34 @@ export class MockDeploy {
         : rel.size > 1
           ? { type: 'replicas', allowed: false, built: true, nodes: [], reason: 'Replicas members run one release (update the fleet)', warn: null, stages: [] }
           : { type: 'replicas', allowed: true, built: true, nodes: fit.map((n) => n.node), reason: null, warn: far.length && near.length ? `${near.join(', ')} on the LAN, ${far.join(', ')} remote: each conversation stays on one member; a failover moves it across the internet` : null, stages: [] };
-    const split = this.split(nodes, !!want, weights, kv);
+    const split = this.split(nodes, !!want, weights, kv, ctx, slots, b.split != null && b.split !== false);
     return ok({ contract_version: FLEET_CONTRACT, model: b.model, pack: b.pack, ctx, slots, nodes, types: [one('single'), replicas, one('role'), split] } satisfies Placement);
   }
 
-  private split(nodes: PlacementNode[], given: boolean, weights: number, kv: number): PlacementType {
-    const out: PlacementType = { type: 'split', allowed: false, built: false, nodes: [], reason: null, warn: 'planned and recorded only: a Split runs once the pipeline split (ENG-307) is built', stages: [] };
-    const sets = given ? [nodes] : nodes.flatMap((a, i) => nodes.slice(i + 1).map((b) => [a, b]));
+  private split(nodes: PlacementNode[], given: boolean, weights: number, kv: number, window: number, slots: number, asked: boolean): PlacementType {
+    const out: PlacementType = { type: 'split', allowed: false, built: true, nodes: [], reason: null, warn: null, stages: [] };
+    const fit = nodes.filter((n) => n.fits);
+    if (!asked && fit.length) return { ...out, reason: `${fit[0].alias} holds the model alone: a Split is planned when asked for (split)` };
+    if (given && nodes.length !== 2) return { ...out, reason: `a Split runs over two nodes (the front stage's first), not ${nodes.length}` };
+    if (nodes.length < 2) return { ...out, reason: 'a Split runs over two nodes: the fleet has fewer' };
+    const pairs = given ? [[nodes[0], nodes[1]]] : nodes.flatMap((a) => nodes.filter((x) => x !== a).map((x) => [a, x]));
     let reason: string | null = null;
-    for (const s of sets) {
-      let why: string | null = null;
-      if (s.length !== 2 && s.length !== 4) why = `a Split runs over 2 or 4 nodes, not ${s.length}`;
-      for (let i = 0; !why && i + 1 < s.length; i++) if (!this.fabric(s[i].node, s[i + 1].node)) why = `no fabric link between ${s[i].alias} and ${s[i + 1].alias}`;
-      const stage = Math.round(((weights + kv) / s.length + FIXED) * 100) / 100;
-      for (const n of s) if (!why && (n.status === 'off' || (n.free_gib != null && n.serving && stage + FLOOR > n.free_gib))) why = n.status === 'off' ? `${n.alias} is off` : `a stage needs ${Math.round(stage)} GiB, ${n.alias} has ${Math.max(0, Math.round(n.free_gib! - FLOOR))} free`;
-      if (!why) return { ...out, allowed: true, nodes: s.map((n) => n.node), stages: s.map((n, i) => ({ node: n.node, layers: `stage ${i + 1} of ${s.length}`, gib: stage })) };
-      reason ??= why;
+    let best: { plan: SplitPlan; f: PlacementNode; t: PlacementNode } | null = null;
+    for (const [f, t] of pairs) {
+      const bad = [f, t].find((n) => n.status === 'off' || n.status === 'draining');
+      const fabric = this.fabric(f.node, t.node);
+      const lan = f.transport !== 'tunnel' && t.transport !== 'tunnel';
+      let why: string | null = bad ? (bad.status === 'off' ? `${bad.alias} is off` : `${bad.alias} is drained: it takes nothing new`) : null;
+      if (!why && !fabric && !lan) why = `no interface pair in one subnet between ${f.alias} and ${t.alias}: join them with the fabric cable, or put both on one LAN (allowed with a warning)`;
+      const budget = (n: PlacementNode) => (n.serving && n.free_gib != null ? Math.max(0, Math.min(BUDGET, r2(n.free_gib - FLOOR))) : BUDGET);
+      const plan = why ? null : mockSplitPlan({ id: f.node, alias: f.alias, budget: budget(f) }, { id: t.node, alias: t.alias, budget: budget(t) }, { weights, kv, slots, window, kind: fabric ? 'fabric' : 'lan' });
+      if (!why && !plan) why = `no cut fits: ${f.alias} and ${t.alias} cannot hold the two stages`;
+      if (why) reason ??= why;
+      else if (!best || (plan!.link.kind === 'fabric' && best.plan.link.kind !== 'fabric') || (plan!.link.kind === best.plan.link.kind && plan!.headroom_gib! > best.plan.headroom_gib!)) best = { plan: plan!, f, t };
     }
-    return { ...out, reason: reason ?? 'a Split runs over 2 or 4 nodes: the fleet has fewer' };
+    if (!best) return { ...out, reason: reason ?? 'no pair of nodes can hold the two stages' };
+    const p = best.plan;
+    return { ...out, allowed: true, nodes: [best.f.node, best.t.node], warn: p.link.warn, split: p, stages: [p.front, p.tail].map((x) => ({ node: x.node, layers: x.layers, gib: x.need_gib })) };
   }
 
   // ---- the weights ---------------------------------------------------------------------------

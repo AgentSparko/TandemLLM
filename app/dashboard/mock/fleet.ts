@@ -8,14 +8,13 @@
 // page sets, else `POST /__mock/fleet {scenario}`, else TANDEM_MOCK_FLEET, else fleet4):
 //   fleet1        one Spark serving the main model and Wren, the controller on it: today's box
 //   fleet4        Desk on the LAN (Replicas with R-3, and Wren as a Role), R-1 + R-2 rented over a fabric
-//                 switch with a Split recorded over both (stopped: not built yet, ENG-307), R-3 rented
+//                 switch with a Split recorded over both (planned, stopped until started), R-3 rented
 //                 and throttling (a thermal alert since 14 min)
 //   fleet2-split  two Sparks on the LAN with one direct fabric cable, one model Split recorded over both
 //
 // The server this page talks to (/v1/dashboard/*) is the first Spark's engine (Desk, Gold, Spark 1):
-// its deployment members' backend is `engine`, the others' `<node>-engine` (lib/where.ts). A Split
-// serves nothing until ENG-307 builds the pipeline split, as on the controller: its record is
-// stopped and its Sparks idle.
+// its deployment members' backend is `engine`, the others' `<node>-engine` (lib/where.ts). The Split
+// is recorded with its plan and stopped: it serves nothing and its Sparks idle until it is started.
 //   node-down     fleet4, and R-3 stops answering 30 s after the scenario starts
 //   alert-thermal fleet4 without the old alert: R-3 heats up and the alert fires a minute in
 //   mixed         fleet4 where R-3 was updated by hand to 0.15.1 eight minutes ago: the version-mismatch
@@ -88,7 +87,7 @@ import type {
 } from '../src/api/fleet.ts';
 import { EVENT_TYPES, FLEET_CONTRACT, METRICS, NODE_ACTIONS, RANGES, WINDOW_KINDS } from '../src/api/fleet.ts';
 import { MockWizard } from './addspark.ts';
-import { MockDeploy } from './deploy.ts';
+import { MockDeploy, mockSplitPlan } from './deploy.ts';
 import { MockSetupRelay } from './setup-relay.ts';
 import { MockOps } from './fleetops.ts';
 import { MockApp } from './appsettings.ts';
@@ -276,7 +275,7 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     inventory: { serial, ...INVENTORY_RENTED },
     pairing: paired('ssh', since, (colour * 17).toString(16).padStart(2, '0')),
   });
-  // VIS-254: the Split is recorded, never started (ENG-307): its Sparks hold no model
+  // VIS-254: the Split is recorded and not started: its Sparks hold no model
   const dsvFrom = Number.POSITIVE_INFINITY;
   const splitPlan = (w: number, peak: number): MemPlan => ({ weights: w, kv: 22, cache: 5, other: 3.2, page: 6.1, ceiling: 116, peak });
   const r1: NodeSim = {
@@ -309,10 +308,16 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     dep: { id: 'wren', name: 'Wren', model: 'Qwen3.5-2B', pack: 'qwen3.5-2b-exl3-6.0', type: 'role', members: ['desk'], api_id: 'wren', ctx: 65536, role_of: 'qwen27', role: 'assistant · setup and fleet help' },
     members: [{ node: 'desk', from: t0 - 4.2 * D, base: 4, span: 14, curve: 'wren', share: 1 }],
   };
+  // SRV-817: the Split's plan as the planner made it when it was recorded: the front on `a`, the tail on `b`
+  const dsvPlan = (a: string, b: string) => {
+    const alias = (id: string) => ({ s1: 'Spark 1', s2: 'Spark 2', r1: 'R-1', r2: 'R-2' })[id] ?? id;
+    const split = mockSplitPlan({ id: a, alias: alias(a) }, { id: b, alias: alias(b) }, { weights: 148.4, kv: 12.2, slots: 4, window: 131072, layers: 60 })!;
+    return { split, stages: [split.front, split.tail].map((x) => ({ node: x.node, layers: x.layers, gib: x.need_gib })) };
+  };
   const dsv = (a: string, b: string): DepSim => ({
     dep: {
       id: 'dsv41', name: 'DeepSeek-V4.1-Flash', model: 'DeepSeek-V4.1-Flash', pack: 'deepseek-v4.1-flash-nvfp4', type: 'split', members: [a, b], api_id: 'deepseek-v4.1-flash', ctx: 131072, state: 'stopped',
-      stages: [{ node: a, layers: 'layers 0–30', gib: 78.2 }, { node: b, layers: 'layers 31–60 + head', gib: 76.5 }],
+      ...dsvPlan(a, b),
     },
     members: [a, b].map((node) => ({ node, from: dsvFrom, base: 80, span: 110, curve: 'dsv', share: 0.5 })),
   });
@@ -379,7 +384,7 @@ function build(scenario: FleetScenario, t0: number): Fleet {
         { id: 's1-s2', a: 's1', b: 's2', kind: 'fabric', speed: '200G', rtt_ms: 0.009, mtu: 9000, state: 'up', note: 'direct QSFP cable', test: { gbps: 197, at: t0 - 3.5 * H }, roce: 'on', interfaces: { up: 2, total: 2 }, port: 'enp1s0f0np0' },
       ],
       events: [
-        { at: t0 - 3.2 * H, item: { id: 'e-dsv', type: 'deploy', severity: null, node: 's1', deployment: 'dsv41', text: 'DeepSeek-V4.1-Flash (Split) recorded on Spark 1 + Spark 2', detail: 'Stage 1: layers 0–30 on Spark 1. Stage 2: layers 31–60 + head on Spark 2. Not built yet (ENG-307): the record and its plan only.' } },
+        { at: t0 - 3.2 * H, item: { id: 'e-dsv', type: 'deploy', severity: null, node: 's1', deployment: 'dsv41', text: 'DeepSeek-V4.1-Flash (Split) recorded on Spark 1 + Spark 2', detail: 'The front stage on Spark 1, the tail on Spark 2: planned and recorded, stopped until started.' } },
         { at: t0 - 3.5 * H, item: { id: 'e-link', type: 'link', severity: null, node: 's2', deployment: null, text: 'Link test Spark 1 ↔ Spark 2: 197 Gb/s, RTT 0.009 ms, MTU 9000', detail: 'RoCE on, both logical interfaces up.' } },
       ],
       alerts: [],
@@ -463,7 +468,7 @@ function build(scenario: FleetScenario, t0: number): Fleet {
     { at: t0 - 2.4 * H, item: { id: 'e-lease', type: 'alert', severity: 'warn', node: 'all', deployment: null, text: 'Leases end in 2 days: R-1, R-2, R-3', detail: 'Release wipes weights, caches, keys and the node agent.' } },
     { at: t0 - 2.9 * H, item: { id: 'e-eng-r2', type: 'engine', severity: null, node: 'r2', deployment: null, text: "R-2's engine restarted", detail: 'back after 38 s; it serves nothing until the Split is built' } },
     { at: t0 - 9 * H, item: { id: 'e-ctl', type: 'controller', severity: null, node: 'host', deployment: null, text: "TandemApp's controller started (0.15.0)", detail: 'stopped for 6 s before' } },
-    { at: t0 - 3.2 * H, item: { id: 'e-dsv', type: 'deploy', severity: null, node: 'r1', deployment: 'dsv41', text: 'DeepSeek-V4.1-Flash (Split) recorded on R-1 + R-2', detail: 'Stage 1: layers 0–30 on R-1. Stage 2: layers 31–60 + head on R-2. Not built yet (ENG-307): the record and its plan only.' } },
+    { at: t0 - 3.2 * H, item: { id: 'e-dsv', type: 'deploy', severity: null, node: 'r1', deployment: 'dsv41', text: 'DeepSeek-V4.1-Flash (Split) recorded on R-1 + R-2', detail: 'The front stage on R-1, the tail on R-2: planned and recorded, stopped until started.' } },
     { at: t0 - 3.7 * H, item: { id: 'e-weights', type: 'weights', severity: null, node: 'r2', deployment: null, text: 'Weights copied R-1 → R-2 over the fabric', detail: '76.5 GiB in 4 min 12 s (2.4 Gb/s average, disk-bound).' } },
     { at: t0 - 5.1 * H, item: { id: 'e-pair-r3', type: 'node', severity: null, node: 'r3', deployment: null, text: 'R-3 paired (rental, SSH tunnel)', detail: 'Host key confirmed. Certificate pinned.' } },
     { at: t0 - 6.4 * H, item: { id: 'e-half', type: 'alert', severity: 'resolved', node: 'r2', deployment: null, text: 'Resolved: R-2 fabric on one logical interface (half bandwidth)', detail: 'Cable re-seated by the provider. Link test 196 Gb/s.' } },
@@ -759,7 +764,7 @@ export class MockFleet {
       let text = d.dep.type === 'replicas' ? `serving · ${up} of ${all} members` : 'serving';
       if (d.dep.type === 'split') {
         status = 'stopped';
-        text = 'stopped · not built yet (ENG-307)';
+        text = 'stopped';
       } else if (up < all) {
         status = 'degraded';
         text = `degraded · ${up} of ${all} members`;

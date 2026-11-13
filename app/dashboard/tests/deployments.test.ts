@@ -40,17 +40,22 @@ describe('the records over the mock fleet', () => {
       ['dsv41', 'split', ['r1', 'r2']],
       ['wren', 'role', ['desk']],
     ]);
-    // VIS-254: the Split is recorded stopped, as the controller keeps it until ENG-307
+    // the Split is recorded with its plan and stopped until it is started (SRV-817)
     expect(deps.map((d) => [d.id, d.state, d.status, d.record && d.managed])).toEqual([
       ['qwen27', 'serving', 'serving', true],
       ['dsv41', 'stopped', 'stopped', true],
       ['wren', 'serving', 'serving', true],
     ]);
-    expect(deps[1].status_text).toBe('stopped · not built yet (ENG-307)');
-    expect(deps[1].member_states!.map((x) => [x.alias, x.state, x.routable])).toEqual([
-      ['R-1', 'down', false],
-      ['R-2', 'down', false],
+    expect(deps[1].status_text).toBe('stopped');
+    expect(deps[1].member_states!.map((x) => [x.alias, x.state, x.routable, x.stage?.role, x.backend])).toEqual([
+      ['R-1', 'down', false, 'front', null],
+      ['R-2', 'down', false, 'tail', 'r2-engine'],
     ]);
+    const sp = deps[1].split!;
+    expect([sp.phase, sp.built, sp.link.kind, sp.link.state, sp.front.alias, sp.tail.alias]).toEqual(['stopped', false, 'fabric', 'unknown', 'R-1', 'R-2']);
+    expect(deps[1].stages).toEqual([sp.front, sp.tail].map((x) => ({ node: x.node, layers: x.layers, gib: x.need_gib })));
+    expect(sp.front.layers).toBe(`0:${sp.cut}`);
+    expect(sp.tail.layers).toBe(`${sp.cut}:${sp.layers}`);
     // the server this page talks to is Desk's engine: its members reach it through `engine`
     expect(deps[0].member_states!.map((x) => x.backend)).toEqual(['engine', 'r3-engine']);
     const q27 = deps[0];
@@ -112,29 +117,103 @@ describe('the actions and their jobs on the clock', () => {
     ]);
     const end = dep(m, 'wren', T0 + MOVE_S);
     expect([end.members, end.api_id, end.status]).toEqual([['r3'], 'wren', 'serving']);
-    expect(plan(m, 'dsv41', 'move', T0, 'to=desk').blocked).toBe('a Split moves with ENG-307');
+    expect(plan(m, 'dsv41', 'move', T0, 'to=desk').blocked).toBe("a Split's two stages move together: stop it, plan it on the new nodes (Serve a model) and start it");
+    const mv = at(m, 'POST', '/v1/fleet/deployments/dsv41/actions/move', { from: 'r1', to: 'desk' });
+    expect([mv.status, valid<{ error: { type: string } }>('error', mv.body).error.type]).toEqual([409, 'partial_split']);
   });
 
-  it('a Split is recorded stopped: its stop says so, its start is 501 not_built until ENG-307', () => {
+  it('VIS-273: a Split starts as a pair (the front, then the tail, then linked) and stops as one, the tail first', () => {
     const m = new MockFleet({ scenario: 'fleet4', now: T0 });
     expect(plan(m, 'dsv41', 'stop').blocked).toBe('DeepSeek-V4.1-Flash is stopped already');
+    const p = plan(m, 'dsv41', 'start');
+    expect(p.allowed).toBe(true);
+    expect(p.impact[0]).toMatch(/^R-1: TandemNode starts the front stage \(layers 0:\d+, [\d.]+ GiB\); up to 600 s$/);
+    expect(p.impact[1]).toMatch(/^R-2: TandemNode starts the tail stage \(layers \d+:60, [\d.]+ GiB\), after the front answers; up to 600 s$/);
+    expect(p.impact[2]).toBe("a new link key goes to both nodes' agents; requests go to the tail on R-2");
     const r = at(m, 'POST', '/v1/fleet/deployments/dsv41/actions/start', {});
-    expect(r.status).toBe(501);
-    expect(valid<{ error: { type: string } }>('error', r.body).error.type).toBe('not_built');
+    expect(r.status).toBe(200);
+    const job = valid<DeploymentJobView>('deployment-job', r.body).job;
+    const states = (d: FleetDeployment) => d.member_states!.map((x) => x.state);
+    const a = dep(m, 'dsv41', T0 + 1);
+    expect([a.status, a.split!.phase, states(a)]).toEqual(['starting', 'starting-front', ['starting', 'down']]);
+    const b = dep(m, 'dsv41', T0 + START_S + 1);
+    expect([b.status, b.split!.phase, states(b), b.member_states![0].stage!.reason]).toEqual(['starting', 'starting-tail', ['waiting', 'starting'], 'no peer yet']);
+    const c = dep(m, 'dsv41', T0 + 2 * START_S);
+    expect([c.status, c.split!.phase, c.split!.built, states(c)]).toEqual(['serving', 'linked', true, ['serving', 'serving']]);
+    expect(c.member_states!.map((x) => x.routable)).toEqual([false, true]);
+    expect([c.split!.link.state, c.split!.link.epoch, c.split!.link.transport]).toEqual(['up', 1, 'tcp']);
+    expect(c.status_text).toBe('serving · the front on R-1, the tail on R-2, link up (epoch 1)');
+    const done = valid<DeploymentJobView>('deployment-job', get(m, `/v1/fleet/deployments/jobs/${job.id}`, T0 + 2 * START_S)).job;
+    expect(done.steps.map((s) => [s.alias, s.phase])).toEqual([['R-1', 'serving'], ['R-2', 'serving']]);
+    // the stop: the tail first, then the front
+    const t1 = T0 + 2 * START_S + 60;
+    const sp = plan(m, 'dsv41', 'stop', t1);
+    expect(sp.impact.slice(-3)).toEqual(['R-2: TandemNode stops the tail stage first', 'R-1: TandemNode stops the front stage', 'the link key is removed from both nodes']);
+    const stop = valid<DeploymentJobView>('deployment-job', at(m, 'POST', '/v1/fleet/deployments/dsv41/actions/stop', { confirm: sp.confirm }, t1).body).job;
+    expect(stop.steps.map((s) => [s.alias, s.phase])).toEqual([['R-2', 'stop']]);
+    expect(dep(m, 'dsv41', t1 + 1).split!.phase).toBe('stopping');
+    const end = dep(m, 'dsv41', t1 + STOP_S);
+    expect([end.status, end.split!.phase, end.split!.built, states(end)]).toEqual(['stopped', 'stopped', false, ['down', 'down']]);
+  });
+
+  it('VIS-273: a link that drops is degraded and heals under the next epoch; a stage that stops is partial until Start', () => {
+    const m = new MockFleet({ scenario: 'fleet4', now: T0 });
+    const knob = (mock: string, t: number) => at(m, 'POST', '/v1/fleet/deployments/dsv41/actions/start', { mock }, t);
+    expect(knob('link-down', T0).status).toBe(409);
+    at(m, 'POST', '/v1/fleet/deployments/dsv41/actions/start', {});
+    const up = T0 + 2 * START_S;
+    expect(knob('link-down', up).status).toBe(200);
+    const d = dep(m, 'dsv41', up + 1);
+    expect([d.status, d.split!.phase, d.split!.link.state, d.split!.link.reason]).toEqual(['degraded', 'degraded', 'down', 'peer closed']);
+    expect(d.member_states!.map((x) => [x.state, x.routable])).toEqual([['waiting', false], ['waiting', false]]);
+    expect(d.status_text).toBe('the link between R-1 and R-2 is down (peer closed): requests get 503 with Retry-After 5 s. The stages link again by themselves; nothing to do');
+    knob('link-up', up + 2);
+    const h = dep(m, 'dsv41', up + 3);
+    expect([h.status, h.split!.phase, h.split!.link.epoch]).toEqual(['serving', 'linked', 2]);
+    knob('front-stop', up + 4);
+    const half = dep(m, 'dsv41', up + 5);
+    expect([half.status, half.split!.phase, half.member_states!.map((x) => x.state)]).toEqual(['down', 'partial', ['down', 'waiting']]);
+    expect(half.status_text).toMatch(/^only the tail runs \(on R-2\); the front on R-1 does not/);
+    expect(plan(m, 'dsv41', 'start', up + 5).impact).toContain('R-2: the tail stage runs already');
+    at(m, 'POST', '/v1/fleet/deployments/dsv41/actions/start', {}, up + 6);
+    const back = dep(m, 'dsv41', up + 6 + 2 * START_S);
+    expect([back.status, back.split!.phase, back.split!.link.epoch]).toEqual(['serving', 'linked', 3]);
+  });
+
+  it('VIS-273: a Split recorded without a plan is kept and does not start', () => {
+    const m = new MockFleet({ scenario: 'fleet4', now: T0 });
+    const r = at(m, 'POST', '/v1/fleet/deployments', { model: 'bare', type: 'split', members: ['r1', 'r2'] });
+    const d = valid<FleetDeployment>('deployment', r.body);
+    expect([d.status, d.split, d.status_text]).toEqual(['stopped', undefined, 'Split: recorded without a plan. Plan it again on Serve a model to start it']);
+    const s = at(m, 'POST', `/v1/fleet/deployments/${d.id}/actions/start`, {});
+    expect([s.status, valid<{ error: { type: string } }>('error', s.body).error.type]).toEqual([409, 'no_plan']);
+    expect(at(m, 'POST', '/v1/fleet/deployments', { model: 'three', type: 'split', members: ['r1', 'r2', 'r3'] }).status).toBe(400);
   });
 });
 
 describe('the placement planner', () => {
   const body = { model: 'qwen3.8-27b', pack: 'exl3-6.0', ctx: 65536 };
-  it('Gherkin: a Split without fabric is refused with the reason; R-1 + R-2 on the switch are allowed, not built', () => {
+  it('VIS-273: a Split is planned when asked for: no shared subnet is refused in words; a fabric pair gets a plan with every number', () => {
     const m = new MockFleet({ scenario: 'fleet4', now: T0 });
-    const p = valid<Placement>('placement', at(m, 'POST', '/v1/fleet/placement', { ...body, nodes: ['desk', 'r1'] }).body);
-    const split = p.types.find((t) => t.type === 'split')!;
-    expect([split.allowed, split.built, split.reason]).toEqual([false, false, 'no fabric link between Desk and R-1']);
-    // R-1 and R-2 on the switch, DeepSeek's Split only recorded there: they take a Split, planned and not built
-    const ok = valid<Placement>('placement', at(m, 'POST', '/v1/fleet/placement', { ...body, nodes: ['r1', 'r2'] }).body).types.find((t) => t.type === 'split')!;
-    expect([ok.allowed, ok.built, ok.nodes, ok.stages.length]).toEqual([true, false, ['r1', 'r2'], 2]);
-    expect(ok.warn).toContain('ENG-307');
+    const split = (b: object) => valid<Placement>('placement', at(m, 'POST', '/v1/fleet/placement', b).body).types.find((t) => t.type === 'split')!;
+    // a model one Spark holds is not split unless the body asks
+    const unasked = split({ ...body, nodes: ['r1', 'r2'] });
+    expect([unasked.allowed, unasked.built, unasked.reason]).toEqual([false, true, 'R-1 holds the model alone: a Split is planned when asked for (split)']);
+    // Desk on the LAN and a rented Spark share no subnet
+    const far = split({ ...body, nodes: ['desk', 'r1'], split: true });
+    expect([far.allowed, far.reason]).toEqual([false, 'no interface pair in one subnet between Desk and R-1: join them with the fabric cable, or put both on one LAN (allowed with a warning)']);
+    // R-1 and R-2 on the fabric switch: the plan
+    const ok = split({ ...body, slots: 4, nodes: ['r1', 'r2'], split: true });
+    expect([ok.allowed, ok.built, ok.nodes, ok.warn]).toEqual([true, true, ['r1', 'r2'], null]);
+    const p = ok.split!;
+    expect(ok.stages).toEqual([{ node: 'r1', layers: `0:${p.cut}`, gib: p.front.need_gib }, { node: 'r2', layers: `${p.cut}:${p.layers}`, gib: p.tail.need_gib }]);
+    expect([p.link.kind, p.computed, p.measured.length, p.front.fits && p.tail.fits]).toEqual(['fabric', true, 1, true]);
+    expect(p.front.parts.at(-1)).toMatchObject({ id: 'slot_margin', basis: 'margin' });
+    const best = p.candidates.find((c) => c.chosen)!;
+    expect(best.cut).toBe(p.cut);
+    expect(p.candidates.filter((c) => !c.chosen).every((c) => !!c.why)).toBe(true);
+    expect(Math.max(...p.candidates.filter((c) => c.fits).map((c) => c.headroom_gib))).toBe(best.headroom_gib);
+    expect(split({ ...body, nodes: ['r1', 'r2', 'r3'], split: true }).reason).toBe("a Split runs over two nodes (the front stage's first), not 3");
   });
 
   it("each node's fit: a node that serves keeps what it serves; Replicas warn across the WAN", () => {

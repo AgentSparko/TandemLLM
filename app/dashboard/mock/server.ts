@@ -872,7 +872,7 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         const oai = (status: number, code: string, message: string) => json(res, status, { error: { message, type: status === 503 ? 'server_busy' : 'invalid_request_error', code } });
         const d = fleetFor(req).deployments(Date.now() / 1000).find((x) => x.api_id === body.model || x.id === body.model);
         if (!d) return oai(404, 'model_not_found', `no model ${JSON.stringify(body.model)}`);
-        if (d.type === 'split') return oai(501, 'not_built', `${d.name} runs Split: the pipeline split (ENG-307) is not built, so it serves no request yet`);
+        if (d.type === 'split' && d.state !== 'stopped' && !(d.member_states ?? []).some((x) => x.routable)) return oai(503, 'stage_down', `${d.name}: ${d.status_text}`);
         if (d.state === 'stopped') return oai(503, 'deployment_stopped', `${d.name} is stopped: start it to serve requests`);
         const pin = String(req.headers['x-tandem-pin'] ?? '').trim();
         const ms = d.member_states ?? [];
