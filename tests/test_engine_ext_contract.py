@@ -15,7 +15,8 @@ The test matrix, the Gherkin of ENG-429:
      module attributes discovery names                            test_the_fake_extension_fits
   3  a plain request asks the hooks in ext.json's order; CONTINUE_HIDDEN at SP2 loops back to the
      blocks and asks at_finish again; REGENERATE_CALL asks at_tool_call again; a plan of None asks
-     nothing more                                                 test_the_order
+     nothing more; prompt gets info and may answer a mapping from an extension on 1.2 or later,
+     two arguments before                                         test_the_order
   4  start is closed: no module in chat mode, a module that does not import, a missing EXT_API,
      another major, a newer minor, start raising and a claimed engine path each refuse with one
      '[ext] REFUSING:' line; an engine without QSE_EXT runs headless; an older minor is taken
@@ -144,7 +145,27 @@ def test_the_order():
     host = H.FakeHost(args={"raw": True})
     rec = host.serve(H.load(X, host), H.Scenario())
     assert rec["trace"] == ["plan"] and rec["raw"] and not rec["errors"], rec
-    return f"plain {len(PLAIN)} steps; CONTINUE_HIDDEN, REGENERATE_CALL, GIVE_UP, SP4, raw"
+    # an extension on 1.2 or later: prompt gets info and may answer a mapping; on 1.0 two arguments
+    seen = []
+
+    class Later:
+        EXT_API, NAME, VERSION, __name__ = "1.3", "later", "0", "later"
+
+        @staticmethod
+        def start(host):
+            ext = X.start(host)
+            ext.prompt = lambda plan, ids, info=None: seen.append(info) or {
+                "ids": list(ids) + [9], "in_think": False, "client_ids": None}
+            return ext
+    host = H.FakeHost()
+    rec = host.serve(H.load(Later, host), H.Scenario())
+    assert rec["prompt"] == [1, 2, 3, 9] and not rec["errors"] and seen == [{"in_think": False, "conv": None}], rec
+    host = H.FakeHost()
+    X10 = H.load(X, host)
+    X10.prompt = lambda plan, ids, info="none given": seen.append(info) or list(ids)
+    rec = host.serve(X10, H.Scenario())
+    assert seen[-1] == "none given" and not rec["errors"], (seen, rec)
+    return f"plain {len(PLAIN)} steps; CONTINUE_HIDDEN, REGENERATE_CALL, GIVE_UP, SP4, raw; prompt per minor"
 
 
 def test_start_is_closed():

@@ -172,6 +172,7 @@ class FakeHost:
         self.NoRoom = NoRoom
         self.lines: list[str] = []
         self.errors: dict[str, int] = {}
+        self.speaks: dict = {}                   # id(extension object) -> its module's EXT_API
 
     def log(self, line: str) -> None:
         self.lines.append(line)
@@ -250,8 +251,16 @@ class FakeHost:
         if plan is None:
             rec["raw"] = True                     # the headless path: no hook asked again
             return rec
-        ids = self._call(rec, ext, "prompt", plan, list(sc.prompt), fallback=list(sc.prompt),
-                         check=lambda v: isinstance(v, list) and all(isinstance(i, int) for i in v))
+        def ids_ok(v):
+            return isinstance(v, list) and all(isinstance(i, int) for i in v)
+        if _version(self.speaks.get(id(ext), "1.0")) < (1, 2):
+            ids = self._call(rec, ext, "prompt", plan, list(sc.prompt), fallback=list(sc.prompt),
+                             check=ids_ok)
+        else:                                     # since 1.2: info, and the answer may be a mapping
+            ids = self._call(rec, ext, "prompt", plan, list(sc.prompt), {"in_think": False, "conv": None},
+                             fallback=list(sc.prompt),
+                             check=lambda v: ids_ok(v) or (isinstance(v, dict) and ids_ok(v.get("ids"))))
+            ids = list(ids["ids"]) if isinstance(ids, dict) else ids
         rec["prompt"] = ids
         ev = {k: None for k in SPEC["supervisor"]["events"]["request"]}
         ev.update(request_id="r1", messages=sc.body.get("messages", []), tools=sc.body.get("tools", []),
@@ -350,4 +359,5 @@ def load(module, host: FakeHost):
     for r in ext.routes:
         if _claims_engine_path(r.get("prefix", "")):
             raise Refused(f"{module.__name__} claims the engine's path {r.get('prefix')}")
+    host.speaks[id(ext)] = module.EXT_API
     return ext
