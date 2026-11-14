@@ -9,7 +9,6 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 from server.stream import Reasoning, split_full  # noqa: E402
 from server.api.toolcall import ToolCallBuffer, call_format, diagnose, parse_tool_calls  # noqa: E402
 from server.api.toolformats.argkey import ArgKeyCalls, argkey_calls, rewrite_argkey  # noqa: E402

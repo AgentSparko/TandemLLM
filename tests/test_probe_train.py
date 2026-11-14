@@ -38,7 +38,6 @@ import torch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from server import probe as probe_mod  # noqa: E402
 from server.api.ledger import CONDUCTOR_DDL  # noqa: E402

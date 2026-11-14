@@ -25,7 +25,6 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 sys.path.insert(0, HERE)
 sys.path.append(os.path.join(os.path.dirname(HERE), "app", "tools"))  # SRV-747: TandemApp's tools, until ENG-413
 

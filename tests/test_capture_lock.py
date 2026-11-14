@@ -46,7 +46,6 @@ import torch  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
 from engine import cache, capture_lock, disk_cache  # noqa: E402
 from test_cache import DEV, fresh, tokens  # noqa: E402
