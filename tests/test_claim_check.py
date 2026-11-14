@@ -48,6 +48,9 @@ import yaml  # noqa: E402
 
 from engine.spec import ThinkBudget  # noqa: E402
 from server import app  # noqa: E402
+from server import ext_app  # noqa: E402
+app.EXT = ext_app.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
+#                                       monitor this file builds through the extension
 from tandemapp.conductor import incontext  # noqa: E402
 from tandemapp.conductor.monitor import (  # noqa: E402
     FinishEvent, Journal, Monitor, Policy, RequestEvent, claimcheck,
@@ -419,12 +422,16 @@ def test_over_the_handler_off_is_byte_identical_and_act_hides_the_note():
     with quiet():
         ref = list(app.generate_stream(torch.tensor(prompt), 30, set(), ThinkBudget(MonTok())))
     _, stop = _stop_after(ref, 4)
-    real = app.conductor.RequestEvent
+    # the request's class is a code class: the adapter builds the monitor's RequestEvent from the
+    # engine's event (ENG-413 WP3b), so the class's dataclass is replaced where it reads it
+    import dataclasses
+    from tandemapp.conductor import monitor as monitor_pkg
+    real = monitor_pkg.RequestEvent
 
-    def coding(*a, **kw):
-        ev = real(*a, **kw)
-        ev.cls = "code_edit"
-        return ev
+    @dataclasses.dataclass
+    class coding(real):
+        def __post_init__(self):
+            self.cls = "code_edit"
 
     def ask(task_mode, stream, asker=None, task=None):
         serve(FixedDrafter(97, 5, tree_mode=False), max_len=1024)
@@ -433,14 +440,14 @@ def test_over_the_handler_off_is_byte_identical_and_act_hides_the_note():
         mon = app.STATE["monitor"] = Monitor(
             "on", _policy(task=SHORT, mode=task_mode) if task is None else task, MonTok(),
             Journal(echo=False))
-        app.conductor.RequestEvent = coding
+        monitor_pkg.RequestEvent = coding
         try:
             with Spy(asker or _asker()) as spy, quiet():
                 _, raw = Req("/v1/chat/completions", {
                     "messages": WROTE, "tools": TOOLS, "stream": stream, "max_tokens": 30,
                     "chat_template_kwargs": {"enable_thinking": False}}).response()
         finally:
-            app.conductor.RequestEvent = real
+            monitor_pkg.RequestEvent = real
         return mon, spy, raw
 
     def strip(raw, stream):

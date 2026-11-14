@@ -32,6 +32,9 @@ sys.path.insert(0, HERE)
 sys.path.append(os.path.join(os.path.dirname(HERE), "app", "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
 
 from server import app  # noqa: E402
+from server import ext_app  # noqa: E402
+app.EXT = ext_app.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
+#                                       monitor this file builds through the extension
 from server.api import activity, dashboard_api, ledger as ledger_mod  # noqa: E402
 from tandemapp.conductor.monitor import Action, Journal, Monitor, RequestEvent  # noqa: E402
 from tandemapp.conductor.monitor.policy import CLOSE_REASONING, PASS  # noqa: E402

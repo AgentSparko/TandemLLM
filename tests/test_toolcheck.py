@@ -38,6 +38,9 @@ sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: Tande
 import yaml  # noqa: E402
 
 from server import app, fake_engine  # noqa: E402
+from server import ext_app  # noqa: E402
+app.EXT = ext_app.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
+#                                       monitor this file builds through the extension
 from engine.models.adapter import ServeSpec  # noqa: E402
 from tandemapp.conductor.monitor import Journal, Monitor, Policy, RequestEvent  # noqa: E402
 from tandemapp.conductor.monitor import policy as policy_mod  # noqa: E402

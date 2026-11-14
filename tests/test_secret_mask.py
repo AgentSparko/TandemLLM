@@ -51,6 +51,9 @@ sys.path.insert(0, HERE)
 from test_ui_states import OPENCODE_UA, _go, quiet  # noqa: E402  (first: the CPU environment)
 
 from server import app, fake_engine  # noqa: E402
+from server import ext_app  # noqa: E402
+app.EXT = ext_app.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
+#                                       monitor this file builds through the extension
 from tandemapp.conductor import redact, schema, shipped  # noqa: E402
 from tandemapp.conductor.hook import Conductor  # noqa: E402
 from tandemapp.conductor.monitor import Journal, Monitor  # noqa: E402
