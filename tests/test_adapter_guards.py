@@ -365,8 +365,7 @@ BASELINE = {
     "app/tandemapp/conductor/router.py": 15, "app/tandemapp/conductor/schema.py": 18,
     "server/conductor/shadow.py": 5, "app/tandemapp/metrics.py": 2, "app/proxy/harness.py": 5,
     "engine/shadow.py": 1, "server/setup/wren.py": 17,
-    # SRV-747: shadow.py's off text (it names the 0.8B), copied for a server that runs no engine
-    "app/tandemapp/conductor/routes.py": 1,
+    # (ENG-413 WP5: app/tandemapp/conductor/routes.py's copy of shadow.py's off text is gone: 0)
     # ENG-413 WP2b: the engine's copy of tandemapp/metrics.py, the same two (a conductor family's help
     # text and the router's "qwen" stage source)
     "server/api/metrics.py": 2,

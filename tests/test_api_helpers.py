@@ -6,8 +6,9 @@ this file holds the answers, on the inputs the engine gives them.
 
 The test matrix:
 
-  1  the residency and roles seeds are the conductor's version 0, a fresh copy each call; other
-     kinds are not the engine's                                    test_the_seeds_are_the_conductors
+  1  the residency and roles seeds are the conductor's version 0, a fresh copy each call, the
+     deciders seed the conductor's less its api (WP5); other kinds are not the engine's
+                                                                    test_the_seeds_are_the_conductors
   2  the validator answers every conductor schema and the setup registry's model check line for
      line as TandemApp's                                           test_validate_answers_alike
   3  the secret refusal: every shape and plain code redacted alike, counts alike
@@ -50,9 +51,11 @@ def test_the_seeds_are_the_conductors():
         assert a is not seeds.seed(kind), "a fresh copy"
         a["changed"] = True
         assert "changed" not in seeds.seed(kind), "the seed itself is not touched"
-    assert seeds.seed("deciders") is None and seeds.seed("router") is None
+    # ENG-413 WP5: the deciders seed is the conductor's less its api (the extension's part)
+    want = {k: v for k, v in schema.seed("deciders").items() if k != "api"}
+    assert seeds.seed("deciders") == want and seeds.seed("router") is None
     assert seeds.TOKENIZER_NONE == schema.TOKENIZER_NONE
-    return "residency and roles equal the conductor's, fresh copies"
+    return "residency, roles and deciders (less api) equal the conductor's, fresh copies"
 
 
 def _broken(doc):

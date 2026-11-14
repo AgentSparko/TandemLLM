@@ -4,9 +4,10 @@ tests/test_engine_api_contract.py against its pinned copy; the live engine is
 tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_toolcalls.py.
 
   1  every path of routes.json's routes and app_routes_via_engine is one the engine dispatches
-     (server/app.py, server/setup_api.py, ops/engine_status.py for the status responder,
-     inproc.ROUTES, and the two in-process app modules that own a prefix); the engine-only
-     screens reach their inproc.ROUTES handler; no planned route is dispatched yet
+     (server/app.py, server/engine_routes.py, server/setup_api.py, ops/engine_status.py for the
+     status responder, and the two in-process app modules that own a prefix); the engine-only
+     screens' old paths reach the extension and their new ones an engine_routes handler; no
+     planned route is dispatched yet
                                                                   test_every_route_is_dispatched
   2  server/engine_api.py VERSION, routes.json's version and ops/engine_status.py's literal are one
      version; the vendored TandemApp's proxy/engineapi.py SPEAKS has its major and is not newer, and
@@ -16,8 +17,10 @@ tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_to
      that holds its mark; README.md lists every engine->app import    test_reverse_deps
   4  the copied values are the contract's (1.3; TandemApp holds its copies to the same files):
      server/setup_api.py and server/api/auth.py same_origin and same_origin_json answer
-     auth.json's cases, server/cache_peek.py and server/api/usage.py TIER_OF are cache.json's,
-     server/decider_api.py and server/conductor/shadow.py OFF_WHY are the screens' off_why
+     auth.json's cases, server/cache_peek.py and server/api/usage.py TIER_OF are cache.json's;
+     1.5: no screen carries an off_why copy any more, server/ext.py EXT_DEFAULT_DIR is the
+     conductor's default directory and server/api/seeds.py's deciders seed the conductor's
+     models and questions (the vendored TandemApp, until WP14)
                                                                   test_values_are_the_contracts
   5  setup/: estimate-cases.json is models/estimate-cases.json byte for byte, limits.json's
      engine_max_slots is the registry's ENGINE_MAX_SLOTS          test_setup_fixtures
@@ -42,9 +45,14 @@ tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_to
      examples equal them but for engine_api                     test_additive_1_3
  11  1.4 is additive (ENG-413 WP3a): every 1.3 route is here; what 1.3 planned and the extension
      host serves left `planned` (`answers`: 404 no_ui and not_on_engine; /health extensions in
-     the schema, optional); the 1.3 examples still validate and the 1.4 ones equal them but for
-     engine_api and extensions; qse_ext_errors_total is an engine family
+     the schema, optional); the 1.3 examples still validate and the 1.4 ones (compat/1.4/) equal
+     them but for engine_api and extensions; qse_ext_errors_total is an engine family
                                                                   test_additive_1_4
+ 12  1.5 is additive (ENG-413 WP5): every 1.4 route is here with its aliases; group 9 is the
+     engine's screens, each GET live, each with a schema in engine/ or a doc, each replacing a
+     screen whose old path is marked to leave with WP14; nothing of group 9 is planned any more;
+     the 1.4 examples validate and the 1.5 ones equal them but for engine_api and ext_api
+                                                                  test_additive_1_5
 
 CPU only, no torch, standard library only. Run: python tests/test_engine_api_contract.py
 """
@@ -241,7 +249,7 @@ def _setup_parts_known(path: str, consts: set) -> list[str]:
 
 def test_every_route_is_dispatched():
     doc = _routes()
-    engine = _constants("server/app.py")
+    engine = _constants("server/app.py") | _constants("server/engine_routes.py")
     setup = _constants("server/setup_api.py")
     status = _constants("ops/engine_status.py")
     # app modules that own a prefix and run in the engine's process until ENG-413
@@ -268,13 +276,18 @@ def test_every_route_is_dispatched():
             ok = _dispatched(p.rstrip("*").rstrip("/"), engine | inproc_app)
         if not ok:
             misses.append(f"app route {r['path']}")
-    from server.conductor import inproc
+    from server import engine_routes
     for s in doc["engine_screens_until_eng413"]:
         if not _dispatched(s["path"], engine):
             misses.append(f"screen {s['path']}")
-        m = re.match(r"inproc\.ROUTES\[(\w+)\]", s["handler"])
-        if m and m.group(1) not in inproc.ROUTES:
-            misses.append(f"screen {s['path']}: no inproc.ROUTES[{m.group(1)}]")
+        if not s["handler"].startswith("host.engine"):
+            misses.append(f"screen {s['path']}: handler {s['handler']}")
+    # 1.5: group 9 is the engine's own (server/engine_routes.py's table)
+    for r in doc["routes"]:
+        if r["group"] == 9:
+            parts = r["path"][len(engine_routes.PREFIX):].replace("{name}", "a").split("/")
+            if engine_routes._route(r["method"], parts) is None:
+                misses.append(f"group 9 {r['method']} {r['path']}: not in engine_routes")
     # a planned route moves into `routes` in the minor of the engine that serves it
     early = [p["path"] for p in doc["planned"] if p["kind"] == "route" and _dispatched(p["path"], engine)]
     assert not early, f"served but still planned (move them into routes): {early}"
@@ -375,10 +388,20 @@ def test_values_are_the_contracts():
     assert {c["headers"].get("Origin") is not None for c in cases} == {True, False}
     assert cache_peek.TIER_OF == _json("cache.json")["tier_of"]
     assert api_usage.TIER_OF == _json("cache.json")["tier_of"]
-    off = {s["path"]: s.get("off_why") for s in _routes()["engine_screens_until_eng413"]}
-    assert decider_api.OFF_WHY == off["/v1/conductor/deciders/*"]
-    assert shadow.OFF_WHY == off["/v1/conductor/shadow/*"]
-    return f"same_origin on {len(cases)} cases (2 copies), TIER_OF (2 copies), 2 OFF_WHY texts"
+    # 1.5 (ENG-413 WP5): the engine answers its screens itself; no copy of its off texts is kept
+    assert not any("off_why" in s for s in _routes()["engine_screens_until_eng413"])
+    assert decider_api.OFF_WHY.startswith("this engine serves no decision model")
+    assert shadow.OFF_WHY.startswith("this engine serves no shadow reader")
+    # the values the engine copied from TandemApp's conductor (until WP14 the vendored app/ holds them)
+    from server import ext as ext_mod
+    from server.api import seeds
+    store = _literal("app/tandemapp/conductor/store.py", "DEFAULT_ROOT")
+    assert ext_mod.EXT_DEFAULT_DIR == store, (ext_mod.EXT_DEFAULT_DIR, store)
+    copies = {c["engine"] for c in _json("reverse-deps.json")["copies"] if c["kind"] == "value"}
+    assert "server/ext.py EXT_DEFAULT_DIR" in copies and "server/api/seeds.py DECIDERS" in copies
+    assert not any("OFF_WHY" in c for c in copies), copies
+    return f"same_origin on {len(cases)} cases (2 copies), TIER_OF (2 copies), EXT_DEFAULT_DIR, " \
+           f"no OFF_WHY copy"
 
 
 def test_setup_fixtures():
@@ -534,8 +557,10 @@ def test_schemas_and_references():
     assert all(e.get("why") for e in doc["app_routes_via_engine"])
     for sc in doc["engine_screens_until_eng413"]:
         assert sc["after_eng413"].startswith("/v1/engine/"), sc
-        assert any(p.get("replaces") == sc["path"] and p["path"] == sc["after_eng413"]
-                   for p in doc["planned"]), sc["path"]
+        # 1.5: the engine's route replaces the screen, which leaves with WP14
+        assert any(r.get("replaces") == sc["path"] and r["path"].startswith(sc["after_eng413"].rstrip("*"))
+                   for r in doc["routes"]), sc["path"]
+        assert sc["leaves"].startswith("ENG-413 WP14"), sc
     leaving = [r["path"] for r in doc["routes"] if r.get("leaves")]
     assert leaving == ["/v1/dashboard/metrics"], leaving
     assert all(r["leaves"].startswith("2.0:") for r in doc["routes"] if r.get("leaves"))
@@ -608,7 +633,8 @@ def test_additive_1_4():
     from tools import contract_check
     old = _json("compat", "1.3", "routes.json")
     assert old["version"] == "1.3"
-    doc = _routes()
+    doc = _json("compat", "1.4", "routes.json")              # 1.4 as it was (1.5 is test_additive_1_5)
+    assert doc["version"] == "1.4"
     now = {(r["method"], r["path"], r.get("port")): r for r in doc["routes"]}
     gone = [f"{r['method']} {r['path']}" for r in old["routes"]
             if (r["method"], r["path"], r.get("port")) not in now or
@@ -636,12 +662,12 @@ def test_additive_1_4():
     def ok(d):
         return not contract_check.validate(d, health, root=CONTRACT)
     for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
-        a, b = _json(name), _json("compat", "1.3", name)
+        a, b = _json("compat", "1.4", name), _json("compat", "1.3", name)
         assert ok(b), name                                     # a 1.3 engine's answer
         assert {k: v for k, v in a.items() if k not in ("engine_api", "extensions")} == \
             {k: v for k, v in b.items() if k != "engine_api"}, name
         assert a.get("engine_api") in (None, "1.4"), name
-    ex = _json("health.example.json")
+    ex = _json("compat", "1.4", "health.example.json")
     assert ok(ex) and ok(dict(ex, extensions=[])) and ok(dict(ex, engine_api="1.3"))
     assert not ok(dict(ex, extensions=[{"name": "x"}]))        # name, version and ext_api, all three
     fam = {f["name"]: f for f in _json("metrics-families.json")["families"]}
@@ -649,6 +675,43 @@ def test_additive_1_4():
                                            "labels": ["hook"], "owner": "engine"}
     return f"{len(old['routes'])} 1.3 routes kept, 1.3 health examples valid, {len(doc['answers'])} answers " \
            f"out of planned, /health extensions in the schema"
+
+
+
+def test_additive_1_5():
+    """ENG-413 WP5: 1.5 adds group 9, the engine-only screens as /v1/engine/*; every 1.4 route stays."""
+    from tools import contract_check
+    old = _json("compat", "1.4", "routes.json")
+    doc = _routes()
+    assert (old["version"], doc["version"]) == ("1.4", "1.5")
+    now = {(r["method"], r["path"], r.get("port")): r for r in doc["routes"]}
+    gone = [f"{r['method']} {r['path']}" for r in old["routes"]
+            if (r["method"], r["path"], r.get("port")) not in now or
+            set(now[(r["method"], r["path"], r.get("port"))]["aliases"]) < set(r["aliases"])]
+    assert not gone, f"1.5 dropped or narrowed 1.4 routes: {gone}"
+    g9 = [r for r in doc["routes"] if r["group"] == 9]
+    assert len(g9) == 14 and all(r["path"].startswith("/v1/engine/") and r["since"] == "1.5" for r in g9)
+    assert all(r["live"] == (r["method"] == "GET") for r in g9)
+    assert all(r.get("schema", "").startswith("engine/") or r.get("doc") for r in g9)
+    screens = {s["path"] for s in doc["engine_screens_until_eng413"]}
+    assert {r["replaces"] for r in g9} == screens == {s["path"] for s in old["engine_screens_until_eng413"]}
+    assert not [p for p in doc["planned"] if p.get("lands_with") == "ENG-413 WP5"]
+    assert [p for p in doc["planned"]] == [p for p in old["planned"] if p["kind"] != "route"]
+    for key in ("app_routes_via_engine", "app_families", "shared_prefixes", "answers"):
+        assert doc[key] == old[key], key
+    health = contract_check.load("health", CONTRACT)
+
+    def ok(d):
+        return not contract_check.validate(d, health, root=CONTRACT)
+    for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
+        a, b = _json(name), _json("compat", "1.4", name)
+        assert ok(b), name                                     # a 1.4 engine's answer
+        strip = lambda d: {k: v for k, v in d.items() if k not in ("engine_api", "extensions")}  # noqa: E731
+        assert strip(a) == strip(b), name
+        assert a.get("engine_api") in (None, "1.5"), name
+    ex = _json("health.example.json")
+    assert [x["ext_api"] for x in ex["extensions"]] == ["2.1"], ex["extensions"]
+    return f"{len(old['routes'])} 1.4 routes kept, {len(g9)} group 9 routes replacing {len(screens)} screens"
 
 
 if __name__ == "__main__":

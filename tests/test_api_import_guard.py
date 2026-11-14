@@ -37,7 +37,7 @@ engine does not.
      `schema.seed("residency"|"roles")`); the importers the plan names take each from server/api
                                                                   test_the_helpers_are_the_engines
   8  each WP2c copy holds exactly the names it took, each statement TandemApp's (docstrings
-     aside), plus what WP2C_OWN names (seeds.seed: the two kinds of schema.seed)
+     aside), plus what WP2C_OWN names (seeds.seed: the kinds of schema.seed; WP5: DECIDERS)
                                                                   test_the_helper_copies_are_the_fork
 
 CPU, standard library only. Run: python tests/test_api_import_guard.py
@@ -101,13 +101,16 @@ WP2C = {"validate": ("tandemapp.conductor.schema", ("ID_RE", "_TYPES", "validate
 #: tests that read TandemApp's copied names on purpose, and why
 HELD = {"tests/test_api_helpers.py": "holds each WP2c copy's answers to TandemApp's"}
 #: what a WP2c copy has of its own, and why
-WP2C_OWN = {"seeds": {"seed"}}       # schema.seed for "residency" and "roles", a fresh copy each
+#: (ENG-413 WP5: DECIDERS, schema.DECIDERS less its api, the extension's part; tests/test_api_helpers.py)
+WP2C_OWN = {"seeds": {"seed", "DECIDERS"}}       # schema.seed for "residency" and "roles", a fresh copy each
 #: the conductor's seed kinds the engine reads from server/api/seeds.py (the others stay its own)
-SEED_KINDS = ("residency", "roles")
+SEED_KINDS = ("residency", "roles", "deciders")
 #: the files WP2c switches (plan section 3.1, WP2c), with the server/api modules each takes
 IMPORTERS_2C = {"server/diskcache.py": {"repository"}, "server/probe.py": {"repository"},
-                "server/mode.py": {"chat_url"}, "server/rolemem.py": {"seeds"},
-                "server/setup/wren.py": {"seeds"}, "server/decider_api.py": {"seeds"},
+                "server/mode.py": {"chat_url"}, "server/decider_api.py": {"seeds"},
+                # ENG-413 WP5: the role memory and Wren's planner read the documents through
+                # server/conductor/residency.py `documents`, which takes the seeds
+                "server/conductor/residency.py": {"seeds"},
                 "server/setup/registry.py": {"validate"}, "server/setup/community.py": {"validate"},
                 "server/setup/knowledge.py": {"textindex"}, "server/setup/apply.py": {"redact"},
                 "tests/test_parallel_card.py": {"validate"}}
@@ -303,7 +306,10 @@ FORK_ADDED = {"ledger": {"SIDE_SHAPES", "_text", "side_shape"},
                           "ext_errors_total"}}
 #: functions the fork changed on purpose, each in both copies: (module, name) -> why
 FORK_CHANGED = {("metrics", "_gpu_memory"): "reads _allocator without the hook",
-                ("metrics", "_gpu_reserved"): "reads _allocator without the hook"}
+                ("metrics", "_gpu_reserved"): "reads _allocator without the hook",
+                # ENG-413 WP5: own_work reads the memory writer's numbers through the extension
+                # (engine-ext-v1 2.1 memory_writer), not the conductor's object in the state
+                ("metrics", "install"): "own_work asks the extension's memory_writer"}
 
 
 def _fork_view(path: str, mod: str, engine: bool) -> list[str]:
