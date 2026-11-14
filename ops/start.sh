@@ -5,8 +5,8 @@
 # whatever answers on :8000 is what Open WebUI calls the model -- and exactly one thing may.
 #
 #   ops/start.sh                      the configured engine
-#   ops/start.sh --setup [--host A]   setup mode (docs/setup.md): no model of Qwen's, only the dashboard,
-#                                     /v1/setup/* and Wren, the setup guide's assistant; on 127.0.0.1
+#   ops/start.sh --setup [--host A]   setup mode (docs/setup.md): no model of Qwen's, only the Setup
+#                                     API /v1/setup/* and Wren, the setup guide's assistant; on 127.0.0.1
 #                                     unless --host says otherwise. While run/setup-pending exists (the
 #                                     installer writes it, the setup guide's apply job removes it) a
 #                                     plain start is setup mode too, with the host the marker names.
@@ -57,58 +57,39 @@ LOG="$LOGS/engine-$(date +%Y%m%d-%H%M%S).log"
 LOGLINK="$LOGS/engine.log"
 [ -z "$PEER" ] || { PIDFILE="$LOGS/peer-$PEER.pid"; LOG="$LOGS/peer-$PEER-${LOG##*/engine-}"; LOGLINK="$LOGS/peer-$PEER.log"; }
 
-# OPS-155: chatd, the Chat tab's service, once the engine answers /health: started if it is not
-# running, by the checkout's app/ops/chatd.sh, TandemApp's launcher (ops/chatd.sh in a checkout from
-# before SRV-747; with neither, one line says so), in its own session, nothing inherited above
-# stdio, serve.env, local.env and secrets.env exported, the admin token held back. Not in setup
-# mode, not for a hold's restart (HOLD_RESTART=1), not with QSE_CHATD=off. A chatd that does not
-# start is a warning: the engine is up either way. ops/stop.sh never stops it, so an engine
-# restart, the watchdog's included, never ends a chat run; `tandem stop` does. Until ENG-413.
-# Engine mode (OPS-260) stops a chatd this checkout started, so the Chat (beta) switch's off ends it.
-# QSE_CHATD=node (ENG-413 WP6, SRV-823; node/control.json `chat`): TandemNode owns chatd, so nothing
-# here starts or stops it, in any mode; one line says so, and whether a TandemNode answers on
-# 127.0.0.1:TANDEM_NODE_PORT (7700): without one this engine serves without the Chat tab.
+# chatd, the Chat tab's service, is TandemApp's (ENG-413 WP7, engine API 1.7, node/control.json
+# `chat`): this script starts and stops none, in any mode, and has no launcher of it. One line says
+# who runs it: QSE_CHATD=node (serve.env reads the older `on` as node, said once here), TandemNode,
+# and whether one answers on 127.0.0.1:TANDEM_NODE_PORT (7700; without one the engine serves without
+# the Chat tab); off or unset, nobody here.
 load_secrets() {
     SECRETS="${QSE_SECRETS:-${QSE_STATE_DIR:+$QSE_STATE_DIR/secrets.env}}"
     SECRETS="${SECRETS:-$HOME/.qwen38-spark-engine/secrets.env}"
     if [ -f "$SECRETS" ]; then set -a; . "$SECRETS"; set +a; fi
 }
 node_answers() { (exec 3<>"/dev/tcp/127.0.0.1/${TANDEM_NODE_PORT:-7700}") 2>/dev/null; }
-start_chatd() {
-    [ -z "$PEER" ] || return 0                     # a peer starts no chatd
-    if [ "${QSE_CHATD:-on}" = node ]; then
-        if node_answers; then
-            echo "[start] chatd: TandemNode's (QSE_CHATD=node): it runs chatd (tandem-node chat status)"
-        else
-            echo "[start] chatd: TandemNode's (QSE_CHATD=node), and no TandemNode answers on" \
-                 "127.0.0.1:${TANDEM_NODE_PORT:-7700}: the engine serves without the Chat tab" \
-                 "(QSE_CHATD=on gives chatd back to this engine)"
-        fi
-        return 0
+chatd_line() {
+    [ -z "$PEER" ] || return 0                     # a peer says nothing of chatd
+    if [ "${QSE_CHATD_ASKED-${QSE_CHATD:-}}" = on ]; then
+        echo "[start] chatd: QSE_CHATD=on is read as node: this engine has no chatd launcher" \
+             "(engine API 1.7), TandemNode runs chatd"
     fi
-    local sh="$REPO/app/ops/chatd.sh"
-    [ -f "$sh" ] || sh="$REPO/ops/chatd.sh"
-    if [ "${QSE_CHATD:-on}" = "off" ]; then
-        if [ "${QSE_MODE:-}" = engine ]; then
-            echo "[start] chatd: off (engine only; QSE_MODE=chat turns the chat on)"
-            # OPS-260: the switch to engine ends the chat's chatd too (this tree's only; not for a hold)
-            if [ "${HOLD_RESTART:-0}" != "1" ] && [ -f "$sh" ] && \
-                    bash "$sh" status >/dev/null 2>&1; then
-                bash "$sh" stop --this-tree || true
-            fi
-        else echo "[start] chatd: off (QSE_CHATD=off)"; fi
-        return 0
-    fi
-    [ "${HOLD_RESTART:-0}" = "1" ] && return 0
-    if [ ! -f "$sh" ]; then
-        echo "[start] WARNING: chatd: $REPO has no app/ops/chatd.sh or ops/chatd.sh; the engine serves" \
-             "without the Chat tab"
-        return 0
-    fi
-    bash "$sh" status >/dev/null 2>&1 && return 0
-    bash "$sh" start \
-        || echo "[start] WARNING: chatd did not start (above, log $REPO/logs/chatd.log); the engine" \
-                "serves without the Chat tab. tandem chat start tries again"
+    case "${QSE_CHATD:-off}" in
+        node|on)
+            if node_answers; then
+                echo "[start] chatd: TandemNode's (QSE_CHATD=node): it runs chatd (tandem-node chat status)"
+            else
+                echo "[start] chatd: TandemNode's (QSE_CHATD=node), and no TandemNode answers on" \
+                     "127.0.0.1:${TANDEM_NODE_PORT:-7700}: the engine serves without the Chat tab" \
+                     "(install.sh --with-chat --app-wheel FILE installs TandemNode)"
+            fi ;;
+        *)
+            if [ "${QSE_MODE:-}" = engine ]; then
+                echo "[start] chatd: off (engine only; QSE_MODE=chat turns the chat on)"
+            else
+                echo "[start] chatd: off (QSE_CHATD=off: no chatd here; QSE_CHATD=node gives it to TandemNode)"
+            fi ;;
+    esac
 }
 
 # A hold owns the board: the pause file is how it says so, and this script must respect it too.
@@ -132,7 +113,7 @@ if [ -f "$REPO/.watchdog.off" ] && [ "${HOLD_RESTART:-0}" != "1" ]; then
 fi
 if [ -z "$PEER" ] && curl -sf -m 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
     echo "[start] already healthy on :$PORT"
-    [ "$SETUP" = "1" ] || { load_secrets; start_chatd; }
+    [ "$SETUP" = "1" ] || chatd_line
     exit 0
 fi
 # One engine at a time, and a LOADING one counts: the server binds its port only once the
@@ -190,7 +171,7 @@ if [ "$SETUP" = "1" ]; then
             # restart screen promise "any moment now" (the typical start is the median of these)
             status up --engine-port "$PORT"
             echo "[start] setup mode answers on $SETUP_HOST:$PORT after $(( $(date +%s) - T_START )) s:" \
-                 "open http://<this box>:$PORT/dashboard/#/setup"
+                 "the Setup API for TandemApp's Setup page at http://<this box>:$PORT"
             exit 0
         fi
         sleep 2
@@ -203,7 +184,7 @@ status starting --reason "${START_REASON:-$( [ "${HOLD_RESTART:-0}" = "1" ] && e
 if [ "${QSE_MODE:-}" = engine ]; then
     echo "[start] mode: engine (the engine alone: no conductor, decision models, narrator, roles or chatd)"
 else
-    echo "[start] mode: ${QSE_MODE:-chat} (the conductor, its small models and chatd)"
+    echo "[start] mode: ${QSE_MODE:-chat} (the conductor and its small models; chatd is TandemNode's)"
 fi
 # The usage ledger is this service's alone: the server does not read QSE_USAGE_LEDGER from
 # its environment, so a benchmark server started with serve.env exported stays off. The same for
@@ -373,7 +354,7 @@ for i in $(seq 1 300); do
                 *) echo "[start] narrator: the load did not answer (or no extension writes narrated lines)" ;;
             esac
         fi
-        start_chatd
+        chatd_line
         exit 0
     fi
     sleep 2

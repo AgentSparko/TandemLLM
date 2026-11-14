@@ -194,6 +194,8 @@ UNINSTALL=0
 REPO_SET=0
 MODE_ARG=""
 RUNTIME_ONLY=0
+APP_WHEEL=""
+APP_SHA=""
 
 usage() {
     cat <<EOF
@@ -212,12 +214,16 @@ Usage: bash install.sh [options]
   --no-corpus       skip the lookup corpus (the lookup drafter then copies from the conversation only)
   --no-start        install and configure, but do not start the engine
   --with-chat       the chat (beta) too: the conductor (router, user memory, packages), its small
-                    models and chatd, the Chat tab's service. Without it a new install serves the
-                    engine alone and a re-run keeps the box's mode
+                    models, and TandemApp's TandemNode with chatd, the Chat tab's service; needs
+                    --app-wheel (a re-run keeps the TandemApp it installed). Without it a new
+                    install serves the engine alone (no page, no chat) and a re-run keeps the mode
+  --app-wheel FILE  with --with-chat: TandemApp's wheel, a local file (tandemapp-*.whl), into this
+                    install's venv (the engine's pins held)
+  --app-wheel-sha256 HEX   the wheel's sha256, checked before it is installed
   --engine-only     the engine alone, a new install's default; on a re-run it turns the chat off
-  --setup           set up in the browser instead: install the code and Wren's model only, then
-                    start setup mode (the dashboard's #/setup page; docs/setup.md); 127.0.0.1
-                    unless --host says otherwise
+  --setup           set up instead of a model now: install the code and Wren's model only, then
+                    start setup mode (the Setup API, /v1/setup/*, for TandemApp's Setup page;
+                    docs/setup.md); 127.0.0.1 unless --host says otherwise
   --force-setup     with --setup, on a directory that already has a configured engine
   --systemd         also install a systemd user unit, tandemllm.service (off by default)
   --runtime-only    the engine's source and Python environment only: no weights, no corpus, no
@@ -252,6 +258,10 @@ while [ $# -gt 0 ]; do
         --no-start) START=0; shift ;;
         --with-chat) MODE_ARG=chat; shift ;;
         --engine-only) MODE_ARG=engine; shift ;;
+        --app-wheel) need_arg "$@"; APP_WHEEL="$2"; shift 2 ;;
+        --app-wheel=*) APP_WHEEL="${1#*=}"; shift ;;
+        --app-wheel-sha256) need_arg "$@"; APP_SHA="$2"; shift 2 ;;
+        --app-wheel-sha256=*) APP_SHA="${1#*=}"; shift ;;
         --setup) SETUP=1; shift ;;
         --force-setup) FORCE_SETUP=1; shift ;;
         --systemd) SYSTEMD=1; shift ;;
@@ -272,6 +282,23 @@ case "$DIR" in /*) ;; *) DIR="$PWD/$DIR" ;; esac
 DIR="${DIR%/}"
 case "$DIR" in *[[:space:]]*) die "the install directory may not contain spaces: '$DIR'" ;; esac
 [ "$DIR" != "$HOME" ] && [ -n "$DIR" ] || die "the install directory cannot be \$HOME itself"
+# ENG-413 WP7: the chat is TandemApp's, installed from its wheel, a local file (TandemApp is not
+# fetched from anywhere): its TandemNode runs chatd (node/control.json `chat.install`)
+if [ -n "$APP_WHEEL" ]; then
+    [ "$MODE_ARG" = chat ] || die "--app-wheel goes with --with-chat: TandemApp's wheel is the chat's"
+    # shellcheck disable=SC2088  # a literal "~" that the caller's shell did not expand
+    case "$APP_WHEEL" in "~/"*) APP_WHEEL="$HOME${APP_WHEEL#"~"}" ;; esac
+    case "$APP_WHEEL" in /*) ;; *) APP_WHEEL="$PWD/$APP_WHEEL" ;; esac
+    [ -f "$APP_WHEEL" ] || die "--app-wheel: no file $APP_WHEEL"
+    case "${APP_WHEEL##*/}" in
+        tandemapp-*.whl) ;;
+        *) die "--app-wheel takes TandemApp's wheel (tandemapp-<version>-py3-none-any.whl), not ${APP_WHEEL##*/}" ;;
+    esac
+fi
+[ -z "$APP_SHA" ] || [ -n "$APP_WHEEL" ] || die "--app-wheel-sha256 goes with --app-wheel"
+if [ "$MODE_ARG" = chat ] && [ "$RUNTIME_ONLY" = 1 ]; then
+    die "--with-chat writes the config and --runtime-only writes none: install the chat with --with-chat --app-wheel FILE"
+fi
 
 SRC="$DIR/src"
 VENV="$DIR/venv"
@@ -280,6 +307,10 @@ RUN="$DIR/run"
 CORPUS_DIR="$DIR/corpus"
 MARK="$DIR/.tandemllm-install"
 UNIT="$HOME/.config/systemd/user/tandemllm.service"
+# TandemNode's unit (tandem-node unit), written by a --with-chat install: ours when it names this DIR
+NODE_UNIT="$HOME/.config/systemd/user/tandemnode.service"
+NODE_BIN="$VENV/bin/tandem-node"
+APP_STATE="$DIR/state/tandemapp-wheel.json"
 HF_HUB_DIR="${HF_HUB_CACHE:-${HF_HOME:-$HOME/.cache/huggingface}/hub}"
 WREN_REPO="Qwen/Qwen3.5-2B"
 WREN_DIR="$HOME/.qwen38-spark-engine/models/qwen3.5-2b"
@@ -354,11 +385,28 @@ hf_repo_dir() { printf '%s/models--%s' "$HF_HUB_DIR" "${1//\//--}"; }
 sha_of() {
     if command -v sha256sum >/dev/null 2>&1; then sha256sum | cut -c1-16; else shasum -a 256 | cut -c1-16; fi
 }
-# chatd_sh: the checkout's chatd launcher, TandemApp's app/ops/chatd.sh, else ops/chatd.sh (a ref
-# from before SRV-747); it may not exist. Looked up at each use: the update below can move the
-# checkout from one layout to the other, and an old ref is installed with this script too
-chatd_sh() {
-    if [ -f "$SRC/app/ops/chatd.sh" ]; then echo "$SRC/app/ops/chatd.sh"; else echo "$SRC/ops/chatd.sh"; fi
+sha256_file() {
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
+# node_unit_ours: the TandemNode unit names this install (--tandem-dir DIR), so it is this
+# install's to write and to remove
+node_unit_ours() { [ -f "$NODE_UNIT" ] && grep -qF -- "--tandem-dir $DIR " "$NODE_UNIT"; }
+# chatd_pid_stop DATA: a chatd that an install from before engine API 1.7 started (its own launchers
+# ran it), stopped by its pid file as its launcher did (SIGTERM: open runs end `interrupted`; KILL
+# after 30 s); only a live process that runs `-m chatd`. No launcher of TandemApp's is needed
+chatd_pid_stop() {
+    local pidf="$1/chatd.pid" pid args
+    [ -f "$pidf" ] || return 0
+    pid="$(tr -dc 0-9 < "$pidf")"
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 0
+    args="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || ps -o args= -p "$pid" 2>/dev/null || true)"
+    case " $args " in *" -m chatd "*) ;; *) return 0 ;; esac
+    run kill -TERM "$pid" || return 0
+    [ "$DRY" = 1 ] && return 0
+    for _ in $(seq 1 60); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+    kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null
+    rm -f "$pidf"
+    info "stopped the chatd the old launchers ran (pid $pid)"
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -378,9 +426,18 @@ if [ "$UNINSTALL" = 1 ]; then
             die "no terminal to confirm on: re-run with --uninstall --yes"
         fi
     fi
+    # TandemNode, when this install put it here (--with-chat): chatd first (it runs TandemApp's code
+    # from DIR/venv, which goes), then the agent and its unit. A TandemNode of anything else, and the
+    # chatd it runs, are left alone (ENG-413 WP7)
+    if node_unit_ours; then
+        if [ -x "$NODE_BIN" ]; then run "$NODE_BIN" chat stop --tandem-dir "$DIR" --chat on || true; fi
+        run systemctl --user disable --now tandemnode.service || true
+        run rm -f "$NODE_UNIT"
+        run systemctl --user daemon-reload || true
+    elif [ -f "$NODE_UNIT" ]; then
+        info "$NODE_UNIT is not this install's: TandemNode and its chatd are left running"
+    fi
     if [ -f "$DIR/bin/tandem" ]; then run bash "$DIR/bin/tandem" stop 120 || warn "the stop reported an error"; fi
-    # chatd too, should this tandem predate its stop (OPS-155)
-    if [ -f "$(chatd_sh)" ]; then run bash "$(chatd_sh)" stop || true; fi
     # the status responder of this install (OPS-175), which outlives an engine stop on purpose
     SPORT="$(sed -n "s/^QSE_STATUS_PORT=//p" "$RUN/ops/serve.env" 2>/dev/null | tail -1 | tr -dc 0-9)"
     if [ -n "$SPORT" ] && [ -f "$RUN/ops/engine_status.py" ]; then
@@ -515,6 +572,43 @@ if [ "$START" = 1 ] && command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | aw
     fail "port $PORT is in use; choose another with --port"
 fi
 
+# The chat (ENG-413 WP7, engine API 1.7): TandemApp's wheel, or the TandemApp this install has
+APP_HAVE=0
+if [ -x "$NODE_BIN" ] && [ -f "$APP_STATE" ]; then APP_HAVE=1; fi
+APP_HAD="$APP_HAVE"
+NODE_PORT="${TANDEM_NODE_PORT:-7700}"
+if [ -n "$APP_WHEEL" ]; then
+    APP_SHA_GOT="$(sha256_file "$APP_WHEEL")"
+    if [ -n "$APP_SHA" ] && [ "$APP_SHA_GOT" != "$(printf '%s' "$APP_SHA" | tr 'A-F' 'a-f')" ]; then
+        die "--app-wheel: ${APP_WHEEL##*/} has sha256 $APP_SHA_GOT, not $APP_SHA"
+    fi
+    ok "TandemApp's wheel ${APP_WHEEL##*/}, sha256 $APP_SHA_GOT"
+elif [ "$MODE_ARG" = chat ] && [ "$APP_HAVE" = 1 ]; then
+    ok "TandemApp: the one this install has ($(sed -n 's/.*"wheel": "\([^"]*\)".*/\1/p' "$APP_STATE"))"
+elif [ "$MODE_ARG" = chat ]; then
+    fail "--with-chat installs TandemApp's chat: add --app-wheel FILE, TandemApp's wheel (its release, or 'python -m pip wheel --no-deps' of its checkout); it is not downloaded"
+fi
+if [ "$MODE_ARG" = chat ] && [ -f "$NODE_UNIT" ] && ! node_unit_ours; then
+    fail "$NODE_UNIT is another TandemNode's, not this install's: give that one chatd (tandem-node serve --chat on, or chat.json own; QSE_CHATD=node here) or remove its unit, then re-run"
+fi
+# An install from before engine API 1.7 runs its own copies (run/ops/*.sh, run/ops/serve.env,
+# bin/tandem): in chat mode its launchers ran chatd (QSE_CHATD on or unset). This engine runs none,
+# so a re-run that rewrites them stops here unless it says who takes chatd: --with-chat
+# --app-wheel (TandemNode, the same data folder, pid file and port) or --engine-only (no chat; its
+# chatd is stopped). Until then the install keeps working as it is (node/control.json chat.update).
+OLD_CHATD=""
+if [ "$RUNTIME_ONLY" != 1 ] && [ -f "$RUN/ops/serve.env" ] && ! grep -q '^QSE_CHATD_ASKED=' "$RUN/ops/serve.env"; then
+    # shellcheck disable=SC2016  # the inner bash expands them
+    OLD_CHATD="$(bash -c 'set -a; . "$1" >/dev/null 2>&1; [ "${QSE_MODE:-}" = chat ] || exit 0
+        case "${QSE_CHATD:-on}" in off|node) exit 0 ;; esac
+        if [ -f "$2" ]; then . "$2" >/dev/null 2>&1; fi
+        printf "%s|%s" "${QSE_CHATD:-on}" "${QSE_CHAT_DATA:-$HOME/.tandemllm/chat}"' - "$RUN/ops/serve.env" \
+        "${QSE_CHATD_ENV:-$RUN/chatd.env}" 2>/dev/null || true)"
+fi
+if [ -n "$OLD_CHATD" ] && [ "$MODE_ARG" != engine ] && [ -z "$APP_WHEEL" ]; then
+    fail "$DIR is an install from before engine API 1.7 in chat mode, and its own launchers run chatd (QSE_CHATD=${OLD_CHATD%%|*}). This release runs no chatd: re-run with --with-chat --app-wheel FILE (TandemApp's TandemNode takes chatd over) or with --engine-only (no chat). Nothing was changed; the install keeps working as it is"
+fi
+
 # Python 3.11, the served engine's: tests/test_grammar.py passes under 3.11 and fails under 3.12
 # (the structured-output grammar's empty-mask check). uv when it is on PATH, else a system
 # python3.11 with venv, else uv (pinned) is fetched into DIR/uv and brings its own 3.11 into
@@ -565,13 +659,9 @@ cat <<EOF
 EOF
 confirm "Go ahead?" || die "cancelled"
 # a chatd running now keeps the code it started with: the last message says how to restart it
-CHATD_WAS_UP=0
-if [ "$DRY" != 1 ] && [ -f "$(chatd_sh)" ] && bash "$(chatd_sh)" status >/dev/null 2>&1; then
-    CHATD_WAS_UP=1
-fi
 chat_note() {
-    if [ "$CHATD_WAS_UP" = 1 ] && bash "$(chatd_sh)" status >/dev/null 2>&1; then
-        printf '\n  chatd was running before this update and keeps the old code until: %s/bin/tandem chat restart\n' "$DIR"
+    if [ -n "$APP_WHEEL" ] && { [ "$APP_HAD" = 1 ] || [ -n "$OLD_CHATD" ]; }; then
+        printf '\n  A chatd that was running keeps the code it started with until: %s/bin/tandem chat restart\n' "$DIR"
     fi
 }
 if [ "$DRY" != 1 ]; then mkdir -p "$DIR" "$RUN/ops" "$DIR/bin" "$DIR/state"; touch "$MARK"; fi
@@ -665,6 +755,27 @@ assert not name.endswith("Pil"), f"the image processor resolved to {name} (PIL b
 print(f"    ok pillow {PIL.__version__}, torchvision {torchvision.__version__}; image processor {name} (torchvision backend)")
 EOF
 fi
+# TandemApp's wheel (--with-chat --app-wheel, ENG-413 WP7): into this venv, beside the engine, its
+# dependencies resolved with the engine's pins as constraints, so no pinned package moves. Its sha256
+# is kept in state/tandemapp-wheel.json (node/control.json chat.install)
+if [ -n "$APP_WHEEL" ]; then
+    if [ "$DRY" != 1 ]; then printf '%s\n' "$LOCK" > "$RUN/requirements.lock"; fi
+    if [ "$PY_MODE" = venv ]; then
+        run "$PY" -m pip install --disable-pip-version-check --force-reinstall -c "$RUN/requirements.lock" \
+            "$APP_WHEEL" --index-url "$PYPI_INDEX" --extra-index-url "$TORCH_INDEX"
+    else
+        run "$UV" pip install --python "$PY" --reinstall-package tandemapp -c "$RUN/requirements.lock" \
+            "$APP_WHEEL" --index-url "$PYPI_INDEX" --extra-index-url "$TORCH_INDEX" --index-strategy unsafe-best-match
+    fi
+    if [ "$DRY" != 1 ]; then
+        [ -x "$NODE_BIN" ] || die "TandemApp's wheel did not install tandem-node into $VENV/bin"
+        printf '{"wheel": "%s", "version": "%s", "sha256": "%s", "installed": "%s"}\n' "${APP_WHEEL##*/}" \
+            "$(printf '%s' "${APP_WHEEL##*/}" | cut -d- -f2)" "$APP_SHA_GOT" "$(date -Iseconds 2>/dev/null || date)" \
+            > "$APP_STATE"
+        APP_HAVE=1
+        ok "TandemApp $(printf '%s' "${APP_WHEEL##*/}" | cut -d- -f2) in $VENV (tandem-node), sha256 kept in $APP_STATE"
+    fi
+fi
 
 if [ "$RUNTIME_ONLY" = 1 ]; then
     printf '\n%sThe engine runtime is in %s%s (source at %s, Python in %s).\n' "$G" "$DIR" "$N" "$TANDEM_REF" "$VENV"
@@ -672,20 +783,8 @@ if [ "$RUNTIME_ONLY" = 1 ]; then
     exit 0
 fi
 
-# The dashboard's page (the engine serves it at /dashboard/) is a build output, not a file in git
-# (OPS-246): kept when the checkout has an intact one, else built when Node is here, else fetched
-# when TANDEM_DASHBOARD_URL and TANDEM_DASHBOARD_SHA256 name a released bundle. Without it the
-# engine and its API run, and /dashboard/ says how to build it.
-if [ -f "$SRC/app/tools/dashboard_bundle.py" ]; then
-    if [ "$DRY" = 1 ]; then
-        note "$PY $SRC/app/tools/dashboard_bundle.py ensure"
-    elif "$PY" -I "$SRC/app/tools/dashboard_bundle.py" ensure >"$DIR/state/dashboard-bundle.log" 2>&1; then
-        ok "dashboard page: $(tail -n 1 "$DIR/state/dashboard-bundle.log")"
-    else
-        warn "the dashboard's page is not built; the engine and its API work without it ($DIR/state/dashboard-bundle.log):"
-        tail -n 12 "$DIR/state/dashboard-bundle.log" | sed 's/^/      /'
-    fi
-fi
+# No page: the engine serves its API alone (ENG-413 WP7). The dashboard and the Chat tab are
+# TandemApp's, served by its controller pointed at this engine.
 
 # ---------------------------------------------------------------------------------------------
 # 4. Weights
@@ -866,6 +965,20 @@ if [ -n "$MODE_ARG" ]; then setv QSE_MODE "$MODE_ARG"
 elif [ "$MODE_OLD" = engine ] || [ "$MODE_OLD" = chat ]; then setv QSE_MODE "$MODE_OLD"
 elif [ ! -f "$RUN/ops/serve.env" ]; then setv QSE_MODE engine
 fi
+# ENG-413 WP7 (engine API 1.7): who runs chatd. This engine runs none: --with-chat gives it to the
+# TandemNode it installs (node), --engine-only to nobody (off); a re-run keeps what this install
+# wrote; none written is off (serve.env's mode block). TandemNode's port goes with node
+CHATD_OLD=""; NPORT_OLD=""
+if [ -f "$RUN/ops/serve.env" ]; then
+    CHATD_OLD="$(sed -n 's/^QSE_CHATD=//p' "$RUN/ops/serve.env" | tail -1 | tr -d "'\"")"
+    NPORT_OLD="$(sed -n 's/^TANDEM_NODE_PORT=//p' "$RUN/ops/serve.env" | tail -1 | tr -dc 0-9)"
+fi
+if [ "$MODE_ARG" = chat ]; then setv QSE_CHATD node; setv TANDEM_NODE_PORT "$NODE_PORT"
+elif [ "$MODE_ARG" = engine ]; then setv QSE_CHATD off
+elif [ "$CHATD_OLD" = node ] || [ "$CHATD_OLD" = off ]; then
+    setv QSE_CHATD "$CHATD_OLD"
+    if [ -n "$NPORT_OLD" ]; then NODE_PORT="$NPORT_OLD"; setv TANDEM_NODE_PORT "$NPORT_OLD"; fi
+fi
 setv QSE_USAGE_LEDGER "$(q "$DIR/state/usage/ledger.sqlite3")"
 setv DROP_PAGE_CACHE 0              # bin/tandem drops the weights' page cache with this install's paths
 setv QWEN38_MODEL "$(q "$SNAP_BASE")"
@@ -926,9 +1039,8 @@ else
         # the release's own service scripts, next to this env file (they source ./serve.env)
         # and what the setup guide's apply job runs beside them (server/setup/apply.py); roles.sh is
         # what start.sh runs after /health, watchdog.sh the cron line of docs/operations.md, hold.sh
-        # a box-alone command (OPS-161). Not copied: chatd.sh runs from the checkout's app/ops
-        # (ops/ in a ref from before SRV-747; it finds the chatd package beside it and this file
-        # through DIR), gate.sh is the release gate of a development checkout.
+        # a box-alone command (OPS-161). No chatd launcher: chatd is TandemApp's, run by its
+        # TandemNode (ENG-413 WP7). Not copied: gate.sh is the release gate of a development checkout.
         # tests/test_install_ops_copy.py keeps this list and their "$HERE/" calls in step.
         for s in start.sh stop.sh engines.sh use-profile.sh make-secrets.sh engine_status.py \
                  fetch_weights.py roles.sh watchdog.sh hold.sh; do install -m 755 "$SRC/ops/$s" "$RUN/ops/$s"; done
@@ -943,6 +1055,8 @@ else
             info "removed an earlier --setup's run/setup-pending: the engine starts configured"
         fi
         mkdir -p "$DIR/state/usage"
+        # --engine-only on an install whose own launchers ran chatd: nothing runs it now, so it stops
+        if [ -n "$OLD_CHATD" ] && [ "$MODE_ARG" = engine ]; then chatd_pid_stop "${OLD_CHATD#*|}"; fi
         ok "wrote $RUN/ops/serve.env (StairCut on: QWEN38_LEN_SWITCH=$(sed -n 's/^QWEN38_LEN_SWITCH=//p' "$RUN/ops/serve.env"), QWEN38_LEN_MODE=$(sed -n 's/^QWEN38_LEN_MODE=//p' "$RUN/ops/serve.env"))"
     fi
 fi
@@ -963,17 +1077,31 @@ doctor() {
     (cd "$TANDEM_DIR/src" && PYTHONPATH="$TANDEM_DIR/src" "$py" -m server.setup.doctor "$@")
 }
 if [ "${1:-}" = doctor ]; then shift; doctor "$@"; exit $?; fi
-# tandem node (SRV-725): TandemNode, the agent TandemApp's controller talks to, with this install's
-# engine as its engine (tandem node unit prints a systemd user unit for it). It runs from
-# TandemApp's tree, src/app (src in a checkout from before SRV-747), until ENG-413
-if [ "${1:-}" = node ]; then
-    shift
-    py="$TANDEM_DIR/venv/bin/python"
-    [ -x "$py" ] || py=python3
-    app="$TANDEM_DIR/src"
-    if [ -d "$app/app/proxy" ]; then app="$app/app"; fi
-    cd "$app" && PYTHONPATH="$app" exec "$py" -m proxy.nodeagent "$@" --tandem-dir "$TANDEM_DIR"
-fi
+# TandemNode (SRV-725), the agent TandemApp's controller talks to, is TandemApp's: the tandem-node
+# install.sh --with-chat --app-wheel put in this venv, else TANDEM_NODE_BIN or tandem-node on PATH.
+# The engine's tree carries none (ENG-413 WP7). tandem node [serve|check|unit|...] runs it with this
+# install's engine as its engine; tandem chat start|stop|restart|status|logs is its chat verbs: it
+# runs chatd (QSE_CHATD=node), this engine never does. When this install put TandemApp here
+# (state/tandemapp-wheel.json), its TandemNode owns chatd, as its unit says (--chat on)
+NODE_OWN=()
+if [ -f "$TANDEM_DIR/state/tandemapp-wheel.json" ]; then NODE_OWN=(--chat on); fi
+node_bin() {
+    if [ -n "${TANDEM_NODE_BIN:-}" ]; then echo "$TANDEM_NODE_BIN"
+    elif [ -x "$TANDEM_DIR/venv/bin/tandem-node" ]; then echo "$TANDEM_DIR/venv/bin/tandem-node"
+    else command -v tandem-node 2>/dev/null || true; fi
+}
+no_node() {
+    echo "[tandem] $1: TandemNode is TandemApp's and this install has none (tandem-node):" \
+         "install.sh --with-chat --app-wheel FILE installs it, or set TANDEM_NODE_BIN" >&2
+    exit 2
+}
+case "${1:-}" in
+    node|chat)
+        NODE="$(node_bin)"
+        [ -n "$NODE" ] || no_node "$*"
+        if [ "$1" = chat ]; then shift; exec "$NODE" chat "$@" --tandem-dir "$TANDEM_DIR" ${NODE_OWN[@]+"${NODE_OWN[@]}"}; fi
+        shift; exec "$NODE" "$@" --tandem-dir "$TANDEM_DIR" ${NODE_OWN[@]+"${NODE_OWN[@]}"} ;;
+esac
 [ -f "$ENV_FILE" ] || { echo "[tandem] no $ENV_FILE; re-run install.sh" >&2; exit 1; }
 # a command that fails in the config (or a file it sources) names its file and line instead of
 # ending this script silently under set -e (OPS-159)
@@ -986,29 +1114,8 @@ trap - ERR
 URL="http://127.0.0.1:$PORT"
 healthy() { curl -sf -m 3 "$URL/health" >/dev/null 2>&1; }
 engine_alive() { [ -f "$REPO/logs/engine.pid" ] && kill -0 "$(cat "$REPO/logs/engine.pid")" 2>/dev/null; }
-# chatd, the Chat tab's service (OPS-155): its own process, from the checkout's app/ops/chatd.sh
-# (ops/chatd.sh in a checkout from before SRV-747; TandemApp's launcher, run from here until
-# ENG-413). start starts it once the engine answers, stop stops it first (open runs end
-# `interrupted`, Continue resumes them), restart leaves it running; QSE_CHATD=off (local.env) keeps
-# start from starting it. QSE_CHATD=node (SRV-823): TandemNode owns chatd, so start and stop leave
-# it alone and tandem chat runs tandem-node chat (TANDEM_NODE_BIN, else tandem-node on PATH).
-CHATD="$REPO/app/ops/chatd.sh"
-[ -f "$CHATD" ] || CHATD="$REPO/ops/chatd.sh"
-NODE="${TANDEM_NODE_BIN:-$(command -v tandem-node 2>/dev/null || true)}"
-node_chat() {
-    if [ -n "$NODE" ]; then exec "$NODE" chat "$@"; fi
-    echo "[tandem] chat: TandemNode runs chatd here (QSE_CHATD=node) and no tandem-node is on PATH:" \
-         "TandemApp's tandem-node chat ${1:-status}, or set TANDEM_NODE_BIN" >&2
-    exit 2
-}
-chat_up() { bash "$CHATD" status >/dev/null 2>&1; }
-chat_auto() {
-    [ "${QSE_CHATD:-on}" = off ] && return 0
-    [ "${QSE_CHATD:-on}" = node ] && return 0          # TandemNode's
-    [ -f "$REPO/run/setup-pending" ] && return 0       # setup mode: the Chat tab waits for the setup
-    chat_up && return 0
-    bash "$CHATD" start || echo "[tandem] WARNING: chatd did not start (above); the engine serves without the Chat tab. Log: $REPO/logs/chatd.log" >&2
-}
+# chatd, the Chat tab's service, is TandemApp's (ENG-413 WP7): start, stop and restart are the
+# engine's alone and never touch it; with QSE_CHATD=node TandemNode runs it (tandem chat ...)
 # SRV-817: a stage of a split model (TANDEM_STAGE in serve.env or local.env; docs/operations.md) says its role,
 # its layers and its link from /health's stage block
 stage_line() {
@@ -1026,14 +1133,19 @@ print("[tandem] stage: the %s, layers %s, link %s (epoch %s)%s" % (s.get("role")
 ' 2>/dev/null || true
 }
 chat_line() {
-    if [ "${QSE_CHATD:-on}" = node ]; then
-        if [ -n "$NODE" ]; then "$NODE" chat status 2>&1 | head -1 || true
-        else echo "[tandem] chat: TandemNode's (QSE_CHATD=node); no tandem-node on PATH (TANDEM_NODE_BIN)"; fi
-        return 0
-    fi
-    if [ "${QSE_MODE:-}" = engine ] && ! chat_up; then echo "[tandem] chat: off (engine only; QSE_MODE=chat in $RUN/local.env, then restart, turns it on)"; return 0; fi
-    if [ "${QSE_CHATD:-on}" = off ] && ! chat_up; then echo "[tandem] chat: off (QSE_CHATD=off)"; return 0; fi
-    bash "$CHATD" status 2>&1 | head -1 || true
+    local node
+    case "${QSE_CHATD:-off}" in
+        node|on)
+            node="$(node_bin)"
+            if [ -n "$node" ]; then "$node" chat status --tandem-dir "$TANDEM_DIR" ${NODE_OWN[@]+"${NODE_OWN[@]}"} 2>&1 | head -1 || true
+            else echo "[tandem] chat: TandemNode's (QSE_CHATD=node); no tandem-node here (TANDEM_NODE_BIN)"; fi ;;
+        *)
+            if [ "${QSE_MODE:-}" = engine ]; then
+                echo "[tandem] chat: off (engine only; install.sh --with-chat --app-wheel FILE adds the chat)"
+            else
+                echo "[tandem] chat: off (QSE_CHATD=off: no chatd here; QSE_CHATD=node gives it to TandemNode)"
+            fi ;;
+    esac
 }
 
 memcheck() {
@@ -1054,7 +1166,7 @@ memcheck() {
 }
 
 start() {
-    if healthy; then echo "[tandem] already healthy on :$PORT"; chat_auto; return 0; fi
+    if healthy; then echo "[tandem] already healthy on :$PORT"; return 0; fi
     # what it repairs or finds is said; a finding does not stop the start (start.sh decides)
     doctor --quiet || echo "[tandem] doctor found something to look at (above); starting anyway" >&2
     memcheck
@@ -1079,7 +1191,6 @@ start() {
     for f in "$QWEN38_MODEL" ${nv[@]+"${nv[@]}"} "$HEAD" "$CKPT8" "$CKPT16"; do [ -n "$f" ] && drop+=("$f"); done
     [ "${#drop[@]}" = 0 ] || "$PY" "$REPO/tools/drop_page_cache.py" "${drop[@]}" 2>&1 | tail -1 || true
     echo "[tandem] healthy: $URL/v1"
-    chat_auto
 }
 
 smoke() {
@@ -1124,7 +1235,7 @@ PY
 
 case "${1:-}" in
     start) start ;;
-    stop) [ "${QSE_CHATD:-on}" = node ] || bash "$CHATD" stop || true; bash "$RUN/ops/stop.sh" "${2:-60}" ;;
+    stop) bash "$RUN/ops/stop.sh" "${2:-60}" ;;
     restart) bash "$RUN/ops/stop.sh" "${2:-60}"; start ;;
     status)
         rc=0
@@ -1136,22 +1247,41 @@ case "${1:-}" in
     smoke) smoke ;;
     logs) tail -n "${2:-100}" -f "$REPO/logs/engine.log" ;;
     env) cat "$ENV_FILE" ;;
-    chat)
-        if [ "${QSE_CHATD:-on}" = node ]; then shift; node_chat "$@"; fi
-        case "${2:-status}" in
-            start|stop|restart|status) bash "$CHATD" "${2:-status}" ;;
-            logs) tail -n "${3:-100}" -f "$REPO/logs/chatd.log" ;;
-            *) echo "usage: $0 chat start | stop | restart | status | logs [n]" >&2; exit 2 ;;
-        esac ;;
     *) echo "usage: $0 start | stop [grace-s] | restart | status | smoke | logs [n] | env | doctor [--check] | node [serve|check|unit] | chat start|stop|restart|status|logs" >&2; exit 2 ;;
 esac
 CTL
 }
 if [ "$DRY" = 1 ]; then
-    note "would write $DIR/bin/tandem (start | stop | restart | status | smoke | logs | env | chat)"
+    note "would write $DIR/bin/tandem (start | stop | restart | status | smoke | logs | env | chat | node)"
 else
     write_control > "$DIR/bin/tandem.tmp" && chmod 755 "$DIR/bin/tandem.tmp" && mv "$DIR/bin/tandem.tmp" "$DIR/bin/tandem"
     ok "wrote $DIR/bin/tandem"
+fi
+
+# TandemNode with chatd (--with-chat, ENG-413 WP7): its systemd user unit from the tandem-node this
+# venv has (tandem-node unit --chat on --tandem-dir DIR), enabled, and started unless --no-start. A
+# unit of another TandemNode is never overwritten: that one is told to own chatd instead.
+NODE_WANT=0
+if [ "$MODE_ARG" = chat ] || { [ -z "$MODE_ARG" ] && [ "$CHATD_OLD" = node ] && [ "$APP_HAVE" = 1 ]; }; then NODE_WANT=1; fi
+if [ "$NODE_WANT" = 1 ]; then
+    if [ -f "$NODE_UNIT" ] && ! node_unit_ours; then
+        warn "$NODE_UNIT is another TandemNode's, not this install's: left as it is (QSE_CHATD=node here)"
+    elif [ "$DRY" = 1 ]; then
+        note "$NODE_BIN unit --chat on --tandem-dir $DIR --port $NODE_PORT > $NODE_UNIT; systemctl --user enable$([ "$START" = 1 ] && echo ' and restart') tandemnode.service"
+    else
+        mkdir -p "$(dirname "$NODE_UNIT")"
+        "$NODE_BIN" unit --chat on --tandem-dir "$DIR" --port "$NODE_PORT" > "$NODE_UNIT.tmp" \
+            && mv "$NODE_UNIT.tmp" "$NODE_UNIT" || die "tandem-node unit failed"
+        ok "wrote $NODE_UNIT (TandemNode on 127.0.0.1:$NODE_PORT, chatd its own)"
+        if systemctl --user daemon-reload 2>/dev/null && systemctl --user enable tandemnode.service >/dev/null 2>&1; then
+            if [ "$START" = 1 ]; then
+                systemctl --user restart tandemnode.service || warn "tandemnode.service did not start: journalctl --user -u tandemnode"
+            fi
+            ok "enabled tandemnode.service (user)$([ "$START" = 1 ] && echo ', started')"
+        else
+            warn "systemctl --user failed (no user session bus?): the unit is at $NODE_UNIT; start TandemNode by hand: $DIR/bin/tandem node serve --chat on"
+        fi
+    fi
 fi
 
 if [ "$SYSTEMD" = 1 ]; then
@@ -1170,9 +1300,8 @@ After=network-online.target
 [Service]
 # bin/tandem start runs the release's ops/start.sh (through bash, as every call of a script here: a
 # copy that lost its execute bit still runs, OPS-167), which starts the server in the background
-# and returns once /health answers, then chatd (the Chat tab's service); both stay in this unit's
-# cgroup. bin/tandem stop stops chatd first, then the engine, so systemctl restart restarts chatd
-# too; tandem restart leaves chatd and its runs alone.
+# and returns once /health answers; bin/tandem stop stops it. chatd is not this unit's: TandemApp's
+# TandemNode runs it (tandemnode.service, ENG-413 WP7), so a restart here leaves chat runs alone.
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/bin/bash $DIR/bin/tandem start
@@ -1200,22 +1329,27 @@ if [ "$SETUP" = 1 ]; then
     if [ "$START" != 1 ]; then
         info "skipped (--no-start). Start setup mode with: bash $RUN/ops/start.sh --setup"
     elif [ "$DRY" = 1 ]; then
-        note "bash $RUN/ops/start.sh --setup --host $HOST   (the dashboard and Wren; waits for /health)"
+        note "bash $RUN/ops/start.sh --setup --host $HOST   (the Setup API and Wren; waits for /health)"
     else
         bash "$RUN/ops/start.sh" --setup --host "$HOST" || die "setup mode did not come up; log: $SRC/logs/engine.log"
     fi
     # no model is loaded yet: the user picks one in the Setup Guide (OPS-149)
-    printf '\n%sSetup mode%s: no model is loaded yet. Open the Setup Guide in a browser and pick a model there.\n' "$B" "$N"
-    printf 'The Chat tab starts with the engine once the setup is done (%s/bin/tandem chat status) when Chat (beta) is on in the guide; engine only is the default.\n\n' "$DIR"
-    case "$HOST" in 127.0.0.1|0.0.0.0) printf '  On this machine:        http://127.0.0.1:%s/dashboard/#/setup\n' "$PORT" ;; esac
+    printf '\n%sSetup mode%s: no model is loaded yet. Point the Setup Guide at this engine and pick a model there:\n' "$B" "$N"
+    printf 'TandemApp'"'"'s Setup page, with this engine'"'"'s address; this engine serves no page, only the Setup API (/v1/setup/*).\n'
+    if [ "$NODE_WANT" = 1 ]; then
+        printf 'TandemNode starts chatd once the setup is done (%s/bin/tandem chat status).\n\n' "$DIR"
+    else
+        printf 'Engine only, the default: no chat (install.sh --with-chat --app-wheel FILE adds it).\n\n'
+    fi
+    case "$HOST" in 127.0.0.1|0.0.0.0) printf '  On this machine:        http://127.0.0.1:%s\n' "$PORT" ;; esac
     if [ "$HOST" = 127.0.0.1 ]; then
         printf '  From another computer:  ssh -L %s:127.0.0.1:%s %s@%s\n' "$PORT" "$PORT" \
             "$(id -un 2>/dev/null || echo '<user>')" "$(hostname 2>/dev/null || echo '<this box>')"
-        printf '                          then open http://127.0.0.1:%s/dashboard/#/setup on that computer\n' "$PORT"
+        printf '                          then http://127.0.0.1:%s on that computer\n' "$PORT"
         printf '  (To open it to your network instead, install with --host 0.0.0.0.)\n'
     else
         SETUP_ADDR="$HOST"; [ "$HOST" = 0.0.0.0 ] && SETUP_ADDR="$(hostname -I 2>/dev/null | awk '{print $1}')"
-        printf '  From your network:      http://%s:%s/dashboard/#/setup\n' "${SETUP_ADDR:-<this box>}" "$PORT"
+        printf '  From your network:      http://%s:%s\n' "${SETUP_ADDR:-<this box>}" "$PORT"
         printf '\n%sWARNING:%s no admin password is set, so anyone who reaches port %s can run the setup.\n' "$Y" "$N" "$PORT"
         printf '  Set one with: bash %s/ops/make-secrets.sh --admin   (then restart setup mode)\n' "$RUN"
     fi
@@ -1238,27 +1372,33 @@ else
 fi
 
 API_HOST="$HOST"; [ "$HOST" = 0.0.0.0 ] && API_HOST="$(hostname -I 2>/dev/null | awk '{print $1}')"; API_HOST="${API_HOST:-127.0.0.1}"
-# the Chat tab's sandbox installer in this checkout: TandemApp's app/ops/sandbox, else ops/sandbox
-# (a ref from before SRV-747)
-SBX=app/ops/sandbox/install.sh
-[ -f "$SRC/$SBX" ] || SBX=ops/sandbox/install.sh
-# OPS-260: the mode the config resolves to (run/setup.env and run/local.env included)
-MODE_NOW="${MODE_ARG:-engine}"
+# OPS-260: the mode the config resolves to (run/setup.env and run/local.env included), and who
+# runs chatd (ENG-413 WP7: node or off)
+MODE_NOW="${MODE_ARG:-engine}"; CHATD_NOW=off
+[ "$NODE_WANT" = 1 ] && CHATD_NOW=node
 if [ "$DRY" != 1 ] && [ -f "$RUN/ops/serve.env" ]; then
-    MODE_NOW="$(bash -c 'set -a; . "$1" >/dev/null 2>&1; echo "${QSE_MODE:-engine}"' - "$RUN/ops/serve.env" 2>/dev/null || echo "$MODE_NOW")"
+    NOW="$(bash -c 'set -a; . "$1" >/dev/null 2>&1; echo "${QSE_MODE:-engine} ${QSE_CHATD:-off}"' - "$RUN/ops/serve.env" 2>/dev/null || true)"
+    if [ -n "$NOW" ]; then MODE_NOW="${NOW%% *}"; CHATD_NOW="${NOW##* }"; fi
 fi
-if [ "$MODE_NOW" = chat ]; then
+if [ "$MODE_NOW" = chat ] && [ "$CHATD_NOW" = node ]; then
     CHAT_LINE="$(cat <<EOF
-Chat:      http://$API_HOST:$PORT/dashboard/#/chat  chatd starts and stops with the engine
-             ($DIR/bin/tandem chat status). The sandbox is optional: without a container runtime
-             the chat answers and uses the file tools; bash $SRC/$SBX adds the rest
+Chat:      TandemNode runs chatd ($DIR/bin/tandem chat status; its unit $NODE_UNIT).
+             The page and the Chat tab are TandemApp's controller's, pointed at this engine.
+             The sandbox is optional: without a container runtime the chat answers and uses the
+             file tools; TandemApp's ops/sandbox/install.sh adds the rest
+EOF
+)"
+elif [ "$MODE_NOW" = chat ]; then
+    CHAT_LINE="$(cat <<EOF
+Chat:      chat mode with no chatd here (QSE_CHATD=off). TandemNode runs it with
+             install.sh --with-chat --app-wheel FILE (TandemApp's wheel)
 EOF
 )"
 else
     CHAT_LINE="$(cat <<EOF
-Mode:      engine only (the default): no conductor, user memory, small models or chatd.
-             The chat (beta): re-run the installer with --with-chat, or QSE_MODE=chat in
-             $RUN/local.env and $DIR/bin/tandem restart
+Mode:      engine only (the default): no conductor, user memory, small models, chatd or page.
+             The chat (beta): re-run the installer with --with-chat --app-wheel FILE
+             (TandemApp's wheel; TandemApp's controller serves the page)
 EOF
 )"
 fi
@@ -1269,13 +1409,13 @@ cat <<EOF
 
 ${B}Done.${N}  TandemLLM $TANDEM_REF in $DIR
 
-  Control:   $DIR/bin/tandem start | stop | restart | status | smoke | logs | doctor | chat
+  Control:   $DIR/bin/tandem start | stop | restart | status | smoke | logs | doctor | chat | node
   Config:    $RUN/ops/serve.env   (your overrides: $RUN/local.env)
   Watchdog:  bash $RUN/ops/watchdog.sh   (optional, from cron every minute: docs/operations.md)
   Update:    re-run the installer (same --dir); downloads resume, finished steps are skipped
   Remove:    bash install.sh --dir $DIR --uninstall   (the weights stay in the HF cache)
-  Dashboard: http://$API_HOST:$PORT/dashboard (no password: anyone who reaches the port can read
-             and change it, the memory included; keep the port on a trusted network)
+  Health:    http://$API_HOST:$PORT/health   Metrics: http://$API_HOST:$PORT/metrics
+             (no password on the API: keep the port on a trusted network)
   $CHAT_LINE
 
   OpenAI-compatible API at http://$API_HOST:$PORT/v1, model "$SERVED_MODEL", no API key needed:

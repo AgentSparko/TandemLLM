@@ -20,42 +20,8 @@ LOGS="$REPO/logs"; mkdir -p "$LOGS"
 STATE="$LOGS/watchdog.fails"; WD="$LOGS/watchdog.log"
 NEED="${WATCHDOG_FAILS:-3}"
 say() { echo "$(date -Is) $*" >> "$WD"; }
-# OPS-155: the engine answers and chatd does not: start chatd, never the engine's restart for it. At
-# most 3 starts in an hour (logs/watchdog.chatd: the hour and the count), then one "giving up"
-# line until the next hour; a chatd found running clears the count. QSE_CHATD=off or setup mode
-# (run/setup-pending): nothing. The launcher is the checkout's app/ops/chatd.sh, TandemApp's (until
-# ENG-413), else ops/chatd.sh (a checkout from before SRV-747); with neither, one line an hour says
-# so (logs/watchdog.nochatd: that hour). QSE_CHATD=node: TandemNode's watcher has this rule
-# (ENG-413 WP6, SRV-823), so nothing here.
-chatd_check() {
-    local f="$LOGS/watchdog.chatd" sh="$REPO/app/ops/chatd.sh" hour h n
-    [ "${QSE_CHATD:-on}" = "off" ] && return 0
-    [ "${QSE_CHATD:-on}" = node ] && return 0
-    [ ! -f "$REPO/run/setup-pending" ] || return 0
-    [ -f "$sh" ] || sh="$REPO/ops/chatd.sh"
-    if [ ! -f "$sh" ]; then
-        hour="$(date +%Y%m%d%H)"
-        [ "$(cat "$LOGS/watchdog.nochatd" 2>/dev/null)" = "$hour" ] && return 0
-        echo "$hour" > "$LOGS/watchdog.nochatd"
-        say "chatd: $REPO has no app/ops/chatd.sh or ops/chatd.sh, so it is not started (said once an hour)"
-        return 0
-    fi
-    if bash "$sh" status >/dev/null 2>&1; then rm -f "$f"; return 0; fi
-    hour="$(date +%Y%m%d%H)"
-    h=""; n=0; [ -f "$f" ] && read -r h n < "$f"
-    [ "${h:-}" = "$hour" ] || n=0
-    n="${n:-0}"
-    if [ "$n" -ge 3 ]; then
-        [ "$n" = 3 ] && { say "chatd: 3 starts this hour did not keep it running; giving up until the next hour"; echo "$hour 4" > "$f"; }
-        return 0
-    fi
-    echo "$hour $((n + 1))" > "$f"
-    if bash "$sh" start >> "$WD" 2>&1; then
-        say "chatd was not running; started it ($((n + 1))/3 this hour)"
-    else
-        say "chatd was not running and did not start ($((n + 1))/3 this hour); log: $REPO/logs/chatd.log"
-    fi
-}
+# chatd is TandemApp's (ENG-413 WP7, engine API 1.7): TandemNode's watcher starts a dead one (at
+# most 3 an hour, OPS-155's rule) when it owns chatd; this script never looks at it.
 
 # A fourth state, added 2026-09-18: PAUSED. A measurement takes the board lock and drains :8000 on
 # purpose, and a supervisor that cannot tell a deliberate stop from a crash restarts the service
@@ -74,7 +40,7 @@ fi
 # code "000000" in every log line of 2026-09-19.
 CODE="$(curl -s -o /dev/null -m 10 -w '%{http_code}' "http://127.0.0.1:$PORT/health")"
 CODE="${CODE:-000}"
-if [ "$CODE" = "200" ]; then echo 0 > "$STATE"; rm -f "$LOGS/loading.since"; chatd_check; exit 0; fi
+if [ "$CODE" = "200" ]; then echo 0 > "$STATE"; rm -f "$LOGS/loading.since"; exit 0; fi
 if [ "$CODE" = "503" ]; then say "draining (503), leaving it alone"; echo 0 > "$STATE"; exit 0; fi
 # SRV-671: the engine says it failed (500, `"status": "failed"`, the reason under `failed`)
 FAILED=""
