@@ -223,10 +223,6 @@ class Seams:
         from tandemapp.conductor import schema
         return plan.row.get("class_id") in schema.CODE_CLASSES
 
-    def lines(self, plan, info):
-        """The `ui.states` lines of a request (see Interim.extras)."""
-        return self.ext._lines(plan, info)
-
     def loop_escape(self, plan, info):
         """SRV-475: the profile's `sampling` section and the loop escape's step for this session:
         {agentic_default, state, sampling(fallback)}. The engine builds the sampler."""
@@ -246,7 +242,8 @@ class Seams:
             sess = mon.sessions.get(key) if mon is not None else None
             sig = loopescape.signal(msgs, loopescape.waits_now(sess, msgs, time.time()),
                                     repeats=repeats, wait_s=wait_s)
-            st = self.state["escapes"].step(key, sig, loopescape.turn_of(msgs))
+            st = self.state.setdefault("escapes", loopescape.Escapes()).step(
+                key, sig, loopescape.turn_of(msgs))
         return {"agentic_default": prof["agentic_default"], "state": st,
                 "sampling": lambda fallback: loopescape.sampling_of(self.state.get("card_sampling"),
                                                                     fallback)}

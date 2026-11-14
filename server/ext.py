@@ -636,13 +636,26 @@ class Supervision:
     def __getattr__(self, name):
         if name in SUPERVISION_INTERIM:
             return lambda *a, **kw: self.interim(name, *a, **kw)
-        return getattr(self._obj, name)
+        try:
+            return getattr(self._obj, name)
+        except AttributeError:
+            if name not in SUPERVISION_STATE:
+                raise
+        # a supervisor that is not the interim adapter's (an extension on the interface alone) has
+        # none of the state the decode loop reads: the headless value, kept for this request
+        state = self.__dict__.setdefault("_state", {})
+        if name not in state:
+            state[name] = SUPERVISION_STATE[name]()
+        return state[name]
 
     def __setattr__(self, name, value):
         if name in self._OWN:
             object.__setattr__(self, name, value)
-        else:
+            return
+        try:
             setattr(self._obj, name, value)
+        except AttributeError:
+            self.__dict__.setdefault("_state", {})[name] = value
 
 
 #: supervisor methods a minor added: an extension written before it has none, which is no failure
@@ -667,6 +680,32 @@ SUPERVISION_INTERIM = {
     "release_block": lambda inner: None,
     "note_repairs": lambda renamed: None,
     "argloop_stopped": lambda verdict, name: None,
+}
+
+
+class _Req:
+    """The request as the decode loop reads it of a supervisor that keeps none (SUPERVISION_STATE)."""
+
+    request_id = ""
+    tools_offered = False
+    n = 1
+    max_tokens = 0
+
+
+class _Policy:
+    version = 0
+
+
+#: the supervisor's state the decode loop reads (interim, ENG-413 WP3b; WP4 makes it fields), with the
+#: value it has on a supervisor that keeps none: an extension's on the interface alone
+SUPERVISION_STATE = {
+    "final_answer": lambda: None, "holds_calls": lambda: False, "arms": lambda: None,
+    "watches_blocks": lambda: True, "mode": lambda: "on", "policy": _Policy,
+    "acts": lambda: 0, "hidden_tokens": lambda: 0, "acted": lambda: False, "gave_up": lambda: None,
+    "cuts": list, "checked": lambda: True, "req": _Req, "memory_notes": lambda: None,
+    "lift_ids": lambda: None, "on_event": lambda: None, "held_events": lambda: None,
+    "resume_ms": list, "forwarding": lambda: None, "forwarded_at": lambda: None,
+    "can_ask": lambda: False,
 }
 
 
