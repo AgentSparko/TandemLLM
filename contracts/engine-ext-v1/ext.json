@@ -1,7 +1,7 @@
 {
   "name": "engine-ext-v1",
-  "version": "1.3",
-  "about": "The in-process extension interface of a TandemLLM engine (ENG-429). Python, not HTTP. The engine owns it; TandemApp's conductor is its first extension. README.md says it in prose; fake_host.py is the reference host and fake_ext.py the smallest extension. A minor step adds a hook, an argument with a default, a host attribute, an event field or an act kind; a major step removes or renames one or changes a meaning.",
+  "version": "2.0",
+  "about": "The in-process extension interface of a TandemLLM engine (ENG-429); version 2.0 since ENG-413 WP4 (changed_from_1). Python, not HTTP. The engine owns it; TandemApp's conductor is its first extension. README.md says it in prose; fake_host.py is the reference host and fake_ext.py the smallest extension. A minor step adds a hook, an argument with a default, a host attribute, an event field or an act kind; a major step removes or renames one or changes a meaning.",
   "discovery": {
     "env": "QSE_EXT",
     "default": "",
@@ -21,35 +21,35 @@
     "state": "the server's state mapping (read; the extension writes only keys it owns)",
     "lock": "the engine lock; a hook never holds it across a call back into the host",
     "tokenizer": "the served model's tokenizer (encode, decode)",
-    "metrics": "the metrics registry handle: add(family) for the families metrics-families.json lists with owner ext; since 1.3 event(row): one journal row of the extension (its decisions) counted in those families",
+    "metrics": "the metrics registry handle: add(family) for the families metrics-families.json lists with owner ext; since 2.0 event(row): one journal row of the extension (its decisions) counted in those families",
     "ledger_path": "the ledger file; the extension owns its own tables in it (conductor_events, its version row)",
     "args": "the parsed command line as a mapping, and QSE_EXT_ARGS (a JSON object, since 1.1) over it: its keys win",
     "engine": "the engine-only screens in process: residency_plan, disk, disk_clear, deciders, narrator, shadow (the /v1/engine/* handlers)",
     "log": "log(line): one line into the engine's log",
     "Refusal": "the exception plan raises to answer the client with an error: Refusal(status, type, message), since 1.2 with a fourth argument param (the request field it names, in the error's param)",
-    "ext_dir": "since 1.3: the directory the engine was given for the extension's own documents (--conductor-config), or None (the extension runs without one: chat mode always has one)",
-    "identity_name": "since 1.3: identity_name() -> str or None, the served model's identity name (the weight profile's), for the extension's answers",
-    "own_eta": "since 1.3: own_eta(texts, max_new) -> milliseconds or None, how long the engine's own model would take to answer a question of the extension now; the attribute is None when the engine keeps no estimate (QWEN38_OWN_ETA off)",
-    "own_idle": "since 1.3: own_idle() -> seconds or None, how long no client request has been decoding (None: one is decoding now)",
-    "NoRoom": "since 1.3: the exception the engine's callbacks raise inside in_context, ask_in_place and settle_claim when the window has no room for the question (its why: no_room)"
+    "ext_dir": "since 2.0: the directory the engine was given for the extension's own documents (--conductor-config), or None (the extension runs without one: chat mode always has one)",
+    "identity_name": "since 2.0: identity_name() -> str or None, the served model's identity name (the weight profile's), for the extension's answers",
+    "own_eta": "since 2.0: own_eta(texts, max_new) -> milliseconds or None, how long the engine's own model would take to answer a question of the extension now; the attribute is None when the engine keeps no estimate (QWEN38_OWN_ETA off)",
+    "own_idle": "since 2.0: own_idle() -> seconds or None, how long no client request has been decoding (None: one is decoding now)",
+    "NoRoom": "since 2.0: the exception the engine's callbacks raise inside in_context, ask_in_place and settle_claim when the window has no room for the question (its why: no_room)"
   },
   "extension": {
     "attributes": {
-      "routes": "[{method, prefix, handler}]: paths the extension serves (method * for any; a prefix ending in / matches below it, any other the path itself and below it); handler(request) -> (status, headers, body), request with method, path, query, headers, body, peer and auth (since 1.1), and since 1.3 allowed(route) (None, or the engine's refusal (status, headers, body) for that access rule), session_token and session (the session address /s/<token> the path came under and the session key it names, else None). A prefix the engine serves itself is refused at start",
+      "routes": "[{method, prefix, handler}]: paths the extension serves (method * for any; a prefix ending in / matches below it, any other the path itself and below it); handler(request) -> (status, headers, body), request with method, path, query, headers, body, peer and auth (since 1.1), and since 2.0 allowed(route) (None, or the engine's refusal (status, headers, body) for that access rule), session_token and session (the session address /s/<token> the path came under and the session key it names, else None). A prefix the engine serves itself is refused at start",
       "models": "[model entry]: what /v1/models lists in place of the engine's own model (the TandemLLM alias); since 1.1 read at every /v1/models answer, so it may follow the extension's own documents, and /v1/models/{id} answers an entry of that id, or the first entry for the engine's own model name (a hidden alias)",
       "knobs": "[name]: the QWEN38_* names it reads (knobs.json)"
     },
     "hooks": [
       {"name": "health", "args": [], "returns": "dict", "phase": "serve", "when": "each full /health answer: merged under loaded"},
       {"name": "plan", "args": ["request"], "returns": "plan or None", "phase": "request", "when": "before the request queues, without the engine lock; None serves the request as a headless engine would"},
-      {"name": "prompt", "args": ["plan", "ids", "info"], "returns": "list[int], or {ids, in_think, client_ids} (since 1.2)", "phase": "request", "when": "the prompt's token ids before prefill (the router's notes replayed); since 1.2 info {in_think, conv} says whether the prompt ends inside <think> and names the conversation, and an extension on 1.2 may answer the ids with in_think (it closed the block) and client_ids (the prompt as the client sent it, None when it put nothing in); a host asks an extension before 1.2 with plan and ids only"},
+      {"name": "prompt", "args": ["plan", "ids", "info"], "returns": "list[int], or {ids, in_think, client_ids} (since 1.2)", "phase": "request", "when": "the prompt's token ids before prefill (the router's notes replayed); since 1.2 info {in_think, conv} says whether the prompt ends inside <think> and names the conversation, and an extension on 1.2 may answer the ids with in_think (it closed the block) and client_ids (the prompt as the client sent it, None when it put nothing in); since 2.0 every extension is asked with info"},
       {"name": "supervisor", "args": ["plan", "event"], "returns": "supervisor or None", "phase": "request", "when": "once the prompt is built: the object the decode loop asks at the safe points"},
       {"name": "extras", "args": ["plan", "point", "info"], "returns": "list[dict]", "phase": "request", "when": "point start, block or finish: items {kind, data} the engine puts into the stream (state lines, narrated lines); start may come before prompt and supervisor (the lines a request shows while it waits)"},
       {"name": "follow_ups", "args": ["plan", "outcome"], "returns": "list[dict]", "phase": "request", "when": "the turn's end: own-work requests {kind, what, body} the engine schedules after the client's"},
       {"name": "finish", "args": ["plan", "row"], "returns": "None", "phase": "request", "when": "the request's ledger row is written: the extension writes its journal rows"},
       {"name": "stop", "args": [], "returns": "None", "phase": "shutdown", "when": "the engine stops"}
     ],
-    "calls_about": "since 1.3: optional methods of the extension object the request path asks, each open like a hook (a raise or a missing method: the headless value; a raise is counted under the call's name). An extension before 1.3 is not asked them. routing is the plan's routing object",
+    "calls_about": "since 2.0: optional methods of the extension object the request path asks, each open like a hook (a raise or a missing method: the headless value; a raise is counted under the call's name). routing is the plan's routing object",
     "calls": [
       {"name": "server_mode", "args": ["header", "n"], "returns": "str", "headless": "raw", "when": "before plan: the extension's mode for the request (raw, shadow or on), lowered by the client's X-Tandem header (header), never above shadow for n > 1 choices; the engine names it in the X-Tandem answer header"},
       {"name": "served_name", "args": [], "returns": "str or None", "headless": "None", "when": "the model name the engine answers under while the extension routes requests (TandemLLM); None: the engine's own"},
@@ -77,7 +77,7 @@
     "plan_fields": {
       "active": "bool: the plan changes the request; false hands every step its input back",
       "body": "dict or None: the body the engine serves in place of the client's",
-      "routing": "since 1.3: the extension's routing of the request, or None (a plan that only supervises: the monitor alone). The engine reads and writes the fields routing_fields names and hands it to the calls"
+      "routing": "since 2.0: the extension's routing of the request, or None (a plan that only supervises: the monitor alone). The engine reads and writes the fields routing_fields names and hands it to the calls"
     },
     "routing_fields": {
       "active": "bool: the routing changes the request (as plan.active)",
@@ -110,7 +110,7 @@
   },
   "extras": {
     "kinds": {
-      "lines": "since 1.3: data is the request's lines object (extras start), with the fields lines_fields names; the engine writes the state lines with it"
+      "lines": "since 2.0: data is the request's lines object (extras start), with the fields lines_fields names; the engine writes the state lines with it"
     },
     "lines_fields": {
       "ui": "the lines' state object: add(...), log(...), take_kinds(...), pending, shown, head, states, voice, narrator; monitor(event), the supervisor's on_event",
@@ -193,9 +193,17 @@
     "events": "request adds prompt_ids (the prompt as it will be prefilled so far), conv (the conversation's id, or null), chat (a chat request), tool_names (the offered tools the answer is read for), thinking_off (the client turned thinking off) and loop_escape (the loop escape's step for SP4's note, or null); events are mappings whose fields read as attributes too",
     "SP2": "at_finish may answer REGENERATE_CALL: an answer that ends on its end token with calls is checked there (SP3 asked at SP2), where the calls can still be written again",
     "pass_through": "an exception of the engine's own that an engine callback raises inside a hook (the client left: ConnectionError) is no failure of the extension: it goes on to the engine",
-    "interim": "1.2 only (ENG-413 WP3b): what the engine's request path asked an interim adapter outside this interface. 1.3 makes it the interface (since_1_3), except what kept_interim lists"
+    "interim": "1.2 only (ENG-413 WP3b): what the engine's request path asked an interim adapter outside this interface. 2.0 makes it the interface (since_2_0), except what kept_interim lists"
   },
-  "since_1_3": {
+  "changed_from_1": {
+    "why": "2.0 (ENG-413 WP4): a 1.x extension that answered the interim plan field cond would load on this host and lose its routing without an error (other tokens, no journal), which the closed start exists to prevent; the host takes major 2 only, so a 1.x extension is refused at start with one line",
+    "cond": "the plan's routing is the field routing; the 1.2-interim cond is not read",
+    "host.interim": "removed; ext_dir, identity_name, own_eta, own_idle, NoRoom and metrics.event take its place",
+    "optional": "the calls, the supervisor's optional methods and its fields each answer a headless value when the extension has none; a missing optional supervisor method no longer detaches the supervisor",
+    "prompt": "every extension is asked prompt(plan, ids, info); the two-argument form of 1.0 and 1.1 is gone",
+    "routes": "a route handler answers (status, headers, body) only"
+  },
+  "since_2_0": {
     "host": "ext_dir, identity_name, own_eta, own_idle and metrics.event: what an extension read of the engine outside the interface until 1.2",
     "calls": "extension.calls: the request path's optional calls, each with its headless value",
     "routing": "request.plan_fields.routing and request.routing_fields: what the engine reads and writes of the extension's routing",

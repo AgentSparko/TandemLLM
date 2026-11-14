@@ -8,9 +8,9 @@ meets an engine. Standard library only; imports neither tree.
 
     ext = load("fake_ext", host)                 # or load(module, host)
     record = host.serve(ext, Scenario(...))      # record["trace"], ["errors"], ["acts"], ["raw"]
-    host.call(ext, name, *args)                  # since 1.3: one of the extension's optional calls
+    host.call(ext, name, *args)                  # since 2.0: one of the extension's optional calls
 
-Since 1.3: CALLS, SUP_OPTIONAL and SUP_FIELDS hold the headless value of each optional call, each
+Since 2.0: CALLS, SUP_OPTIONAL and SUP_FIELDS hold the headless value of each optional call, each
 optional supervisor method and each supervisor field (ext.json extension.calls,
 supervisor.optional_methods, supervisor.fields).
 """
@@ -44,7 +44,7 @@ def _released(call, *a, **kw):
     return {k: v for k, v in call.items() if not k.startswith("_")}
 
 
-#: since 1.3: the extension's optional calls (ext.json extension.calls), each with the value a
+#: since 2.0: the extension's optional calls (ext.json extension.calls), each with the value a
 #: headless engine uses
 CALLS = {
     "server_mode": lambda header, n: "raw",
@@ -67,7 +67,7 @@ CALLS = {
     "writer_foreign_call": lambda text: None,
     "probe_stage": lambda routing: None,
 }
-#: since 1.3: the supervisor's optional methods (ext.json supervisor.optional_methods), headless
+#: since 2.0: the supervisor's optional methods (ext.json supervisor.optional_methods), headless
 SUP_OPTIONAL = {
     "apply_request": lambda prompt, in_think, acts: (prompt, in_think),
     "route_budget": lambda budget, task="route": False,
@@ -79,7 +79,7 @@ SUP_OPTIONAL = {
     "note_repairs": lambda renamed: None,
     "argloop_stopped": lambda verdict, name: None,
 }
-#: since 1.3: the supervisor's fields (ext.json supervisor.fields), the value a supervisor that keeps
+#: since 2.0: the supervisor's fields (ext.json supervisor.fields), the value a supervisor that keeps
 #: one answers
 SUP_FIELDS = {
     "final_answer": lambda: None, "holds_calls": lambda: False, "arms": lambda: None,
@@ -112,7 +112,7 @@ class Refusal(Exception):
 
 
 class NoRoom(ValueError):
-    """Since 1.3: what the engine's callbacks raise when a question asked in place has no room."""
+    """Since 2.0: what the engine's callbacks raise when a question asked in place has no room."""
 
     def __init__(self, why: str = "no_room"):
         super().__init__(why)
@@ -164,7 +164,7 @@ class FakeHost:
         self.engine = {k: (lambda *a, **kw: {}) for k in
                        ("residency_plan", "disk", "disk_clear", "deciders", "narrator", "shadow")}
         self.Refusal = Refusal
-        # since 1.3
+        # since 2.0
         self.ext_dir = ext_dir
         self.identity_name = lambda: None
         self.own_eta = None
@@ -172,7 +172,6 @@ class FakeHost:
         self.NoRoom = NoRoom
         self.lines: list[str] = []
         self.errors: dict[str, int] = {}
-        self.speaks: dict = {}                   # id(extension object) -> its module's EXT_API
 
     def log(self, line: str) -> None:
         self.lines.append(line)
@@ -180,7 +179,7 @@ class FakeHost:
     # ------------------------------------------------------------------------- one request
 
     def call(self, ext, name: str, *args, **kw):
-        """Since 1.3: one of the extension's optional calls (CALLS), open: a missing method or one
+        """Since 2.0: one of the extension's optional calls (CALLS), open: a missing method or one
         that raises answers the headless value; a raise is logged and counted under its name."""
         fn = getattr(ext, name, None)
         if fn is None:
@@ -253,14 +252,11 @@ class FakeHost:
             return rec
         def ids_ok(v):
             return isinstance(v, list) and all(isinstance(i, int) for i in v)
-        if _version(self.speaks.get(id(ext), "1.0")) < (1, 2):
-            ids = self._call(rec, ext, "prompt", plan, list(sc.prompt), fallback=list(sc.prompt),
-                             check=ids_ok)
-        else:                                     # since 1.2: info, and the answer may be a mapping
-            ids = self._call(rec, ext, "prompt", plan, list(sc.prompt), {"in_think": False, "conv": None},
-                             fallback=list(sc.prompt),
-                             check=lambda v: ids_ok(v) or (isinstance(v, dict) and ids_ok(v.get("ids"))))
-            ids = list(ids["ids"]) if isinstance(ids, dict) else ids
+        # info, and the answer may be a mapping (2.0: every extension; 1.x had a two-argument form)
+        ids = self._call(rec, ext, "prompt", plan, list(sc.prompt), {"in_think": False, "conv": None},
+                         fallback=list(sc.prompt),
+                         check=lambda v: ids_ok(v) or (isinstance(v, dict) and ids_ok(v.get("ids"))))
+        ids = list(ids["ids"]) if isinstance(ids, dict) else ids
         rec["prompt"] = ids
         ev = {k: None for k in SPEC["supervisor"]["events"]["request"]}
         ev.update(request_id="r1", messages=sc.body.get("messages", []), tools=sc.body.get("tools", []),
@@ -359,5 +355,4 @@ def load(module, host: FakeHost):
     for r in ext.routes:
         if _claims_engine_path(r.get("prefix", "")):
             raise Refused(f"{module.__name__} claims the engine's path {r.get('prefix')}")
-    host.speaks[id(ext)] = module.EXT_API
     return ext

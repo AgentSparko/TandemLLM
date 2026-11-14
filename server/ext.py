@@ -10,7 +10,7 @@ it. Standard library only, plus the engine's metrics registry for one counter.
     ext.models()             its /v1/models entries; ext.card(name, raw) one of them, or None
     ext.route(method, path)  the handler of a path it serves, or None
     ext.request(request)     one request's hooks (Request), open on any failure
-    ext.ask(name, ...)       one of the extension's optional calls (CALLS, since 1.3), open; the
+    ext.ask(name, ...)       one of the extension's optional calls (CALLS, since 2.0), open; the
                              headless value when headless, missing or raising
     ext.stop()               the engine stops
     attach(state)            tests: an extension's object around objects a test built itself
@@ -18,7 +18,7 @@ it. Standard library only, plus the engine's metrics registry for one counter.
 ENG-413 WP3b: the request path asks these hooks and nothing of the conductor. `Request` asks them in
 ext.json's order; `Supervision` is the supervisor as the decode loop asks it at SP1-SP4, each act
 checked against its method and every failure detaching it for the rest of the request. The acts
-are the engine's (the kinds below), carried out by the engine. ENG-413 WP4 (engine-ext-v1 1.3):
+are the engine's (the kinds below), carried out by the engine. ENG-413 WP4 (engine-ext-v1 2.0):
 what the request path asked an interim adapter outside the contract is the contract now: the
 optional calls (CALLS), the supervisor's optional methods (SUP_OPTIONAL) and fields (SUP_FIELDS),
 each with the value a headless engine uses, the plan's `routing` and the host's fields. INTERIM
@@ -43,7 +43,7 @@ import re
 import threading
 
 #: the engine-ext-v1 version this host speaks (contracts/engine-ext-v1/ext.json `version`)
-EXT_API = "1.3"
+EXT_API = "2.0"
 #: the module attributes discovery reads (ext.json discovery.module)
 MODULE_ATTRS = ("EXT_API", "NAME", "VERSION", "start")
 #: the extension's hooks and their arguments (ext.json extension.hooks)
@@ -175,7 +175,7 @@ def check_module(module):
 
 
 class Host:
-    """What the engine hands an extension (ext.json `host`); since 1.3 also `ext_dir`,
+    """What the engine hands an extension (ext.json `host`); since 2.0 also `ext_dir`,
     `identity_name`, `own_eta`, `own_idle`, `NoRoom` and `metrics.event`."""
 
     def __init__(self, *, mode: str, engine_api: str, state, lock, tokenizer, registry,
@@ -205,7 +205,7 @@ class Host:
 
 class _Families:
     """The registry handle: `add(family)` for the families metrics-families.json lists as `ext`;
-    since 1.3 `event(row)`, one journal row of the extension counted in those families."""
+    since 2.0 `event(row)`, one journal row of the extension counted in those families."""
 
     def __init__(self, registry, on_event=None):
         self._registry = registry
@@ -385,17 +385,12 @@ class Loaded(Null):
     def request(self, request: dict) -> "Request":
         return Request(self, request)
 
-    def speaks(self, major: int, minor: int) -> bool:
-        """Whether the extension was written against engine-ext-v1 major.minor or later."""
-        v = _version(self.ext_api)
-        return v is not None and v[0] == major and v[1] >= minor
-
     def ask(self, name: str, *args, **kw):
-        """One of the optional calls (CALLS, since 1.3; INTERIM, ext.json kept_interim), a method
-        of the extension object: open. An extension before 1.3 or without the method is not asked;
+        """One of the optional calls (CALLS, since 2.0; INTERIM, ext.json kept_interim), a method
+        of the extension object: open. An extension without the method is not asked;
         a raise is logged and counted under the call's name (`interim.<name>` for INTERIM) and the
         headless value comes back."""
-        fn = getattr(self.obj, name, None) if self.speaks(1, 3) else None
+        fn = getattr(self.obj, name, None)
         if fn is None:
             return _HEADLESS[name](*args, **kw)
         try:
@@ -416,7 +411,7 @@ class ExtRouteError(Exception):
 
 class RouteRequest:
     """What a route handler gets: `method`, `path` (no query), `query`, `headers`, `body` (the JSON
-    read, or None), `peer`, `auth` (the engine's access rule); since 1.3 `allowed(route)` (None, or
+    read, or None), `peer`, `auth` (the engine's access rule); since 2.0 `allowed(route)` (None, or
     the engine's refusal (status, headers, body) for that rule), `session_token` and `session` (the
     session address /s/<token> the path came under, and the session key it names). The handler
     returns (status, headers, body). `handler` is the engine's HTTP handler, not the interface's."""
@@ -478,17 +473,18 @@ class Request:
         return self.plan
 
     def prompt(self, ids: list, in_think: bool | None = None, conv: str | None = None):
-        """`prompt(plan, ids)`: the ids to prefill (a failure: the ids as built). With `in_think`
-        (since 1.2, the prompt ends inside `<think>`): `(ids, in_think, client_ids)`, where an
-        extension on 1.2 gets `info` {in_think, conv} and may answer `{ids, in_think, client_ids}`
-        (client_ids: the prompt as the client sent it, without what the extension put in; None
-        when it put nothing in)."""
+        """`prompt(plan, ids, info)`: the ids to prefill (a failure: the ids as built); `info` is
+        {in_think, conv} and the extension may answer `{ids, in_think, client_ids}` (client_ids: the
+        prompt as the client sent it, without what the extension put in; None when it put nothing
+        in). With `in_think` given: `(ids, in_think, client_ids)`; without it the ids alone."""
         ids = list(ids)
         if self.raw:
             return ids if in_think is None else (ids, in_think, None)
-        if in_think is None or not self.ext.speaks(1, 2):
-            out = self.ext.call("prompt", self.plan, ids, fallback=ids, check=_ids_ok)
-            return out if in_think is None else (out, in_think, None)
+        if in_think is None:
+            out = self.ext.call("prompt", self.plan, ids, {"in_think": False, "conv": conv},
+                                fallback=ids,
+                                check=lambda v: _ids_ok(v) or (isinstance(v, dict) and _ids_ok(v.get("ids"))))
+            return list(out["ids"]) if isinstance(out, dict) else out
         out = self.ext.call("prompt", self.plan, ids, {"in_think": bool(in_think), "conv": conv},
                             fallback=ids,
                             check=lambda v: _ids_ok(v) or (isinstance(v, dict) and _ids_ok(v.get("ids"))
@@ -574,7 +570,7 @@ class Supervision:
     supervisor for the rest of the request, counted under the method's name, and the loop goes on
     as on a headless engine (no act). Acts already carried out stay.
 
-    Since 1.3 the decode loop also asks the optional methods SUP_OPTIONAL names (each open, with
+    Since 2.0 the decode loop also asks the optional methods SUP_OPTIONAL names (each open, with
     the value a headless engine has; a supervisor without one answers it) and reads the fields
     SUP_FIELDS names (`gave_up`, `holds_calls`, `cuts`, ...); a supervisor that keeps a field
     answers its headless value."""
@@ -654,7 +650,7 @@ class Supervision:
     def done(self, outcome, detail):
         return self._ask("done", None, outcome, detail)
 
-    # ------------------------------------------------------------------ optional (since 1.3)
+    # ------------------------------------------------------------------ optional (since 2.0)
     def optional(self, name: str, *args, **kw):
         """One of SUP_OPTIONAL, open: a supervisor without it answers the headless value; a raise
         detaches the supervisor (counted under its name) and the headless value comes back;
@@ -681,7 +677,7 @@ class Supervision:
         except AttributeError:
             if name not in SUP_FIELDS:
                 raise
-        # a supervisor that keeps a field (1.3 supervisor.fields) not: the field's headless value,
+        # a supervisor that keeps a field (2.0 supervisor.fields) not: the field's headless value,
         # kept for this request
         state = self.__dict__.setdefault("_state", {})
         if name not in state:
@@ -706,7 +702,7 @@ def _released(call, *a, **kw):
     return {k: v for k, v in call.items() if not k.startswith("_")}
 
 
-#: since 1.3 (ext.json supervisor.optional_methods): what the decode loop asks a supervisor beyond
+#: since 2.0 (ext.json supervisor.optional_methods): what the decode loop asks a supervisor beyond
 #: the safe points' methods, each with the value a headless engine has: SP4's splice and the
 #: request's reasoning cap, SP2's claim check asked in place and the memory notes taken out of an
 #: answer, SP3's release of held calls and the argument loop's stop
@@ -736,7 +732,7 @@ class _Policy:
     version = 0
 
 
-#: since 1.3 (ext.json supervisor.fields): the supervisor's fields the decode loop reads (and some it
+#: since 2.0 (ext.json supervisor.fields): the supervisor's fields the decode loop reads (and some it
 #: writes), with the value a supervisor that keeps one answers
 SUP_FIELDS = {
     "final_answer": lambda: None, "holds_calls": lambda: False, "arms": lambda: None,
@@ -756,7 +752,7 @@ def supervising(sup):
     return Supervision(sup)
 
 
-#: since 1.3 (ext.json extension.calls): the extension's optional calls the request path asks, each
+#: since 2.0 (ext.json extension.calls): the extension's optional calls the request path asks, each
 #: with the value a headless engine has; `Loaded.ask(name, ...)` asks it open
 CALLS = {
     "server_mode": lambda header, n: "raw",
