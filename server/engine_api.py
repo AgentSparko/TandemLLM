@@ -12,7 +12,9 @@ the engine and writes down the engine's reads, metrics, tool-call parsing and co
 answer changes (ENG-427). 1.4 adds the optional `extensions` field of the full /health answer and
 the 404 answers `no_ui` and `not_on_engine` of a path nothing in the engine serves (ENG-413 WP3a,
 the extension host). 1.5 adds group 9, the engine-only screens as the engine's own /v1/engine/*
-routes (ENG-413 WP5, ENG-433). Standard library only, nothing imported.
+routes (ENG-413 WP5, ENG-433). 1.6 adds node/control.json's `chat` block: QSE_CHATD=node leaves
+chatd to TandemNode, so the engine's launchers neither start nor stop it (ENG-413 WP6, SRV-823); no
+route or answer changes. Standard library only, nothing imported.
 """
 
-VERSION = "1.5"
+VERSION = "1.6"
