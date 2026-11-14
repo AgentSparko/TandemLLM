@@ -9,9 +9,10 @@ this file holds the seam itself.
      (startup reads and WP5's hand-over, none on the request path), by statement or by name;
      server/ext.py, server/round_runner.py and server/fake_engine.py import none of TandemApp
                                                               test_the_request_path_imports_no_conductor
-  2  the interim calls: every name of INTERIM and SUPERVISION_INTERIM is the adapter's; a headless
-     engine (NULL) answers each with its headless value and asks nothing; the act kinds are the
-     monitor's; the own questions' User-Agent is TandemApp's    test_the_interim_calls_are_named
+  2  the optional calls (engine-ext-v1 1.3): every name of CALLS, INTERIM and SUP_OPTIONAL is the
+     extension's; a headless engine (NULL) answers each with its headless value and asks nothing;
+     the act kinds are the monitor's; the own questions' User-Agent is TandemApp's
+                                                              test_the_optional_calls_are_named
   3  a failing safe point in the decode loop (in process): SP1 (`_sp1`), SP2 (`_sp2`), SP3
      (`_sp3_calls`) and SP4 (`at_request`), each raising and each answering an act its method
      does not allow: no act, the supervisor detached (nothing more asked, `done` not asked),
@@ -49,6 +50,9 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
 from server import ext as E  # noqa: E402
+
+#: the extension chat mode loads (ops/serve.env)
+EXT_NAME = "server.ext_app"
 
 LAUNCH = ("import sys, runpy; sys.modules['triton'] = None; sys.modules['triton.language'] = None;"
           "sys.argv = ['server/app.py'] + sys.argv[1:]; runpy.run_path('server/app.py', run_name='__main__')")
@@ -139,24 +143,29 @@ def test_the_request_path_imports_no_conductor():
     return f"server/app.py: {len(got)} TandemApp imports, each ALLOWED; the request path asks the extension"
 
 
-def test_the_interim_calls_are_named():
-    from server import ext_app as A
-    seams = {n for n in dir(A.Seams) if not n.startswith("_")} - {"cond"}
-    assert set(E.INTERIM) == seams, (sorted(set(E.INTERIM) - seams), sorted(seams - set(E.INTERIM)))
+def test_the_optional_calls_are_named():
+    import importlib
+    A = importlib.import_module(EXT_NAME)
+    host = E.Host(mode="chat", engine_api="", state={}, lock=None, tokenizer=None, registry=None,
+                  ledger_path=None, args={})
+    obj = A.Interim(host) if hasattr(A, "Interim") else A.attach(host)
+    names = set(E.CALLS) | set(E.INTERIM)
+    have = {n for n in names if callable(getattr(obj, n, None))}
+    assert names == have and A.EXT_API == E.EXT_API, (sorted(names - have), A.EXT_API)
     watch = {n for n in vars(A.Watch) if not n.startswith("_")}
     sup_methods = set(E.SUPERVISOR)
     assert sup_methods <= watch, sorted(sup_methods - watch)
-    for name in E.SUPERVISION_INTERIM:
+    for name in E.SUP_OPTIONAL:
         assert name in watch or hasattr(_monitor_supervisor(), name), name
     # headless: the documented values, nothing asked
     plan = types.SimpleNamespace(active=True)
-    assert E.NULL.interim("server_mode", "on", 1) == "raw"
-    assert E.NULL.interim("strip_states", [{"role": "user"}]) == ([{"role": "user"}], 0)
-    assert E.NULL.interim("replayed", "s", [1, 2]) == [1, 2]
-    assert E.NULL.interim("served", plan, None, False) is None
-    assert E.NULL.interim("writer") == (None, None)
-    assert E.NULL.interim("memory_spans", [1], None, []) == ([], 0)
-    assert E.NULL.interim("code_class", plan) is False and E.NULL.interim("served_name") is None
+    assert E.NULL.ask("server_mode", "on", 1) == "raw"
+    assert E.NULL.ask("strip_states", [{"role": "user"}]) == ([{"role": "user"}], 0)
+    assert E.NULL.ask("replayed", "s", [1, 2]) == [1, 2]
+    assert E.NULL.ask("served", plan, None, False) is None
+    assert E.NULL.ask("writer") == (None, None)
+    assert E.NULL.ask("memory_spans", [1], None, []) == ([], 0)
+    assert E.NULL.ask("code_class", plan) is False and E.NULL.ask("served_name") is None
     r = E.NULL.request({})
     assert r.begin() is None and r.prompt([3], True, conv="c") == ([3], True, None)
     assert r.supervise({}) is None and r.extras("start", {}) == [] and r.follow_ups({}) == []
@@ -167,8 +176,8 @@ def test_the_interim_calls_are_named():
     with open(os.path.join(ROOT, "server", "app.py")) as f:
         m = re.search(r'^OWN_QUESTION_UA = "([^"]+)"$', f.read(), re.M)
     assert m and m.group(1) == USER_AGENT, (m and m.group(1), USER_AGENT)
-    return f"{len(E.INTERIM)} interim calls and {len(E.SUPERVISION_INTERIM)} supervisor ones, " \
-           f"each the adapter's, each headless"
+    return f"{len(E.CALLS)} calls, {len(E.INTERIM)} kept interim and {len(E.SUP_OPTIONAL)} supervisor " \
+           f"ones, each the extension's, each headless"
 
 
 def _monitor_supervisor():

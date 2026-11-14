@@ -110,6 +110,7 @@ def test_the_host_is_the_interface():
         assert E.claims_engine_path(prefix) == H._claims_engine_path(prefix), prefix
     for a, b in (("1.0", "1.1"), ("1.1", "1.1"), ("1.2", "1.1"), ("2.0", "1.1"), ("x", "1.1")):
         assert E.accepts(a, b) == H.accepts(a, b), (a, b)
+    _the_1_3_surface(s, H)
     with open(os.path.join(ROOT, "server", "ext.py")) as f:
         tree = ast.parse(f.read())
     std = {"__future__", "importlib", "json", "os", "re", "threading"}
@@ -119,6 +120,58 @@ def test_the_host_is_the_interface():
     inner = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)} - set(top)
     assert inner == {"server.api"}, inner                       # the counter, inside a function
     return f"engine-ext-v1 {E.EXT_API}: {len(E.HOOKS)} hooks, {len(E.SUPERVISOR)} methods, the reference's paths"
+
+
+def _params(fn) -> list:
+    return [p.name for p in inspect.signature(fn).parameters.values()
+            if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)]
+
+
+#: arguments for each optional call and supervisor method, to compare the headless values
+_ARGS = {"header": "on", "n": 2, "messages": [{"role": "user"}], "routing": None, "info": {},
+         "prompt": [1], "in_think": True, "prompt_ids": [1, 2], "choice": None, "rows": None,
+         "why": "no_room", "ui": None, "chat": True, "n_choices": 1, "tool_names": (), "ids": [4, 5],
+         "decode": str, "taken": ["t"], "body": {}, "session": "s", "supervisor": None,
+         "tokenizer": None, "text": "x", "acts": [], "budget": 64, "task": "client", "asker": None,
+         "answer": "a", "items": [{"x": 1}], "events": None, "call": {"id": 1, "_held": 2},
+         "inner": "y", "renamed": {}, "verdict": "v", "name": "f"}
+
+
+def _the_1_3_surface(s: dict, H) -> None:
+    """engine-ext-v1 1.3: the optional calls, the supervisor's optional methods and fields and the
+    kept interim are server/ext.py's and the reference host's, name for name, argument for
+    argument and headless value for headless value."""
+    calls = {c["name"]: c for c in s["extension"]["calls"]}
+    assert set(calls) == set(E.CALLS) == set(H.CALLS), (sorted(set(calls) ^ set(E.CALLS)),
+                                                         sorted(set(calls) ^ set(H.CALLS)))
+    for name, c in calls.items():
+        assert _params(E.CALLS[name]) == c["args"] == _params(H.CALLS[name]), name
+        args = [_ARGS[a] for a in c["args"]]
+        assert E.NULL.ask(name, *args) == H.CALLS[name](*args), name
+    opt = {m["name"]: m for m in s["supervisor"]["optional_methods"]}
+    assert set(opt) == set(E.SUP_OPTIONAL) == set(H.SUP_OPTIONAL), sorted(set(opt) ^ set(E.SUP_OPTIONAL))
+    assert not set(opt) & set(E.SUPERVISOR)
+    for name, m in opt.items():
+        assert _params(E.SUP_OPTIONAL[name]) == m["args"] == _params(H.SUP_OPTIONAL[name]), name
+        args = [_ARGS[a] for a in m["args"]]
+        assert E.SUP_OPTIONAL[name](*args) == H.SUP_OPTIONAL[name](*args), name
+    assert set(s["supervisor"]["fields"]) == set(E.SUP_FIELDS) == set(H.SUP_FIELDS)
+    plain = E.Supervision(types.SimpleNamespace())
+    for name in E.SUP_FIELDS:
+        a, b = getattr(plain, name), H.SUP_FIELDS[name]()
+        if isinstance(b, types.SimpleNamespace):
+            assert all(getattr(a, k) == v for k, v in vars(b).items()), name
+        else:
+            assert a == b, (name, a, b)
+    # a supervisor without an optional method answers its headless value and stays attached
+    assert plain.apply_request([1], True, []) == ([1], True) and not plain.detached
+    kept = " ".join(k["what"] for k in s["kept_interim"])
+    assert set(E.INTERIM) == {"writer"} and all(n + "()" in kept for n in E.INTERIM), kept
+    assert all(k["why"] and k["until"] for k in s["kept_interim"])
+    assert {"ext_dir", "identity_name", "own_eta", "own_idle", "NoRoom"} <= set(s["host"])
+    assert "routing" in s["request"]["plan_fields"] and s["request"]["routing_fields"]
+    assert set(s["extras"]["lines_fields"]) >= {"ui", "doc", "channel", "inline", "share"}
+    assert "interim" not in json.dumps({k: v for k, v in s.items() if k not in ("since_1_2", "kept_interim")})
 
 
 # ---------------------------------------------------------------------------- 2
