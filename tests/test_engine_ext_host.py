@@ -564,7 +564,7 @@ def test_an_extension_on_a_fake_engine():
         assert _chat(port)[0] == 200
     finally:
         out = _stop(p, seen)
-    assert "[ext] on: fake-ext 0 (engine-ext-v1 1.0)" in out and "[ext] health failed" in out, out[-2000:]
+    assert "[ext] on: fake-ext 0 (engine-ext-v1 2.0)" in out and "[ext] health failed" in out, out[-2000:]
     # a route that raises: 500 extension_error, counted; a route's own answer; stop at the drain, open
     p = _engine({"QSE_EXT": "ext_boom", "QSE_EXT_ARGS": '{"fail": "stop"}'})
     seen: list = []

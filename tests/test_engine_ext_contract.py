@@ -1,4 +1,4 @@
-"""The engine extension interface engine-ext-v1 1.0, the engine's side (ENG-429, QA ENG-430).
+"""The engine extension interface engine-ext-v1 (2.0 since ENG-413 WP4), the engine's side (ENG-429, QA ENG-430).
 
 contracts/engine-ext-v1 is the in-process interface TandemApp's conductor runs through in chat mode:
 ext.json (the hooks, the order, the failure rule), fake_host.py (the reference host), fake_ext.py
