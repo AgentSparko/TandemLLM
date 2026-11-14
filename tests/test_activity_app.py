@@ -36,7 +36,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 from test_fake_engine import ADMIN, _port, _start  # noqa: E402
-from tools import contract_check  # noqa: E402
+import dash_contract  # noqa: E402
 
 
 def _up(port, proc):
@@ -177,7 +177,7 @@ def test_live_rates_leave_the_warm_up_out():
                 headers={"Authorization": f"Bearer {ADMIN}"}), timeout=5) as r:
             snaps.append(json.loads(r.read()))
         for s in snaps[::5]:
-            assert not contract_check.check(s, "live")
+            assert not dash_contract.check(s, "live")
         assert snaps[-1]["windows"]["decode_warmup_tokens"] == 50
         # "prefill" starts at the lock; activity.prefill stays null until the prompt is counted
         pre = [(s, r) for s in snaps for r in s["requests"] if r["phase"] == "prefill"
@@ -230,7 +230,7 @@ def test_refused_and_rejected():
                 srv.base + "/v1/dashboard/live?follow=0",
                 headers={"Authorization": f"Bearer {ADMIN}"}), timeout=5) as r:
             snap = json.loads(r.read())
-        assert not contract_check.check(snap, "live")
+        assert not dash_contract.check(snap, "live")
         stops = {(x["stop"]["reason"], x["stop"]["detail"]) for x in snap["recent"]}
         assert ("refused", "queue_full") in stops, stops
         assert ("rejected", "prompt_too_long") in stops, stops
@@ -338,7 +338,7 @@ def test_auth_cap_release_and_ping():
         ids = [int(m) for m in re.findall(r"^id: (\d+)$", text, flags=re.M)]
         assert ids == sorted(set(ids)), ids[:10]
         for e in _events(text)[-3:]:
-            assert not contract_check.check(e, "live")
+            assert not dash_contract.check(e, "live")
         assert released < 1.0, released
     finally:
         srv.close()
@@ -362,7 +362,7 @@ def test_the_kill_switch_on_the_wire():
         for e in evs:
             assert e["recent"] is None and e["engine"]["waiting_for_client"] is None
             assert all(r["activity"] is None and r["timeline"] is None for r in e["requests"])
-            assert not contract_check.check(e, "live")
+            assert not dash_contract.check(e, "live")
     finally:
         srv.close()
 

@@ -27,7 +27,8 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from tools import contract_check, usage_check  # noqa: E402
+from tools import usage_check  # noqa: E402
+import dash_contract  # noqa: E402
 
 ADMIN = "e2e-" + "0" * 40
 LAUNCH = ("import sys, runpy; sys.modules['triton'] = None; sys.modules['triton.language'] = None;"
@@ -133,7 +134,7 @@ def test_the_fake_engine_end_to_end():
                          ("requests?limit=50", "requests"), ("system", "system"),
                          ("logs?follow=0&backlog=100", "logs-json")):
             got = _get(port, f"/v1/dashboard/{ep}")
-            errs = contract_check.check(got, name)
+            errs = dash_contract.check(got, name)
             assert not errs, (ep, errs[:5])
         # VIS-54: without --backends the system answer says the proxy is off, so the Backends view
         # never asks /v1/config (which stays a 404 here)
@@ -185,7 +186,7 @@ def test_the_memory_policy_answers_503_before_a_prefill_it_cannot_hold():
             row = {r["key"]: r for r in lim["rows"]}
             assert row["MAX_LEN"]["applies"] == "locked" and row["MEM_PEAK_GIB"]["value"] == 77.0
             assert lim["budget"]["refused"] == (1 if want == 503 else 0)
-            errs = contract_check.check(sysinfo, "system")
+            errs = dash_contract.check(sysinfo, "system")
             assert not errs, errs[:5]
         finally:
             proc.send_signal(signal.SIGTERM)
@@ -206,7 +207,7 @@ def test_the_default_dashboard_login_is_off():
                          ("requests?limit=50", "requests"), ("system", "system"),
                          ("logs?follow=0&backlog=100", "logs-json"), ("session", "session")):
             got = _get(port, f"/v1/dashboard/{ep}", token=None, headers=PROXY)
-            errs = contract_check.check(got, name)
+            errs = dash_contract.check(got, name)
             assert not errs, (ep, errs[:5])
         sess = _get(port, "/v1/dashboard/session", token=None, headers=PROXY)
         assert sess["login"] is False and sess["password_set"] is False, sess

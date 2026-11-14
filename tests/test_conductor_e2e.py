@@ -46,6 +46,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from tools import contract_check  # noqa: E402
+import dash_contract  # noqa: E402
 
 CONTRACT = os.path.join(ROOT, "app", "contracts", "conductor-v1")
 ADMIN = "e2e-" + "0" * 40
@@ -222,7 +223,7 @@ def test_the_conductor_end_to_end():
         st, _, sysd = _call(port, "GET", "/v1/dashboard/system")
         assert st == 200 and (sysd["engine"]["model"], sysd["engine"]["base_model"]) == \
             ("TandemLLM", "qwen38-spark-engine"), sysd.get("engine")
-        dash = os.path.join(ROOT, "app", "contracts", "dashboard-v1")
+        dash = os.path.join(ROOT, "contracts", "engine-api-v1", "dashboard")
         assert not contract_check.validate(sysd, contract_check.load("system", dash), root=dash)
         one = {"model": "qwen38-spark-engine", "max_tokens": 16, "temperature": 0,
                "messages": [{"role": "user", "content": "Say ok."}]}
@@ -604,8 +605,7 @@ def test_the_residency_planner_over_http():
         _check(cfg, "config")
         assert cfg["store"]["documents"]["residency"]["version"] == 1
         st, _, sysinfo = _call(port, "GET", "/v1/dashboard/system")
-        assert contract_check.check(sysinfo, "system") == [], contract_check.check(sysinfo,
-                                                                                   "system")
+        assert dash_contract.check(sysinfo, "system") == [], dash_contract.check(sysinfo, "system")
         assert "split" in sysinfo["memory"]
     finally:
         srv.send_signal(signal.SIGTERM)

@@ -1,8 +1,9 @@
 """The dashboard API, contract v1, on a CPU over seeded temp ledgers.
 
 the Gherkin is the matrix, and every response in it is validated against
-docs/contract/dashboard-v1 with tools/contract_check.py -- the same schemas the dashboard's mocks
-are held to. Also: DST days, bad parameters, the ledger switched off, the example files, the
+the engine's contracts/engine-api-v1/dashboard with tools/contract_check.py (tests/dash_contract.py;
+the page's session and error schemas are still TandemApp's contracts/dashboard-v1, whose own
+examples TandemApp's tests/test_dashboard_examples.py checks since ENG-413 WP9). Also: DST days, bad parameters, the ledger switched off, the example files, the
 routes through the handler, and the 500,000-row budget.
 
 Run: python tests/test_dashboard_api.py
@@ -28,6 +29,7 @@ from test_app_loop import Req, serve  # noqa: E402  (first: the CPU environment)
 
 from server import app  # noqa: E402
 from server.api import auth, dashboard_api as D, ledger, usage  # noqa: E402
+import dash_contract  # noqa: E402
 from tools import contract_check  # noqa: E402
 
 BERLIN = D.zone("Europe/Berlin")
@@ -60,7 +62,7 @@ def _api(led, now_ms: int, **kw):
 
 
 def _valid(payload, name):
-    errs = contract_check.check(json.loads(json.dumps(payload)), name)
+    errs = dash_contract.check(json.loads(json.dumps(payload)), name)
     assert not errs, errs[:10]
     return payload
 
@@ -306,22 +308,22 @@ def test_routes_through_the_handler():
 
 
 def test_the_example_files_validate():
-    root = contract_check.ROOT
+    root = dash_contract.ENGINE
     names = sorted(f[:-len(".example.json")] for f in os.listdir(root)
                    if f.endswith(".example.json"))
-    assert set(names) >= {"summary", "usage", "requests", "system", "logs-json", "logs-line", "gap", "error", "session"}
+    assert set(names) >= {"summary", "usage", "requests", "system", "logs-json", "logs-line", "live", "parallel"}
     for n in names:
-        errs = contract_check.check(json.load(open(os.path.join(root, f"{n}.example.json"))), n)
+        errs = contract_check.check(json.load(open(os.path.join(root, f"{n}.example.json"))), n, root)
         assert not errs, (n, errs[:5])
 
 
 def test_the_validator_catches_drift():
-    good = json.load(open(os.path.join(contract_check.ROOT, "requests.example.json")))
+    good = json.load(open(os.path.join(dash_contract.ENGINE, "requests.example.json")))
     bad = json.loads(json.dumps(good))
     bad["requests"][0]["stream"] = "yes"
     del bad["requests"][0]["ttft_ms"]
     bad["requests"][0]["prompt_text"] = "no"
-    errs = contract_check.check(bad, "requests")
+    errs = dash_contract.check(bad, "requests")
     assert any("stream" in e for e in errs) and any("ttft_ms" in e for e in errs) \
         and any("prompt_text" in e for e in errs), errs
 

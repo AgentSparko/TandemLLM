@@ -220,7 +220,7 @@ def test_parallel_lane_waiting_for_memory():
 
 
 def test_contract_knows_the_state_and_the_total():
-    p = os.path.join(ROOT, "app", "contracts", "dashboard-v1", "parallel.schema.json")
+    p = os.path.join(ROOT, "contracts", "engine-api-v1", "dashboard", "parallel.schema.json")
     s = json.load(open(p))
     txt = json.dumps(s)
     assert '"waiting_memory"' in txt

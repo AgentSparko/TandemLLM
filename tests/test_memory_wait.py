@@ -458,7 +458,7 @@ def test_a_wait_says_its_own_checks_numbers():
             if got is not None:
                 return got
         return None
-    schema = block(json.load(open(os.path.join(ROOT, "app", "contracts", "dashboard-v1", "live.schema.json"))))
+    schema = block(json.load(open(os.path.join(ROOT, "contracts", "engine-api-v1", "dashboard", "live.schema.json"))))
     assert schema["additionalProperties"] is False and set(out) <= set(schema["properties"]), \
         sorted(set(out) - set(schema["properties"]))
     try:
