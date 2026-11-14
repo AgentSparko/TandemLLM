@@ -52,6 +52,8 @@ def test_dry_run_then_apply():
     _setup()
     cond = Conductor(tempfile.mkdtemp(prefix="cond-"), state=app.STATE, journal=False)
     app.STATE["conductor"] = cond
+    from server import ext_app
+    app.EXT = ext_app.attach(app.STATE)          # ENG-413 WP3a: /v1/conductor/* is the extension's
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{httpd.server_address[1]}"

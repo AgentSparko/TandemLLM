@@ -105,6 +105,8 @@ def with_packages(login=True):
     prof["routing"] = {"debug": {"packages": ["coding"]}}
     cond.store.put("profiles", "coding", prof, note="g2", author="t")
     app.STATE["conductor"] = cond
+    from server import ext_app
+    app.EXT = ext_app.attach(app.STATE)          # ENG-413 WP3a: /v1/conductor/* is the extension's
     return cond
 
 

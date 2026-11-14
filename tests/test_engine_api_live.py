@@ -7,8 +7,8 @@ dashboard directory that holds no built page, a temporary home, ledger and admin
      the token gets {status} alone; /v1/models and a chat completion answer 200; every GET route
      routes.json marks live answers 200, and one with a schema (1.3: dashboard/) validates
      against it; every family /metrics names is in metrics-families.json with its type;
-     /dashboard/ is the not-built page, not a 5xx (it leaves the engine with ENG-413; not removed
-     yet)
+     1.4 (ENG-413 WP3a): the engine runs headless (no QSE_EXT): /health `extensions` is [] and
+     /dashboard/ answers 404 no_ui, naming TandemApp (the page is the extension's until it leaves)
                                                                   test_the_engine_answers_the_contract
   2  the same from a copy of the tree without app/dashboard (the engine runs without the
      dashboard's sources), its dashboard directory left to the default
@@ -121,6 +121,7 @@ def _check(e: Engine) -> str:
     h = json.loads(raw)
     assert st == 200 and h["engine_api"] == engine_api.VERSION == doc["version"], h
     assert not contract_check.validate(h, contract_check.load("health", CONTRACT), root=CONTRACT)
+    assert h["extensions"] == [], h.get("extensions")        # 1.4: a headless engine
     st, raw, _ = e.get("/health", headers={"X-Forwarded-For": "192.0.2.7"}, token=None)
     assert st == 200 and json.loads(raw) == {"status": "ok"}, raw
     # the data plane
@@ -160,11 +161,12 @@ def _check(e: Engine) -> str:
     assert st == 200 and typed, (st, raw[:200])
     wrong = {k: v for k, v in typed.items() if k not in fams or fams[k]["type"] != v}
     assert not wrong, f"families not in metrics-families.json or of another type: {wrong}"
-    # the dashboard's files: none built here, so the placeholder page
+    # 1.4: a headless engine has no page (ENG-413 WP3a)
     st, raw, ctype = e.get("/dashboard/", token=None)
-    assert st == 200 and ctype.startswith("text/html") and b"not built" in raw, (st, raw[:200])
+    err = json.loads(raw)["error"] if st == 404 else {}
+    assert st == 404 and err.get("type") == "no_ui" and "TandemApp" in err.get("message", ""), (st, raw[:200])
     out = f"engine_api {engine_api.VERSION}, {n} live GET routes 200 ({shaped} valid), " \
-          f"{len(typed)} /metrics families listed, /dashboard/ not built"
+          f"{len(typed)} /metrics families listed, /dashboard/ 404 no_ui"
     print(f"[engine-api] {out}", flush=True)
     return out
 

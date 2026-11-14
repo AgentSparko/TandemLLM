@@ -696,7 +696,8 @@ def _server(policy_path: str, config_dir: str | None = None, extra=()):
             "--conductor-watch-s", "0.2", *extra]
     if config_dir:
         args += ["--conductor-config", config_dir]
-    proc = subprocess.Popen(args, cwd=ROOT, env=_env(), stdout=subprocess.PIPE,
+    env = dict(_env(), **({"QSE_EXT": "server.ext_app"} if config_dir else {}))   # ENG-413 WP3a
+    proc = subprocess.Popen(args, cwd=ROOT, env=env, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
     _wait(port, proc)
     return port, proc, ledger

@@ -136,7 +136,8 @@ def _same(want, got, path, filled, out):
 def _server(home, cdir):
     port = _port()
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home, "PYTHONPATH": ROOT,
-           "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN}
+           "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN,
+           "QSE_EXT": "server.ext_app"}                   # ENG-413 WP3a: chat mode's extension
     ledger = os.path.join(home, "ledger.sqlite3")
     proc = subprocess.Popen([sys.executable, "-c", LAUNCH, "--fake-engine", "--port", str(port),
                              "--served-model", "qwen38-spark-engine", "--usage-ledger", ledger,

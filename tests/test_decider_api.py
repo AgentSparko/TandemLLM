@@ -62,7 +62,8 @@ def _server(port, models: str, tps: str = "2000"):
     args = [sys.executable, "-c", LAUNCH, "--fake-engine", "--port", str(port),
             "--served-model", "qwen38-spark-engine", "--usage-ledger", ledger,
             "--fake-tps", tps, "--conductor-config", cdir]
-    proc = subprocess.Popen(args, cwd=ROOT, env=_env(models), stdout=subprocess.PIPE,
+    proc = subprocess.Popen(args, cwd=ROOT, env=dict(_env(models), QSE_EXT="server.ext_app"),
+                            stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
     return proc
 

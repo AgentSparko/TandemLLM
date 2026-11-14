@@ -78,7 +78,8 @@ def _server(port, conductor_dir=None, extra=()):
             "--fake-tps", "2000", *extra]
     if conductor_dir:
         args += ["--conductor-config", conductor_dir]
-    proc = subprocess.Popen(args, cwd=ROOT, env=_env(), stdout=subprocess.PIPE,
+    env = dict(_env(), **({"QSE_EXT": "server.ext_app"} if conductor_dir else {}))   # ENG-413 WP3a
+    proc = subprocess.Popen(args, cwd=ROOT, env=env, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
     return proc, ledger
 

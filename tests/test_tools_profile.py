@@ -272,7 +272,8 @@ def test_the_rule_over_http():
         [sys.executable, "-c", h.LAUNCH, "--fake-engine", "--port", str(port),
          "--served-model", "qwen38-spark-engine", "--usage-ledger", ledger, "--fake-tps", "2000",
          "--conductor-config", cdir, "--conductor-defaults", "shipped", "--conductor", "on"],
-        cwd=ROOT, env=dict(h._env(), QSE_FAKE_PROMPTS=plog), stdout=subprocess.PIPE,
+        cwd=ROOT, env=dict(h._env(), QSE_FAKE_PROMPTS=plog, QSE_EXT="server.ext_app"),
+        stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, text=True)
     try:
         h._wait(arb_port, arb, "/readyz")

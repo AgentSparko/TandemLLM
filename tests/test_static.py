@@ -44,9 +44,13 @@ def _dist() -> str:
     return d
 
 
-def get(path, dist, headers=None):
+def get(path, dist, headers=None, headless=False):
     serve()
     app.STATE.update(dashboard_dir=dist, auth=auth.Auth("adm-" + "1" * 40))
+    # ENG-413 WP3a: the page is the extension's route (the interim adapter in chat mode); a headless
+    # engine answers 404 no_ui
+    from server import ext_app
+    app.EXT = app.ext_mod.NULL if headless else ext_app.attach(app.STATE)
     req = Req(path, {})
     req.command, req.path = "GET", path
     req.headers.update(dict(PROXY, **(headers or {})))
@@ -107,6 +111,21 @@ def test_the_shell_is_public_and_holds_no_data():
     assert code == 200
     code, _, _ = get("/v1/dashboard/summary", d)          # the data is not
     assert code == 401
+
+
+def test_a_headless_engine_has_no_page():
+    """ENG-413 WP3a (engine API 1.4): without an extension that serves it, every page path is
+    404 no_ui, naming TandemApp, through the proxy or not; the data reads stay the engine's."""
+    import json
+    d = _dist()
+    for path in ("/dashboard", "/dashboard/", "/dashboard/assets/index-3f9a1c0e.js", "/dashboard/usage/2026"):
+        for headers in ({}, {"Authorization": "Bearer adm-" + "1" * 40}):
+            code, head, body = get(path, d, headers=headers, headless=True)
+            err = json.loads(body)["error"]
+            assert code == 404 and err["type"] == "no_ui" and "TandemApp" in err["message"], (path, code, body)
+    code, _, _ = get("/v1/dashboard/summary", d, headless=True)
+    assert code == 401
+    return "4 page paths 404 no_ui; the reads keep their rule"
 
 
 if __name__ == "__main__":

@@ -525,7 +525,7 @@ def test_end_to_end_on_the_fake_engine():
     ledger = os.path.join(d, "ledger.sqlite3")
     # its own proxy config in the temp dir (`--backends`, as live starts): the proxy's stage
     # override is set, and answers None for the engine's own requests
-    env = dict(_env(), QWEN38_SHADOW_ASK_IDLE_S="2")
+    env = dict(_env(), QWEN38_SHADOW_ASK_IDLE_S="2", QSE_EXT="server.ext_app")   # ENG-413 WP3a
     srv = subprocess.Popen([sys.executable, "-c", LAUNCH, "--fake-engine", "--port", "0",
                             "--served-model", "qwen38-spark-engine", "--usage-ledger", ledger,
                             "--fake-tps", "2000", "--conductor-config", cdir,

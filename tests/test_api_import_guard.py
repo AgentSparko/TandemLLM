@@ -298,7 +298,9 @@ FORK_ADDED = {"ledger": {"SIDE_SHAPES", "_text", "side_shape"},
                              "_is_tool_response", "compaction_shape", "is_compaction"},
               # the GPU gauges' reading without the engine's hook: the nested dict, never torch's
               # flattening readers, which server/ may not call (tests/test_alloc_stats_cycles.py)
-              "metrics": {"_allocator"}}
+              "metrics": {"_allocator",
+                          # ENG-413 WP3a: the extension host's counter, an engine family
+                          "ext_errors_total"}}
 #: functions the fork changed on purpose, each in both copies: (module, name) -> why
 FORK_CHANGED = {("metrics", "_gpu_memory"): "reads _allocator without the hook",
                 ("metrics", "_gpu_reserved"): "reads _allocator without the hook"}

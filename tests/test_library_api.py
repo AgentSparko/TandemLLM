@@ -65,6 +65,8 @@ def with_library(install=True):
     rows = []
     cond.journal.note = lambda kind, task, **kw: rows.append(dict(kw, kind=kind, task=task))
     app.STATE["conductor"] = cond
+    from server import ext_app
+    app.EXT = ext_app.attach(app.STATE)          # ENG-413 WP3a: the route is the extension's
     return cond, d, rows
 
 
@@ -153,9 +155,11 @@ def test_limits_and_errors():
     with_library(install=False)
     for path in ("/v1/library", "/v1/library/search?q=game", "/v1/library/browser-game"):
         _err(path, 404)
-    # no conductor (a raw server): the route is not there
+    # no conductor (a headless server, ENG-413 WP3a): no extension serves it, 404 not_on_engine
     app.STATE.pop("conductor")
-    assert call("GET", "/v1/library", PROXY)[0] == 404
+    app.EXT = app.ext_mod.NULL
+    code, _, out = call("GET", "/v1/library", PROXY)
+    assert code == 404 and out["error"]["type"] == "not_on_engine", (code, out)
 
 
 # ------------------------------------------------------------------ 4

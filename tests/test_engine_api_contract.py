@@ -40,6 +40,11 @@ tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_to
      aliases; the 1.2 examples of compat/1.2/ (a 1.0, a 1.1 and a 1.2 engine's /health, both
      stages, the split request and block) validate against the 1.3 schemas, and the 1.3
      examples equal them but for engine_api                     test_additive_1_3
+ 11  1.4 is additive (ENG-413 WP3a): every 1.3 route is here; what 1.3 planned and the extension
+     host serves left `planned` (`answers`: 404 no_ui and not_on_engine; /health extensions in
+     the schema, optional); the 1.3 examples still validate and the 1.4 ones equal them but for
+     engine_api and extensions; qse_ext_errors_total is an engine family
+                                                                  test_additive_1_4
 
 CPU only, no torch, standard library only. Run: python tests/test_engine_api_contract.py
 """
@@ -588,13 +593,62 @@ def test_additive_1_3():
     assert ok(block, {"$ref": "setup/split.schema.json"})
     # the 1.3 examples are the 1.2 ones but for the version they say
     for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
-        a, b = _json(name), _json("compat", "1.2", name)
+        a, b = _json("compat", "1.3", name), _json("compat", "1.2", name)
         assert {k: v for k, v in a.items() if k != "engine_api"} == \
             {k: v for k, v in b.items() if k != "engine_api"}, name
         assert a.get("engine_api") in (None, "1.3"), name
     for name in ("split.example.json", "split-request.example.json"):
         assert _json("setup", name) == _json("compat", "1.2", name), name
     return f"{len(old['routes'])} 1.2 routes kept, 1.0/1.1/1.2 health and both stages valid, split valid"
+
+
+def test_additive_1_4():
+    """ENG-413 WP3a: 1.4 adds /health `extensions` and the answers of a path nothing serves
+    (`answers`, out of `planned`); every 1.3 route stays, the 1.3 examples still validate."""
+    from tools import contract_check
+    old = _json("compat", "1.3", "routes.json")
+    assert old["version"] == "1.3"
+    doc = _routes()
+    now = {(r["method"], r["path"], r.get("port")): r for r in doc["routes"]}
+    gone = [f"{r['method']} {r['path']}" for r in old["routes"]
+            if (r["method"], r["path"], r.get("port")) not in now or
+            set(now[(r["method"], r["path"], r.get("port"))]["aliases"]) < set(r["aliases"]) or
+            now[(r["method"], r["path"], r.get("port"))]["live"] != r["live"]]
+    assert not gone, f"1.4 dropped or narrowed 1.3 routes: {gone}"
+    for key in ("engine_screens_until_eng413", "app_routes_via_engine", "app_families", "shared_prefixes"):
+        assert doc[key] == old[key], key
+    # what 1.3 planned and 1.4 serves: out of `planned`, into `answers` and the health schema
+    served = {"404 no_ui", "404 not_on_engine"}
+    assert {a["what"] for a in doc["answers"]} == served and all(a["since"] == "1.4" for a in doc["answers"])
+    was = {p["what"]: p for p in old["planned"] if p["kind"] in ("field", "answer")}
+    assert set(was) == served | {"/health extensions"}, sorted(was)
+    for a in doc["answers"]:
+        assert set(a["paths"]) - set(was[a["what"]]["paths"]) <= {
+            "/v1/library", "/v1/library/*", "/v1/memory", "/v1/laya", "/v1/laya/*",
+            "/s/{token}/v1/library*", "/s/{token}/v1/memory*", "/s/{token}/v1/laya*"}, a["what"]
+    left = [p for p in doc["planned"] if p["kind"] != "route"]
+    assert [p["paths"] for p in left] == [["/v1/chat-app", "/v1/chat-app/*", "/v1/dashboard/session"]], left
+    assert [p for p in doc["planned"] if p["kind"] == "route"] == \
+        [p for p in old["planned"] if p["kind"] == "route"]
+    health = contract_check.load("health", CONTRACT)
+    assert "extensions" in health["properties"] and "extensions" not in health.get("required", [])
+
+    def ok(d):
+        return not contract_check.validate(d, health, root=CONTRACT)
+    for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
+        a, b = _json(name), _json("compat", "1.3", name)
+        assert ok(b), name                                     # a 1.3 engine's answer
+        assert {k: v for k, v in a.items() if k not in ("engine_api", "extensions")} == \
+            {k: v for k, v in b.items() if k != "engine_api"}, name
+        assert a.get("engine_api") in (None, "1.4"), name
+    ex = _json("health.example.json")
+    assert ok(ex) and ok(dict(ex, extensions=[])) and ok(dict(ex, engine_api="1.3"))
+    assert not ok(dict(ex, extensions=[{"name": "x"}]))        # name, version and ext_api, all three
+    fam = {f["name"]: f for f in _json("metrics-families.json")["families"]}
+    assert fam["qse_ext_errors_total"] == {"name": "qse_ext_errors_total", "type": "counter",
+                                           "labels": ["hook"], "owner": "engine"}
+    return f"{len(old['routes'])} 1.3 routes kept, 1.3 health examples valid, {len(doc['answers'])} answers " \
+           f"out of planned, /health extensions in the schema"
 
 
 if __name__ == "__main__":

@@ -143,6 +143,8 @@ def trace(mode: str) -> tuple:
         assert port not in (8000, 8009), port
         env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": tmp, "PYTHONPATH": ROOT,
                "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin", "TRACE_OUT": out, "TMPDIR": tmp}
+        if mode == "chat":
+            env["QSE_EXT"] = "server.ext_app"           # ENG-413 WP3a: chat mode's extension
         log = open(os.path.join(tmp, "engine.log"), "w")
         p = subprocess.Popen(
             [sys.executable, "-c", TRACE_LAUNCH, "--fake-engine", "--host", "127.0.0.1",

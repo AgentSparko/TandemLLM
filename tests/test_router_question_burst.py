@@ -230,7 +230,8 @@ def test_the_class_question_finds_its_turn_on_the_fake_engine():
     from test_conductor_e2e import LAUNCH, ROOT, _call, _env, _stream, _wait
     for mode in ("out", "in"):
         d = tempfile.mkdtemp(prefix="srv769-e2e-")
-        env = dict(_env(), QSE_PREFILL_BURST="joint", QSE_PREFILL_BURST_ASKING=mode)
+        env = dict(_env(), QSE_PREFILL_BURST="joint", QSE_PREFILL_BURST_ASKING=mode,
+                   QSE_EXT="server.ext_app")                     # ENG-413 WP3a
         srv = subprocess.Popen([sys.executable, "-c", LAUNCH, "--fake-engine", "--port", "0",
                                 "--served-model", "qwen38-spark-engine",
                                 "--usage-ledger", os.path.join(d, "ledger.sqlite3"),
