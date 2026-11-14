@@ -6,10 +6,11 @@ interim calls server/ext.py names. tests/test_ext_trace.py holds the tokens and 
 this file holds the seam itself.
 
   1  the import guard: server/app.py imports TandemApp's conductor only where ALLOWED says why
-     (startup reads and WP5's hand-over, none on the request path), by statement or by name;
-     server/ext.py, server/round_runner.py and server/fake_engine.py import none of TandemApp
+     (none on the request path; WP5 took out the routes, the store and the monitor), by statement
+     or by name; server/ext.py, server/round_runner.py, server/fake_engine.py and (WP5) the
+     screens' and the documents' readers import none of TandemApp
                                                               test_the_request_path_imports_no_conductor
-  2  the optional calls (engine-ext-v1 2.0): every name of CALLS, INTERIM and SUP_OPTIONAL is the
+  2  the optional calls (engine-ext-v1 2.0, 2.1): every name of CALLS and SUP_OPTIONAL is the
      extension's; a headless engine (NULL) answers each with its headless value and asks nothing;
      the act kinds are the monitor's; the own questions' User-Agent is TandemApp's
                                                               test_the_optional_calls_are_named
@@ -59,23 +60,23 @@ LAUNCH = ("import sys, runpy; sys.modules['triton'] = None; sys.modules['triton.
 RAW = "qwen38-spark-engine"
 
 #: (TandemApp module, the server/app.py function it is imported in; None: the module's top) -> why
+#: ENG-413 WP5 took out the conductor's routes (the screens are /v1/engine/*), its store (the
+#: fake-engine guard's directory is a value copy, the residency limits come through the module's
+#: read_document) and its monitor (the policy is checked by the module's before_load)
 ALLOWED = {
-    ("tandemapp.conductor.routes", None): "WP5: the engine-only screens handed to the conductor "
-                                          "(ENGINE_ROUTES) until /v1/engine/*",
-    ("tandemapp.conductor.store", "conductor_root"): "startup: a fake engine never uses the "
-                                                     "production directory",
-    ("tandemapp.conductor.store", "_limits_at_start"): "startup, WP5: the residency document's "
-                                                       "limits before the weights load",
-    ("tandemapp.conductor.monitor", "_conductor_policy"): "startup: the monitor's policy refused "
-                                                          "before the weights load",
-    ("tandemapp.conductor.loopescape", "card_sampling"): "the load: the checkpoint's sampling",
+    ("tandemapp.conductor.loopescape", "card_sampling"): "the load: the checkpoint's sampling "
+                                                         "(owner: ENG-413 follow-up, /health's part)",
     ("tandemapp.conductor.loopescape", "loop_escapes"): "startup: the loop escape's sessions, which "
-                                                        "/health reports on every engine",
+                                                        "/health reports on every engine (the same)",
     ("tandemapp.static", None): "WP14: setup mode's page",
-    ("tandemapp.laya_api", None): "WP5: Laya's routes with the engine's decision models",
+    ("tandemapp.laya_api", None): "Laya's routes with the engine's decision models (owner: the "
+                                  "Laya move, plan 3.1 (d) then (b))",
     ("tandemapp.chat_forward", None): "WP14: /v1/chat-app leaves the engine",
-    ("tandemapp.session_tokens", None): "WP5: the session addresses /s/<token>",
+    ("tandemapp.session_tokens", None): "the session addresses /s/<token> (owner: with Laya, the "
+                                        "library and the memory routes, plan 3.1 (d))",
 }
+#: what WP5 took out of server/app.py: none of it may come back
+GONE_WP5 = ("tandemapp.conductor.routes", "tandemapp.conductor.store", "tandemapp.conductor.monitor")
 #: --backends: the proxy in the engine's process, with the engine's conductor as its harness (it
 #: leaves the engine with the controller, WP7/WP14); none of these functions is the request path
 for _fn in ("start_proxy", "do_POST", "_proxied", "_config", "_hosts", "_system", "_cache_peek"):
@@ -120,6 +121,12 @@ def test_the_request_path_imports_no_conductor():
     bad = sorted((x for x in got if not _allowed(*x)), key=str)
     got = sorted(got, key=str)
     assert not bad, f"server/app.py imports TandemApp outside ALLOWED: {bad}"
+    back = sorted(m for m, _ in got if m.startswith(GONE_WP5))
+    assert not back, f"WP5 took these out of server/app.py: {back}"
+    for path in ("server/conductor/inproc.py", "server/conductor/residency.py", "server/decider_api.py",
+                 "server/engine_routes.py", "server/memlimits.py", "server/diskcache.py",
+                 "server/rolemem.py"):
+        assert not _imports(path), (path, _imports(path))         # WP5: the engine's own
     import io
     import tokenize
     with open(os.path.join(ROOT, "server", "app.py")) as f:
@@ -161,7 +168,7 @@ def test_the_optional_calls_are_named():
     host = E.Host(mode="chat", engine_api="", state={}, lock=None, tokenizer=None, registry=None,
                   ledger_path=None, args={})
     obj = A.attach(host)
-    names = set(E.CALLS) | set(E.INTERIM)
+    names = set(E.CALLS)                     # 2.1: the writer is memory_writer, a call
     have = {n for n in names if callable(getattr(obj, n, None))}
     assert names == have and A.EXT_API == E.EXT_API, (sorted(names - have), A.EXT_API)
     watch = {n for n in vars(A.Watch) if not n.startswith("_")}
@@ -175,7 +182,7 @@ def test_the_optional_calls_are_named():
     assert E.NULL.ask("strip_states", [{"role": "user"}]) == ([{"role": "user"}], 0)
     assert E.NULL.ask("replayed", "s", [1, 2]) == [1, 2]
     assert E.NULL.ask("served", plan, None, False) is None
-    assert E.NULL.ask("writer") == (None, None)
+    assert E.NULL.ask("memory_writer") == (None, None) and E.NULL.ask("document", "router") is None
     assert E.NULL.ask("memory_spans", [1], None, []) == ([], 0)
     assert E.NULL.ask("code_class", plan) is False and E.NULL.ask("served_name") is None
     r = E.NULL.request({})
@@ -188,7 +195,7 @@ def test_the_optional_calls_are_named():
     with open(os.path.join(ROOT, "server", "app.py")) as f:
         m = re.search(r'^OWN_QUESTION_UA = "([^"]+)"$', f.read(), re.M)
     assert m and m.group(1) == USER_AGENT, (m and m.group(1), USER_AGENT)
-    return f"{len(E.CALLS)} calls, {len(E.INTERIM)} kept interim and {len(E.SUP_OPTIONAL)} supervisor " \
+    return f"{len(E.CALLS)} calls and {len(E.SUP_OPTIONAL)} supervisor " \
            f"ones, each the extension's, each headless"
 
 
@@ -315,6 +322,7 @@ FAILING = '''"""A test extension: TandemApp's extension with one method failing 
 from tandemapp import engine_ext as A
 
 EXT_API, NAME, VERSION = A.EXT_API, "failing", "0"
+read_document, before_load = A.read_document, A.before_load     # engine-ext-v1 2.1's module functions
 HOOKS = ("plan", "prompt", "extras", "follow_ups", "finish")
 
 

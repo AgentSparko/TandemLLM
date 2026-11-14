@@ -969,8 +969,14 @@ class _Store:
 
 
 class _Cond:
+    """The extension as server/memlimits.py asks it (ENG-413 WP5: engine-ext-v1 2.1 `document`,
+    under state["ext"]): its residency document and version."""
+
     def __init__(self, v, doc):
         self.store = _Store(v, doc)
+
+    def ask(self, name, *args):
+        return self.store.peek(*args) if name == "document" and args[0] == "residency" else None
 
 
 def _args(**over):
@@ -1007,7 +1013,7 @@ def test_a_models_own_grid_is_shown_locked_with_no_restart_pending():
     assert row["value"] == row["running"] == 4096 and row["applies"] == "locked", row
     assert not row["pending_restart"] and "own grid: 4,096 tokens" in row["locked"], row
     # a dashboard override changes nothing for such a model either
-    st["conductor"] = _Cond(5, {"engine": {"PREFIX_CHUNK": 512}})
+    st["ext"] = _Cond(5, {"engine": {"PREFIX_CHUNK": 512}})
     row = {r["key"]: r for r in memlimits.view(st)["rows"]}["PREFIX_CHUNK"]
     assert row["value"] == 4096 and not row["pending_restart"]
 
@@ -1020,7 +1026,7 @@ def test_a_dashboard_override_applies_live_or_says_it_needs_a_restart():
     doc = {"engine": {"RESIDENT_PARK_GB": 2, "CACHE_GB": 1, "MEM_CEILING_GIB": 68,
                       "PREFIX_CHUNK": 512, "MAX_LEN": 131072}}
     st = {"args": _args(), "serve_flags": _args(), "mem": mem, "state_store": store,
-          "conductor": _Cond(3, doc), "max_len": 262144}
+          "ext": _Cond(3, doc), "max_len": 262144}
     done = memlimits.refresh(st)
     assert "MEM_CEILING_GIB=68" in done and "CACHE_GB=1" in done
     assert mem.ceiling == 68 * GIB and store.budget == GIB
@@ -1030,7 +1036,7 @@ def test_a_dashboard_override_applies_live_or_says_it_needs_a_restart():
     assert row["MAX_LEN"]["value"] == 262144, "the hard rule is not overridable"
     assert row["MEM_CEILING_GIB"]["source"] == "dashboard" and row["MEM_CEILING_GIB"]["value"] == 68
     # the key leaves the document: back to the flag
-    st["conductor"] = _Cond(4, {"engine": {}})
+    st["ext"] = _Cond(4, {"engine": {}})
     memlimits.refresh(st)
     assert mem.ceiling == 70 * GIB and store.budget == 2 * GIB
 

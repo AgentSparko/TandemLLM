@@ -634,6 +634,12 @@ def test_the_routes():
     import test_ui_states as ui
     cond, _ = ui.serve("on")
     app.STATE.pop("narrator", None)
+    # ENG-413 WP5: the engine's screens, handed to the conductor as tandemapp.engine_ext does
+    import types
+    from server import engine_routes, ext
+    from tandemapp import engine_ext
+    cond.engine = engine_ext._screens(types.SimpleNamespace(engine=engine_routes.in_process(app.STATE),
+                                                            Refusal=ext.Refusal))
 
     class H:
         def __init__(self, path):

@@ -36,7 +36,6 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 from engine import cache, disk_cache as dc  # noqa: E402
 from server import diskcache, memlimits  # noqa: E402
-from server.conductor import inproc  # noqa: E402
 from server.api import metrics as M  # noqa: E402
 from tandemapp.conductor import routes, schema  # noqa: E402
 from tools import contract_check  # noqa: E402
@@ -62,9 +61,23 @@ class Store:
 
 
 class Cond:
+    """The conductor as the disk screen's paths use it, and (ENG-413 WP5) the extension the engine
+    asks for the settings document (engine-ext-v1 2.1 `document`, state["ext"]); `engine` is the
+    engine's screens handed over in process (host.engine)."""
+
     def __init__(self, state, v=1, doc=None):
+        import types
+        from server import engine_routes, ext
+        from tandemapp import engine_ext
         self.state = state
         self.store = Store(v, doc or {})
+        # as tandemapp.engine_ext hands them to its conductor: the host's Refusal as an ApiError
+        self.engine = engine_ext._screens(types.SimpleNamespace(engine=engine_routes.in_process(state),
+                                                                Refusal=ext.Refusal))
+        state["ext"] = self
+
+    def ask(self, name, *args):
+        return self.store.peek(*args) if name == "document" and args[0] == "settings" else None
 
 
 def _tier(d, **kw):
@@ -191,7 +204,7 @@ def test_the_disk_route_answers_the_contract_running_or_not():
         cache.prefill(fresh(), Pos(), tokens(100, seed=2), "cpu", chunk=CH, disk=t)
         assert t.flush()
         cache.prefill(fresh(), Pos(), tokens(100, seed=2) + [3], "cpu", chunk=CH, disk=t)
-        state = {"disk_cache": t, "args": {"disk_cache": d}, routes.ENGINE_ROUTES: inproc.ROUTES}
+        state = {"disk_cache": t, "args": {"disk_cache": d}}
         state["conductor"] = Cond(state, 2, _doc())
         v = diskcache.view(state)
         _check({**v, "contract_version": "1.0"}, "memory-disk")
@@ -214,7 +227,7 @@ def test_the_disk_route_answers_the_contract_running_or_not():
 
 
 def test_clear_without_a_tier_is_a_conflict():
-    state = {"args": {}, routes.ENGINE_ROUTES: inproc.ROUTES}
+    state = {"args": {}}
     try:
         routes._memory(Cond(state), "POST", ["disk", "clear"], {}, {})
         raise AssertionError("no 409")

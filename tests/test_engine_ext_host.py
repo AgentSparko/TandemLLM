@@ -12,8 +12,9 @@ The test matrix (the Gherkin of ENG-429's host part):
      in the same order as the reference host, for a plain request, a tool call, CONTINUE_HIDDEN,
      REGENERATE_CALL, GIVE_UP, an SP4 note and a plan of None   test_the_order_is_the_reference_hosts
   3  start is closed: chat mode without QSE_EXT, a module that does not import, no EXT_API,
-     another major (1.x), a newer minor, start raising, a missing hook, a route on an engine path each
-     refuse with the reference host's one line; engine mode without QSE_EXT is headless
+     another major (1.x), a newer minor, start raising, a missing hook, a route on an engine path,
+     2.1: the session monitor without the module's before_load and a 2.0 extension that routes
+     requests each refuse with the reference host's one line; engine mode without QSE_EXT is headless
                                                                   test_start_is_closed
   4  a request is open: each hook and supervisor method that raises, a wrong shape and an act out
      of its safe point leave the request served (raw from a failed plan), counted by hook in
@@ -136,7 +137,8 @@ _ARGS = {"header": "on", "n": 2, "messages": [{"role": "user"}], "routing": None
          "decode": str, "taken": ["t"], "body": {}, "session": "s", "supervisor": None,
          "tokenizer": None, "text": "x", "acts": [], "budget": 64, "task": "client", "asker": None,
          "answer": "a", "items": [{"x": 1}], "events": None, "call": {"id": 1, "_held": 2},
-         "inner": "y", "renamed": {}, "verdict": "v", "name": "f"}
+         "inner": "y", "renamed": {}, "verdict": "v", "name": "f", "slot": None, "fields": {},
+         "tokenizer_sha": None, "registry": None, "doc": {}}
 
 
 def _the_2_0_surface(s: dict, H) -> None:
@@ -168,12 +170,19 @@ def _the_2_0_surface(s: dict, H) -> None:
     # a supervisor without an optional method answers its headless value and stays attached
     assert plain.apply_request([1], True, []) == ([1], True) and not plain.detached
     kept = " ".join(k["what"] for k in s["kept_interim"])
-    assert set(E.INTERIM) == {"writer"} and all(n + "()" in kept for n in E.INTERIM), kept
-    assert all(k["why"] and k["until"] for k in s["kept_interim"])
+    # 2.1 (ENG-413 WP5): nothing interim of the 2.0 list is left; only the --backends hand-over,
+    # until WP14; the writer and the reads outside a request are calls
+    assert not hasattr(E, "INTERIM") and "writer" not in kept and "--backends" in kept, kept
+    assert all(k["why"] and k["until"] == "ENG-413 WP14" for k in s["kept_interim"])
+    assert set(E.CALLS_2_1) == {c["name"] for c in s["extension"]["calls"] if c.get("since") == "2.1"}
+    assert set(E.DOCUMENTS) == set(s["extension"]["documents"]) and set(E.WRITER) == set(s["memory_writer"]["methods"])
+    assert set(E.MODULE_OPTIONAL) == set(s["discovery"]["module_optional"])
+    assert {"shipped_guard", "engine"} <= set(s["host"]) and "conductor" in s["state_keys"]
     assert {"ext_dir", "identity_name", "own_eta", "own_idle", "NoRoom"} <= set(s["host"])
     assert "routing" in s["request"]["plan_fields"] and s["request"]["routing_fields"]
     assert set(s["extras"]["lines_fields"]) >= {"ui", "doc", "channel", "inline", "share"}
-    assert "interim" not in json.dumps({k: v for k, v in s.items() if k not in ("since_1_2", "kept_interim", "changed_from_1")})
+    assert "interim" not in json.dumps({k: v for k, v in s.items()
+                                        if k not in ("since_1_2", "kept_interim", "changed_from_1", "since_2_1")})
 
 
 # ---------------------------------------------------------------------------- 2
@@ -273,6 +282,7 @@ def test_start_is_closed():
     def ours(module, args=None, mode="chat") -> str:
         try:
             m = E.discover(module, mode) if isinstance(module, str) else E.check_module(module)
+            E.before_load(m, dict(args or {}))            # 2.1: server/app.py asks it before the load
             E.start(m, _host(args))
         except E.Refused as exc:
             line = str(exc)
@@ -293,7 +303,10 @@ def test_start_is_closed():
              (variant(EXT_API="1.3"), None), (variant(EXT_API="2.9"), None),
              (variant(EXT_API="one"), None), (mod, {"fail": "start"}),
              (mod, {"route": "/v1/chat/completions"}), (mod, {"route": "/v1/dashboard/live"}),
-             (mod, {"route": "/v1/engine/disk"}), (variant(start=lambda host: NoHook()), None)]
+             (mod, {"route": "/v1/engine/disk"}), (variant(start=lambda host: NoHook()), None),
+             # 2.1 (ENG-413 WP5): the monitor without before_load; a 2.0 extension that routes
+             (mod, {"conductor": "on"}),
+             (variant(start=lambda host: (host.state.update(conductor=object()), mod.start(host))[1]), None)]
     lines = []
     for module, args in cases:
         a = ours(module, args)
@@ -302,7 +315,7 @@ def test_start_is_closed():
         assert a.replace("fake_ext", "M").replace("variant_ext", "M") == \
             b.replace("engine_ext_ref_fake_ext", "M").replace("variant_ext", "M"), (a, b)
         lines.append(a)
-    assert "QSE_EXT is empty" in lines[0] and lines[3] == "[ext] REFUSING: the extension speaks engine-ext-v1 1.3; this engine speaks 2.0", lines
+    assert "QSE_EXT is empty" in lines[0] and lines[3] == "[ext] REFUSING: the extension speaks engine-ext-v1 1.3; this engine speaks 2.1", lines
     assert E.discover("", "engine") is None and E.NULL.listing() == [] and E.NULL.route("GET", "/x") is None
     # an older minor starts; the extension's own paths are fine
     assert E.start(mod, _host({"route": "/v1/conductor/"})).listing() == \
@@ -438,7 +451,7 @@ def test_the_engine_refuses_to_start():
     cdir = tempfile.mkdtemp(prefix="ext-cond-")
     before = [({}, cdir, "chat mode needs an extension (QSE_EXT is empty)"),
               ({"QSE_EXT": "no_such_extension_module_x"}, None, "QSE_EXT=no_such_extension_module_x does not import"),
-              ({"QSE_EXT": "ext_major1"}, None, "the extension speaks engine-ext-v1 1.3; this engine speaks 2.0"),
+              ({"QSE_EXT": "ext_major1"}, None, "the extension speaks engine-ext-v1 1.3; this engine speaks 2.1"),
               ({"QSE_EXT": "fake_ext", "QSE_EXT_ARGS": "[1]"}, None, "QSE_EXT_ARGS is not a JSON object")]
     after = [({"QSE_EXT": "ext_nohook"}, None, "ext_nohook lacks the hooks"),
              ({"QSE_EXT": "fake_ext", "QSE_EXT_ARGS": '{"fail": "start"}'}, None, "fake_ext.start failed"),

@@ -106,12 +106,17 @@ def _planner_on(mem_gib, root, *, hold_file=None):
     """server/decider_api.py's planner with MemAvailable pinned, journaling into `root`."""
     state = {}
 
-    class Cond:
+    class Ext:
+        """The extension as the planner asks it (ENG-413 WP5, engine-ext-v1 2.1 `document`)."""
+
         def __init__(self):
             from tandemapp.conductor.store import Store
-            self.root, self.store = root, Store(root)
+            self.store = Store(root)
 
-    state["conductor"] = Cond()
+        def ask(self, name, *args):
+            return self.store.peek(args[0]) if name == "document" else None
+
+    state["ext"], state["ext_root"] = Ext(), root     # its documents; the journal in its directory
     orig = decider_api._mem_available_gib
     decider_api._mem_available_gib = lambda fake: mem_gib
     try:

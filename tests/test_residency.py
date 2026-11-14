@@ -161,7 +161,9 @@ def test_the_document_validates_versions_and_restores():
 def test_the_command_line_reads_the_store_and_journals():
     root = tempfile.mkdtemp(prefix="qse-res-cli-")
     Store(root).put("residency", None, dict(DOC, margin_gib=10.0), note="m10", author="t")
-    env = dict(os.environ, PYTHONPATH=ROOT)
+    # ENG-413 WP5: the command line reads the store through the extension's module (QSE_EXT,
+    # engine-ext-v1 2.1 read_document), as ops/roles.sh runs it with serve.env's QSE_EXT
+    env = dict(os.environ, PYTHONPATH=ROOT, QSE_EXT="tandemapp.engine_ext")
     run = lambda *a: subprocess.run([sys.executable, "-m", "server.conductor.residency",  # noqa: E731
                                      "--root", root, *a], capture_output=True, text=True,
                                     env=env, cwd=ROOT)

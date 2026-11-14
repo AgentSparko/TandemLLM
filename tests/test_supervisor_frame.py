@@ -218,14 +218,20 @@ def test_the_server_refuses_to_start_on_a_bad_policy_and_ignores_it_raw():
     path = os.path.join(tempfile.mkdtemp(), "bad.yaml")
     with open(path, "w") as f:
         f.write("version: 1\ncaps: {}\n")
-    args = type("A", (), {"conductor": "on", "conductor_policy": path})()
+    # ENG-413 WP5: the extension's module checks the policy before the load (engine-ext-v1 2.1
+    # before_load, which server/app.py's start asks through server/ext.py)
+    import importlib
+    from server import ext as ext_mod
+    mod = importlib.import_module("tandemapp.engine_ext")
+    args = {"conductor": "on", "conductor_policy": path}
+    assert app._monitor_asked(type("A", (), args)())
     try:
-        app._conductor_policy(args)
+        ext_mod.before_load(mod, args)
         raise AssertionError("a policy that does not validate must stop the start")
     except SystemExit as exc:
         assert "does not load: policy.session: missing" in str(exc), exc
-    args.conductor = "raw"
-    assert app._conductor_policy(args) is None
+    args["conductor"] = "raw"
+    assert ext_mod.before_load(mod, args) is None and not app._monitor_asked(type("A", (), args)())
 
 
 def test_the_modes():
