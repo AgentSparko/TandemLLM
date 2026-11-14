@@ -2,8 +2,8 @@
 # Copy: git -C ENGINE archive COMMIT contracts/engine-api-v1 contracts/engine-ext-v1 | tar -x, then
 # these lines: the commit, each folder's version and git tree id (this file left out of the first).
 # tests/test_contract_pin.py hashes both folders from disk against them.
-engine_commit 17e995e493c2f87e7052278e3d1de8eb2690d52a
-engine_api 1.5
-engine-api-v1 0b9636ffc4314ce5f1e61fbdd119dc67a06e1881
+engine_commit 0618507a977c85a4958b59db4d41ed206ffd3afa
+engine_api 1.6
+engine-api-v1 bcdabc007b8146dadba5cc033ea855fb0ca6e8e4
 ext_api 3.1
-engine-ext-v1 5cd86aab5346f87d46ddac5f275093251d600c12
+engine-ext-v1 8486335a3a6e036c761831fe7f9ed4dc35ef836e

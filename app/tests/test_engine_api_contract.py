@@ -49,8 +49,12 @@ tests/test_engine_api_contract.py.
  10  1.5 (ENG-413 WP5) is additive: the 1.4 examples (compat/1.4/) validate, every 1.4 route is
      still here, group 9 is the engine's screens (each replaces a /v1/conductor/* screen, which
      is marked to leave), the dashboard reads them at /v1/engine/* and no longer at the
-     conductor's paths, and the health example names TandemApp's extension on PIN's ext_api
+     conductor's paths, and the 1.5 health example names TandemApp's extension on PIN's ext_api
                                                                   test_additive_1_5
+ 11  1.6 (ENG-413 WP6) is additive: the 1.5 examples (compat/1.5/) validate, the routes are 1.5's,
+     the health example says SPEAKS; node/control.json `chat` is what proxy/nodechat.py does:
+     QSE_CHATD=node from 1.6, the tandem-node chat verbs, 3 starts an hour
+                                                                  test_additive_1_6
 
 Standard library only; the fake engines are threads on loopback ports.
 
@@ -74,7 +78,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from proxy import _version, engineapi, nodeengines, nodeweights  # noqa: E402
+from proxy import _version, engineapi, nodechat, nodeengines, nodeweights  # noqa: E402
 from proxy_util import run  # noqa: E402
 from tools import contract_check  # noqa: E402
 
@@ -745,14 +749,40 @@ def test_additive_1_5():
     new_calls = {lit for rel in ui_files() for _ln, lit in literals_of(rel)
                  if lit.startswith("/v1/engine/")}
     assert len(new_calls) >= 6, sorted(new_calls)
-    ex = _ex("health.example.json")
-    assert ok(ex, health) and ex["engine_api"] == engineapi.SPEAKS == "1.5"
+    ex = _ex("compat/1.5/health.example.json")
+    assert ok(ex, health) and ex["engine_api"] == "1.5"
     with open(os.path.join(ROOT, "contracts", "engine-api-v1", "PIN")) as f:
         pin = dict(ln.split(None, 1) for ln in f.read().splitlines() if ln and not ln.startswith("#"))
     (x,) = ex["extensions"]
     assert x["name"] == "tandemapp" and x["ext_api"] == pin["ext_api"].strip(), (x, pin)
     return f"1.4 answers valid, {len(now)} routes, {len(g9)} in group 9, the dashboard reads " \
            f"{len(new_calls)} engine screen paths, extensions names tandemapp {x['ext_api']}"
+
+
+
+def test_additive_1_6():
+    def ok(doc, schema):
+        return not contract_check.validate(doc, schema, root=CONTRACT)
+    health = contract_check.load("health", CONTRACT)
+    for name in ("health.example.json", "health.stage-front.example.json",
+                 "health.stage-tail.example.json"):
+        assert ok(_ex("compat/1.5/" + name), health), name
+    old, doc = _ex("compat/1.5/routes.json"), _routes()
+    assert (old["version"], doc["version"]) == ("1.5", "1.6") == ("1.5", engineapi.SPEAKS)
+    assert {k: v for k, v in doc.items() if k != "version"} == \
+        {k: v for k, v in old.items() if k != "version"}, "1.6 changes no route"
+    ex = _ex("health.example.json")
+    assert ok(ex, health) and ex["engine_api"] == engineapi.SPEAKS
+    for said in ("1.0", "1.5", "1.6"):
+        assert engineapi.read(dict(ex, engine_api=said))["ok"], said
+    with open(os.path.join(CONTRACT, "node", "control.json")) as f:
+        chat = json.load(f)["chat"]
+    assert chat["node"] == nodechat.NODE_VALUE and chat["values"] == ["on", "off", "node"]
+    assert chat["about"].startswith("Since engine API %d.%d:" % nodechat.NEEDS_API)
+    assert nodechat.api_at_least("1.6") and not nodechat.api_at_least("1.5")
+    assert chat["node_cli"] == "tandem-node chat" and chat["node_verbs"] == list(nodechat.VERBS)
+    assert chat["watch"]["starts_per_hour"] == nodechat.MAX_STARTS
+    return f"1.5 answers valid, {len(doc['routes'])} routes as 1.5's, chat: {'/'.join(chat['node_verbs'])}"
 
 
 if __name__ == "__main__":

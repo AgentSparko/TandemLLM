@@ -39,5 +39,30 @@
       "tail",
       "front"
     ]
+  },
+  "chat": {
+    "about": "Since engine API 1.6: who runs chatd, the Chat tab's service, on an engine box. The engine's QSE_CHATD (run/local.env): on, the default, its launchers run it (ops/start.sh starts it once /health answers, ops/watchdog.sh starts a dead one at most 3 times an hour, bin/tandem start starts it and bin/tandem stop stops it first); off, nothing here starts it; node, TandemNode owns it: the launchers neither start nor stop it and say so, the watchdog leaves it alone, and bin/tandem chat runs tandem-node chat. serve.env's engine mode keeps node and turns every other value off. An engine before 1.6 reads node as on, so TandemNode hands chatd over only to an engine whose /health says 1.6 or later, or that says off.",
+    "key": "QSE_CHATD",
+    "values": [
+      "on",
+      "off",
+      "node"
+    ],
+    "node": "node",
+    "node_cli": "tandem-node chat",
+    "node_verbs": [
+      "start",
+      "stop",
+      "restart",
+      "status",
+      "logs"
+    ],
+    "node_bin": "TANDEM_NODE_BIN, else tandem-node on PATH",
+    "node_port": "TANDEM_NODE_PORT, default 7700: ops/start.sh says whether a TandemNode answers there",
+    "start_line": "[start] chatd: TandemNode's (QSE_CHATD=node)",
+    "watch": {
+      "starts_per_hour": 3,
+      "only_when": "/health 200, no fresh .watchdog.off, not setup mode, not engine mode"
+    }
   }
 }

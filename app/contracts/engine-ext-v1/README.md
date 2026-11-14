@@ -85,6 +85,8 @@ Why: an engine asked for chat mode that came up without its extension would serv
 
 MAJOR.MINOR. A minor step adds a hook, an argument with a default, a host attribute, an event field, a plan field or an act kind. A major step removes or renames one, or changes a meaning or the failure rule.
 
+Until ENG-413 is finished (decided 2026-11-14): the engine and TandemApp's extension are always vendored and pinned together (the engine's `app.pin`, TandemApp's `PIN`), so an engine and an extension from different steps never meet, and every contract change in that time is a minor step, even one a mismatched pair would feel. The release step then sets one clean major and freezes it; from there the rule above holds for every change.
+
 ## Tests
 
 - The engine (`tests/test_engine_ext_contract.py`): `ext.json` is well formed; `fake_ext.py` has every hook with its arguments; `fake_host.py` drives the order of `ext.json` (a plain request, each act loop); every start failure is refused with one line, every request failure is open; the Python files here import only the standard library; `knobs.json` matches `engine/settings.py` `KNOBS`. The engine's host (`server/ext.py`, ENG-413 WP3a) is held to the same cases by `tests/test_engine_ext_host.py`: `fake_ext.py` through the real loader, each refusal line on a fake engine, the per-request rule and `qse_ext_errors_total`.

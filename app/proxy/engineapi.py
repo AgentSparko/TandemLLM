@@ -11,7 +11,9 @@ ASCII digits, a dot, ASCII digits, nothing around it); its reason quotes what th
     read(doc, kind)   {engine_api, assumed, ok, why} for kind tandemllm; None for any other kind
 
 Readers: proxy/nodeengines.py (an engine view says `unhealthy` with health.api_why) and
-proxy/deployments.py (such a member is `down`, takes no request, and a start fails at once).
+proxy/deployments.py (such a member is `down`, takes no request, and a start fails at once);
+proxy/nodechat.py hands chatd to TandemNode on QSE_CHATD=node only from 1.6 (node/control.json
+`chat`).
 Standard library only; nothing of the engine is imported.
 """
 
@@ -22,7 +24,7 @@ import re
 from proxy import _version
 
 #: the engine API version this TandemApp speaks (routes.json `version`)
-SPEAKS = "1.5"
+SPEAKS = "1.6"
 #: what an engine without the field speaks
 ASSUMED = "1.0"
 _FORM = re.compile(r"([0-9]+)\.([0-9]+)")

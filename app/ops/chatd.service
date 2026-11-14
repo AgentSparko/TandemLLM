@@ -3,6 +3,8 @@
 # install.sh: there chatd starts with the engine (ops/start.sh) and `tandem stop`, the stop of
 # tandemllm.service included, stops it (OPS-155). This unit is for a box that runs chatd under
 # systemd on its own; then set QSE_CHATD=off in run/local.env so start.sh leaves it to the unit.
+# On a box with TandemNode, let TandemNode own chatd instead (no unit): `tandem-node serve --chat
+# on` and QSE_CHATD=node in run/local.env (proxy/nodechat.py, SRV-823).
 # A user unit dies with the login session unless linger is enabled (sudo loginctl enable-linger).
 #
 # Install with (another --dir: replace %h/TandemLLM below):

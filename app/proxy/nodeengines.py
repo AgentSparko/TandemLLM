@@ -140,6 +140,7 @@ class Engines:
         self.list = engines
         self.by_id = {e.id: e for e in engines}
         self.log, self.clock, self.poll_s = log, clock, poll_s
+        self.on_done = None             # (engine, job) after each job: the chat watcher's kick
         for e in engines:
             _load_stage(e)
 
@@ -261,6 +262,11 @@ class Engines:
         job["ended_at"] = self.clock()
         self.log(f"[node] {job['action']} {e.id}: {job['state']}"
                  f"{' · ' + job['message'] if job['message'] else ''}")
+        if self.on_done is not None:
+            try:
+                self.on_done(e, dict(job))
+            except Exception as exc:                                 # noqa: BLE001
+                self.log(f"[node] after {job['action']} {e.id}: {type(exc).__name__}: {exc}")
 
     def _popen(self, e: Engine, argv: list[str]) -> subprocess.Popen:
         os.makedirs(os.path.dirname(e.log_path), exist_ok=True)

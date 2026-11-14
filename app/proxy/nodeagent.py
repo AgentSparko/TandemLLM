@@ -11,6 +11,9 @@ talks to (SRV-725). Port 7700.
     tandem-node status                                the owner, this node's fingerprint, the window
     tandem-node reset [--keys]                        forget the owner and every pin (and the key)
     tandem-node adopt --address IP [--takeover]       a controller's certificate from stdin (SSH once)
+    tandem-node chat [status|start|stop|restart|logs [n]] [--no-follow] [--json]
+                                                      chatd on this box when this node owns it
+                                                      (`serve --chat on`, proxy/nodechat.py)
 
 ROUTES (every one behind the caller check below; JSON unless an event stream):
 
@@ -82,6 +85,11 @@ ROUTES (every one behind the caller check below; JSON unless an event stream):
                                        hands this node to the new controller's certificate; the
                                        controller on this machine (the secret, no owner yet)
                                        hands it on with the LAN address to listen on
+    GET    /node/chat                  chatd, the Chat tab's service (proxy/nodechat.py, SRV-823):
+                                       who owns it, running or stopped (pid, URL, data folder),
+                                       the engine's QSE_CHATD, the watcher's count, the job
+    POST   /node/chat/start | stop | restart     202 and the job; 409 not_owned (the engine's
+                                       launchers run chatd), busy or no_launcher
     GET    /node/controller            a controller this agent started on this machine, or none
     POST   /node/controller {bundle, port, admin_token, name?, state_dir?}   the owner's: a
                                        TandemApp controller started here as a systemd user unit
@@ -159,7 +167,7 @@ if __package__ in (None, ""):                                    # pragma: no co
 
 from proxy import hostcollect, linktest, mdns, nodeclient, nodeengines, nodemaint  # noqa: E402
 from proxy import nodemetrics, nodeupdate, nodeweights  # noqa: E402
-from proxy import nodesource, nodetrust, pairing  # noqa: E402
+from proxy import nodechat, nodesource, nodetrust, pairing  # noqa: E402
 
 DEFAULT_PORT = 7700
 DEFAULT_DIR = "~/.tandemllm/node"
@@ -252,7 +260,8 @@ class Agent:
     def __init__(self, state_dir: str, *, tandem_dir: str | None = None, root: str = "/",
                  collector=None, local=None, engines=None, clock=time.time, sample_wait=None,
                  addrs=None, ping=None, logbuf=None, log=None, virtual: str | None = None,
-                 maintenance=None, weights_dir: str | None = None):
+                 maintenance=None, weights_dir: str | None = None, chat=None,
+                 chat_own: bool = False):
         self.state_dir = os.path.expanduser(state_dir)
         os.makedirs(self.state_dir, mode=0o700, exist_ok=True)
         self.log = log or (lambda m: print(m, flush=True))
@@ -269,6 +278,12 @@ class Agent:
         self.engines = engines or nodeengines.Engines.load(self.state_dir, tandem_dir,
                                                            virtual=virtual, log=self.log,
                                                            clock=clock)
+        # SRV-823: chatd, when this node owns it; an engine start or restart here wakes its watcher
+        self.chat = chat or nodechat.Chat.load(self.state_dir, tandem_dir, self.engines,
+                                               own=chat_own, log=self.log, clock=clock)
+        self.engines.on_done = lambda e, job: (
+            self.chat.kick() if job["action"] in ("start", "restart") and job["state"] == "done"
+            else None)
         self.maintenance = maintenance or nodemaint.Maintenance.load(
             self.state_dir, virtual=virtual, log=self.log, clock=clock)
         self.weights = nodeweights.Store(weights_dir or os.path.join(self.state_dir, "weights"),
@@ -782,6 +797,87 @@ def _line(e: dict, source: str) -> dict:
 
 # ====================================================================== the HTTP side
 
+def _chat_lines(doc: dict) -> list[str]:
+    who = {"node": "this node's", "engine": "the engine's (its launchers run it)",
+           "both": "this node's, and the engine's launchers too"}[doc["owner"]]
+    out = [f"[chat] chatd: {who}"]
+    out += [ln for ln in doc.get("status") or []]
+    if doc.get("why"):
+        out.append(f"[chat] {doc['why']}")
+    w = doc.get("watch") or {}
+    if w.get("stopped_by_hand"):
+        out.append("[chat] stopped by hand: the watcher leaves it until tandem-node chat start")
+    elif w.get("gave_up"):
+        out.append("[chat] 3 starts this hour did not keep it running: the watcher gave up until "
+                   "the next hour")
+    return out
+
+
+def cmd_chat(a, verb: str, lines: int = 100) -> int:
+    """`tandem-node chat`: through the running agent (its job slot and its watcher), else here
+    with this node's chat.json; logs read the file. Exit 0 done or running, 1 failed or stopped,
+    3 an agent without chat routes, 4 refused."""
+    c = local_client(a)
+    if verb == "logs":
+        path = nodechat.Chat.load(a.state_dir, a.tandem_dir, own=a.chat == "on").log_path
+        if c is not None:
+            st, doc = c.json("GET", "/node/chat")
+            if st == 200:
+                path = doc.get("log") or path
+        if not os.path.isfile(path):
+            print(f"[chat] no log yet at {path}", file=sys.stderr)
+            return 1
+        argv = ["tail", "-n", str(lines)] + ([] if a.no_follow else ["-f"]) + [path]
+        os.execvp("tail", argv)
+    if c is not None:
+        st, doc = c.json("GET", "/node/chat")
+        if st == 404:
+            print("[chat] this TandemNode has no chat routes (an agent from before SRV-823): "
+                  "update it", file=sys.stderr)
+            return 3
+        if verb != "status":
+            st, job = c.json("POST", f"/node/chat/{verb}")
+            if st != 202:
+                print(f"[chat] {((job or {}).get('error') or {}).get('message') or f'HTTP {st}'}",
+                      file=sys.stderr)
+                return 4
+            t0 = time.monotonic()
+            while time.monotonic() - t0 < nodechat.LAUNCH_TIMEOUT_S + 30:
+                st, doc = c.json("GET", "/node/chat")
+                j = (doc or {}).get("job") or {}
+                if j.get("id") == job["id"] and j.get("state") != "running":
+                    print(f"[chat] {verb}: {j['state']}"
+                          + (f" · {j['message']}" if j.get("message") else ""))
+                    return 0 if j["state"] == "done" else 1
+                time.sleep(0.5)
+            print(f"[chat] {verb}: still running; tandem-node chat status", file=sys.stderr)
+            return 1
+    else:
+        chat = nodechat.Chat.load(a.state_dir, a.tandem_dir, own=a.chat == "on")
+        if verb != "status":
+            if not chat.own:
+                print("[chat] chatd is not this node's (tandem-node serve --chat on, or chat.json "
+                      "own)", file=sys.stderr)
+                return 4
+            print("[chat] TandemNode does not answer: acting here; its watcher is not running")
+            try:
+                rc, msg = chat.run_action(verb)
+            except nodechat.ChatError as exc:
+                print(f"[chat] {exc.message}", file=sys.stderr)
+                return 4
+            print(f"[chat] {verb}: {'done' if rc == 0 else 'failed'} · {msg}")
+            return 0 if rc == 0 else 1
+        doc = chat.view()
+        doc["agent"] = "not answering"
+    if a.json:
+        print(json.dumps(doc))
+    else:
+        print("\n".join(_chat_lines(doc)))
+        if doc.get("agent"):
+            print("[chat] TandemNode does not answer: its watcher is not running")
+    return 0 if doc.get("state") == "running" else 1
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "TandemNode"
@@ -933,6 +1029,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._metrics(q)
             if head == "engines":
                 return self._engines(method, parts[2:], u.query)
+            if head == "chat":
+                return self._chat(method, parts[2:])
             if head == "maintenance":
                 return self._maintenance(method, parts[2:])
             if head == "weights":
@@ -976,6 +1074,8 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as exc:
             return self._err(400, "bad_request", str(exc))
         except nodeengines.EngineError as exc:
+            return self._json(exc.status, exc.body())
+        except nodechat.ChatError as exc:
             return self._json(exc.status, exc.body())
         except nodeupdate.UpdateError as exc:
             return self._json(exc.status, exc.body())
@@ -1093,6 +1193,17 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET":
             return self._relay_get(e, "/" + "/".join(rest[1:]), query)
         return self._err(404, "not_found", f"no route {method} /node/engines/{'/'.join(rest)}")
+
+    def _chat(self, method: str, rest: list[str]) -> None:
+        """SRV-823: chatd on this box, when this node owns it."""
+        chat = self.agent.chat
+        if method == "GET" and not rest:
+            return self._json(200, chat.view())
+        if method == "POST" and len(rest) == 1 and rest[0] in nodechat.ACTIONS:
+            job = chat.act(rest[0], self._who())
+            self._audit(f"chat {rest[0]}", 202)
+            return self._json(202, job)
+        return self._err(404, "not_found", f"no route {method} /node/chat/{'/'.join(rest)}")
 
     def _maintenance(self, method: str, rest: list[str]) -> None:
         m = self.agent.maintenance
@@ -1657,7 +1768,7 @@ def listen(agent: Agent, hosts: list[str], port: int) -> list[Server]:
 
 # ====================================================================== the command
 
-COMMANDS = ("serve", "check", "unit", "pair", "takeover", "status", "reset", "adopt")
+COMMANDS = ("serve", "check", "unit", "pair", "takeover", "status", "reset", "adopt", "chat")
 
 
 def parser() -> argparse.ArgumentParser:
@@ -1692,7 +1803,13 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--name", default="", help="adopt: the controller's name")
     ap.add_argument("--keys", action="store_true", help="reset: a new key and certificate too")
     ap.add_argument("--json", action="store_true",
-                    help="pair, takeover, status: the answer as JSON; pair does not wait")
+                    help="pair, takeover, status, chat status: the answer as JSON; pair does not "
+                         "wait")
+    ap.add_argument("--chat", choices=("on", "off"),
+                    default=(env.get("TANDEM_NODE_CHAT") or "off").lower(),
+                    help="this node owns chatd, the Chat tab's service (TANDEM_NODE_CHAT, default "
+                         "off; or chat.json own): the engine hands it over with QSE_CHATD=node")
+    ap.add_argument("--no-follow", action="store_true", help="chat logs: print and exit")
     return ap
 
 
@@ -1715,7 +1832,8 @@ def unit_text(a) -> str:
         f"{a.state_dir}" + (f" --tandem-dir {a.tandem_dir}" if a.tandem_dir else "") + \
         (f" --virtual {a.virtual}" if a.virtual else "") + \
         (" --mdns off" if a.mdns == "off" else "") + \
-        (f" --weights-dir {a.weights_dir}" if a.weights_dir else "")
+        (f" --weights-dir {a.weights_dir}" if a.weights_dir else "") + \
+        (" --chat on" if a.chat == "on" else "")
     return f"""[Unit]
 Description=TandemNode agent (tandem-node) on {', '.join(_hosts(a))}:{a.port}
 After=network-online.target
@@ -1919,6 +2037,11 @@ def cmd_adopt(a) -> int:
 def main(argv=None) -> None:
     argv = list(sys.argv[1:] if argv is None else argv)
     cmd = argv.pop(0) if argv and argv[0] in COMMANDS else "serve"
+    verb, lines = "status", 100
+    if cmd == "chat":
+        verb = argv.pop(0) if argv and argv[0] in nodechat.VERBS else "status"
+        if verb == "logs" and argv and argv[0].isdigit():
+            lines = int(argv.pop(0))
     a = parser().parse_args(argv)
     a.state_dir = os.path.expanduser(a.state_dir)
     if cmd == "unit":
@@ -1932,6 +2055,8 @@ def main(argv=None) -> None:
         raise SystemExit(cmd_reset(a))
     if cmd == "adopt":
         raise SystemExit(cmd_adopt(a))
+    if cmd == "chat":
+        raise SystemExit(cmd_chat(a, verb, lines))
     store = nodetrust.Store(os.path.join(a.state_dir, "trust"))
     extra = store.listen_addrs() if store.ready() else []
     try:
@@ -1951,7 +2076,7 @@ def main(argv=None) -> None:
     buf = logbuf.install()
     try:
         agent = Agent(a.state_dir, tandem_dir=a.tandem_dir, logbuf=buf, virtual=a.virtual,
-                      weights_dir=a.weights_dir)
+                      weights_dir=a.weights_dir, chat_own=a.chat == "on")
         listen(agent, _hosts(a), a.port)
     except (nodetrust.TrustError, nodetrust.BindRefused, ValueError, OSError) as exc:
         raise SystemExit(f"[node] not starting: {exc}")
@@ -1962,7 +2087,9 @@ def main(argv=None) -> None:
                                        for e in agent.engines.list)
           + f"; psutil {'yes' if agent.collector.psutil else 'no'}, nvml "
           f"{'yes' if agent.collector._nvml_handle() else 'no'}"
-          + f"; owner {(agent.store.owner() or {}).get('name') or 'none'}", flush=True)
+          + f"; owner {(agent.store.owner() or {}).get('name') or 'none'}"
+          + "; chatd " + ("this node's" if agent.chat.own else "the engine's"), flush=True)
+    agent.chat.start_watcher()
     for s in agent.servers:
         threading.Thread(target=s.serve_forever, kwargs={"poll_interval": 0.5},
                          daemon=True).start()
@@ -1984,6 +2111,7 @@ def main(argv=None) -> None:
             agent.mdns.stop()
             agent.mdns = None
         agent.sampler.close()
+        agent.chat.close()
         agent.close_window()
         for s in list(agent.servers):
             s.shutdown()

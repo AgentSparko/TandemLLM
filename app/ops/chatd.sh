@@ -9,7 +9,8 @@
 #
 # From TandemApp's own root the path is ops/chatd.sh. The engine's ops/start.sh starts it once the
 # engine answers /health, `tandem stop` stops it first and `tandem chat start|stop|restart|status|logs`
-# calls this script (OPS-155), until ENG-413. Its own process, never the engine's: ops/stop.sh, an
+# calls this script (OPS-155), until ENG-413; with QSE_CHATD=node TandemNode does all of that instead
+# (`tandem-node chat ...`, SRV-823). Its own process, never the engine's: ops/stop.sh, an
 # engine restart and a hold leave it alone, and it does not touch the engine (ops/engines.sh does
 # not count it). It stays in the checkout (DIR/src/app/ops in an install): the `chatd` package is
 # found from here.
@@ -32,7 +33,8 @@
 # key there chatd makes <data>/forward.key, which the engine reads too. The admin and metrics
 # tokens never reach chatd. Address from QSE_CHAT_URL (http://127.0.0.1:8016), the engine from
 # QSE_CHAT_ENGINE (else http://127.0.0.1:$PORT), data in QSE_CHAT_DATA (~/.tandemllm/chat, the pid
-# file there too), the log in $TOP/logs/chatd.log (ids and counts, never message text).
+# file there too), the log in QSE_CHAT_LOG, else $TOP/logs/chatd.log (ids and counts, never message
+# text). TandemNode runs this script when it owns chatd (proxy/nodechat.py, SRV-823).
 # `--front HOST:PORT` also serves the dashboard and the Chat tab from this process, for an engine
 # whose server has no /v1/chat-app forward yet (chatd/front.py).
 set -eu
@@ -48,7 +50,7 @@ CHATD_ENV="${QSE_CHATD_ENV:-$TOP/run/chatd.env}"
 if [ -f "$CHATD_ENV" ]; then set +u; set -a; . "$CHATD_ENV"; set +a; set -u; fi
 DATA="${QSE_CHAT_DATA:-$HOME/.tandemllm/chat}"
 PIDF="$DATA/chatd.pid"
-LOG="$TOP/logs/chatd.log"
+LOG="${QSE_CHAT_LOG:-$TOP/logs/chatd.log}"
 URL="${QSE_CHAT_URL:-http://127.0.0.1:8016}"
 ADDR="${URL#*://}"; ADDR="${ADDR%%/*}"
 case "$ADDR" in *:*) CHOST="${ADDR%:*}"; CPORT="${ADDR##*:}" ;; *) CHOST="$ADDR"; CPORT=8016 ;; esac
@@ -130,7 +132,7 @@ start() {
         fi
         return 1
     fi
-    mkdir -p "$DATA" "$TOP/logs" 2>/dev/null && [ -w "$DATA" ] \
+    mkdir -p "$DATA" "$(dirname "$LOG")" 2>/dev/null && [ -w "$DATA" ] \
         || { echo "[chatd] cannot write the data folder $DATA (QSE_CHAT_DATA)"; return 1; }
     pick_python || return 1
     forward_key
