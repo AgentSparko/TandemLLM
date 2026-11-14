@@ -1080,11 +1080,7 @@ def _plan_served(plan, prompt, in_think: bool) -> tuple:
     if getattr(plan, "context", None) is not None and not getattr(plan, "prompt_client", False):
         inj = (getattr(plan, "router_cfg", None) or {}).get("injection") or {}
         undecided = int(inj.get("max_note_tokens", 8000))
-    try:
-        got = plan.served(prompt, STATE["tok"], in_think)
-    except Exception:                                              # noqa: BLE001
-        logbuf.print_exc()
-        got = None
+    got = EXT.interim("served", plan, prompt, in_think)     # ENG-413 WP3b: the extension's dry run
     return (None, (), undecided) if got is None else (got[0], got[1], undecided)
 
 
@@ -4782,12 +4778,9 @@ def _peek_ids(body: dict, headers) -> tuple[list[int], str | None]:
     session = body.get("session") if isinstance(body.get("session"), str) else None
     session = (session or conversation_id(body, headers) or _session_header(headers) or None)
     ids = build_prompt(body, count="ids")
-    cond = STATE.get("conductor")
-    if cond is not None and session:
-        try:
-            ids = cond.router.replayed_for("c:" + session[:120], ids, STATE["tok"])
-        except Exception:                                          # noqa: BLE001
-            logbuf.print_exc()             # the peek reads the copy without the notes
+    if STATE.get("conductor") is not None and session:
+        # the extension's router replays its notes (ENG-413 WP3b); a failure: the copy without them
+        ids = EXT.interim("replayed", session, ids)
     return ids, session
 
 
@@ -11104,20 +11097,20 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     plan.ask = None
             if plan is not None:
-                # the notes go into the last turn, before its <|im_end|>; earlier ones replay;
-                # thinking off closes the generation prompt's <think> (the head never changes)
+                # the extension's prompt (engine-ext-v1 `prompt`): the notes go into the last turn,
+                # before its <|im_end|>; earlier ones replay; thinking off closes the generation
+                # prompt's <think> (the head never changes); the memory's notes marked as given
                 n_rendered = int(prompt.numel())
-                prompt, in_think = plan.apply_prompt(prompt, STATE["tok"], in_think)
-                if plan.changed:
-                    clean_ids = plan.clean_ids
+                before_ = prompt.tolist()
+                ids_, in_think, cids_ = rec.ext.prompt(before_, in_think, conv=conv_id)
+                if ids_ != before_:
+                    prompt = torch.tensor(ids_, dtype=prompt.dtype, device=prompt.device)
+                if cids_ is not None:
+                    clean_ids = cids_
                 # SRV-165 (UT1, 2026-10-06: a 'hi' reported 238 prompt tokens, raw 11): the notes
                 # the router put in (this turn's and the session's replayed ones, the closed think
                 # block of a turn it turned thinking off) are not what the client sent
                 plan_hidden = int(prompt.numel()) - n_rendered
-                if getattr(plan, "memory", None) is not None:
-                    conductor_memory.mark_injected(STATE["conductor"].memory, plan)
-                    STATE["conductor"].memory.writer.seen(conv_id, plan.memory,
-                                                          plan.memory.get("text"))
             # A compaction as the continuation of the session's conversation
             comp = None
             if (chat and plan is not None and plan.active and getattr(plan, "compaction", False)
