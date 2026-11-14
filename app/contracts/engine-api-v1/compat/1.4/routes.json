@@ -1,0 +1,942 @@
+{
+  "version": "1.4",
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "aliases": [],
+      "group": 1,
+      "used_by": [
+        "proxy/service.py",
+        "proxy/canary.py",
+        "tandemapp/conductor/classify.py",
+        "chatd/engine.py",
+        "chatd/agent.py",
+        "chatd/service.py",
+        "dashboard/src/api/client.ts",
+        "dashboard/src/views/playground.ts"
+      ],
+      "doc": "OpenAI chat completions; the extensions below",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/completions",
+      "aliases": [],
+      "group": 1,
+      "used_by": [
+        "proxy/service.py"
+      ],
+      "doc": "OpenAI completions",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/embeddings",
+      "aliases": [],
+      "group": 1,
+      "used_by": [
+        "proxy/service.py",
+        "proxy/relay.py"
+      ],
+      "doc": "OpenAI embeddings",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/responses",
+      "aliases": [],
+      "group": 1,
+      "used_by": [
+        "proxy/service.py"
+      ],
+      "doc": "OpenAI responses",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/models",
+      "aliases": [],
+      "group": 1,
+      "used_by": [
+        "proxy/nodeengines.py",
+        "proxy/nodesource.py",
+        "tandemapp/conductor/classify.py",
+        "chatd/engine.py",
+        "dashboard/src/api/fleet.ts"
+      ],
+      "doc": "OpenAI model list; each model's `tandem` card, and `decision_models`",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/models/{id}",
+      "aliases": [],
+      "group": 1,
+      "used_by": [
+        "proxy/service.py",
+        "tandemapp/conductor/classify.py"
+      ],
+      "doc": "one model's card",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "aliases": [
+        "/healthz",
+        "/v1/health"
+      ],
+      "group": 2,
+      "used_by": [
+        "proxy/nodeengines.py",
+        "chatd/engine.py",
+        "dashboard/src/app.ts",
+        "dashboard/src/setup/api.ts",
+        "dashboard/src/setup/install.ts"
+      ],
+      "schema": "health.schema.json",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/metrics",
+      "aliases": [],
+      "group": 2,
+      "used_by": [
+        "proxy/nodeengines.py",
+        "proxy/nodesource.py",
+        "dashboard/src/views/performance.ts"
+      ],
+      "doc": "Prometheus text, the qse_* families (tandemapp/METRICS.md)",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/metrics/up",
+      "aliases": [],
+      "group": 2,
+      "used_by": [],
+      "doc": "one number for a scraper: the engine answers",
+      "consumer": "a Prometheus scrape (the engine's ops/monitoring); no TandemApp file",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/replica/identity",
+      "aliases": [],
+      "group": 2,
+      "used_by": [
+        "proxy/canary.py",
+        "proxy/nodeengines.py"
+      ],
+      "doc": "the replica identity block (server/identity.py): what two engines compare before they serve one model; 503 identity_pending until it is computed, once after the start. Since 1.1",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/live",
+      "aliases": [],
+      "group": 3,
+      "used_by": [
+        "proxy/nodeengines.py",
+        "proxy/nodesource.py",
+        "chatd/engine.py",
+        "dashboard/src/api/client.ts",
+        "dashboard/src/views/live-panel.ts"
+      ],
+      "schema": "dashboard/live.schema.json",
+      "query": "follow=0",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/system",
+      "aliases": [],
+      "group": 3,
+      "used_by": [
+        "proxy/nodeengines.py",
+        "proxy/nodesource.py",
+        "chatd/engine.py",
+        "dashboard/src/api/client.ts"
+      ],
+      "schema": "dashboard/system.schema.json",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/logs",
+      "aliases": [],
+      "group": 3,
+      "used_by": [
+        "proxy/nodeengines.py",
+        "proxy/nodesource.py",
+        "proxy/nodeagent.py",
+        "dashboard/src/api/client.ts"
+      ],
+      "schema": "dashboard/logs-json.schema.json",
+      "query": "follow=0",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/logs/export",
+      "aliases": [],
+      "group": 3,
+      "used_by": [
+        "dashboard/src/lib/log-export.ts"
+      ],
+      "doc": "the whole log ring as one text file (SRV-803), as ../dashboard-v1/logs-export.example.txt",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/parallel",
+      "aliases": [],
+      "group": 3,
+      "used_by": [
+        "proxy/relay.py",
+        "tandemapp/parallel.py",
+        "dashboard/src/api/client.ts",
+        "dashboard/src/views/parallel.ts"
+      ],
+      "schema": "dashboard/parallel.schema.json",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/metrics",
+      "aliases": [],
+      "group": 3,
+      "used_by": [
+        "dashboard/src/api/client.ts"
+      ],
+      "doc": "the /metrics text under the dashboard's access rule",
+      "live": true,
+      "leaves": "2.0: only the dashboard page on the engine's origin reads /metrics this way (its cookie access rule); the page leaves the engine (2026-11-13), callers read GET /metrics. Served through every 1.x"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/summary",
+      "aliases": [],
+      "group": 4,
+      "used_by": [
+        "dashboard/src/api/client.ts"
+      ],
+      "schema": "dashboard/summary.schema.json",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/usage",
+      "aliases": [],
+      "group": 4,
+      "used_by": [
+        "dashboard/src/api/client.ts"
+      ],
+      "schema": "dashboard/usage.schema.json",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/dashboard/requests",
+      "aliases": [],
+      "group": 4,
+      "used_by": [
+        "dashboard/src/api/client.ts",
+        "tools/tandem_eval.py"
+      ],
+      "schema": "dashboard/requests.schema.json",
+      "live": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tokenize",
+      "aliases": [],
+      "group": 5,
+      "used_by": [
+        "chatd/agent.py",
+        "proxy/deployments.py"
+      ],
+      "doc": "the exact prompt tokens of a request (the model's own template)",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cache/peek",
+      "aliases": [],
+      "group": 5,
+      "used_by": [
+        "chatd/service.py",
+        "proxy/deployments.py"
+      ],
+      "doc": "where a prompt's prefix is cached (tier per tandemapp/usage.py TIER_OF)",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cache/prewarm",
+      "aliases": [],
+      "group": 5,
+      "used_by": [
+        "chatd/service.py",
+        "proxy/deployments.py"
+      ],
+      "doc": "load a prompt's prefix ahead of its request",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cache/release",
+      "aliases": [],
+      "group": 5,
+      "used_by": [
+        "chatd/engine.py",
+        "proxy/deployments.py"
+      ],
+      "doc": "the engine gives back memory it holds",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cache/clear",
+      "aliases": [],
+      "group": 5,
+      "used_by": [
+        "tools/tandem_eval.py"
+      ],
+      "doc": "the prefix store emptied (the admin bearer)",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/models",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/models/{id}",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/models/{id}/steps",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/models/{id}/current",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/device",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/weights",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts",
+        "proxy/nodeagent.py"
+      ],
+      "doc": "docs/setup.md",
+      "live": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/setup/remove",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts",
+        "proxy/nodeagent.py"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/status",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts",
+        "dashboard/src/lib/restart.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/community",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/setup/community/sync",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/setup/estimate",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts",
+        "proxy/placement.py"
+      ],
+      "doc": "docs/setup.md; since 1.2 the optional split ask and block, setup/split.schema.json (422 invalid_split)",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/setup/plan",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/setup/apply",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/jobs/{id}",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/setup/jobs/{id}/retry",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/jobs/{id}/diagnostics",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/reset",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/setup/reset",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/assistant/status",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/setup/assistant/load",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/setup/assistant/unload",
+      "aliases": [],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/setup/assistant/chat",
+      "aliases": [
+        "/v1/setup/chat"
+      ],
+      "group": 6,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts",
+        "dashboard/src/setup/wren.ts"
+      ],
+      "doc": "docs/setup.md",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "aliases": [],
+      "group": 7,
+      "used_by": [
+        "dashboard/src/app.ts",
+        "dashboard/src/setup/install.ts"
+      ],
+      "schema": "health.schema.json",
+      "doc": "ops/engine_status.py: 503, `status` the engine's state, the facts under `engine`",
+      "port": "QSE_STATUS_PORT",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/models",
+      "aliases": [
+        "/models",
+        "/v1/models/{id}"
+      ],
+      "group": 7,
+      "used_by": [],
+      "doc": "ops/engine_status.py: 200, the engine's last model list",
+      "port": "QSE_STATUS_PORT",
+      "consumer": "an OpenAI client's model list while the engine restarts (OPS-67); no TandemApp file",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/status",
+      "aliases": [],
+      "group": 7,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/lib/restart.ts"
+      ],
+      "doc": "docs/setup.md",
+      "port": "QSE_STATUS_PORT",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/setup/jobs/{id}",
+      "aliases": [],
+      "group": 7,
+      "used_by": [
+        "relay:/v1/setup/",
+        "dashboard/src/setup/api.ts"
+      ],
+      "doc": "docs/setup.md",
+      "port": "QSE_STATUS_PORT",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/_tandem/status",
+      "aliases": [],
+      "group": 7,
+      "used_by": [],
+      "doc": "ops/engine_status.py: the responder's tree, status file, version and pid",
+      "port": "QSE_STATUS_PORT",
+      "consumer": "ops/engine_status.py ensure (the engine's own scripts); no TandemApp file",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/systemone",
+      "aliases": [
+        "/v1/predict"
+      ],
+      "group": 8,
+      "used_by": [
+        "tandemapp/conductor/classify.py"
+      ],
+      "schema": "decision/systemone.schema.json",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/readyz",
+      "aliases": [],
+      "group": 8,
+      "used_by": [
+        "tandemapp/conductor/classify.py"
+      ],
+      "doc": "200 once the engine's decision models are ready",
+      "live": false
+    }
+  ],
+  "engine_screens_until_eng413": [
+    {
+      "method": "GET",
+      "path": "/v1/conductor/residency/plan",
+      "schema": "../conductor-v1/residency-plan.schema.json",
+      "handler": "inproc.ROUTES[residency_plan]",
+      "tandem_app": "404 not_found, routes.ENGINE_ONLY",
+      "group": 9,
+      "after_eng413": "/v1/engine/residency/plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conductor/memory/disk",
+      "schema": "../conductor-v1/memory-disk.schema.json",
+      "handler": "inproc.ROUTES[disk]",
+      "tandem_app": "404 not_found, routes.ENGINE_ONLY",
+      "group": 9,
+      "after_eng413": "/v1/engine/disk"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conductor/memory/disk/clear",
+      "schema": "../conductor-v1/memory-disk-clear.schema.json",
+      "handler": "inproc.ROUTES[disk]",
+      "tandem_app": "404 not_found, routes.ENGINE_ONLY",
+      "group": 9,
+      "after_eng413": "/v1/engine/disk/clear"
+    },
+    {
+      "method": "*",
+      "path": "/v1/conductor/deciders/*",
+      "schema": "../conductor-v1/deciders-status.schema.json",
+      "handler": "inproc.ROUTES[deciders]",
+      "tandem_app": "status: 200, enabled false, why routes.DECIDERS_OFF_WHY; the rest 404 not_found with that text",
+      "group": 9,
+      "off_why": "this engine serves no decision model: QWEN38_DECIDER_MODELS is empty (set it in ops/serve.env, e.g. laya-english,laya-multilingual,laya-typed-decisions, and restart)",
+      "after_eng413": "/v1/engine/deciders/*"
+    },
+    {
+      "method": "*",
+      "path": "/v1/conductor/narrator/*",
+      "handler": "the narrator inproc.start_narrator starts (state narrator)",
+      "tandem_app": "status: 200, the narrator off; the rest 404 not_found (narrator.OFF_WHY)",
+      "group": 9,
+      "after_eng413": "/v1/engine/narrator/*"
+    },
+    {
+      "method": "*",
+      "path": "/v1/conductor/shadow/*",
+      "handler": "the shadow reader server/conductor/shadow.py start() runs (state shadow)",
+      "tandem_app": "status: 200, enabled false, why routes.SHADOW_OFF_WHY; the rest 404 not_found with that text",
+      "group": 9,
+      "off_why": "this engine serves no shadow reader: QWEN38_SHADOW_MODEL is empty (set it in ops/serve.env, e.g. qwen3.5-0.8b, and restart)",
+      "after_eng413": "/v1/engine/shadow/*"
+    }
+  ],
+  "app_routes_via_engine": [
+    {
+      "path": "/v1/conductor/*",
+      "except": [
+        "/v1/conductor/residency/plan",
+        "/v1/conductor/memory/disk",
+        "/v1/conductor/memory/disk/clear",
+        "/v1/conductor/deciders/*",
+        "/v1/conductor/narrator/*",
+        "/v1/conductor/shadow/*"
+      ],
+      "contract": "../conductor-v1/",
+      "doc": "TandemApp's conductor, run in the engine's process",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
+    },
+    {
+      "path": "/v1/dashboard/session",
+      "contract": "../dashboard-v1/session.schema.json",
+      "doc": "the dashboard's sign-in",
+      "after_eng413": "leaves",
+      "why": "the page's cookie sign-in leaves with the page (2026-11-13); the engine keeps the bearer token and the loopback rule"
+    },
+    {
+      "path": "/v1/config",
+      "contract": null,
+      "doc": "the proxy's backends and rules (--backends)",
+      "after_eng413": "leaves",
+      "why": "--backends leaves the engine: other backends sit behind TandemApp's controller (tandem-app), 2026-11-13"
+    },
+    {
+      "path": "/v1/config/*",
+      "contract": null,
+      "doc": "the proxy's backends and rules (--backends)",
+      "after_eng413": "leaves",
+      "why": "--backends leaves the engine: other backends sit behind TandemApp's controller (tandem-app), 2026-11-13"
+    },
+    {
+      "path": "/v1/collect/*",
+      "contract": null,
+      "doc": "the host collector (--backends)",
+      "after_eng413": "leaves",
+      "why": "--backends leaves the engine: the host collector runs in TandemApp's controller, 2026-11-13"
+    },
+    {
+      "path": "/v1/chat-app",
+      "contract": null,
+      "doc": "chatd, the Chat tab's service, through the engine port (tandemapp/chat_forward.py)",
+      "after_eng413": "leaves",
+      "why": "only the page on the engine's origin reaches chatd here; the page leaves (2026-11-13) and TandemApp's controller forwards the Chat tab"
+    },
+    {
+      "path": "/v1/chat-app/*",
+      "contract": null,
+      "doc": "chatd, the Chat tab's service, through the engine port (tandemapp/chat_forward.py)",
+      "after_eng413": "leaves",
+      "why": "only the page on the engine's origin reaches chatd here; the page leaves (2026-11-13) and TandemApp's controller forwards the Chat tab"
+    },
+    {
+      "path": "/v1/library*",
+      "contract": "../conductor-v1/",
+      "doc": "the package library (library.schema.json)",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
+    },
+    {
+      "path": "/v1/laya*",
+      "contract": "../conductor-v1/",
+      "doc": "Laya (laya-ask.schema.json)",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
+    },
+    {
+      "path": "/v1/memory",
+      "contract": null,
+      "doc": "the model's own memory, under its session's address",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
+    },
+    {
+      "path": "/v1/memory/*",
+      "contract": null,
+      "doc": "the model's own memory, under its session's address",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
+    },
+    {
+      "path": "/s/{token}/*",
+      "contract": null,
+      "doc": "a session address: /v1/library, /v1/laya and /v1/memory under the session's token (tandemapp/session_tokens.py)",
+      "after_eng413": "extension",
+      "why": "served only by an engine extension that registers it (engine-ext-v1); a headless engine answers 404"
+    },
+    {
+      "path": "/dashboard/*",
+      "contract": null,
+      "doc": "the dashboard's built files (the not-built page without them)",
+      "after_eng413": "leaves",
+      "why": "the dashboard page leaves the engine: an engine-only install has no web page; TandemApp's controller serves it (2026-11-13)"
+    }
+  ],
+  "app_families": [
+    {
+      "path": "/v1/fleet/*",
+      "contract": "../fleet-v1",
+      "doc": "the controller's fleet API; never the engine"
+    }
+  ],
+  "shared_prefixes": {
+    "/v1/dashboard": [
+      "routes",
+      "app_routes_via_engine"
+    ]
+  },
+  "answers": [
+    {
+      "kind": "answer",
+      "what": "404 no_ui",
+      "since": "1.4",
+      "paths": [
+        "/dashboard",
+        "/dashboard/*"
+      ],
+      "when": "the engine runs no extension that serves the page (a headless engine, ENG-413 WP3a); the setup-mode server still serves it until it leaves the engine (WP14)",
+      "shape": "error.type and error.code no_ui, the message names TandemApp"
+    },
+    {
+      "kind": "answer",
+      "what": "404 not_on_engine",
+      "since": "1.4",
+      "paths": [
+        "/v1/conductor/*",
+        "/v1/library",
+        "/v1/library/*",
+        "/v1/memory",
+        "/v1/memory/*",
+        "/v1/laya",
+        "/v1/laya/*",
+        "/s/{token}/v1/library*",
+        "/s/{token}/v1/memory*",
+        "/s/{token}/v1/laya*",
+        "/v1/config",
+        "/v1/config/*",
+        "/v1/collect/*"
+      ],
+      "when": "nothing in the engine's process serves the path: no extension route for it (the conductor's, its library and memory); /v1/laya* without the engine's decision models; /v1/config* and /v1/collect/* with --backends off. A session address answers as the path under it",
+      "shape": "error.type and error.code not_on_engine, the message names TandemApp"
+    }
+  ],
+  "planned": [
+    {
+      "kind": "answer",
+      "what": "404 not_on_engine",
+      "paths": [
+        "/v1/chat-app",
+        "/v1/chat-app/*",
+        "/v1/dashboard/session"
+      ],
+      "shape": "error.type not_on_engine, the message names TandemApp",
+      "lands_with": "ENG-413 WP14 (the engine serves these until they leave it; the owner's decision of 2026-11-13)"
+    },
+    {
+      "kind": "route",
+      "method": "GET",
+      "path": "/v1/engine/residency/plan",
+      "group": 9,
+      "schema": "../conductor-v1/residency-plan.schema.json",
+      "replaces": "/v1/conductor/residency/plan",
+      "lands_with": "ENG-413 WP5"
+    },
+    {
+      "kind": "route",
+      "method": "GET",
+      "path": "/v1/engine/disk",
+      "group": 9,
+      "schema": "../conductor-v1/memory-disk.schema.json",
+      "replaces": "/v1/conductor/memory/disk",
+      "lands_with": "ENG-413 WP5"
+    },
+    {
+      "kind": "route",
+      "method": "POST",
+      "path": "/v1/engine/disk/clear",
+      "group": 9,
+      "schema": "../conductor-v1/memory-disk-clear.schema.json",
+      "replaces": "/v1/conductor/memory/disk/clear",
+      "lands_with": "ENG-413 WP5"
+    },
+    {
+      "kind": "route",
+      "method": "*",
+      "path": "/v1/engine/deciders/*",
+      "group": 9,
+      "schema": "../conductor-v1/deciders-status.schema.json",
+      "replaces": "/v1/conductor/deciders/*",
+      "lands_with": "ENG-413 WP5"
+    },
+    {
+      "kind": "route",
+      "method": "*",
+      "path": "/v1/engine/narrator/*",
+      "group": 9,
+      "replaces": "/v1/conductor/narrator/*",
+      "lands_with": "ENG-413 WP5"
+    },
+    {
+      "kind": "route",
+      "method": "*",
+      "path": "/v1/engine/shadow/*",
+      "group": 9,
+      "replaces": "/v1/conductor/shadow/*",
+      "lands_with": "ENG-413 WP5"
+    }
+  ]
+}

@@ -939,7 +939,7 @@ export interface ResidencyJournalLine {
   claim_gib?: number | null;
   mem_available_gib?: number | null;
 }
-/** `GET /v1/conductor/residency/plan`. */
+/** `GET /v1/engine/residency/plan` (engine API 1.5). */
 export interface ResidencyPlan {
   version: number;
   doc: ResidencyDoc;

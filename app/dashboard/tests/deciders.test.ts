@@ -160,3 +160,30 @@ describe('the screen’s words', () => {
     expect(segs.find((x) => x.key === 'deciders')?.label).toBe('decision models');
   });
 });
+
+// ENG-413 WP5: the screens are the engine's own routes (/v1/engine/*, engine API 1.5); a server with
+// no engine (the controller) has no such route, and the Deciders screen shows that as off
+describe('the engine screens', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  it('reads /v1/engine/*, and a 404 is the screen off with the server\'s words', async () => {
+    const { conductor } = await import('../src/api/conductor');
+    const { api } = await import('../src/api/client');
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      urls.push(url);
+      return url.endsWith('/v1/engine/deciders/status')
+        ? reply(404, { error: { type: 'not_found', message: 'no route /v1/engine/deciders/status' } })
+        : reply(200, { running: false, settings: {}, plan: {}, version: 0 });
+    });
+    const s = await conductor.deciders();
+    expect(s.enabled).toBe(false);
+    expect(s.why).toBe('no route /v1/engine/deciders/status');
+    expect([s.models, s.questions, s.ready]).toEqual([[], [], false]);
+    await conductor.memoryDisk();
+    await api.residencyPlan();
+    expect(urls.map((u) => new URL(u, 'http://x').pathname)).toEqual(['/v1/engine/deciders/status', '/v1/engine/disk', '/v1/engine/residency/plan']);
+    vi.stubGlobal('fetch', async () => reply(500, { error: { type: 'boom', message: 'broken' } }));
+    await expect(conductor.deciders()).rejects.toThrow();
+  });
+});

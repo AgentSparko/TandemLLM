@@ -736,7 +736,7 @@ export interface DecidersStatus {
   last_refusal: DeciderDecision | null;
   questions: { id: string; model: string; picks: Record<string, number> }[];
   unserved?: string[];
-  api?: DeciderApi & { stats: { calls: number; texts: number; errors: number; rate_limited: number; last_ms: number | null; last_at: number | null; drive_sessions?: number } };
+  api?: null | DeciderApi & { stats: { calls: number; texts: number; errors: number; rate_limited: number; last_ms: number | null; last_at: number | null; drive_sessions?: number } };
 }
 export interface DeciderAction {
   name?: string;
@@ -872,7 +872,7 @@ export interface DiskEvent {
   ts: number;
   [k: string]: unknown;
 }
-/** GET /v1/conductor/memory/disk (server/diskcache.py `view`): the settings always; the numbers
+/** GET /v1/engine/disk (server/diskcache.py `view`): the settings always; the numbers
  *  when the tier runs on this server. */
 export interface MemoryDisk {
   running: boolean;
@@ -1166,8 +1166,9 @@ export const conductor = {
   // VIS-48: the session transcripts; the admin rule (open while no password is set), reads included
   memorySessions: () => write<MemorySessions>('/v1/conductor/memory/sessions', 'GET'),
   memorySession: (key: string, page?: number | null) => write<MemorySession>(`/v1/conductor/memory/sessions/${enc(key)}${page ? `?page=${page}` : ''}`, 'GET'),
-  memoryDisk: () => write<MemoryDisk>('/v1/conductor/memory/disk', 'GET'),
-  memoryDiskClear: () => write<{ cleared: boolean; entries: number; chunks: number; bytes: number; disk: MemoryDisk }>('/v1/conductor/memory/disk/clear', 'POST', {}),
+  // ENG-413 WP5: the engine's own screens (engine API 1.5, /v1/engine/*)
+  memoryDisk: () => write<MemoryDisk>('/v1/engine/disk', 'GET'),
+  memoryDiskClear: () => write<{ cleared: boolean; entries: number; chunks: number; bytes: number; disk: MemoryDisk }>('/v1/engine/disk/clear', 'POST', {}),
   memoryKeep: (key: string, keep: boolean) => write<{ session: string; keep: boolean }>(`/v1/conductor/memory/sessions/${enc(key)}/keep`, 'PATCH', { keep }),
   memoryExport: async (key: string, format: 'md' | 'json'): Promise<Blob> => {
     const endpoint = `/v1/conductor/memory/sessions/${enc(key)}/export?format=${format}`;
@@ -1199,9 +1200,13 @@ export const conductor = {
     if (!res.ok) throw new ApiError(endpoint, res.status, `HTTP ${res.status}`, 'error');
     return await res.blob();
   },
-  deciders: () => request<DecidersStatus>('/v1/conductor/deciders/status'),
-  deciderLoad: (name: string) => write<DeciderAction>(`/v1/conductor/deciders/models/${enc(name)}/load`, 'POST', {}),
-  deciderUnload: (name: string) => write<DeciderAction>(`/v1/conductor/deciders/models/${enc(name)}/unload`, 'POST', {}),
+  // a server with no engine (the controller) has no such route: the screen says so, as off
+  deciders: () => request<DecidersStatus>('/v1/engine/deciders/status').catch((e) => {
+    if (!(e instanceof ApiError) || e.status !== 404) throw e;
+    return { enabled: false, why: e.message, ready: false, device: null, window: 'idle', families: [], models: [], planner: null, last_refusal: null, questions: [] } as DecidersStatus;
+  }),
+  deciderLoad: (name: string) => write<DeciderAction>(`/v1/engine/deciders/models/${enc(name)}/load`, 'POST', {}),
+  deciderUnload: (name: string) => write<DeciderAction>(`/v1/engine/deciders/models/${enc(name)}/unload`, 'POST', {}),
   deciderTest: (state: string, questions: Record<string, SystemOneQuestion>, model: string) =>
-    request<SystemOneResult>('/v1/conductor/deciders/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state, questions, model }) }),
+    request<SystemOneResult>('/v1/engine/deciders/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state, questions, model }) }),
 };

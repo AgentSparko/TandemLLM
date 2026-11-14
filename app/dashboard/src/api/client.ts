@@ -214,7 +214,7 @@ export const api = {
    *  sample the page holds, so a poll carries the new samples only */
   parallel: (since?: number | null) => request<Parallel>(`/v1/dashboard/parallel${since != null ? `?since=${since}` : ''}`),
   /** OPS-41: the residency planner's view (a 404 means the conductor is off on this server) */
-  residencyPlan: () => request<ResidencyPlan>('/v1/conductor/residency/plan'),
+  residencyPlan: () => request<ResidencyPlan>('/v1/engine/residency/plan'),   // ENG-413 WP5: the engine's
   /** VIS-44: one request's supervisor decisions, the row drawer's list (the conductor's journal) */
   conductorEvents: (requestId: string) => request<{ events: unknown[]; monitor: boolean }>(`/v1/conductor/events?request=${encodeURIComponent(requestId)}&limit=50`),
   liveUrl: () => `${base}/v1/dashboard/live?follow=1`,

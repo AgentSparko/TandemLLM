@@ -44,14 +44,12 @@ Rules the schemas cannot express, which both sides test:
 
 ## The engine-only screens
 
-These screens read or load the engine's own models and memory: `GET /v1/conductor/residency/plan`, `GET /v1/conductor/memory/disk`, `POST /v1/conductor/memory/disk/clear`, `/v1/conductor/deciders/*`, `/v1/conductor/narrator/*` and `/v1/conductor/shadow/*`. A TandemLLM engine that runs this conductor in its own process answers them until ENG-413: `server/conductor/inproc.py` `ROUTES` (residency plan, disk, deciders), the narrator it starts and the shadow reader. TandemApp's controller (tandem-app) runs no engine and answers:
+These screens read or load the engine's own models and memory: `GET /v1/conductor/residency/plan`, `GET /v1/conductor/memory/disk`, `POST /v1/conductor/memory/disk/clear`, `/v1/conductor/deciders/*`, `/v1/conductor/narrator/*` and `/v1/conductor/shadow/*`. Since engine API 1.5 (ENG-413 WP5) they are the engine's own routes, `/v1/engine/*` (`../engine-api-v1/README.md`, group 9), and the dashboard reads them there. These paths stay until ENG-413 WP14: a TandemLLM engine that runs this conductor in its own process hands their handlers over in process (engine-ext-v1 2.1 `host.engine`, `cond.engine`), and they answer the engine's body plus `contract_version`, an error the same bytes. TandemApp's controller (tandem-app) runs no engine and answers, in its own words:
 
 - residency plan, disk and disk clear: 404 `not_found`, "an engine screen: this server runs no TandemLLM engine in its process" (`routes.ENGINE_ONLY`);
-- `GET .../deciders/status`: 200, `enabled` false, `why` `routes.DECIDERS_OFF_WHY`; every other deciders route 404 `not_found` with that text;
-- `GET .../shadow/status`: 200, `enabled` false, `why` `routes.SHADOW_OFF_WHY`; every other shadow route 404 `not_found` with that text;
-- `GET .../narrator/status`: 200, the narrator off; every other narrator route 404 `not_found`.
+- `GET .../deciders/status`, `.../narrator/status`, `.../shadow/status`: 200, `enabled` false, `why` `routes.ENGINE_ONLY` (the deciders' with its empty lists); every other route of the three 404 `not_found` with that text.
 
-The engine keeps its own copies of the two `OFF_WHY` texts (`server/decider_api.py`, `server/conductor/shadow.py`). The list is `../engine-api-v1/routes.json`, `engine_screens_until_eng413`.
+TandemApp keeps no copy of the engine's own off texts (until engine API 1.4 it held the two `OFF_WHY` texts). The list is `../engine-api-v1/routes.json`, `engine_screens_until_eng413`.
 
 ## Changes
 

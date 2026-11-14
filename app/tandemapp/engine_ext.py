@@ -13,9 +13,18 @@ chat mode: `QSE_EXT=tandemapp.engine_ext`.
     health()        its part of /health `loaded`
     hooks           plan, prompt, supervisor (the decode loop's safe points), extras, follow_ups,
                     finish, stop
-    calls           the request path's optional calls (engine-ext-v1 2.0 `extension.calls`) and
-                    `writer`, which the interface keeps outside until ENG-413 WP5 (`kept_interim`)
+    calls           the request path's optional calls (engine-ext-v1 2.0 `extension.calls`), and
+                    since 2.1 (ENG-413 WP5) what the engine reads of it outside a request: its
+                    documents, the library's texts, the shadow switch, the monitor's mode, the
+                    narrator over the engine's slot, the role contract, the decision models'
+                    client and the deciders screen's api part, and the memory writer
+    read_document(ext_dir, name), before_load(args)
+                    2.1: the module's own reads before the start (the residency limits, the
+                    session monitor's policy)
     attach(host)    tests: the extension object around a conductor or monitor a test built, no start
+
+The engine-only screens are the engine's (`/v1/engine/*`); the conductor's old paths answer over
+the engine's handlers in process (`host.engine`), set on the Conductor as `cond.engine`.
 
 The conductor's own code is unchanged: this module wraps it. It is the engine's interim adapter
 (the engine's server/ext_app.py of ENG-413 WP3a/WP3b) moved here, with what that adapter read of the
@@ -30,7 +39,7 @@ import io
 import json
 import time
 
-EXT_API = "2.0"
+EXT_API = "2.1"
 NAME = "tandemapp"
 #: the session monitor runs behind this extension with no conductor directory too
 MONITOR_ALONE = True
@@ -45,6 +54,94 @@ def _version() -> str:
 
 
 VERSION = _version()
+
+
+#: engine-ext-v1 2.1: what before_load read before the weights load (the session monitor's policy)
+_EARLY: dict = {"policy": None}
+
+
+def read_document(ext_dir, name):
+    """engine-ext-v1 2.1 `read_document`: the stored document `name` in the conductor's directory,
+    before the extension starts: [version, doc] (version 0: the built-in one)."""
+    from tandemapp.conductor.store import Store
+    v, doc = Store(ext_dir, readonly=True).get(name)
+    return [v, doc]
+
+
+def before_load(args):
+    """engine-ext-v1 2.1 `before_load`: the session monitor's policy for `--conductor shadow|on`,
+    validated before the weights load (a file that does not validate stops the start); its line
+    for the engine's log, or None when the monitor is not asked for."""
+    _EARLY["policy"] = None
+    if args.get("conductor", "raw") not in ("shadow", "on"):
+        return None
+    from tandemapp.conductor import monitor as conductor
+    mode = conductor.parse_mode(args.get("conductor", "raw"))
+    if mode in (None, "raw"):
+        return None
+    try:
+        pol = conductor.load(args.get("conductor_policy", "") or None)
+    except conductor.PolicyError as exc:
+        raise SystemExit(f"[conductor] the policy does not load: {exc}")
+    _EARLY["policy"] = pol
+    return (f"policy {pol.path} version {pol.version}: "
+            + ", ".join(f"{t.id}={t.mode}" for t in pol.tasks.values()))
+
+
+def _policy(state):
+    """The session monitor's policy: before_load's, or one a test put into the state."""
+    return _EARLY["policy"] if _EARLY["policy"] is not None else (state or {}).get("conductor_policy")
+
+
+class _Writer:
+    """engine-ext-v1 2.1 `memory_writer`: the conductor's memory writer as the engine asks it; `gate`
+    asks the conductor's own router."""
+
+    def __init__(self, cond):
+        self._w, self._router = cond.memory.writer, cond.router
+
+    @property
+    def stats(self):
+        return self._w.stats
+
+    def state(self, conv):
+        return self._w.state(conv)
+
+    def due(self, conv, at, idle_s, settings):
+        return self._w.due(conv, at, idle_s, settings)
+
+    def mark(self, conv, trigger):
+        return self._w.mark(conv, trigger)
+
+    def gate(self, conv):
+        return self._w.gate(self._router, conv)
+
+    def instructions(self, conv, settings):
+        return self._w.instructions(conv, settings)
+
+    def apply(self, conv, text, settings, trigger, at, info):
+        return self._w.apply(conv, text, settings, trigger, at, info)
+
+    def skipped(self, conv, trigger, why, at, info=None):
+        return self._w.skipped(conv, trigger, why, at, info)
+
+
+def _screens(host) -> dict:
+    """The engine's screens (`host.engine`, engine-ext-v1 2.1) as the conductor's routes call them:
+    the host's Refusal becomes the conductor's ApiError, so an error is answered as before."""
+    from tandemapp.conductor.routes import ApiError
+    refusal = getattr(host, "Refusal", None)
+
+    def wrap(fn):
+        def call(*args, **kw):
+            try:
+                return fn(*args, **kw)
+            except Exception as exc:                                   # noqa: BLE001
+                if refusal is not None and isinstance(exc, refusal):
+                    raise ApiError(exc.status, exc.type, exc.message) from None
+                raise
+        return call
+    return {name: wrap(fn) for name, fn in (getattr(host, "engine", None) or {}).items()}
 
 
 def _knobs() -> list:
@@ -528,14 +625,76 @@ class Ext:
             w = getattr(supervisor, "_obj", supervisor)
             mon.turn_ended(w._sup if isinstance(w, Watch) else w)   # the watch's idle time starts here
 
-    def writer(self):
-        """Outside the interface until ENG-413 WP5 (engine-ext-v1 `kept_interim`): (the conductor's
-        memory, the writer's settings), or (None, None) without one."""
+    # ------------------------------------------------------------------ 2.1: outside a request
+    def memory_writer(self):
+        """(the memory writer, its settings), or (None, None) without one."""
         cond = self.cond
         if cond is None or getattr(cond, "memory", None) is None:
             return None, None
         from tandemapp.conductor import memwriter
-        return cond.memory, memwriter.settings_of(cond.memory.cfg())
+        return _Writer(cond), memwriter.settings_of(cond.memory.cfg())
+
+    def document(self, name):
+        """One of the conductor's documents (engine-ext-v1 `extension.documents`): [version, doc]."""
+        cond = self.cond
+        if cond is None:
+            return None
+        v, doc = cond.store.peek(name)
+        return [v, doc]
+
+    def library_text(self, name):
+        cond = self.cond
+        if cond is None:
+            return None
+        text, _ = cond.library.text(cond.store.peek("packages")[1], name)
+        return text
+
+    def shadow_wanted(self):
+        """Does some profile have `shadow.mode: on`?"""
+        cond = self.cond
+        if cond is None:
+            return False
+        for name in cond.store.names():
+            try:
+                _, doc = cond.store.peek("profiles", name)
+            except Exception:                                      # noqa: BLE001
+                continue
+            if ((doc or {}).get("shadow") or {}).get("mode", "off") == "on":
+                return True
+        return False
+
+    def monitor_mode(self):
+        mon = self.state.get("monitor")
+        return mon.mode if mon is not None else None
+
+    def narrator(self, slot):
+        """The narrator over the engine's slot (its roles document's `narrator`, the router's labels)."""
+        from tandemapp.conductor import narrator as narr_mod
+        state = self.state
+        return narr_mod.Narrator(slot, role=lambda: narr_mod.role_doc(state),
+                                 labels=lambda: narr_mod.class_labels(state))
+
+    def role_errors(self, fields, name, tokenizer_sha):
+        from tandemapp.conductor import schema
+        return schema.role_errors(fields, name, tokenizer_sha)
+
+    def deciders(self, registry):
+        """The conductor's in-process client of the engine's decision models: the classify backends
+        `self` and each family."""
+        from tandemapp.conductor import classify
+
+        def factory(model, timeout_ms):
+            return classify.InProcess(registry, model, timeout_ms)
+
+        classify.register_backend("self", factory)
+        for fam in registry.families:
+            classify.register_backend(fam, factory)
+
+    def deciders_api(self, doc):
+        """The Deciders screen's api part: the deciders document's api section and Laya's counts."""
+        from tandemapp import laya_api
+        from tandemapp.conductor import schema
+        return {**schema.decider_api(doc), "stats": laya_api.stats()}
 
     def writer_ban_ids(self, tokenizer):
         from tandemapp.conductor import memwriter
@@ -578,9 +737,9 @@ class Ext:
     # ------------------------------------------------------------------ start
     def start_monitor(self) -> None:
         """The session monitor (`--conductor shadow|on`, its policy validated before the weights
-        load: state `conductor_policy`), as the engine's start built it before ENG-413 WP3b."""
+        load by before_load), as the engine's start built it before ENG-413 WP3b."""
         state, args = self.state, self.host.args
-        pol = state.get("conductor_policy")
+        pol = _policy(state)
         if pol is None:
             return
         from tandemapp.conductor import monitor as conductor
@@ -636,6 +795,9 @@ class Ext:
         cond = state["conductor"] = Conductor(
             root, state=state, journal=journal,
             monitor_seed=mon.policy.data if mon is not None else None)
+        # engine-ext-v1 2.1: the engine's screens for the conductor's old paths, and the speed-guard
+        # report the release tree ships (the Compare screen)
+        cond.engine, cond.shipped_guard = _screens(host), getattr(host, "shipped_guard", None)
         import os
         legacy = os.path.join(cond.root, "decisions.sqlite3")
         if journal.path and os.path.exists(legacy) and not os.path.exists(legacy + ".imported"):
@@ -661,7 +823,7 @@ class Ext:
 def start(host) -> Ext:
     """engine-ext-v1 `start(host)`: the conductor needs a directory (chat mode), the session
     monitor alone `--conductor shadow|on`; with neither there is nothing to run."""
-    if getattr(host, "ext_dir", None) is None and (host.state or {}).get("conductor_policy") is None:
+    if getattr(host, "ext_dir", None) is None and _policy(host.state) is None:
         raise RuntimeError("tandemapp.engine_ext runs the conductor or its session monitor: it "
                            "needs a conductor directory (--conductor-config, chat mode) or "
                            "--conductor shadow|on")
@@ -677,4 +839,7 @@ def attach(host) -> Ext:
     if "escapes" not in host.state:
         from tandemapp.conductor import loopescape
         host.state["escapes"] = loopescape.Escapes()
+    cond = host.state.get("conductor")
+    if cond is not None:
+        cond.engine, cond.shipped_guard = _screens(host), getattr(host, "shipped_guard", None)
     return Ext(host)

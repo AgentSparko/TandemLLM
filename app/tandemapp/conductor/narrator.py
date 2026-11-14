@@ -187,6 +187,21 @@ class Narrator:
         r = self.role() or {}
         return {"mode": r.get("mode", "on"), "budget_ms": int(r.get("latency_budget_ms") or 150)}
 
+    def status(self) -> dict:
+        """The engine's `GET /v1/engine/narrator/status` for this narrator (engine-ext-v1 2.1
+        narrator.status): its settings, its slot, the line limits and the thought summaries."""
+        return {"enabled": True, "why": None, "settings": self.settings(), "slot": self.slot.status(),
+                "limits": {"max_words": MAX_WORDS, "max_tokens": MAX_TOKENS,
+                           "request_lines": REQUEST_LINES},
+                # N2: the thought summaries (`ui.narrator: thoughts`)
+                "thoughts": {"jobs": bool(getattr(self.slot.model, "jobs", False)),
+                             # True: Qwen's ids go to the model as they are (the same tokenizer)
+                             "qwen_ids": (getattr(self.slot.model, "same_ids", "") is None
+                                          if getattr(self.slot.model, "jobs", False) else None),
+                             "min_tokens": THOUGHT_MIN_TOKENS, "window": THOUGHT_WINDOW,
+                             "max_tokens": THOUGHT_MAX_TOKENS, "share": THOUGHT_SHARE,
+                             "end_ms": THOUGHT_END_MS}}
+
     def around(self) -> tuple[list[int], list[int]]:
         """The thought prompt's fixed head and tail in the loaded model's ids (cached per load)."""
         key = (id(self.slot.model), self.slot.loaded_at)
@@ -633,8 +648,9 @@ def _duration(s: float) -> str:
 
 
 # ---------------------------------------------------------------------- the server's wiring
-# The narrator's model and its slot load in the engine's process: server/conductor/inproc.py
-# start_narrator (SRV-747), which builds the `Narrator` below.
+# The narrator's model and its slot load in the engine's process: the engine builds the slot
+# (server/conductor/inproc.py start_narrator) and this extension the `Narrator` over it
+# (tandemapp/engine_ext.py `narrator`, engine-ext-v1 2.1; ENG-413 WP5).
 def configured() -> str:
     return (_S.get("NARRATOR_MODEL") or "").strip()
 
@@ -656,18 +672,9 @@ def class_labels(state: dict) -> dict:
 
 
 def status(state: dict) -> dict:
-    """`GET /v1/conductor/narrator/status`."""
+    """The narrator's status in `state` (its own `status()`), or off: the engine's
+    `/v1/engine/narrator/status` answers it (ENG-413 WP5)."""
     n = state.get("narrator")
     if n is None:
         return {"enabled": False, "why": OFF_WHY}
-    return {"enabled": True, "why": None, "settings": n.settings(), "slot": n.slot.status(),
-            "limits": {"max_words": MAX_WORDS, "max_tokens": MAX_TOKENS,
-                       "request_lines": REQUEST_LINES},
-            # N2: the thought summaries (`ui.narrator: thoughts`)
-            "thoughts": {"jobs": bool(getattr(n.slot.model, "jobs", False)),
-                         # True: Qwen's ids go to the model as they are (the same tokenizer)
-                         "qwen_ids": (getattr(n.slot.model, "same_ids", "") is None
-                                      if getattr(n.slot.model, "jobs", False) else None),
-                         "min_tokens": THOUGHT_MIN_TOKENS, "window": THOUGHT_WINDOW,
-                         "max_tokens": THOUGHT_MAX_TOKENS, "share": THOUGHT_SHARE,
-                         "end_ms": THOUGHT_END_MS}}
+    return n.status()

@@ -3,9 +3,10 @@ engine's interface engine-ext-v1 at the version PIN names, through the reference
 (contracts/engine-ext-v1/fake_host.py). No engine and no model: the host is the reference's.
 
   1  the module is an extension of the pinned interface: EXT_API is ext.json's version and the
-     reference host takes it (a 1.x host does not: 2.0), NAME tandemapp, VERSION TandemApp's release,
-     every hook and every optional call (extension.calls) with exactly ext.json's arguments,
-     `writer` (kept_interim) beside them, the knobs knobs.json's     test_the_module_fits_the_interface
+     reference host takes it (a 1.x or a 2.0 host does not: 2.1), NAME tandemapp, VERSION TandemApp's
+     release, every hook, every optional call (extension.calls, 2.1's included) and the module's
+     optional functions with exactly ext.json's arguments, no interim `writer` and nothing kept
+     interim of it, the knobs knobs.json's                           test_the_module_fits_the_interface
   2  start is closed: with neither a conductor directory nor the monitor's policy the reference
      host refuses it with one line; nothing is started              test_start_needs_work
   3  the session monitor alone: the reference host asks the hooks in ext.json's order (a plain
@@ -21,6 +22,19 @@ engine's interface engine-ext-v1 at the version PIN names, through the reference
      the engine's refusal from allowed() passes as it is (401 with its header), /v1/memory
      without a session address 403 with its journal row, the page and the library answer; a
      route that writes nothing is an error the host counts           test_the_routes_answer
+  6  2.1 (ENG-413 WP5): the conductor's engine screens answer over host.engine: the handler's body
+     plus contract_version, a Refusal as the conductor's own error (no contract_version), the base
+     its messages name is the conductor's path; with no engine (the controller) the status screens
+     say ENGINE_ONLY and the rest 404; the release tree's speed-guard report reaches the Conductor
+                                                                  test_the_engine_screens
+  7  2.1: the calls outside a request: document, library_text, shadow_wanted, monitor_mode,
+     role_errors, deciders_api, narrator over a slot (its status), deciders (the classify backends
+     registered), memory_writer (the writer with gate(conv) asking the conductor's router)
+                                                                  test_the_calls_outside_a_request
+  8  2.1, the module before the start: read_document reads the stored document (version 0, the
+     built-in one, in a new directory); before_load checks the session monitor's policy and gives
+     its line, nothing without --conductor shadow|on, and a policy that does not load stops the
+     start with the line the engine printed before                  test_the_module_before_the_start
 
 Standard library only (the reference host is loaded by path). Run: python tests/test_engine_ext.py
 """
@@ -102,7 +116,10 @@ def _chat_host():
 def test_the_module_fits_the_interface():
     X = engine_ext
     assert X.EXT_API == SPEC["version"] and H.accepts(X.EXT_API) is None, (X.EXT_API, SPEC["version"])
-    assert H.accepts(X.EXT_API, "1.2") is not None and X.EXT_API == "2.0"
+    assert H.accepts(X.EXT_API, "1.2") is not None and X.EXT_API == "2.1"
+    assert H.accepts(X.EXT_API, "2.0") is not None                    # a 2.0 host has no 2.1 calls
+    for name, args in (("read_document", ["ext_dir", "name"]), ("before_load", ["args"])):
+        assert name in SPEC["discovery"]["module_optional"] and _params(getattr(X, name)) == args, name
     assert X.NAME == "tandemapp" and X.VERSION == (release() or "0"), (X.NAME, X.VERSION)
     for attr in SPEC["discovery"]["module"]:
         assert hasattr(X, attr), attr
@@ -112,7 +129,7 @@ def test_the_module_fits_the_interface():
     for c in SPEC["extension"]["calls"]:
         assert _params(getattr(obj, c["name"])) == c["args"], c["name"]
     kept = " ".join(k["what"] for k in SPEC["kept_interim"])
-    assert "writer()" in kept and _params(obj.writer) == []
+    assert "writer" not in kept and not hasattr(obj, "writer") and _params(obj.memory_writer) == []
     for m in SPEC["supervisor"]["methods"]:
         assert callable(getattr(X.Watch, m["name"], None)), m["name"]
     with open(os.path.join(DIR, "knobs.json")) as f:
@@ -121,7 +138,7 @@ def test_the_module_fits_the_interface():
     for attr in SPEC["extension"]["attributes"]:
         assert isinstance(getattr(obj, attr), list), attr
     return f"engine-ext-v1 {X.EXT_API}: {len(SPEC['extension']['hooks'])} hooks, " \
-           f"{len(SPEC['extension']['calls'])} calls and writer, VERSION {X.VERSION}"
+           f"{len(SPEC['extension']['calls'])} calls, 2 module functions, VERSION {X.VERSION}"
 
 
 def test_start_needs_work():
@@ -162,7 +179,8 @@ def test_the_monitor_alone():
         assert ext.prompt(plan, [5, 6], {"in_think": True}) == {"ids": [5, 6], "in_think": True,
                                                                  "client_ids": None}
         assert ext.server_mode(None, 2) == "shadow" and ext.server_mode("raw", 1) == "raw"
-        assert ext.writer() == (None, None) and host.errors == {}, host.errors
+        assert ext.memory_writer() == (None, None) and host.errors == {}, host.errors
+        assert ext.monitor_mode() == "on" and ext.document("residency") is None
     finally:
         host.state["monitor"].stop_watch()
     return f"{len(PLAIN)} steps in order, a call, a raw plan; {len(host.metrics.events)} journal rows counted"
@@ -233,6 +251,127 @@ def test_the_routes_answer():
     else:
         raise AssertionError("an empty answer passed")
     return "the conductor's settings, a refusal as the engine gives it, memory 403, the page, the library"
+
+
+# ---------------------------------------------------------------------------- 6, 7, 8 (2.1)
+
+def test_the_engine_screens():
+    from tandemapp.conductor import routes
+    seen = []
+
+    def plan():
+        return 200, {"version": 3, "plan": {}}
+
+    def disk_clear():
+        raise H.Refusal(409, "not_running", "the disk tier is not running on this server")
+
+    def deciders(method, rest, body, base="/v1/engine/deciders"):
+        seen.append((method, rest, base))
+        if rest == ["status"]:
+            return 200, {"enabled": False, "why": "no models"}
+        raise H.Refusal(404, "not_found", f"no route {method} {base}/{'/'.join(rest)}")
+
+    host = _chat_host()
+    host.engine = {"residency_plan": plan, "disk": lambda: (200, {"running": False}),
+                   "disk_clear": disk_clear, "deciders": deciders,
+                   "narrator": lambda m, w, b, base="": (200, {"enabled": False, "why": "none"}),
+                   "shadow": lambda m, w, b, base="": (200, {"enabled": False, "why": "none"})}
+    host.shipped_guard = "/nowhere/release/speed-guard.json"
+    ext = H.load(engine_ext, host)
+    cond = host.state["conductor"]
+    assert cond.shipped_guard == host.shipped_guard and set(cond.engine) == set(host.engine)
+
+    def get(method, path, body=None):
+        st, _hd, raw = ext._conductor(Route(method, path, body=body))
+        return st, json.loads(raw)
+    assert get("GET", "/v1/conductor/residency/plan") == (200, {"version": 3, "plan": {},
+                                                               "contract_version": "1.0"})
+    assert get("GET", "/v1/conductor/memory/disk")[1]["running"] is False
+    assert get("POST", "/v1/conductor/memory/disk/clear", {}) == (409, {"error": {
+        "type": "not_running", "message": "the disk tier is not running on this server"}})
+    assert get("GET", "/v1/conductor/deciders/status")[1]["why"] == "no models"
+    st, out = get("POST", "/v1/conductor/deciders/models/x/nope", {})
+    assert st == 404 and out == {"error": {"type": "not_found", "message":
+                                           "no route POST /v1/conductor/deciders/models/x/nope"}}, out
+    assert seen[-1] == ("POST", ["models", "x", "nope"], "/v1/conductor/deciders"), seen
+    assert get("GET", "/v1/conductor/narrator/status")[1]["why"] == "none"
+    assert get("GET", "/v1/conductor/shadow/status")[1]["why"] == "none"
+    # the controller runs no engine: its own words, and no engine handler
+    from tandemapp.conductor.hook import Conductor
+    bare = Conductor(tempfile.mkdtemp(prefix="engine-ext-bare-"), journal=False)
+    assert bare.engine == {} and bare.shipped_guard is None
+    for what in ("deciders", "narrator", "shadow"):
+        st, out, _ = routes._route(None, bare, "GET", [what, "status"], {}, {}, None)
+        assert (st, out["enabled"], out["why"]) == (200, False, routes.ENGINE_ONLY), (what, out)
+    for parts in (["residency", "plan"], ["deciders", "test"], ["shadow", "ask"]):
+        try:
+            routes._route(None, bare, "POST" if parts[-1] != "plan" else "GET", parts, {}, {}, None)
+        except routes.ApiError as exc:
+            assert (exc.status, str(exc)) == (404, routes.ENGINE_ONLY), parts
+        else:
+            raise AssertionError(parts)
+    return "the engine's bodies with contract_version, its refusals as before, the controller's own words"
+
+
+class Slot:
+    """A small-model slot as the engine hands it to narrator()."""
+
+    state, loaded_at = "not_loaded", None
+    model = types.SimpleNamespace(name="fake-narrator", jobs=False)
+
+    def status(self):
+        return {"state": self.state, "model": self.model.name}
+
+
+def test_the_calls_outside_a_request():
+    host = _chat_host()
+    ext = H.load(engine_ext, host)
+    cond = host.state["conductor"]
+    v, doc = ext.document("residency")
+    assert (v, doc) == tuple(cond.store.peek("residency")) and "claims" in doc
+    assert ext.document("router")[1]["effort"]["levels"]
+    assert ext.shadow_wanted() is False and ext.monitor_mode() is None
+    assert ext.role_errors({}, "narrator", None), "an empty role breaks the contract"
+    api = ext.deciders_api(cond.store.peek("deciders")[1])
+    assert {"mode", "stats"} <= set(api), api
+    n = ext.narrator(Slot())
+    st = n.status()
+    assert st["enabled"] and st["slot"]["model"] == "fake-narrator" and st["settings"]["mode"] in ("on", "off")
+    from tandemapp.conductor import classify
+    reg = types.SimpleNamespace(families=["laya"])
+    ext.deciders(reg)
+    assert {"self", "laya"} <= set(classify.BACKENDS), sorted(classify.BACKENDS)
+    w, cfg = ext.memory_writer()
+    if cond.memory is not None:
+        asked = []
+        cond.memory.writer.gate = lambda router, conv: asked.append((router, conv)) or ("yes", "t")
+        w2, _ = ext.memory_writer()
+        assert w2.gate("c1") == ("yes", "t") and asked == [(cond.router, "c1")], asked
+        assert isinstance(w2.stats, dict) and w2.state("nobody") is None and "mode" in cfg
+    else:
+        assert (w, cfg) == (None, None)
+    return "documents, library, shadow, monitor, role contract, deciders api, narrator, classify, writer"
+
+
+def test_the_module_before_the_start():
+    root = tempfile.mkdtemp(prefix="engine-ext-early-")
+    v, doc = engine_ext.read_document(root, "residency")
+    from tandemapp.conductor import schema
+    assert v == 0 and doc == schema.seed("residency")
+    assert engine_ext.before_load({"conductor": "raw"}) is None and engine_ext._EARLY["policy"] is None
+    line = engine_ext.before_load({"conductor": "on"})
+    assert line.startswith("policy ") and " version " in line and engine_ext._EARLY["policy"] is not None
+    bad = os.path.join(root, "bad.yaml")
+    with open(bad, "w") as f:
+        f.write("version: nope\n")
+    try:
+        engine_ext.before_load({"conductor": "on", "conductor_policy": bad})
+    except SystemExit as exc:
+        assert str(exc).startswith("[conductor] the policy does not load:"), exc
+    else:
+        raise AssertionError("a bad policy loaded")
+    engine_ext.before_load({})
+    return f"read_document v0, before_load: {line[:40]}..."
 
 
 if __name__ == "__main__":

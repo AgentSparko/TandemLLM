@@ -1,0 +1,4 @@
+{
+  "enabled": false,
+  "why": "this engine serves no narrator: QWEN38_NARRATOR_MODEL is empty (set it in ops/serve.env to the narrator's model, and restart)"
+}

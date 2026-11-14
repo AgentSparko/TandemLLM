@@ -11,32 +11,14 @@
    "proxy.service:Service",
    "tandemapp.chat_forward",
    "tandemapp.conductor.loopescape",
-   "tandemapp.conductor.monitor",
-   "tandemapp.conductor.routes",
-   "tandemapp.conductor.store:DEFAULT_ROOT",
-   "tandemapp.conductor.store:Store",
    "tandemapp.laya_api",
    "tandemapp.session_tokens",
    "tandemapp.static"
-  ],
-  "server/conductor/inproc.py": [
-   "tandemapp.conductor.narrator",
-   "tandemapp.conductor.routes:ApiError",
-   "tandemapp.conductor.schema"
-  ],
-  "server/conductor/residency.py": [
-   "tandemapp.conductor.store:DEFAULT_ROOT",
-   "tandemapp.conductor.store:Store"
   ],
   "server/conductor/shadow.py": [
    "tandemapp.conductor.incontext",
    "tandemapp.conductor.inject",
    "tandemapp.conductor.schema"
-  ],
-  "server/decider_api.py": [
-   "tandemapp.conductor.classify",
-   "tandemapp.conductor.schema",
-   "tandemapp.laya_api"
   ],
   "tools/class_core_eval.py": [
    "tandemapp.conductor.classify:Qwen",
@@ -567,7 +549,8 @@
   "tests/test_disk_cache_server.py": {
    "imports": [
     "tandemapp.conductor.routes",
-    "tandemapp.conductor.schema"
+    "tandemapp.conductor.schema",
+    "tandemapp.engine_ext"
    ],
    "reads": [
     "app/",
@@ -989,7 +972,8 @@
     "tandemapp.conductor.narrator",
     "tandemapp.conductor.routes",
     "tandemapp.conductor.schema",
-    "tandemapp.conductor.states"
+    "tandemapp.conductor.states",
+    "tandemapp.engine_ext"
    ],
    "reads": [
     "app/"
@@ -1492,7 +1476,8 @@
     "tandemapp.conductor.monitor:ToolCallEvent",
     "tandemapp.conductor.monitor:lower",
     "tandemapp.conductor.monitor:parse_mode",
-    "tandemapp.conductor.monitor:schema"
+    "tandemapp.conductor.monitor:schema",
+    "tandemapp.engine_ext"
    ],
    "reads": [
     "app/"
@@ -2040,18 +2025,18 @@
   },
   {
    "kind": "value",
-   "engine": "server/decider_api.py OFF_WHY",
-   "app": "app/tandemapp/conductor/routes.py DECIDERS_OFF_WHY; both equal routes.json off_why (1.3)"
-  },
-  {
-   "kind": "value",
-   "engine": "server/conductor/shadow.py OFF_WHY",
-   "app": "app/tandemapp/conductor/routes.py SHADOW_OFF_WHY; both equal routes.json off_why (1.3)"
-  },
-  {
-   "kind": "value",
    "engine": "server/engine_api.py VERSION, ops/engine_status.py ENGINE_API",
    "app": "app/proxy/engineapi.py SPEAKS: the version of the contract TandemApp pinned, the same major, not newer (1.3)"
+  },
+  {
+   "kind": "value",
+   "engine": "server/ext.py EXT_DEFAULT_DIR",
+   "app": "app/tandemapp/conductor/store.py DEFAULT_ROOT: the conductor's default directory, which a fake engine may not use (1.5)"
+  },
+  {
+   "kind": "value",
+   "engine": "server/api/seeds.py DECIDERS",
+   "app": "app/tandemapp/conductor/schema.py DECIDERS without its api: the decision models' load policy and questions of a server without the extension's document (1.5)"
   }
  ]
 }

@@ -114,20 +114,12 @@ from tandemapp.conductor import schema, store as store_mod
 from tandemapp.conductor.store import ConfigError
 
 CONTRACT = "1.0"
-#: SRV-747: the state key under which an engine that runs this conductor in its own process hands
-#: over its engine-only screens (server/conductor/inproc.py ROUTES); absent in tandem-app
-ENGINE_ROUTES = "conductor_engine_routes"
-#: VIS-68, SRV-747: the state key under which such an engine names the speed-guard report its
-#: release tree ships (server/conductor/inproc.py SHIPPED_GUARD); absent in tandem-app, which lists
-#: no shipped report
-SHIPPED_GUARD_KEY = "conductor_shipped_guard"
+#: ENG-413 WP5: the engine-only screens are the engine's (`/v1/engine/*`, engine API 1.5); an engine
+#: that runs this conductor in its own process hands their handlers over in process (engine-ext-v1
+#: 2.1 `host.engine`), which tandemapp.engine_ext sets as `cond.engine`, with the speed-guard report
+#: its release tree ships as `cond.shipped_guard` (VIS-68). tandem-app runs no engine: it has neither
+#: and answers the screens with ENGINE_ONLY
 ENGINE_ONLY = "an engine screen: this server runs no TandemLLM engine in its process"
-# the engine's own words when it serves no such model (server/decider_api.py, server/conductor/shadow.py;
-# tests/test_engine_api_contract.py holds the copies equal)
-DECIDERS_OFF_WHY = ("this engine serves no decision model: QWEN38_DECIDER_MODELS is empty (set it in "
-                    "ops/serve.env, e.g. laya-english,laya-multilingual,laya-typed-decisions, and restart)")
-SHADOW_OFF_WHY = ("this engine serves no shadow reader: QWEN38_SHADOW_MODEL is empty (set it in "
-                  "ops/serve.env, e.g. qwen3.5-0.8b, and restart)")
 DOCS = ("settings", "router", "roles", "packages", "monitor", "residency", "deciders")
 DECIDER_ROUTES = ("status", "models", "autoload", "test")
 CATALOG_ROUTES = ("catalog", "item", "tokens", "usage")
@@ -427,8 +419,8 @@ def _route(handler, cond, method, parts, q, body, auth):
         # VIS-68: a release tree ships its own speed-guard report (release/speed-guard.json, written in
         # the fold by tools/speed_guard.py ship), so a release's build line reads its result out of
         # the box; a report of the box's own for the same build comes first. The engine names the
-        # file (SHIPPED_GUARD_KEY); tandem-app has none
-        shipped = cond.state.get(SHIPPED_GUARD_KEY)
+        # file (cond.shipped_guard, engine-ext-v1 2.1 host.shipped_guard); tandem-app has none
+        shipped = getattr(cond, "shipped_guard", None)
         if shipped:
             try:
                 with open(shipped) as fh:
@@ -488,7 +480,7 @@ def _route(handler, cond, method, parts, q, body, auth):
     if head == "residency" and parts[1:] == ["plan"] and method == "GET":
         # OPS-41: the planner's view -- the limits, what fits now, the engine's own split, the
         # journal's last refusal -- for the System view: the engine's own (server/conductor/inproc.py)
-        return _engine_route(cond, "residency_plan")(cond)
+        return _answer(_engine_route(cond, "residency_plan")())
     if head in DOCS or head == "profiles":
         kind, name, rest = _doc_ref(parts)
         if not st.exists(kind, name) and not (method == "PUT" and kind == "profiles"):
@@ -556,8 +548,13 @@ def _memory(cond, method: str, rest: list[str], q: dict, body: dict,
             handler_author: str = "dashboard"):
     """The Memory screen's routes over the session transcripts (VIS-48, SRV-137) and the disk
     tier (C1)."""
+    if rest == ["disk"] and method == "GET":
+        return _answer(_engine_route(cond, "disk")())
+    if rest == ["disk", "clear"] and method == "POST":
+        return _answer(_engine_route(cond, "disk_clear")())
     if rest[:1] == ["disk"]:
-        return _engine_route(cond, "disk")(cond, method, rest)
+        _engine_route(cond, "disk")
+        raise ApiError(404, "not_found", f"no route {method} /v1/conductor/memory/{'/'.join(rest)}")
     if rest[:1] == ["notes"]:
         return _notes(cond, method, rest[1:], q, body)
     if rest[:1] == ["proposals"]:
@@ -780,118 +777,56 @@ def _catalog(cond, method: str, rest: list[str], q: dict, body: dict):
     raise ApiError(404, "not_found", f"no route {method} /v1/conductor/packages/{'/'.join(rest)}")
 
 
-def _narrator(cond, method: str, what: str, body: dict):
-    """The narrator's routes over `STATE["narrator"]` (None: no narrator, and only `status`
-    answers, saying so)."""
-    from tandemapp.conductor import narrator as narr_mod
-    n = cond.state.get("narrator")
+def _off(method: str, what: str, extra: dict | None = None):
+    """A screen of the engine's on a server with no engine: `status` says so (enabled false,
+    ENGINE_ONLY), the rest 404."""
     if what == "status" and method == "GET":
-        return 200, narr_mod.status(cond.state), None
-    if n is None:
-        raise ApiError(404, "not_found", narr_mod.OFF_WHY)
-    if what == "try" and method == "POST":
-        events = body.get("events")
-        if not isinstance(events, list) or not events or len(events) > narr_mod.TRY_MAX_EVENTS \
-                or not all(isinstance(e, dict) for e in events):
-            raise ApiError(400, "bad_request", f"events is a list of 1 to "
-                                               f"{narr_mod.TRY_MAX_EVENTS} objects")
-        budget, cap = body.get("budget_ms"), body.get("max_tokens")
-        for k, v, top in (("budget_ms", budget, narr_mod.TRY_MAX_BUDGET_MS),
-                          ("max_tokens", cap, narr_mod.TRY_MAX_TOKENS)):
-            if v is not None and (not isinstance(v, int) or isinstance(v, bool)
-                                  or not 1 <= v <= top):
-                raise ApiError(400, "bad_request", f"{k} is an integer from 1 to {top}")
-        lines = n.try_events(events, budget_ms=budget, max_tokens=cap)
-        return 200, {"lines": lines, "slot": n.slot.status()}, None
-    if what in ("load", "unload") and method == "POST":
-        if what == "load":
-            # v3: ops/start.sh asks at the start (`service_start`); from then on the server's
-            # keeper loads it again whenever it is not loaded (app.narrator_once)
-            ss, hr = body.get("service_start"), body.get("hold_restart")
-            for k, v in (("service_start", ss), ("hold_restart", hr)):
-                if v is not None and not isinstance(v, bool):
-                    raise ApiError(400, "bad_request", f"{k} is a boolean")
-            if n.settings()["mode"] == "off":
-                # 0.11.3: the role is off by default; ops/start.sh asks whenever the model is set
-                print("[narrator] not loaded: the narrator role is off (roles document, "
-                      "narrator.mode)", flush=True)
-                return 409, {"state": n.slot.state, "error": {
-                    "type": "role_off", "message": "the narrator role is off (the roles "
-                                                   "document's narrator.mode); nothing loads"}}, None
-            cond.state["narrator_keep"] = True
-            reg = cond.state.get("deciders")
-            if n.slot.state not in ("loaded", "loading") and reg is not None and reg.loading():
-                # one load at a time: the keeper loads it once the decision models are in
-                return 202, {"state": n.slot.state, "queued": True}, None
-            d = n.slot.load(service_start=bool(ss), hold_restart=bool(hr))
-            if not d.get("allowed"):
-                return 409, {"state": n.slot.state, "decision": d,
-                             "error": {"type": d.get("reason") or "refused",
-                                       "message": f"the residency planner refused the load: "
-                                                  f"{d.get('reason')}"}}, None
-            return 202, {"state": n.slot.state, "decision": d}, None
-        cond.state["narrator_keep"] = False        # unloaded by hand: the keeper leaves it
-        if not n.slot.unload():
-            raise ApiError(409, "not_loaded", f"the narrator is {n.slot.state}, not loaded")
-        return 200, {"state": n.slot.state}, None
-    raise ApiError(404, "not_found", f"no route {method} /v1/conductor/narrator/{what}")
+        return 200, {"enabled": False, "why": ENGINE_ONLY, **(extra or {})}, None
+    raise ApiError(404, "not_found", ENGINE_ONLY)
+
+
+def _narrator(cond, method: str, what: str, body: dict):
+    """The narrator's routes: the engine's (`/v1/engine/narrator/*`, handed over in process)."""
+    h = _screen(cond, "narrator")
+    if h is None:
+        return _off(method, what)
+    return _answer(h(method, what, body, "/v1/conductor/narrator"))
 
 
 def _shadow(cond, method: str, what: str, body: dict):
-    """The shadow reader's routes over `STATE["shadow"]` (SR1)."""
-    svc = cond.state.get("shadow")
-    if what == "status" and method == "GET":
-        if svc is None:
-            return 200, {"enabled": False, "why": cond.state.get("shadow_refused") or
-                         SHADOW_OFF_WHY}, None
-        return 200, svc.status(), None
-    if svc is None:
-        raise ApiError(404, "not_found", cond.state.get("shadow_refused") or SHADOW_OFF_WHY)
-    if what == "ask" and method == "POST":
-        key, question, choices = body.get("session"), body.get("question"), body.get("choices")
-        if not isinstance(key, str) or not key:
-            raise ApiError(400, "bad_request", "session is the router's session key")
-        if not isinstance(question, str) or not 4 <= len(question) <= 4000:
-            raise ApiError(400, "bad_request", "question is a string of 4 to 4,000 characters")
-        if (not isinstance(choices, dict) or not 2 <= len(choices) <= 26
-                or not all(isinstance(k, str) and isinstance(v, str) for k, v in choices.items())):
-            raise ApiError(400, "bad_request", "choices is an object of 2 to 26 id: text pairs")
-        budget = body.get("budget_ms", 5000)
-        if not isinstance(budget, int) or isinstance(budget, bool) or not 1 <= budget <= 60000:
-            raise ApiError(400, "bad_request", "budget_ms is an integer from 1 to 60000")
-        gate = getattr(svc.slot, "gate", None)
-        if gate is not None and not gate.acquire(timeout=30):
-            raise ApiError(409, "busy", "the engine stayed busy for 30 s")
-        try:
-            out = svc.ask(key, question, choices, budget_ms=float(budget))
-        finally:
-            if gate is not None:
-                gate.release()
-        if out.get("why"):
-            return 409, {"error": {"type": out["why"], "message": out.get("error") or out["why"]}}, \
-                None
-        return 200, out, None
-    raise ApiError(404, "not_found", f"no route {method} /v1/conductor/shadow/{what}")
+    """The shadow reader's routes (SR1): the engine's (`/v1/engine/shadow/*`)."""
+    h = _screen(cond, "shadow")
+    if h is None:
+        return _off(method, what)
+    return _answer(h(method, what, body, "/v1/conductor/shadow"))
 
 
 def _deciders(cond, method: str, rest: list[str], body: dict):
-    """The Deciders screen's routes: the engine's own (server/conductor/inproc.py) over the registry
-    in `STATE["deciders"]`. A server that runs no engine answers `status` saying so, and 404."""
-    h = (cond.state.get(ENGINE_ROUTES) or {}).get("deciders")
+    """The Deciders screen's routes: the engine's (`/v1/engine/deciders/*`) over its decision models.
+    A server that runs no engine answers `status` saying so, and 404."""
+    h = _screen(cond, "deciders")
     if h is not None:
-        return h(cond, method, rest, body)
-    if rest == ["status"] and method == "GET":
-        return 200, {"enabled": False, "why": DECIDERS_OFF_WHY, "models": [], "planner": None,
-                     "last_refusal": None, "questions": [], "families": [], "device": None,
-                     "window": "idle", "ready": False}, None
-    raise ApiError(404, "not_found", DECIDERS_OFF_WHY)
+        return _answer(h(method, rest, body, "/v1/conductor/deciders"))
+    return _off(method, "status" if rest == ["status"] else "", {
+        "models": [], "planner": None, "last_refusal": None, "questions": [], "families": [],
+        "device": None, "window": "idle", "ready": False})
+
+
+def _screen(cond, name: str):
+    """An engine screen's handler (engine-ext-v1 2.1 `host.engine`, as `cond.engine`), or None."""
+    return (getattr(cond, "engine", None) or {}).get(name)
+
+
+def _answer(got):
+    """An engine screen's (status, body) as this module's routes answer."""
+    status, body = got
+    return status, body, None
 
 
 def _engine_route(cond, name: str):
     """An engine-only screen's handler, which the engine that runs this conductor in its own
-    process puts in its state (server/conductor/inproc.py ROUTES, until ENG-413); a server with
-    no engine answers 404."""
-    h = (cond.state.get(ENGINE_ROUTES) or {}).get(name)
+    process hands over (`cond.engine`); a server with no engine answers 404."""
+    h = _screen(cond, name)
     if h is None:
         raise ApiError(404, "not_found", ENGINE_ONLY)
     return h

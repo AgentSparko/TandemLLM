@@ -175,7 +175,7 @@ test('the disk settings save as a new settings version, and the floor holds @moc
   await expect(sec.locator('[data-saved]')).toContainText('version');
   const s = await (await page.request.get('/v1/conductor/settings')).json();
   expect(s.doc.memory.disk_cache).toEqual({ mode: 'on', budget_gb: 80, ttl_days: 14, admit_after: 2, min_free_gb: 50 });
-  const d = await (await page.request.get('/v1/conductor/memory/disk')).json();
+  const d = await (await page.request.get('/v1/engine/disk')).json();   // ENG-413 WP5: the engine's
   expect(d.settings.budget_gb).toBe(80);
   await sec.locator('[data-disk-setting="min_free_gb"]').fill('20');
   await expect(sec.locator('[data-disk-errors]')).toContainText('at least 50 GB');

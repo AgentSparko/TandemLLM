@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "why": "this engine serves no decision model: QWEN38_DECIDER_MODELS is empty (set it in ops/serve.env, e.g. laya-english,laya-multilingual,laya-typed-decisions, and restart)",
+  "models": [],
+  "planner": null,
+  "last_refusal": null,
+  "questions": [],
+  "families": [],
+  "device": null,
+  "window": "idle",
+  "ready": false
+}

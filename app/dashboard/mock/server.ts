@@ -728,6 +728,20 @@ export function createMockMiddleware(opts: MockOptions = {}): Middleware {
         const r = cond.library(path.replace(/\/$/, ''), q);
         return json(res, r.status, r.body);
       }
+      if (path.startsWith('/v1/engine/')) {
+        // ENG-413 WP5: the engine's own screens (engine API 1.5, server/engine_routes.py): the
+        // conductor's mock answers without its contract_version, under the same rules
+        const sub = path.slice('/v1/engine/'.length);
+        const to = '/v1/conductor/' + (sub.startsWith('disk') ? 'memory/' + sub : sub);
+        const isWrite = sub.startsWith('disk') || (req.method === 'POST' && !sub.endsWith('/test'));
+        if (mode === '401') return error(res, 401, 'unauthorized', 'session expired');
+        const bearer = req.headers.authorization === `Bearer ${TOKEN}`;
+        if (password && (isWrite ? !(bearer || (!cond.requireToken && authed(req))) : !authed(req))) return error(res, 401, 'unauthorized', 'a bearer token or the dashboard session is needed');
+        const b = req.method === 'POST' ? JSON.parse((await readBody(req)) || '{}') : {};
+        const r = cond.handle(req.method ?? 'GET', to, q, b, bearer ? 'admin token 127.0.0.1' : 'open 127.0.0.1');
+        const { contract_version: _cv, ...body } = (r.body ?? {}) as Record<string, unknown>;
+        return json(res, r.status, body);
+      }
       if (path.startsWith('/v1/conductor/')) {
         // AU1: no password set, every route is open; with one, reads follow the dashboard's rule
         // and writes take the admin token or a session (only the bearer with requireToken), as

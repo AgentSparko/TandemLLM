@@ -1,0 +1,4 @@
+{
+  "enabled": false,
+  "why": "this engine serves no shadow reader: QWEN38_SHADOW_MODEL is empty (set it in ops/serve.env, e.g. qwen3.5-0.8b, and restart)"
+}

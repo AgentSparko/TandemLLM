@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "not_running",
+    "message": "the disk tier is not running on this server"
+  }
+}

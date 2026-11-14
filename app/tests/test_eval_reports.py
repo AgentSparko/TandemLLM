@@ -41,9 +41,8 @@ def test_a_night_may_carry_a_suffix():
 
 def _get(root, shipped=None):
     state = {"version": "0.3.8-test", "code_sha": "abc"}
-    if shipped is not None:
-        state[routes.SHIPPED_GUARD_KEY] = shipped           # what the engine hands over
-    cond = types.SimpleNamespace(store=None, root=root, state=state)
+    # ENG-413 WP5: what the engine hands over (engine-ext-v1 2.1 host.shipped_guard)
+    cond = types.SimpleNamespace(store=None, root=root, state=state, shipped_guard=shipped)
     st, body, _ = routes._route(None, cond, "GET", ["evals"], {}, {}, None)
     assert st == 200
     return {r["file"]: r for r in body["reports"]}

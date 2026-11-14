@@ -1,5 +1,5 @@
 // The Deciders screen's words and the test box's question (VIS-46): pure functions over the
-// /v1/conductor/deciders/status contract, so the screen and its tests read the same thing.
+// /v1/engine/deciders/status contract (engine API 1.5), so the screen and its tests read the same thing.
 
 import type { DeciderDecision, DeciderModel, DeciderState, JevAnswer, SystemOneQuestion } from '../api/conductor';
 import { gibOf, REASON_WORDS } from './residency';

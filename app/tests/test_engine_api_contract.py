@@ -17,7 +17,7 @@ tests/test_engine_api_contract.py.
                                                                   test_every_literal_is_classified
   3  every route is used: a file of its used_by holds a literal for it, or a relay prefix
      covers it; nodeengines.RELAY is in the routes               test_every_route_is_used
-  4  the version: a missing field reads 1.0 (assumed, ok), 1.0, 1.1, 1.2, 1.3 and 1.4 are ok, 2.0
+  4  the version: a missing field reads 1.0 (assumed, ok), 1.0 to 1.5 are ok, 2.0
      is not and names 1.x, a value not in the plain MAJOR.MINOR form is not ok and its reason
      quotes it, another kind is not read; nodeengines.health against fake engines that say
      nothing, 1.0, 1.1, 1.2, 1.3, 1.4, 2.0 and garbage; the health example validates
@@ -33,7 +33,7 @@ tests/test_engine_api_contract.py.
                                                                   test_node_fixtures
   7  1.3, TandemApp's copies of the engine's values: tandemapp/auth.py same_origin and
      same_origin_json answer auth.json's cases, tandemapp/usage.py TIER_OF is cache.json's,
-     tandemapp/conductor/routes.py's two OFF_WHY texts are the screens' off_why, the registry of
+     tandemapp/conductor/routes.py keeps no OFF_WHY copy (1.5: the engine answers its screens), the registry of
      tandemapp/metrics.py names metrics-families.json's families with their types and labels
      (less the engine host's own counter, 1.4's qse_ext_errors_total)
                                                                   test_values_1_3
@@ -43,9 +43,14 @@ tests/test_engine_api_contract.py.
      their after-ENG-413 mark and no TandemApp file calls a planned route
                                                                   test_additive_1_3
   9  1.4 (ENG-413 WP3a, pinned for WP4) is additive: the 1.3 examples (compat/1.3/) validate,
-     every 1.3 route is still here, the health example's `extensions` names TandemApp's
-     extension on the ext_api PIN says, and the headless answers name no_ui and not_on_engine
-                                                                  test_additive_1_4
+     every 1.3 route is still here, 1.4's health example (compat/1.4/) says 1.4 and its
+     `extensions` names TandemApp's extension, and the headless answers name no_ui and
+     not_on_engine                                                test_additive_1_4
+ 10  1.5 (ENG-413 WP5) is additive: the 1.4 examples (compat/1.4/) validate, every 1.4 route is
+     still here, group 9 is the engine's screens (each replaces a /v1/conductor/* screen, which
+     is marked to leave), the dashboard reads them at /v1/engine/* and no longer at the
+     conductor's paths, and the health example names TandemApp's extension on PIN's ext_api
+                                                                  test_additive_1_5
 
 Standard library only; the fake engines are threads on loopback ports.
 
@@ -306,7 +311,7 @@ def test_routes_json():
         name = f"{r.get('method')} {r.get('path')}"
         if r.get("method") not in ("GET", "POST") or not str(r.get("path", "")).startswith("/"):
             bad.append(f"{name}: method or path")
-        if r.get("group") not in range(1, 9):
+        if r.get("group") not in range(1, 10):            # 1.5: group 9, the engine's screens
             bad.append(f"{name}: group")
         if not isinstance(r.get("live"), bool) or (r["live"] and r["method"] != "GET"):
             bad.append(f"{name}: live")
@@ -629,9 +634,9 @@ def test_values_1_3():
         assert answer(auth.same_origin(c["headers"])) == c["same_origin"], c
         assert answer(auth.same_origin_json(c["headers"])) == c["same_origin_json"], c
     assert usage.TIER_OF == _ex("cache.json")["tier_of"]
-    off = {e["path"]: e.get("off_why") for e in _routes()["engine_screens_until_eng413"]}
-    assert routes.DECIDERS_OFF_WHY == off["/v1/conductor/deciders/*"]
-    assert routes.SHADOW_OFF_WHY == off["/v1/conductor/shadow/*"]
+    # 1.5 (ENG-413 WP5): the engine answers its screens itself, so no copy of its off texts is kept
+    assert not hasattr(routes, "DECIDERS_OFF_WHY") and not hasattr(routes, "SHADOW_OFF_WHY")
+    assert not any("off_why" in e for e in _routes()["engine_screens_until_eng413"])
     fams = {f["name"]: f for f in _ex("metrics-families.json")["families"]
             if f["name"] not in ENGINE_HOST_ONLY}
     reg = {m.name: m for m in metrics.REGISTRY._metrics}
@@ -640,7 +645,7 @@ def test_values_1_3():
         assert (fams[name]["type"], fams[name]["labels"]) == (m.kind, list(m.labelnames)), name
     ext = sorted(n for n, f in fams.items() if f["owner"] == "ext")
     assert ext and all(n.startswith("qse_conductor_") for n in ext), ext
-    return f"same_origin on {len(cases)} cases, TIER_OF, 2 OFF_WHY, {len(fams)} families ({len(ext)} ext)"
+    return f"same_origin on {len(cases)} cases, TIER_OF, no OFF_WHY copy, {len(fams)} families ({len(ext)} ext)"
 
 
 #: families only an engine's extension host has (1.4: the host's failures of an extension's hooks);
@@ -696,15 +701,58 @@ def test_additive_1_4():
     gone = [r["path"] for r in _ex("compat/1.3/routes.json")["routes"]
             if (r["method"], r["path"], r.get("port")) not in now]
     assert not gone, gone
+    ex = _ex("compat/1.4/health.example.json")
+    assert ok(ex, health) and ex["engine_api"] == "1.4"
+    (x,) = ex["extensions"]
+    assert x["name"] == "tandemapp", x
+    kinds = {a["what"].split()[-1] for a in _routes()["answers"]}
+    assert {"no_ui", "not_on_engine"} <= kinds, kinds
+    return f"1.0-1.3 answers valid, {len(now)} routes, 1.4's extensions names tandemapp {x['ext_api']}"
+
+
+#: ENG-413 WP5: the screens the dashboard reads at the engine's /v1/engine/* since 1.5
+OLD_SCREENS = ("/v1/conductor/residency/plan", "/v1/conductor/memory/disk",
+               "/v1/conductor/deciders/")
+
+
+def test_additive_1_5():
+    def ok(doc, schema):
+        return not contract_check.validate(doc, schema, root=CONTRACT)
+    health = contract_check.load("health", CONTRACT)
+    for name in ("health.example.json", "health.stage-front.example.json",
+                 "health.stage-tail.example.json"):
+        assert ok(_ex("compat/1.4/" + name), health), name
+    old = _ex("compat/1.4/health.example.json")
+    for said in ("1.0", "1.1", "1.2", "1.3", "1.4"):
+        assert engineapi.read(dict(old, engine_api=said))["ok"], said
+    doc = _routes()
+    now = {(r["method"], r["path"], r.get("port")) for r in doc["routes"]}
+    gone = [r["path"] for r in _ex("compat/1.4/routes.json")["routes"]
+            if (r["method"], r["path"], r.get("port")) not in now]
+    assert not gone, gone
+    # group 9: each route replaces a screen the conductor served, and that screen leaves
+    g9 = [r for r in doc["routes"] if r["group"] == 9]
+    screens = {e["path"]: e for e in doc["engine_screens_until_eng413"]}
+    assert len(g9) == 14 and all(r["path"].startswith("/v1/engine/") for r in g9), g9
+    assert {r["replaces"] for r in g9} == set(screens), sorted({r["replaces"] for r in g9})
+    assert all(e["leaves"].startswith("ENG-413 WP14") and e["after_eng413"].startswith("/v1/engine/")
+               for e in screens.values())
+    assert not [p for p in doc["planned"] if p.get("lands_with") == "ENG-413 WP5"]
+    # the dashboard reads the engine's screens at the engine's paths only
+    old_calls = [f"{rel}:{ln} {lit}" for rel in ui_files() for ln, lit in literals_of(rel)
+                 if lit.startswith(OLD_SCREENS)]
+    assert not old_calls, old_calls
+    new_calls = {lit for rel in ui_files() for _ln, lit in literals_of(rel)
+                 if lit.startswith("/v1/engine/")}
+    assert len(new_calls) >= 6, sorted(new_calls)
     ex = _ex("health.example.json")
-    assert ok(ex, health) and ex["engine_api"] == engineapi.SPEAKS == "1.4"
+    assert ok(ex, health) and ex["engine_api"] == engineapi.SPEAKS == "1.5"
     with open(os.path.join(ROOT, "contracts", "engine-api-v1", "PIN")) as f:
         pin = dict(ln.split(None, 1) for ln in f.read().splitlines() if ln and not ln.startswith("#"))
     (x,) = ex["extensions"]
     assert x["name"] == "tandemapp" and x["ext_api"] == pin["ext_api"].strip(), (x, pin)
-    kinds = {a["what"].split()[-1] for a in _routes()["answers"]}
-    assert {"no_ui", "not_on_engine"} <= kinds, kinds
-    return f"1.0-1.3 answers valid, {len(now)} routes, extensions names tandemapp {x['ext_api']}"
+    return f"1.4 answers valid, {len(now)} routes, {len(g9)} in group 9, the dashboard reads " \
+           f"{len(new_calls)} engine screen paths, extensions names tandemapp {x['ext_api']}"
 
 
 if __name__ == "__main__":
