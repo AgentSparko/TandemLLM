@@ -11,7 +11,8 @@ adds GET /v1/replica/identity (SRV-741). 1.2 adds the optional `split` ask and b
 the engine and writes down the engine's reads, metrics, tool-call parsing and copied values; no
 answer changes (ENG-427). 1.4 adds the optional `extensions` field of the full /health answer and
 the 404 answers `no_ui` and `not_on_engine` of a path nothing in the engine serves (ENG-413 WP3a,
-the extension host). Standard library only, nothing imported.
+the extension host). 1.5 adds group 9, the engine-only screens as the engine's own /v1/engine/*
+routes (ENG-413 WP5, ENG-433). Standard library only, nothing imported.
 """
 
-VERSION = "1.4"
+VERSION = "1.5"

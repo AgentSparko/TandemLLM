@@ -108,11 +108,11 @@ from tandemapp import session_tokens as session_tokens_mod  # noqa: E402
 from server import preempt  # noqa: E402
 from server import queue_wait as qwait  # noqa: E402
 # ENG-413 WP3b: the request path asks the conductor and its session monitor only through the
-# extension (server/ext.py; TandemApp's tandemapp.engine_ext since WP4). Left here: the hand-over of
-# the engine-only screens (WP5)
-from tandemapp.conductor import routes as conductor_routes  # noqa: E402
+# extension (server/ext.py; TandemApp's tandemapp.engine_ext since WP4). WP5: the engine-only screens
+# are the engine's /v1/engine/* routes (server/engine_routes.py), handed over as host.engine
 from server.conductor import shadow as shadow_mod  # noqa: E402
 from server.conductor import inproc as conductor_inproc  # noqa: E402
+from server import engine_routes  # noqa: E402
 #: the User-Agent of the conductor's own questions to this engine (TandemApp's
 #: tandemapp/conductor/classify.py USER_AGENT, held equal by tests/test_ext_request_path.py): their
 #: turns wait behind the questions they asked, never the other way round
@@ -230,10 +230,6 @@ EXT = ext_mod.NULL
 _EXT_MODULE = None
 #: ENG-413 WP5: the line the extension's before_load gave for the log (its session monitor's policy)
 _EXT_EARLY: str | None = None
-# SRV-747: the conductor's engine-only screens, which TandemApp's routes hand to the engine, and
-# the speed-guard report this release tree ships (VIS-68), which its Compare screen lists
-STATE[conductor_routes.ENGINE_ROUTES] = conductor_inproc.ROUTES
-STATE[conductor_routes.SHIPPED_GUARD_KEY] = conductor_inproc.SHIPPED_GUARD
 # the routers' prices for this weight set (engine/prices.py); empty = the code's constants
 PRICES: dict = {}
 LOCK = EngineLock()
@@ -6171,7 +6167,7 @@ def shadow_preload_once() -> str | None:
 
 
 # v3: the narrator's model stays loaded. ops/start.sh asks for its load at the start, after the
-# page cache is dropped (`POST /v1/conductor/narrator/load`, the residency planner's check with
+# page cache is dropped (`POST /v1/engine/narrator/load`, the residency planner's check with
 # service_start); from then on this keeper loads it again whenever it is not loaded -- the shadow
 # reader released a shared slot's pool, three failed calls unloaded it, a refusal passed -- in an
 # idle window (no request running or waiting), so the copy never waits behind a long turn (the
@@ -9546,6 +9542,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._dashboard_get(path)
         if path.startswith("/v1/conductor/"):
             return self._conductor("GET")
+        if path.startswith(engine_routes.PREFIX):
+            # ENG-413 WP5: the engine-only screens (engine API 1.5, group 9)
+            return engine_routes.serve(self, STATE, "GET", path, None)
         if path.startswith("/v1/setup/"):
             # the setup guide (server/setup_api.py, docs/setup.md): imported on its first call
             from server import setup_api
@@ -9844,6 +9843,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._cache_peek(body, prewarm=path.endswith("prewarm"))
         if path.startswith("/v1/conductor/"):
             return self._conductor("POST", body)
+        if path.startswith(engine_routes.PREFIX):
+            # ENG-413 WP5: the engine-only screens (engine API 1.5, group 9)
+            return engine_routes.serve(self, STATE, "POST", path, body)
         if path.startswith("/v1/setup/"):
             from server import setup_api
             return setup_api.handle(self, sys.modules[__name__], "POST", path, body)
@@ -12685,7 +12687,7 @@ def cache_stats() -> dict:
     suffix = STATE.get("suffix_store")
     out["suffix_store"] = suffix.report() if suffix is not None else None
     disk = STATE.get("disk_cache")
-    # the counts only: the entries' previews are the admin's (GET /v1/conductor/memory/disk)
+    # the counts only: the entries' previews are the admin's (GET /v1/engine/disk)
     out["disk_cache"] = disk.report(top=10) if disk is not None else None
     g = getattr(disk, "guard", None) if disk is not None else None
     out["disk_writes"] = g.report() if g is not None else None
@@ -13641,7 +13643,7 @@ def _ext_start(a, root, led) -> None:
         mode="chat" if root is not None else "engine", engine_api=engine_api.VERSION, state=STATE,
         lock=LOCK, tokenizer=STATE.get("tok"), registry=metrics.REGISTRY,
         ledger_path=STATE["ledger"].path if led is not None else None,
-        args=ext_mod.ext_args(vars(a)), engine=dict(conductor_inproc.ROUTES),
+        args=ext_mod.ext_args(vars(a)), engine=engine_routes.in_process(STATE),
         log=lambda s: print(s, flush=True),
         # engine-ext-v1 1.3: the extension's directory, the identity, the own questions' clock,
         # and the monitor's decisions in Prometheus (SRV-115); 2.1: the release tree's speed-guard

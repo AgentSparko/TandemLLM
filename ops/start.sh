@@ -340,9 +340,9 @@ for i in $(seq 1 300); do
             HR=false; [ "${HOLD_RESTART:-0}" = "1" ] && HR=true
             curl -sf -m 10 -X POST -H 'Content-Type: application/json' \
                 -d "{\"service_start\": true, \"hold_restart\": $HR}" \
-                "http://127.0.0.1:$PORT/v1/conductor/deciders/autoload" >/dev/null \
+                "http://127.0.0.1:$PORT/v1/engine/deciders/autoload" >/dev/null \
                 && echo "[start] decision models: autoload asked" \
-                || echo "[start] decision models: the autoload did not answer (conductor off?)"
+                || echo "[start] decision models: the autoload did not answer"
         fi
         # v3: the narrator's model (the live lines) loads after the decision models (one load at a
         # time), in the start's idle window, through the residency planner; the server's keeper
@@ -352,11 +352,11 @@ for i in $(seq 1 300); do
             HR=false; [ "${HOLD_RESTART:-0}" = "1" ] && HR=true
             NC="$(curl -s -m 10 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
                 -d "{\"service_start\": true, \"hold_restart\": $HR}" \
-                "http://127.0.0.1:$PORT/v1/conductor/narrator/load" || true)"
+                "http://127.0.0.1:$PORT/v1/engine/narrator/load" || true)"
             case "$NC" in
                 2*) echo "[start] narrator: load asked" ;;
                 409) echo "[start] narrator: not loaded (the narrator role is off, or the planner refused it; the engine log says which)" ;;
-                *) echo "[start] narrator: the load did not answer (conductor off?)" ;;
+                *) echo "[start] narrator: the load did not answer (or no extension writes narrated lines)" ;;
             esac
         fi
         start_chatd
