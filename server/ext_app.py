@@ -29,7 +29,7 @@ import json
 import os
 import time
 
-EXT_API = "1.2"
+EXT_API = "1.3"
 NAME = "tandemapp"
 #: ENG-413 WP3b: the session monitor runs behind this adapter with no conductor directory too
 MONITOR_ALONE = True
@@ -69,6 +69,12 @@ class XPlan:
 
     __slots__ = ("cond", "request", "server_mode", "ui")
     body = None
+
+    @property
+    def routing(self):
+        """engine-ext-v1 1.3: the plan's routing (the conductor's own plan, None with the monitor
+        alone)."""
+        return self.cond
 
     def __init__(self, cond, request: dict, server_mode: str):
         self.cond, self.request, self.server_mode = cond, request, server_mode
@@ -335,7 +341,13 @@ class Interim:
             {"method": "GET", "prefix": "/dashboard", "handler": self._page},
         ]
         self.knobs = _knobs()
-        self.interim = Seams(self)
+        self.calls = Seams(self)
+
+    def __getattr__(self, name):
+        # engine-ext-v1 1.3: the optional calls are the extension object's methods
+        if name.startswith("_") or name in ("calls", "host", "state"):
+            raise AttributeError(name)
+        return getattr(self.calls, name)
 
     @property
     def cond(self):
@@ -361,7 +373,7 @@ class Interim:
             n = int(request["body"].get("n") or 1)
         except (TypeError, ValueError):
             n = 1
-        mode = self.interim.server_mode(request["headers"].get("X-Tandem"), n)
+        mode = self.calls.server_mode(request["headers"].get("X-Tandem"), n)
         if cond is None:
             return XPlan(None, request, mode)
         from tandemapp.conductor.store import ConfigError
@@ -539,7 +551,7 @@ class Interim:
     def start_monitor(self) -> None:
         """The session monitor (`--conductor shadow|on`, its policy validated before the weights
         load: STATE["conductor_policy"]), as server/app.py's start built it before ENG-413 WP3b."""
-        i, state, args = self.host.interim, self.state, self.host.args
+        state, args = self.state, self.host.args
         pol = state.get("conductor_policy")
         if pol is None:
             return
@@ -548,7 +560,7 @@ class Interim:
         mon = state["monitor"] = conductor.Monitor(mode, pol, state["tok"])
         # the monitor's decisions are counted in Prometheus (SRV-115); its rows go into the
         # conductor's journal, opened with the ledger
-        mon.journal.sinks.append(i.on_conductor_event)
+        mon.journal.sinks.append(self.host.metrics.event)
         if args.get("fake_engine"):
             # a test run never pushes to a phone, whatever its policy says
             mon.notifier = lambda cfg, title, message: "suppressed: fake engine"
@@ -558,11 +570,11 @@ class Interim:
     def boot(self) -> None:
         """What server/app.py's start did for the conductor (until ENG-413 WP3a) and its session
         monitor (until WP3b), in its order."""
-        i, state, log = self.host.interim, self.state, self.host.log
+        host, state, log = self.host, self.state, self.host.log
         self.start_monitor()
         from tandemapp.conductor import loopescape
         state.setdefault("escapes", loopescape.Escapes())   # SRV-475: the engine made them at start
-        root = i.root
+        root = host.ext_dir
         if root is None:
             # the session monitor without the conductor (`--conductor shadow|on` alone): its
             # journal (SRV-115); with the ledger off it lives in memory only
@@ -571,7 +583,7 @@ class Interim:
             state["monitor"].journal.sinks.append(journal.monitor_sink)
             log(f"[conductor] journal: {journal.path or 'in memory (no ledger)'}, 30 days")
             return
-        if i.defaults == "shipped":
+        if host.args.get("conductor_defaults", "builtin") == "shipped":
             # The shipped documents a box has no version of yet, as version 1
             from tandemapp.conductor import shipped
             for line in shipped.install_at(root):
@@ -589,7 +601,7 @@ class Interim:
         log(f"[conductor] journal: {journal.path or 'in memory (no ledger)'}, {days} days")
         from tandemapp.conductor.hook import Conductor
         from tandemapp.conductor import schema as cond_schema
-        cond_schema.SERVED_NAME = i.identity_name()
+        cond_schema.SERVED_NAME = host.identity_name()
         from tandemapp.conductor import modelfit as cond_fit
         _caps = getattr(state.get("engine"), "caps", None)
         log(cond_fit.install(getattr(_caps, "conductor", None)))
@@ -605,9 +617,9 @@ class Interim:
             log(f"[conductor] journal: {n} rows imported from {legacy}")
         cond.router.session_tokens = state["session_tokens"]
         # SPD-249: no Qwen question whose answer cannot come in time
-        cond.router.own_eta = i.own_eta
+        cond.router.own_eta = host.own_eta
         # VIS-119: the shadow questions after their turn wait for an idle server
-        cond.router.own_idle = i.own_idle
+        cond.router.own_idle = host.own_idle
         # stored documents a fix must reach (a shipped default reaches only a box without one)
         from tandemapp.conductor import migrations as cond_migrations
         cond_migrations.run(cond.store, cond.journal)
@@ -618,9 +630,8 @@ class Interim:
 
 
 def start(host) -> Interim:
-    i = getattr(host, "interim", None)
-    if i is None or (getattr(i, "root", None) is None
-                     and (host.state or {}).get("conductor_policy") is None):
+    if (getattr(host, "ext_dir", None) is None
+            and (host.state or {}).get("conductor_policy") is None):
         raise RuntimeError("the interim adapter runs the engine's conductor or its session monitor: "
                            "it needs a conductor directory (--conductor-config, chat mode) or "
                            "--conductor shadow|on")

@@ -1,4 +1,4 @@
-"""The reference host of engine-ext-v1 1.0 (ENG-429, QA ENG-430): ext.json's rules as code.
+"""The reference host of engine-ext-v1 (ENG-429, QA ENG-430): ext.json's rules as code.
 
 No model and no server. `load` is the discovery and the start, closed on any failure; `FakeHost.serve`
 drives one request through an extension's hooks in ext.json's order, open on any failure of a
@@ -8,6 +8,11 @@ meets an engine. Standard library only; imports neither tree.
 
     ext = load("fake_ext", host)                 # or load(module, host)
     record = host.serve(ext, Scenario(...))      # record["trace"], ["errors"], ["acts"], ["raw"]
+    host.call(ext, name, *args)                  # since 1.3: one of the extension's optional calls
+
+Since 1.3: CALLS, SUP_OPTIONAL and SUP_FIELDS hold the headless value of each optional call, each
+optional supervisor method and each supervisor field (ext.json extension.calls,
+supervisor.optional_methods, supervisor.fields).
 """
 
 from __future__ import annotations
@@ -35,6 +40,60 @@ ENGINE_PREFIXES = ("/v1/chat/completions", "/v1/completions", "/v1/embeddings", 
 ENGINE_DASHBOARD = ("live", "system", "logs", "parallel", "metrics", "summary", "usage", "requests")
 
 
+def _released(call, *a, **kw):
+    return {k: v for k, v in call.items() if not k.startswith("_")}
+
+
+#: since 1.3: the extension's optional calls (ext.json extension.calls), each with the value a
+#: headless engine uses
+CALLS = {
+    "server_mode": lambda header, n: "raw",
+    "served_name": lambda: None,
+    "side_first_max": lambda: 0,
+    "strip_states": lambda messages: (messages, 0),
+    "loop_escape": lambda routing, info: None,
+    "code_class": lambda routing: False,
+    "served": lambda routing, prompt, in_think: None,
+    "in_context": lambda routing, prompt_ids, choice, rows: None,
+    "settle_context": lambda routing, why: None,
+    "ask_in_place": lambda routing, prompt_ids, choice: None,
+    "route_lines": lambda routing, ui: None,
+    "memory_filter": lambda routing, chat, n_choices, ui, tool_names: None,
+    "memory_spans": lambda ids, decode, taken: ([], 0),
+    "answer_mask": lambda routing, chat, body: None,
+    "replayed": lambda session, ids: ids,
+    "turn_ended": lambda supervisor: None,
+    "writer_ban_ids": lambda tokenizer: {},
+    "writer_foreign_call": lambda text: None,
+    "probe_stage": lambda routing: None,
+}
+#: since 1.3: the supervisor's optional methods (ext.json supervisor.optional_methods), headless
+SUP_OPTIONAL = {
+    "apply_request": lambda prompt, in_think, acts: (prompt, in_think),
+    "route_budget": lambda budget, task="route": False,
+    "settle_claim": lambda asker: None,
+    "without_notes": lambda answer: (answer, 0, 0),
+    "as_sent": lambda items, events=None: items,
+    "release_call": _released,
+    "release_block": lambda inner: None,
+    "note_repairs": lambda renamed: None,
+    "argloop_stopped": lambda verdict, name: None,
+}
+#: since 1.3: the supervisor's fields (ext.json supervisor.fields), the value a supervisor that keeps
+#: one answers
+SUP_FIELDS = {
+    "final_answer": lambda: None, "holds_calls": lambda: False, "arms": lambda: None,
+    "watches_blocks": lambda: True, "mode": lambda: "on",
+    "policy": lambda: types.SimpleNamespace(version=0),
+    "acts": lambda: 0, "hidden_tokens": lambda: 0, "acted": lambda: False, "gave_up": lambda: None,
+    "cuts": list, "checked": lambda: True,
+    "req": lambda: types.SimpleNamespace(request_id="", tools_offered=False, n=1, max_tokens=0),
+    "memory_notes": lambda: None, "lift_ids": lambda: None, "on_event": lambda: None,
+    "held_events": lambda: None, "resume_ms": list, "forwarding": lambda: None,
+    "forwarded_at": lambda: None, "can_ask": lambda: False,
+}
+
+
 class Refused(Exception):
     """The engine does not start: one line, '[ext] REFUSING: <why>'."""
 
@@ -46,9 +105,18 @@ class Refused(Exception):
 class Refusal(Exception):
     """What `plan` raises to answer the client with an error (ext.json failure.refusal)."""
 
-    def __init__(self, status: int, type_: str, message: str):
+    def __init__(self, status: int, type_: str, message: str, param: str | None = None):
         super().__init__(message)
         self.status, self.type, self.message = status, type_, message
+        self.param = param                       # since 1.2
+
+
+class NoRoom(ValueError):
+    """Since 1.3: what the engine's callbacks raise when a question asked in place has no room."""
+
+    def __init__(self, why: str = "no_room"):
+        super().__init__(why)
+        self.why = why
 
 
 def _version(text) -> tuple[int, int] | None:
@@ -79,20 +147,29 @@ def _claims_engine_path(prefix: str) -> bool:
 class FakeHost:
     """ext.json's host attributes, a log of every hook call and the failure counters."""
 
-    def __init__(self, mode: str = "chat", args: dict | None = None):
+    def __init__(self, mode: str = "chat", args: dict | None = None, ext_dir: str | None = None,
+                 state: dict | None = None):
         self.ext_api = EXT_API
-        self.engine_api = "1.3"
+        self.engine_api = "1.4"
         self.mode = mode
-        self.state: dict = {}
+        self.state: dict = state if state is not None else {}
         self.lock = None
         self.tokenizer = types.SimpleNamespace(encode=lambda s: [ord(c) for c in s],
                                                decode=lambda ids: "".join(chr(i) for i in ids))
-        self.metrics = types.SimpleNamespace(families=[], add=lambda fam: self.metrics.families.append(fam))
+        self.metrics = types.SimpleNamespace(families=[], events=[],
+                                             add=lambda fam: self.metrics.families.append(fam),
+                                             event=lambda row: self.metrics.events.append(row))
         self.ledger_path = ":memory:"
         self.args = dict(args or {})
         self.engine = {k: (lambda *a, **kw: {}) for k in
                        ("residency_plan", "disk", "disk_clear", "deciders", "narrator", "shadow")}
         self.Refusal = Refusal
+        # since 1.3
+        self.ext_dir = ext_dir
+        self.identity_name = lambda: None
+        self.own_eta = None
+        self.own_idle = lambda: None
+        self.NoRoom = NoRoom
         self.lines: list[str] = []
         self.errors: dict[str, int] = {}
 
@@ -100,6 +177,19 @@ class FakeHost:
         self.lines.append(line)
 
     # ------------------------------------------------------------------------- one request
+
+    def call(self, ext, name: str, *args, **kw):
+        """Since 1.3: one of the extension's optional calls (CALLS), open: a missing method or one
+        that raises answers the headless value; a raise is logged and counted under its name."""
+        fn = getattr(ext, name, None)
+        if fn is None:
+            return CALLS[name](*args, **kw)
+        try:
+            return fn(*args, **kw)
+        except Exception as exc:                                   # noqa: BLE001
+            self.errors[name] = self.errors.get(name, 0) + 1
+            self.log(f"[ext] {name} failed, the request goes on without it: {exc!r}")
+            return CALLS[name](*args, **kw)
 
     def _call(self, rec: dict, ext, name: str, *args, fallback=None, check=None):
         """One hook, open on failure: the error is logged and counted, `fallback` comes back."""
@@ -164,7 +254,10 @@ class FakeHost:
                          check=lambda v: isinstance(v, list) and all(isinstance(i, int) for i in v))
         rec["prompt"] = ids
         ev = {k: None for k in SPEC["supervisor"]["events"]["request"]}
-        ev.update(request_id="r1", messages=sc.body.get("messages", []), tools=sc.body.get("tools", []))
+        ev.update(request_id="r1", messages=sc.body.get("messages", []), tools=sc.body.get("tools", []),
+                  n=1, stream=False, prompt_tokens=len(ids), in_think=False, prompt_ids=list(ids),
+                  chat=True, tool_names=[t.get("function", {}).get("name") for t in sc.body.get("tools", [])],
+                  thinking_off=False, model=sc.body.get("model"))
         sup = self._call(rec, ext, "supervisor", plan, ev)
         self._ask(rec, sup, "at_request", ev)
         self._call(rec, ext, "extras", plan, "start", {}, fallback=[], check=lambda v: isinstance(v, list))

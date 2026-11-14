@@ -1069,7 +1069,7 @@ def _plan_served(plan, prompt, in_think: bool) -> tuple:
     if getattr(plan, "context", None) is not None and not getattr(plan, "prompt_client", False):
         inj = (getattr(plan, "router_cfg", None) or {}).get("injection") or {}
         undecided = int(inj.get("max_note_tokens", 8000))
-    got = EXT.interim("served", plan, prompt, in_think)     # ENG-413 WP3b: the extension's dry run
+    got = EXT.ask("served", plan, prompt, in_think)     # ENG-413 WP3b: the extension's dry run
     return (None, (), undecided) if got is None else (got[0], got[1], undecided)
 
 
@@ -4767,7 +4767,7 @@ def _peek_ids(body: dict, headers) -> tuple[list[int], str | None]:
     ids = build_prompt(body, count="ids")
     if STATE.get("conductor") is not None and session:
         # the extension's router replays its notes (ENG-413 WP3b); a failure: the copy without them
-        ids = EXT.interim("replayed", session, ids)
+        ids = EXT.ask("replayed", session, ids)
     return ids, session
 
 
@@ -5752,7 +5752,7 @@ def _writer_ctx():
     extension's (ENG-413 WP3b, interim)."""
     if STATE.get("conductor") is None:
         return None, None
-    return EXT.interim("writer")
+    return EXT.ask("writer")
 
 
 def memory_once() -> str:
@@ -5892,7 +5892,7 @@ def _writer_turn(mem, cfg, conv, r, trigger, gate, stop=lambda: False, yielded=N
     # banned for the turn (a logit bias of -100: after a compaction Qwen answered a `bash` call)
     prefill = str(cfg.get("prefill") or "")
     pre_ids = list(tok(prefill, add_special_tokens=False).input_ids) if prefill else []
-    ban = EXT.interim("writer_ban_ids", tok) if cfg.get("ban_tool_call") else {}
+    ban = EXT.ask("writer_ban_ids", tok) if cfg.get("ban_tool_call") else {}
     tail = tail + pre_ids
     cap = int(cfg["max_tokens"])
     info = {"gate": gate, "tail": len(tail), "record": r.at, "existing": len(existing),
@@ -5932,7 +5932,7 @@ def _writer_turn(mem, cfg, conv, r, trigger, gate, stop=lambda: False, yielded=N
                 break
             # a tool call that is not a memory block ends the turn at its function's name (after
             # a compaction Qwen answered an empty or a `bash` call, 2026-10-05): it writes nothing
-            cut = EXT.interim("writer_foreign_call",
+            cut = EXT.ask("writer_foreign_call",
                               prefill + tok.decode(ids, skip_special_tokens=False))
             if cut is not None:
                 break
@@ -7292,7 +7292,7 @@ def _probe_done(rec) -> None:
         row = plan.row if plan is not None and plan.row is not None else {}
         stage = STATE.get("probe_stage")
         if stage is not None and plan is not None and plan.router_cfg is not None:
-            ps = EXT.interim("probe_stage", plan) or {"mode": "off"}
+            ps = EXT.ask("probe_stage", plan) or {"mode": "off"}
             if ps["mode"] != "off" and row.get("source") != "probe":
                 row.setdefault("extra", {})["probe"] = stage.stage(
                     ps, cap.vector("prompt"), cap.names, reason="shadow")
@@ -8254,7 +8254,7 @@ def served_name() -> str:
     (`base_model` where a surface shows both): the cache label, the metrics and the classifier's own
     call keep using it."""
     if STATE.get("conductor") is not None:
-        return EXT.interim("served_name") or str(STATE.get("model") or "")   # ENG-413 WP3b
+        return EXT.ask("served_name") or str(STATE.get("model") or "")   # ENG-413 WP3b
     return str(STATE.get("model") or "")
 
 
@@ -9979,7 +9979,7 @@ class Handler(BaseHTTPRequestHandler):
         Returns the sampler the request decodes with."""
         # the profile's section and the escape's step for the session: the extension's (ENG-413
         # WP3b, server/ext_app.py); the sampler is the engine's
-        got = EXT.interim("loop_escape", plan, {
+        got = EXT.ask("loop_escape", plan, {
             "body": body, "session": (None if plan.session is not None
                                       else regenerate_mod.session_of(body, self.headers))})
         if got is None:
@@ -10153,7 +10153,7 @@ class Handler(BaseHTTPRequestHandler):
             n_req = int(body.get("n") or 1)
         except (TypeError, ValueError):
             n_req = 1
-        self._tandem = EXT.interim("server_mode", self.headers.get("X-Tandem"), n_req)
+        self._tandem = EXT.ask("server_mode", self.headers.get("X-Tandem"), n_req)
         rec.learn_suffix = suffix_learns(self.headers)         # SPD-151
         self._images_left_out = 0                      # a keep-alive socket's handler is reused
         live_registry().register(rec)                  # visible from now until 30 s after
@@ -10177,7 +10177,7 @@ class Handler(BaseHTTPRequestHandler):
                 STATE["regenerate"].answered(rec.regen, rec.request_id)   # SRV-241
             live_registry().finish(rec)
             if rec.sup is not None:
-                EXT.interim("turn_ended", rec.sup)     # the watch's idle time starts here
+                EXT.ask("turn_ended", rec.sup)     # the watch's idle time starts here
             if rec.probe is not None:
                 _probe_done(rec)                   # before the row is written: extra.probe
             if rec.ext is not None:
@@ -10207,7 +10207,7 @@ class Handler(BaseHTTPRequestHandler):
         # and the prompt is the one the request would have without them
         stripped = 0
         if chat and STATE.get("conductor") is not None and isinstance(body.get("messages"), list):
-            body["messages"], stripped = EXT.interim("strip_states", body["messages"])
+            body["messages"], stripped = EXT.ask("strip_states", body["messages"])
         # A call the loop guard (or the token limit) stopped, sent back in the history
         # (Open WebUI's tool loop replays its arguments: 2026-10-06, five byte-identical retries,
         # the prompt 17k -> 46k), is cut down to its head and one marker before anything reads the
@@ -10396,8 +10396,8 @@ class Handler(BaseHTTPRequestHandler):
         # arbiter or this server's own raw model, and must never do that holding the engine lock. A
         # raw request gets an inactive plan whose every step hands its input back unchanged; a
         # failing plan serves the request raw (counted). `plan` is the conductor's own plan, which
-        # the request path still reads until ENG-413 WP4 (`cond`, interim); with the session
-        # monitor alone there is none, and the monitor still watches the request.
+        # the request path reads by the fields engine-ext-v1 1.3 names (`routing`); with the
+        # session monitor alone there is none, and the monitor still watches the request.
         req_x = rec.ext = EXT.request({
             "body": body, "headers": self.headers, "client_kind": rec.client_kind,
             "request_id": cid, "chat": chat, "user": self._memory_user(rec),
@@ -10415,7 +10415,7 @@ class Handler(BaseHTTPRequestHandler):
                     xplan = req_x.begin()
             except ext_mod.Refusal as exc:
                 return self._json(exc.status, exc.body())
-            plan = rec.plan = getattr(xplan, "cond", None)
+            plan = rec.plan = getattr(xplan, "routing", None)      # engine-ext-v1 1.3
         # the name the prefix capture and the session snapshot (the disk tier) file this request
         # under; conv_id itself, which compaction, the preparer and the memory writer key on, stays
         disk_id = _disk_session_id(rec.client_kind, plan, conv_id)
@@ -10498,7 +10498,7 @@ class Handler(BaseHTTPRequestHandler):
                 if (plan.active and plan.row is not None and body.get("no_repeat_ngram_size")
                         and not getattr(plan, "prompt_client", False)
                         and pen_spec.no_repeat != base.no_repeat
-                        and (EXT.interim("code_class", plan) or bool(body.get("tools")))):
+                        and (EXT.ask("code_class", plan) or bool(body.get("tools")))):
                     # The client's no-repeat n-gram mask is not for code: every
                     # repeated n-gram pays 4 nats, and in code (and in a tool call's arguments)
                     # repeated n-grams are the text itself. Dropped on the code classes' turns and
@@ -10506,7 +10506,7 @@ class Handler(BaseHTTPRequestHandler):
                     # logged; the raw path honours it as before.
                     plan.row["extra"]["penalty_dropped"] = {
                         "no_repeat_ngram_size": int(pen_spec.no_repeat),
-                        "why": "code" if EXT.interim("code_class", plan) else "tools"}
+                        "why": "code" if EXT.ask("code_class", plan) else "tools"}
                     print(f"[penalty] {cid} no_repeat_ngram_size={pen_spec.no_repeat} dropped "
                           f"(class {plan.row.get('class_id')}, tools "
                           f"{'yes' if body.get('tools') else 'no'})", flush=True)
@@ -10574,7 +10574,7 @@ class Handler(BaseHTTPRequestHandler):
         if plan is not None and plan.side is not None:
             try:
                 short = (int(build_prompt(body, client, count=True, left_out=left_out))
-                         <= EXT.interim("side_first_max"))
+                         <= EXT.ask("side_first_max"))
             except Exception:                                      # noqa: BLE001
                 short = True                   # the render fails again under the lock, as a 400
             rank = RANK_SIDE if short else RANK_SIDE_LONG
@@ -11038,13 +11038,13 @@ class Handler(BaseHTTPRequestHandler):
                 prompt_n = int(prompt.numel())
                 if prompt_n + 1 < int(STATE["max_len"]):
                     gone = self._prefill_watch(False)
-                    EXT.interim(
+                    EXT.ask(
                         "in_context", plan, prompt.tolist(),
                         lambda ids, letters, at: context_choice(ids, letters, at, conv_id,
                                                                 gone, images),
                         lambda ids: context_rows(ids, conv_id, gone, images))
                 else:
-                    EXT.interim("settle_context", plan, "prompt_too_long")
+                    EXT.ask("settle_context", plan, "prompt_too_long")
                 # the turn's class is known now, and with it the budget
                 budget = routed(client.budget if client.asked else server_budget)
             if plan is not None and plan.ask is not None and not micro:
@@ -11052,7 +11052,7 @@ class Handler(BaseHTTPRequestHandler):
                 # in-context stage's forward; journaled, nothing of the turn changes
                 if int(prompt.numel()) + 1 < int(STATE["max_len"]):
                     gone = self._prefill_watch(False)
-                    EXT.interim(
+                    EXT.ask(
                         "ask_in_place", plan, prompt.tolist(),
                         lambda ids, letters, at: context_choice(ids, letters, at, conv_id,
                                                                 gone, images))
@@ -11157,7 +11157,7 @@ class Handler(BaseHTTPRequestHandler):
                     s1_len += d
             # the router's state lines, now that the plan is applied
             if ui is not None:
-                EXT.interim("route_lines", plan, ui)
+                EXT.ask("route_lines", plan, ui)
             # SP4: the conductor's session monitor sees the request before anything is prefilled,
             # and may add a hidden note at the prompt's tail or set the thinking budget
             sup, client_ids = None, None
@@ -12728,7 +12728,7 @@ def _memory_filter(plan, chat: bool, n_choices: int, ui, tool_names=()):
     off: one choice of a chat request; None otherwise (the stream is the release's)."""
     if plan is None:
         return None
-    return EXT.interim("memory_filter", plan, chat, n_choices, ui, tool_names)
+    return EXT.ask("memory_filter", plan, chat, n_choices, ui, tool_names)
 
 
 def _answer_mask(plan, chat: bool, body: dict):
@@ -12738,7 +12738,7 @@ def _answer_mask(plan, chat: bool, body: dict):
     release's byte for byte)."""
     if not chat or plan is None or not plan.active:
         return None
-    return EXT.interim("answer_mask", plan, chat, body)
+    return EXT.ask("answer_mask", plan, chat, body)
 
 
 def _answer_mask_done(plan, cid: str, sm) -> None:
@@ -12759,7 +12759,7 @@ def _memory_spans(taken: list[str], ids: list[int], n_prompt: int) -> list:
     if not taken:
         return []
     tok = STATE["tok"]
-    spans, bad = EXT.interim("memory_spans", ids,
+    spans, bad = EXT.ask("memory_spans", ids,
                              lambda xs: tok.decode(xs, skip_special_tokens=True), taken)
     ctx = STATE.get("last_ctx") or []
     out, at = [], n_prompt
@@ -13647,20 +13647,17 @@ def _ext_start(a, root, led) -> None:
     if _EXT_MODULE is None:
         EXT = ext_mod.NULL
         return
-    from types import SimpleNamespace
     host = ext_mod.Host(
         mode="chat" if root is not None else "engine", engine_api=engine_api.VERSION, state=STATE,
         lock=LOCK, tokenizer=STATE.get("tok"), registry=metrics.REGISTRY,
         ledger_path=STATE["ledger"].path if led is not None else None,
         args=ext_mod.ext_args(vars(a)), engine=dict(conductor_inproc.ROUTES),
         log=lambda s: print(s, flush=True),
-        # what the interim adapter (server/ext_app.py) still reads of the engine, until WP4
-        interim=SimpleNamespace(root=root, defaults=getattr(a, "conductor_defaults", "builtin"),
-                                identity_name=_identity_name,
-                                own_eta=_own_eta_ms if OWN_ETA == "on" else None,
-                                own_idle=_own_idle_s,
-                                # ENG-413 WP3b: the monitor's decisions in Prometheus (SRV-115)
-                                on_conductor_event=metrics.on_conductor_event))
+        # engine-ext-v1 1.3: the extension's directory, the identity, the own questions' clock,
+        # and the monitor's decisions in Prometheus (SRV-115)
+        ext_dir=root, identity_name=_identity_name,
+        own_eta=_own_eta_ms if OWN_ETA == "on" else None, own_idle=_own_idle_s,
+        on_event=metrics.on_conductor_event)
     EXT = ext_mod.start(_EXT_MODULE, host)
     print(f"[ext] on: {EXT.name} {EXT.version} (engine-ext-v1 {EXT.ext_api}); "
           f"{len(EXT.obj.routes)} routes: "

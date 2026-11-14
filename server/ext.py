@@ -10,15 +10,19 @@ it. Standard library only, plus the engine's metrics registry for one counter.
     ext.models()             its /v1/models entries; ext.card(name, raw) one of them, or None
     ext.route(method, path)  the handler of a path it serves, or None
     ext.request(request)     one request's hooks (Request), open on any failure
-    ext.interim(name, ...)   one of the interim calls (INTERIM), open; the fallback when headless
+    ext.ask(name, ...)       one of the extension's optional calls (CALLS, since 1.3), open; the
+                             headless value when headless, missing or raising
     ext.stop()               the engine stops
+    attach(state)            tests: an extension's object around objects a test built itself
 
 ENG-413 WP3b: the request path asks these hooks and nothing of the conductor. `Request` asks them in
 ext.json's order; `Supervision` is the supervisor as the decode loop asks it at SP1-SP4, each act
 checked against its method and every failure detaching it for the rest of the request. The acts
-are the engine's (the kinds below), carried out by the engine. INTERIM names what the request path
-still asks the interim adapter (server/ext_app.py) outside the contract: each with the value a
-headless engine uses; ENG-413 WP4 turns them into hooks or moves them out.
+are the engine's (the kinds below), carried out by the engine. ENG-413 WP4 (engine-ext-v1 1.3):
+what the request path asked an interim adapter outside the contract is the contract now: the
+optional calls (CALLS), the supervisor's optional methods (SUP_OPTIONAL) and fields (SUP_FIELDS),
+each with the value a headless engine uses, the plan's `routing` and the host's fields. INTERIM
+keeps what ext.json `kept_interim` names (until WP5).
 
 The failure rule (ext.json `failure`): closed at start, open per request. `discover` and `start`
 raise Refused, a SystemExit whose text is the one line `[ext] REFUSING: <why>`: a module that does
@@ -39,7 +43,7 @@ import re
 import threading
 
 #: the engine-ext-v1 version this host speaks (contracts/engine-ext-v1/ext.json `version`)
-EXT_API = "1.2"
+EXT_API = "1.3"
 #: the module attributes discovery reads (ext.json discovery.module)
 MODULE_ATTRS = ("EXT_API", "NAME", "VERSION", "start")
 #: the extension's hooks and their arguments (ext.json extension.hooks)
@@ -171,37 +175,48 @@ def check_module(module):
 
 
 class Host:
-    """What the engine hands an extension (ext.json `host`). `interim`: what ENG-413 WP3a's
-    interim adapter (server/ext_app.py) still reads of the engine beyond the interface; WP4 ends it."""
+    """What the engine hands an extension (ext.json `host`); since 1.3 also `ext_dir`,
+    `identity_name`, `own_eta`, `own_idle`, `NoRoom` and `metrics.event`."""
 
     def __init__(self, *, mode: str, engine_api: str, state, lock, tokenizer, registry,
-                 ledger_path, args: dict, engine: dict | None = None, log=print, interim=None):
+                 ledger_path, args: dict, engine: dict | None = None, log=print, ext_dir=None,
+                 identity_name=None, own_eta=None, own_idle=None, on_event=None):
         self.ext_api = EXT_API
         self.engine_api = engine_api
         self.mode = mode
         self.state = state
         self.lock = lock
         self.tokenizer = tokenizer
-        self.metrics = _Families(registry)
+        self.metrics = _Families(registry, on_event)
         self.ledger_path = ledger_path
         self.args = args
         self.engine = dict(engine or {})
         self._log = log
         self.Refusal = Refusal
-        self.interim = interim
+        self.ext_dir = ext_dir
+        self.identity_name = identity_name or (lambda: None)
+        self.own_eta = own_eta
+        self.own_idle = own_idle or (lambda: None)
+        self.NoRoom = NoRoom
 
     def log(self, line: str) -> None:
         self._log(line)
 
 
 class _Families:
-    """The registry handle: `add(family)` for the families metrics-families.json lists as `ext`."""
+    """The registry handle: `add(family)` for the families metrics-families.json lists as `ext`;
+    since 1.3 `event(row)`, one journal row of the extension counted in those families."""
 
-    def __init__(self, registry):
+    def __init__(self, registry, on_event=None):
         self._registry = registry
+        self._on_event = on_event
 
     def add(self, family):
         return self._registry.add(family) if self._registry is not None else family
+
+    def event(self, row) -> None:
+        if self._on_event is not None:
+            self._on_event(row)
 
 
 def _count(hook: str) -> None:
@@ -258,9 +273,9 @@ class Null:
     def request(self, request: dict) -> "Request":
         return Request(None, request)
 
-    def interim(self, name: str, *args, **kw):
-        """INTERIM's headless value: nothing is asked."""
-        return INTERIM[name](*args, **kw)
+    def ask(self, name: str, *args, **kw):
+        """An optional call's (CALLS, INTERIM) headless value: nothing is asked."""
+        return _HEADLESS[name](*args, **kw)
 
     def stop(self) -> None:
         return None
@@ -371,19 +386,21 @@ class Loaded(Null):
         v = _version(self.ext_api)
         return v is not None and v[0] == major and v[1] >= minor
 
-    def interim(self, name: str, *args, **kw):
-        """One of INTERIM, asked of the extension object's `interim` (the interim adapter's): open,
-        a raise is logged, counted as `interim.<name>` and the headless value comes back."""
-        fn = getattr(getattr(self.obj, "interim", None), name, None)
+    def ask(self, name: str, *args, **kw):
+        """One of the optional calls (CALLS, since 1.3; INTERIM, ext.json kept_interim), a method
+        of the extension object: open. An extension before 1.3 or without the method is not asked;
+        a raise is logged and counted under the call's name (`interim.<name>` for INTERIM) and the
+        headless value comes back."""
+        fn = getattr(self.obj, name, None) if self.speaks(1, 3) else None
         if fn is None:
-            return INTERIM[name](*args, **kw)
+            return _HEADLESS[name](*args, **kw)
         try:
             return fn(*args, **kw)
         except PASS_THROUGH:
             raise
         except Exception as exc:                                   # noqa: BLE001
-            self.failed(f"interim.{name}", exc)
-            return INTERIM[name](*args, **kw)
+            self.failed(name if name in CALLS else f"interim.{name}", exc)
+            return _HEADLESS[name](*args, **kw)
 
     def stop(self) -> None:
         self.call("stop")
@@ -395,9 +412,10 @@ class ExtRouteError(Exception):
 
 class RouteRequest:
     """What a route handler gets: `method`, `path` (no query), `query`, `headers`, `body` (the JSON
-    read, or None), `peer`, `auth` (the engine's access rule). `handler` is the engine's HTTP handler:
-    ENG-413 WP3a's interim adapter answers on it and returns None; an extension returns
-    (status, headers, body) instead."""
+    read, or None), `peer`, `auth` (the engine's access rule); since 1.3 `allowed(route)` (None, or
+    the engine's refusal (status, headers, body) for that rule), `session_token` and `session` (the
+    session address /s/<token> the path came under, and the session key it names). The handler
+    returns (status, headers, body). `handler` is the engine's HTTP handler, not the interface's."""
 
     def __init__(self, handler, method: str, path: str, body=None, auth=None):
         self.handler = handler
@@ -412,6 +430,19 @@ class RouteRequest:
             self.peer = handler._peer()
         except Exception:                                          # noqa: BLE001
             self.peer = None
+        self.session_token = getattr(handler, "_stok", None)
+        self.session = getattr(handler, "_sess", None)
+
+    def allowed(self, route: str):
+        """The engine's access rule for `route` (server/api/auth.py): None when the request may
+        pass, else the answer the engine gives: 404 for a route that is off, 401 otherwise."""
+        verdict = self.auth.decide(route, self.peer or "", self.headers) if self.auth is not None else "ok"
+        if verdict == "ok":
+            return None
+        if verdict == "absent":
+            return 404, {}, {"error": {"type": "not_found", "message": f"no route {self.path}"}}
+        return 401, {"WWW-Authenticate": 'Bearer realm="TandemLLM"'}, {"error": {
+            "type": "unauthorized", "message": "a bearer token or the dashboard session is needed"}}
 
 
 class Request:
@@ -539,9 +570,10 @@ class Supervision:
     supervisor for the rest of the request, counted under the method's name, and the loop goes on
     as on a headless engine (no act). Acts already carried out stay.
 
-    Beyond the contract's methods the decode loop still asks the interim adapter's supervisor what
-    SUPERVISION_INTERIM names (each open, with the value a headless engine has) and reads its state
-    (`gave_up`, `holds_calls`, `cuts`, ...) as attributes; ENG-413 WP4 turns them into fields."""
+    Since 1.3 the decode loop also asks the optional methods SUP_OPTIONAL names (each open, with
+    the value a headless engine has; a supervisor without one answers it) and reads the fields
+    SUP_FIELDS names (`gave_up`, `holds_calls`, `cuts`, ...); a supervisor that keeps a field
+    answers its headless value."""
 
     _OWN = ("_obj", "_req", "_detached", "_taken")
 
@@ -618,15 +650,19 @@ class Supervision:
     def done(self, outcome, detail):
         return self._ask("done", None, outcome, detail)
 
-    # ------------------------------------------------------------------ interim (outside the contract)
-    def interim(self, name: str, *args, **kw):
-        """One of SUPERVISION_INTERIM, open: a raise detaches the supervisor (counted under its
-        name) and the headless value comes back; detached, nothing is asked."""
-        fallback = SUPERVISION_INTERIM[name](*args, **kw)
+    # ------------------------------------------------------------------ optional (since 1.3)
+    def optional(self, name: str, *args, **kw):
+        """One of SUP_OPTIONAL, open: a supervisor without it answers the headless value; a raise
+        detaches the supervisor (counted under its name) and the headless value comes back;
+        detached, nothing is asked."""
+        fallback = SUP_OPTIONAL[name](*args, **kw)
         if self.detached:
             return fallback
+        fn = getattr(self._obj, name, None)
+        if fn is None:
+            return fallback
         try:
-            return getattr(self._obj, name)(*args, **kw)
+            return fn(*args, **kw)
         except PASS_THROUGH:
             raise
         except Exception as exc:                                   # noqa: BLE001
@@ -634,18 +670,18 @@ class Supervision:
             return fallback
 
     def __getattr__(self, name):
-        if name in SUPERVISION_INTERIM:
-            return lambda *a, **kw: self.interim(name, *a, **kw)
+        if name in SUP_OPTIONAL:
+            return lambda *a, **kw: self.optional(name, *a, **kw)
         try:
             return getattr(self._obj, name)
         except AttributeError:
-            if name not in SUPERVISION_STATE:
+            if name not in SUP_FIELDS:
                 raise
         # a supervisor that is not the interim adapter's (an extension on the interface alone) has
         # none of the state the decode loop reads: the headless value, kept for this request
         state = self.__dict__.setdefault("_state", {})
         if name not in state:
-            state[name] = SUPERVISION_STATE[name]()
+            state[name] = SUP_FIELDS[name]()
         return state[name]
 
     def __setattr__(self, name, value):
@@ -666,11 +702,11 @@ def _released(call, *a, **kw):
     return {k: v for k, v in call.items() if not k.startswith("_")}
 
 
-#: what the decode loop asks the interim adapter's supervisor beyond the contract (ENG-413 WP3b),
-#: each with the value a headless engine has: SP4's splice and the request's reasoning cap, SP2's
-#: claim check asked in place and the memory notes taken out of an answer, SP3's release of held
-#: calls and the argument loop's stop
-SUPERVISION_INTERIM = {
+#: since 1.3 (ext.json supervisor.optional_methods): what the decode loop asks a supervisor beyond
+#: the safe points' methods, each with the value a headless engine has: SP4's splice and the
+#: request's reasoning cap, SP2's claim check asked in place and the memory notes taken out of an
+#: answer, SP3's release of held calls and the argument loop's stop
+SUP_OPTIONAL = {
     "apply_request": lambda prompt, in_think, acts: (prompt, in_think),
     "route_budget": lambda budget, task="route": False,
     "settle_claim": lambda asker: None,
@@ -684,7 +720,7 @@ SUPERVISION_INTERIM = {
 
 
 class _Req:
-    """The request as the decode loop reads it of a supervisor that keeps none (SUPERVISION_STATE)."""
+    """The request as the decode loop reads it of a supervisor that keeps none (SUP_FIELDS)."""
 
     request_id = ""
     tools_offered = False
@@ -696,9 +732,9 @@ class _Policy:
     version = 0
 
 
-#: the supervisor's state the decode loop reads (interim, ENG-413 WP3b; WP4 makes it fields), with the
-#: value it has on a supervisor that keeps none: an extension's on the interface alone
-SUPERVISION_STATE = {
+#: since 1.3 (ext.json supervisor.fields): the supervisor's fields the decode loop reads (and some it
+#: writes), with the value a supervisor that keeps one answers
+SUP_FIELDS = {
     "final_answer": lambda: None, "holds_calls": lambda: False, "arms": lambda: None,
     "watches_blocks": lambda: True, "mode": lambda: "on", "policy": _Policy,
     "acts": lambda: 0, "hidden_tokens": lambda: 0, "acted": lambda: False, "gave_up": lambda: None,
@@ -716,27 +752,44 @@ def supervising(sup):
     return Supervision(sup)
 
 
-#: what the request path asks the interim adapter (server/ext_app.py) beyond the contract (ENG-413
-#: WP3b), each with the value a headless engine has; `Loaded.interim(name, ...)` asks it open
-INTERIM = {
+#: since 1.3 (ext.json extension.calls): the extension's optional calls the request path asks, each
+#: with the value a headless engine has; `Loaded.ask(name, ...)` asks it open
+CALLS = {
     "server_mode": lambda header, n: "raw",
     "served_name": lambda: None,
     "side_first_max": lambda: 0,
     "strip_states": lambda messages: (messages, 0),
-    "loop_escape": lambda plan, info: None,
-    "code_class": lambda plan: False,
-    "served": lambda plan, prompt, in_think: None,
-    "in_context": lambda plan, prompt_ids, choice, rows: None,
-    "settle_context": lambda plan, why: None,
-    "ask_in_place": lambda plan, prompt_ids, choice: None,
-    "route_lines": lambda plan, ui: None,
-    "memory_filter": lambda plan, chat, n_choices, ui, tool_names: None,
+    "loop_escape": lambda routing, info: None,
+    "code_class": lambda routing: False,
+    "served": lambda routing, prompt, in_think: None,
+    "in_context": lambda routing, prompt_ids, choice, rows: None,
+    "settle_context": lambda routing, why: None,
+    "ask_in_place": lambda routing, prompt_ids, choice: None,
+    "route_lines": lambda routing, ui: None,
+    "memory_filter": lambda routing, chat, n_choices, ui, tool_names: None,
     "memory_spans": lambda ids, decode, taken: ([], 0),
-    "answer_mask": lambda plan, chat, body: None,
+    "answer_mask": lambda routing, chat, body: None,
     "replayed": lambda session, ids: ids,
-    "turn_ended": lambda sup: None,
-    "writer": lambda: (None, None),
-    "writer_ban_ids": lambda tok: {},
+    "turn_ended": lambda supervisor: None,
+    "writer_ban_ids": lambda tokenizer: {},
     "writer_foreign_call": lambda text: None,
-    "probe_stage": lambda plan: None,
+    "probe_stage": lambda routing: None,
 }
+
+#: outside the interface (ext.json kept_interim, until ENG-413 WP5): the memory writer's object.
+#: Asked like a call (`Loaded.ask`), counted as interim.<name>
+INTERIM = {
+    "writer": lambda: (None, None),
+}
+
+_HEADLESS = {**CALLS, **INTERIM}
+
+
+def attach(state: dict, *, name: str = "tandemapp.engine_ext", log=print, **host):
+    """Tests: the extension `name` as the loaded extension around a conductor or a session monitor
+    the test built itself (`state["conductor"]`, `state["monitor"]`), without its start (no shipped
+    documents, journal or migrations): the module's `attach(host)` makes the extension object."""
+    module = check_module(importlib.import_module(name))
+    h = Host(mode="chat", engine_api="", state=state, lock=None, tokenizer=state.get("tok"),
+             registry=None, ledger_path=None, args={}, log=log, **host)
+    return Loaded(module, module.attach(h), h)

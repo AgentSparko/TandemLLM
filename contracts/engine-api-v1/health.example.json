@@ -28,8 +28,8 @@
   "extensions": [
     {
       "name": "tandemapp",
-      "version": "interim+d7a3aa6fb1d8",
-      "ext_api": "1.1"
+      "version": "0.15.0",
+      "ext_api": "1.3"
     }
   ]
 }
