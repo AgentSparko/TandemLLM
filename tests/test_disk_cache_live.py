@@ -8,7 +8,10 @@ three routes (it runs on the box after the deploy and cannot run here against th
     answers, and the ids the server draws for tool calls are not the text: the 22:08 run of
     2026-10-02 failed `same_text` on them alone, and a call's arguments that differ
     still fail;
-  * a server whose tier does not run, and a box whose lock is held, are refused before a request.
+  * a server whose tier does not run, and a box whose lock is held, are refused before a request;
+  * ENG-413 WP10: the tool reads the engine's screen `/v1/engine/disk` (the stub answers nothing
+    under `/v1/conductor/`) and loads from a tree without app/: it strips the step lines itself,
+    a narrated line and a reasoning part's title too.
 
 Run: python tests/test_disk_cache_live.py
 """
@@ -18,6 +21,8 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -82,7 +87,7 @@ def serve(stub):
 
         def do_GET(self):
             stub.calls.append(("GET", self.path))
-            if self.path == "/v1/conductor/memory/disk":
+            if self.path == "/v1/engine/disk":
                 return self._json(stub.disk())
             self.send_error(404)
 
@@ -216,6 +221,30 @@ def test_no_tier_or_a_held_box_is_refused_before_a_request():
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)
         httpd.shutdown()
+
+
+def test_it_reads_the_engine_screen_and_no_app_file():
+    stub = Stub()
+    rc, _ = check(stub)
+    assert rc == 0
+    gets = {p for m, p in stub.calls if m == "GET"}
+    assert gets == {"/v1/engine/disk"}, gets
+    with tempfile.TemporaryDirectory(prefix="disk-live-noapp-") as d:
+        os.makedirs(os.path.join(d, "tools"))
+        shutil.copy(L.__file__, os.path.join(d, "tools", "disk_cache_live.py"))
+        p = subprocess.run([sys.executable, "-I", "-B", "-c",
+                            "import importlib.util, sys\n"
+                            "s = importlib.util.spec_from_file_location('L', sys.argv[1])\n"
+                            "m = importlib.util.module_from_spec(s); s.loader.exec_module(m)\n"
+                            "print(repr(m.model_text(sys.argv[2])))\n"
+                            "print(sorted(k for k in sys.modules if k.split('.')[0] in "
+                            "('tandemapp', 'server', 'engine')))",
+                            os.path.join(d, "tools", "disk_cache_live.py"),
+                            "\n\u203a reading 9 tokens\n\nok\n**\u203a deciding: code\n**\u203a "
+                            "Thinking 1m: a plan\u2060**\n\nend\n\u203a Thought 4s: done\u2060"],
+                           capture_output=True, text=True, timeout=60, cwd=d)
+    assert p.returncode == 0, p.stderr[-1500:]
+    assert p.stdout.splitlines() == ["'ok\\n**\u203a deciding: codeend'", "[]"], p.stdout
 
 
 def test_the_head_is_about_as_long_as_asked():

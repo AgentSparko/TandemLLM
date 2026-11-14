@@ -5,7 +5,7 @@ text of about `--system-tokens` tokens of the repository's docs, opencode's tool
 turn a short user message, the answers kept in the history, `--pause-s` between turns) under a
 test bearer (`--key`, which the idle checks do not count), then reads the shadow's status, its
 journal rows for that session and, with `--ask`, one typed question over the session
-(`POST /v1/conductor/shadow/ask`). Prints one JSON report; nothing of a real conversation.
+(`POST /v1/engine/shadow/ask`). Prints one JSON report; nothing of a real conversation.
 
     python tools/shadow_live.py --base http://127.0.0.1:8000 --key sr1-test --turns 4
 """
@@ -109,7 +109,7 @@ def main() -> int:
                                                                    f"turn-{i}.bin"))
         time.sleep(a.pause_s)
     time.sleep(5)
-    st = get(a.base, "/v1/conductor/shadow/status", a.admin)
+    st = get(a.base, "/v1/engine/shadow/status", a.admin)
     mine = [s for s in st.get("sessions") or [] if s["session"] == hkey]
     rows = []
     if os.path.isfile(a.journal):
@@ -126,7 +126,7 @@ def main() -> int:
                 "choices": {"docs": "reading or summarising documentation",
                             "code": "writing or changing code",
                             "ops": "running or deploying a service"}}
-        req = urllib.request.Request(a.base + "/v1/conductor/shadow/ask",
+        req = urllib.request.Request(a.base + "/v1/engine/shadow/ask",
                                      data=json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json",
                                               **({"Authorization": f"Bearer {a.admin}"}

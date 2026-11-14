@@ -14,7 +14,7 @@ time, every one bounded.
   router's rows (a class and its effort, the packages of its note, the tools its answer called,
   which the tool gate checks) and the session monitor's acts (steering notes, loop and cap closes).
   The state lines were off that night, so the events are rebuilt from those rows as states.py makes
-  them. They go through `POST /v1/conductor/narrator/try` twice: at the role's budget (what a user
+  them. They go through `POST /v1/engine/narrator/try` twice: at the role's budget (what a user
   would see; a line not finished in time is the template) and at `--lifted-ms` (what the model
   writes when it may finish: the lines to read by eye, and the latency a line needs). Printed: the
   template, the line, its milliseconds and why it fell back; then p50 and p90 per pass.
@@ -27,7 +27,7 @@ time, every one bounded.
   narrator's mean decode rate within 3 % of the template's; the TTFT difference is printed (the
   router's line is narrated before the prefill).
 
-The narrator is loaded first (`POST /v1/conductor/narrator/load`) and unloaded at the end unless
+The narrator is loaded first (`POST /v1/engine/narrator/load`) and unloaded at the end unless
 --keep-loaded; the two profiles stay (reachable only by the header). Exit 0 when the decode gate
 holds and the narrator wrote at least one line in each pass that allows it.
 """
@@ -181,7 +181,7 @@ def lines(events: list[dict], budget_ms: int | None, label: str) -> dict:
     body = {"events": events, "max_tokens": 24}
     if budget_ms:
         body["budget_ms"] = budget_ms
-    st, out = call("POST", "/v1/conductor/narrator/try", body, timeout=600)
+    st, out = call("POST", "/v1/engine/narrator/try", body, timeout=600)
     if st != 200:
         raise SystemExit(f"[narr] try ({label}): {st} {out}")
     got = out["lines"]
@@ -307,20 +307,20 @@ def main(argv=None) -> int:
     if held():
         print("[narr] the box lock is held (a hold runs): not now", flush=True)
         return 2
-    st, s = call("GET", "/v1/conductor/narrator/status")
+    st, s = call("GET", "/v1/engine/narrator/status")
     if st != 200 or not s.get("enabled"):
         print(f"[narr] no narrator on this engine: {st} {s}", flush=True)
         return 2
     events = pick(recorded(a.since, a.until), a.events)
     print(f"[narr] {len(events)} events from {a.since} to {a.until}: "
           f"{sorted({e['kind'] for e in events})}", flush=True)
-    st, d = call("POST", "/v1/conductor/narrator/load")
+    st, d = call("POST", "/v1/engine/narrator/load")
     if st not in (200, 202):
         print(f"[narr] load refused: {st} {d}", flush=True)
         return 3
     t0 = time.time()
     while time.time() - t0 < 300:
-        st, s = call("GET", "/v1/conductor/narrator/status")
+        st, s = call("GET", "/v1/engine/narrator/status")
         if s["slot"]["state"] in ("loaded", "failed"):
             break
         time.sleep(2)
@@ -336,7 +336,7 @@ def main(argv=None) -> int:
     if not a.skip_decode:
         report["decode"] = decode(a.runs)
     if not a.keep_loaded:
-        call("POST", "/v1/conductor/narrator/unload")
+        call("POST", "/v1/engine/narrator/unload")
     out = a.out or os.path.join("results", "narrator",
                                 f"measure-{time.strftime('%Y%m%d-%H%M%S')}.json")
     os.makedirs(os.path.dirname(out), exist_ok=True)

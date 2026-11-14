@@ -32,8 +32,9 @@ gates hold.
 
 What is compared is what the model wrote: the stream's text without TandemLLM's step lines (S1's
 `› reading 16,427 tokens at ~800 tok/s, about 18 s left`, `› waiting: ...`, which say how long
-something took and differ between two identical answers; app/tandemapp/conductor/states.py
-`strip_text`), and each tool call's name and arguments, not the call id the server draws per
+something took and differ between two identical answers; TandemApp's conductor writes them in
+chat mode, framed as `\n› <text>\n\n`, `model_text` takes each whole frame out), and each tool
+call's name and arguments, not the call id the server draws per
 request. On 2026-10-02 at 22:08 the gate compared the raw stream: the cold run's reading lines
 and the disk run's waiting line, and two calls' ids, made `same_text` false on the same answer
 and the same calls. The server's TTFT is the one that counts: the client's first piece is a step
@@ -45,10 +46,10 @@ from __future__ import annotations
 import argparse
 import datetime
 import fcntl
-import importlib.util
 import json
 import os
 import random
+import re
 import sys
 import time
 import urllib.request
@@ -89,23 +90,31 @@ def admin_token(path: str) -> str | None:
     return None
 
 
-def _states():
-    """app/tandemapp/conductor/states.py by its path (it needs nothing but `re`): this file runs on
-    the box's own python, without the engine's packages."""
-    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app",
-                        "tandemapp", "conductor", "states.py")
-    spec = importlib.util.spec_from_file_location("_tandem_states", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-STATES = _states()
+#: TandemLLM's step lines (ENG-413 WP10: this tool reads no TandemApp file): the marker and one line
+#: of at most STEP_MAX characters, closed by a blank line (`\n› <text>\n\n`), or the same as a
+#: reasoning part's title (`**› <text>**`); at the stream's ends a client may have trimmed the
+#: frame's outer newlines. The frame is self-delimiting, so a whole frame is taken out wherever it is.
+MARKER = "› "
+STEP_MAX = 320
+_LINE = re.escape(MARKER) + r"[^\n]{1,%d}?" % STEP_MAX
+_ILINE = r"\*\*" + re.escape(MARKER) + r"[^\n]{1,%d}?\*\*" % STEP_MAX
+_MID = [re.compile(r"\n" + x + r"\n\n") for x in (_LINE, _ILINE)]
+_ENDS = [re.compile(r"\A" + x + r"(?:\n\n|\n?\Z)") for x in (_LINE, _ILINE)] + \
+    [re.compile(r"\n" + x + r"\n?\Z") for x in (_LINE, _ILINE)]
 
 
 def model_text(text: str) -> str:
     """The stream's text without TandemLLM's step lines."""
-    return STATES.strip_text(text)
+    if MARKER not in text:
+        return text
+    prev = None
+    while prev != text:
+        prev = text
+        for rx in _MID:
+            text = rx.sub("", text)
+        for rx in _ENDS:
+            text = rx.sub("", text, count=1)
+    return text
 
 
 def call_list(deltas: list) -> list:
@@ -201,7 +210,7 @@ def main(argv=None) -> int:
         print("[disk-live] the box lock is held (a hold runs): not now", flush=True)
         return 2
     token = admin_token(a.token_file)
-    disk = call(server, "GET", "/v1/conductor/memory/disk", token)
+    disk = call(server, "GET", "/v1/engine/disk", token)
     if not disk.get("running") or not disk.get("on"):
         print(f"[disk-live] the disk tier does not run on {server} (running {disk.get('running')}, "
               f"mode {disk.get('settings', {}).get('mode')})", flush=True)
@@ -222,7 +231,7 @@ def main(argv=None) -> int:
     # show on a busy cache): a write of an opencode head since the start, nothing dropped
     deadline, entry = time.time() + a.wait_s, None
     while time.time() < deadline:
-        rep = call(server, "GET", "/v1/conductor/memory/disk", token)
+        rep = call(server, "GET", "/v1/engine/disk", token)
         done = [e for e in rep.get("events") or [] if e.get("kind") == "write"
                 and e.get("ts", 0) >= t_start - 1 and "opencode-head" in (e.get("kinds") or [])
                 and not e.get("dropped")]
@@ -244,7 +253,7 @@ def main(argv=None) -> int:
     call(server, "POST", "/v1/cache/clear", token, {})
     runs["disk"] = one(server, system, tools, user1, f"disk-live-{nonce}-b")
     runs["other"] = one(server, system, tools, user2, f"disk-live-{nonce}-c")
-    rep = call(server, "GET", "/v1/conductor/memory/disk", token)
+    rep = call(server, "GET", "/v1/engine/disk", token)
     hits = [e for e in rep.get("events") or [] if e.get("kind") == "hit"][-2:]
     for k in ("disk", "other"):
         r = runs[k]
