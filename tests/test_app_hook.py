@@ -7,12 +7,17 @@
      helper tests.proxy_util (only app/tests has it) are not found, tools.contract_check is
      the engine's own                                        test_nothing_else_of_app_is_found
   3  in a tree without app/, `import server` installs nothing  test_no_app_no_finder
+  4  the no-app guard (ENG-413 WP9, flips at WP14): while VENDORED_APP is True, app/ and app.pin
+     are here and every engine test that still reaches app/ is a pair test of tests/test-ledger.json
+     or listed in reverse-deps.json; WP14 sets it False with `git rm -r app/`, and then app/,
+     app.pin and the finder are gone and no engine test reaches app/      test_the_no_app_guard
 
 CPU, standard library only. Run: python tests/test_app_hook.py
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -22,6 +27,8 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 APP = os.path.join(ROOT, "app")
+#: WP14 flips this to False in the commit that runs `git rm -r app/`
+VENDORED_APP = True
 
 
 def _child(code: str, root: str = ROOT) -> list[str]:
@@ -86,6 +93,33 @@ def test_no_app_no_finder():
                      "print('finders', sum(bool(getattr(f, 'tandem_app_finder', False))"
                      " for f in sys.meta_path))\n", root=d)
     assert out == ["finders 0"], out
+
+
+def _reaching_tests() -> list[str]:
+    """The engine's test files that import TandemApp's packages or name app/ as a path part, as
+    tests/test_engine_api_contract.py's scan reads them (this file aside: it names app/ to guard it)."""
+    sys.path.insert(0, HERE)
+    import test_engine_api_contract as C
+    return sorted(f for f in C.inventory()["tests"] if f != "tests/test_app_hook.py")
+
+
+def test_the_no_app_guard():
+    with open(os.path.join(ROOT, "tests", "test-ledger.json")) as f:
+        ledger = json.load(f)
+    pair = set(ledger["pair_suite"]["files"])
+    with open(os.path.join(ROOT, "contracts", "engine-api-v1", "reverse-deps.json")) as f:
+        listed = set(json.load(f)["tests"])
+    reaching = _reaching_tests()
+    if VENDORED_APP:
+        assert os.path.isdir(APP) and os.path.isfile(os.path.join(ROOT, "app.pin")), "app/ is vendored until WP14"
+        loose = [f for f in reaching if f not in pair and f not in listed]
+        assert not loose, f"engine tests reach app/ and are neither pair tests nor listed: {loose}"
+        return f"app/ vendored; {len(reaching)} test files reach it, {len(pair & set(reaching))} of them pair tests"
+    assert not os.path.exists(APP) and not os.path.exists(os.path.join(ROOT, "app.pin")), "app/ after WP14"
+    with open(os.path.join(ROOT, "server", "__init__.py")) as f:
+        assert "AppFinder" not in f.read(), "the finder after WP14"
+    assert not reaching, f"engine tests reach app/ after WP14: {reaching}"
+    return "no app/, no finder, no test reaches it"
 
 
 if __name__ == "__main__":

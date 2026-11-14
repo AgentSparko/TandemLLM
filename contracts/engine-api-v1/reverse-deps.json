@@ -189,12 +189,6 @@
     "app/"
    ]
   },
-  "tests/test_activity.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_adapter_guards.py": {
    "imports": [],
    "reads": [
@@ -234,34 +228,10 @@
     "app/"
    ]
   },
-  "tests/test_argkey_calls.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_argloop.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_auth.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_budget.py": {
    "imports": [
     "tandemapp.conductor.schema"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_cache_peek.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -271,18 +241,6 @@
     "tandemapp.conductor.states",
     "tandemapp.conductor.voice"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_callrepair.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_capture_lock.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -353,24 +311,6 @@
     "tandemapp.conductor.schema",
     "tandemapp.conductor.signals"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_client_budgets.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_client_cached.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_compaction_continue.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -465,12 +405,6 @@
    "imports": [
     "tandemapp.conductor.inject"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_contract_toolcalls.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -704,18 +638,6 @@
     "app/"
    ]
   },
-  "tests/test_grammar.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_images.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_install_docs.py": {
    "imports": [],
    "reads": [
@@ -752,13 +674,6 @@
     "app/tandemapp"
    ]
   },
-  "tests/test_kvpool_admission.py": {
-   "imports": [],
-   "reads": [
-    "app/",
-    "app/contracts"
-   ]
-  },
   "tests/test_laya_api.py": {
    "imports": [
     "tandemapp.laya_api"
@@ -773,12 +688,6 @@
    "reads": [
     "app/contracts",
     "app/tandemapp"
-   ]
-  },
-  "tests/test_ledger.py": {
-   "imports": [],
-   "reads": [
-    "app/"
    ]
   },
   "tests/test_ledger_owners.py": {
@@ -826,18 +735,11 @@
     "app/tests"
    ]
   },
-  "tests/test_live_app.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_live_rates.py": {
    "imports": [
     "app/tests/test_live.py"
    ],
    "reads": [
-    "app/",
     "app/tests"
    ]
   },
@@ -851,7 +753,6 @@
   "tests/test_logbuf.py": {
    "imports": [],
    "reads": [
-    "app/",
     "app/dashboard"
    ]
   },
@@ -879,32 +780,6 @@
     "app/"
    ]
   },
-  "tests/test_memory_api.py": {
-   "imports": [
-    "app/tests/test_transcripts.py",
-    "tandemapp.conductor.transcripts"
-   ],
-   "reads": [
-    "app/",
-    "app/tests"
-   ]
-  },
-  "tests/test_memory_notes.py": {
-   "imports": [
-    "tandemapp.conductor.classify:Answer",
-    "tandemapp.conductor.hook:Conductor",
-    "tandemapp.conductor.memory",
-    "tandemapp.conductor.notes",
-    "tandemapp.conductor.notes:NoteStore",
-    "tandemapp.conductor.notes:Refused",
-    "tandemapp.conductor.routes",
-    "tandemapp.memblock",
-    "tandemapp.memory_api"
-   ],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_memory_router.py": {
    "imports": [
     "tandemapp.conductor.memory",
@@ -917,12 +792,6 @@
    ],
    "reads": [
     "app/"
-   ]
-  },
-  "tests/test_memory_wait.py": {
-   "imports": [],
-   "reads": [
-    "app/contracts"
    ]
   },
   "tests/test_memory_where.py": {
@@ -948,24 +817,6 @@
     "app/"
    ]
   },
-  "tests/test_metrics.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_metrics_app.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_monitoring.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_narrator.py": {
    "imports": [
     "tandemapp.conductor.narrator",
@@ -984,12 +835,6 @@
     "tandemapp.conductor.schema",
     "tandemapp.conductor.store:Store"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_nemotron_h_api.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1082,12 +927,6 @@
     "app/tests"
    ]
   },
-  "tests/test_parallel_card.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_playtest_install.py": {
    "imports": [
     "tandemapp.conductor.hook:Conductor"
@@ -1113,12 +952,6 @@
    "reads": [
     "app/",
     "app/contracts"
-   ]
-  },
-  "tests/test_probe_train.py": {
-   "imports": [],
-   "reads": [
-    "app/"
    ]
   },
   "tests/test_proxy_affinity.py": {
@@ -1151,18 +984,6 @@
     "app/"
    ]
   },
-  "tests/test_reasoning_effort_off.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_regenerate.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_release_gate_setup.py": {
    "imports": [],
    "reads": [
@@ -1189,8 +1010,7 @@
     "tandemapp.conductor.store:Store"
    ],
    "reads": [
-    "app/",
-    "app/contracts"
+    "app/"
    ]
   },
   "tests/test_resident_guard.py": {
@@ -1254,12 +1074,6 @@
     "tandemapp.conductor.loopescape"
    ],
    "reads": []
-  },
-  "tests/test_scratch_turn_images.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
   },
   "tests/test_secret_mask.py": {
    "imports": [
@@ -1330,71 +1144,11 @@
     "app/tandemapp"
    ]
   },
-  "tests/test_setup_api.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_apply.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_cli.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_job_stream.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_mode.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_setup_registry.py": {
    "imports": [],
    "reads": [
     "app/dashboard",
     "app/docs"
-   ]
-  },
-  "tests/test_setup_remove.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_reset.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_reset_job_lock.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_retry.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_wren.py": {
-   "imports": [],
-   "reads": [
-    "app/"
    ]
   },
   "tests/test_shadow.py": {
@@ -1527,7 +1281,6 @@
     "app/tools/tandem_eval.py"
    ],
    "reads": [
-    "app/",
     "app/tools"
    ]
   },
@@ -1536,8 +1289,13 @@
     "app/tools/tandem_eval.py"
    ],
    "reads": [
-    "app/",
     "app/tools"
+   ]
+  },
+  "tests/test_test_ledger.py": {
+   "imports": [],
+   "reads": [
+    "app/"
    ]
   },
   "tests/test_think.py": {
@@ -1615,18 +1373,6 @@
     "app/"
    ]
   },
-  "tests/test_toolformats.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_tools_api.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_tools_profile.py": {
    "imports": [
     "tandemapp.conductor.router",
@@ -1669,12 +1415,6 @@
     "tandemapp.conductor.states",
     "tandemapp.conductor.transcripts"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_usage.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1820,36 +1560,6 @@
   }
  ],
  "copies": [
-  {
-   "kind": "file",
-   "engine": "tests/conftest.py",
-   "app": "app/tests/conftest.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tests/ports.py",
-   "app": "app/tests/ports.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tests/realnode.py",
-   "app": "app/tests/realnode.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tests/script_suite.py",
-   "app": "app/tests/script_suite.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tests/scriptmode.py",
-   "app": "app/tests/scriptmode.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tests/test_script_suite.py",
-   "app": "app/tests/test_script_suite.py"
-  },
   {
    "kind": "file",
    "engine": "tools/contract_check.py",
