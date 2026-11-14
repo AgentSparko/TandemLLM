@@ -1342,6 +1342,12 @@
     "app/"
    ]
   },
+  "tests/test_setup_cli.py": {
+   "imports": [],
+   "reads": [
+    "app/"
+   ]
+  },
   "tests/test_setup_job_stream.py": {
    "imports": [],
    "reads": [
