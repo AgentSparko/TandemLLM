@@ -13,13 +13,13 @@ chat mode: `QSE_EXT=tandemapp.engine_ext`.
     health()        its part of /health `loaded`
     hooks           plan, prompt, supervisor (the decode loop's safe points), extras, follow_ups,
                     finish, stop
-    calls           the request path's optional calls (engine-ext-v1 1.3 `extension.calls`) and
+    calls           the request path's optional calls (engine-ext-v1 2.0 `extension.calls`) and
                     `writer`, which the interface keeps outside until ENG-413 WP5 (`kept_interim`)
     attach(host)    tests: the extension object around a conductor or monitor a test built, no start
 
 The conductor's own code is unchanged: this module wraps it. It is the engine's interim adapter
 (the engine's server/ext_app.py of ENG-413 WP3a/WP3b) moved here, with what that adapter read of the
-engine beyond the interface now read from the host's 1.3 fields. It imports nothing of the engine;
+engine beyond the interface now read from the host's 2.0 fields. It imports nothing of the engine;
 the engine's objects come in through `host` (tests/test_import_boundary.py holds that).
 """
 
@@ -30,7 +30,7 @@ import io
 import json
 import time
 
-EXT_API = "1.3"
+EXT_API = "2.0"
 NAME = "tandemapp"
 #: the session monitor runs behind this extension with no conductor directory too
 MONITOR_ALONE = True
@@ -54,7 +54,7 @@ def _knobs() -> list:
 
 class XPlan:
     """The plan this extension hands the engine (engine-ext-v1 `plan`): `active` and `body` as the
-    interface says, and `routing` (1.3), the conductor's own plan (None with the monitor alone),
+    interface says, and `routing` (2.0), the conductor's own plan (None with the monitor alone),
     which the engine reads by the fields `request.routing_fields` names. `server_mode` is the
     monitor's mode for the request before its profile lowers it (`Monitor.mode_for`); `ui` the state
     lines `extras` made."""
@@ -86,7 +86,7 @@ def _event(cls, ev):
 class Watch:
     """The supervisor the decode loop asks (engine-ext-v1 `supervisor`): the session monitor's
     Supervisor for this request. The interface's methods take the engine's events and hand the
-    monitor its own; the optional methods and the fields (1.3 `supervisor.optional_methods`,
+    monitor its own; the optional methods and the fields (2.0 `supervisor.optional_methods`,
     `supervisor.fields`) are the Supervisor's own."""
 
     def __init__(self, sup, req_event, req_dict):
@@ -143,7 +143,7 @@ class Watch:
 
 
 class Lines:
-    """The state lines of one request (engine-ext-v1 1.3 `extras` at `start`, an item of kind
+    """The state lines of one request (engine-ext-v1 2.0 `extras` at `start`, an item of kind
     `lines`, the fields `extras.lines_fields` names): the conductor's States object (`ui`), its
     profile's `ui` section (`doc`), the channel and the progress settings, and the helpers the
     engine's stream writes them with."""
@@ -184,7 +184,7 @@ class Lines:
 class _Reply:
     """A route's answer kept for the engine: the handler the conductor's routes, the library, the
     memory routes and the page write on (as on the controller's handler), turned into the
-    interface's (status, headers, body). Its reads come from the route's request (1.3: `allowed`,
+    interface's (status, headers, body). Its reads come from the route's request (2.0: `allowed`,
     `session_token`, `session`)."""
 
     def __init__(self, request):
@@ -428,7 +428,7 @@ class Ext:
     def stop(self):
         return None
 
-    # ------------------------------------------------------------------ the optional calls (1.3)
+    # ------------------------------------------------------------------ the optional calls (2.0)
     def server_mode(self, header, n):
         """The conductor's mode for this request: the server's, lowered by `X-Tandem`, and never
         more than shadow for `n > 1`."""

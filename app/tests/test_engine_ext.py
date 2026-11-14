@@ -3,7 +3,7 @@ engine's interface engine-ext-v1 at the version PIN names, through the reference
 (contracts/engine-ext-v1/fake_host.py). No engine and no model: the host is the reference's.
 
   1  the module is an extension of the pinned interface: EXT_API is ext.json's version and the
-     reference host takes it (a 1.2 host does not), NAME tandemapp, VERSION TandemApp's release,
+     reference host takes it (a 1.x host does not: 2.0), NAME tandemapp, VERSION TandemApp's release,
      every hook and every optional call (extension.calls) with exactly ext.json's arguments,
      `writer` (kept_interim) beside them, the knobs knobs.json's     test_the_module_fits_the_interface
   2  start is closed: with neither a conductor directory nor the monitor's policy the reference
@@ -102,7 +102,7 @@ def _chat_host():
 def test_the_module_fits_the_interface():
     X = engine_ext
     assert X.EXT_API == SPEC["version"] and H.accepts(X.EXT_API) is None, (X.EXT_API, SPEC["version"])
-    assert H.accepts(X.EXT_API, "1.2") is not None
+    assert H.accepts(X.EXT_API, "1.2") is not None and X.EXT_API == "2.0"
     assert X.NAME == "tandemapp" and X.VERSION == (release() or "0"), (X.NAME, X.VERSION)
     for attr in SPEC["discovery"]["module"]:
         assert hasattr(X, attr), attr
@@ -197,7 +197,7 @@ def test_chat_mode():
 
 
 class Route:
-    """A route's request as the engine hands it (engine-ext-v1 1.3)."""
+    """A route's request as the engine hands it (engine-ext-v1 2.0)."""
 
     def __init__(self, method, path, query="", body=None, refuse=None, session_token=None):
         self.method, self.path, self.query, self.body = method, path, query, body
