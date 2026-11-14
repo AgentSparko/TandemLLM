@@ -7,8 +7,8 @@
 
 The files are the top-level tests/test_*.py of this tree whose home in tests/test-ledger.json is
 `engine` (the engine's own code; WP9) or that came after the ledger's base (an engine test file),
-less .github/cpu-suite-skip.txt and less NEEDS_APP: engine tests that still read the vendored app/
-until WP14 removes it (each says why). A split or pair file is not here: its pair ids need
+less .github/cpu-suite-skip.txt and less .github/headless-needs-app.txt (NEEDS_APP): engine tests
+that still need the vendored app/ until WP14 removes it, each with the reason measured on the box. A split or pair file is not here: its pair ids need
 TandemApp (WP13 builds the pair suite). tools/headless_suite.sh runs the list in a
 tree without app/; the CI job of that name and the box both call it. Standard library only.
 """
@@ -23,14 +23,23 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(ROOT, "tests", "test-ledger.json")
 SKIP_FILE = os.path.join(ROOT, ".github", "cpu-suite-skip.txt")
-#: engine tests that read the vendored app/ until WP14 (that package flips or drops each read)
-NEEDS_APP = {
-    "tests/test_app_hook.py": "the no-app guard: while VENDORED_APP is True it asserts app/ and app.pin "
-                              "are here (WP14 flips it)",
-    "tests/test_app_pin.py": "hashes app/ against app.pin (WP14 removes both)",
-    "tests/test_engine_api_contract.py": "reverse-deps.json is the inventory of the engine's reach into "
-                                         "app/, and the vendored SPEAKS is checked (WP14 empties both)",
-}
+NEEDS_FILE = os.path.join(ROOT, ".github", "headless-needs-app.txt")
+
+
+def _needs_app() -> dict:
+    """{file: why} of .github/headless-needs-app.txt (`tests/x.py  # why`, one a line)."""
+    out = {}
+    if os.path.isfile(NEEDS_FILE):
+        with open(NEEDS_FILE, encoding="utf-8") as f:
+            for ln in f:
+                if ln.strip() and not ln.startswith("#"):
+                    rel, _, why = ln.partition("#")
+                    out[rel.strip()] = why.strip()
+    return out
+
+
+#: engine tests that need the vendored app/ until WP14 (WP14 empties the file)
+NEEDS_APP = _needs_app()
 
 
 def files() -> list[str]:
