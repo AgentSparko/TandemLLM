@@ -192,6 +192,9 @@ def test_config_python_and_disk():
     rep = doctor.run(r)
     assert "the engine's interpreter: /nowhere/python does not exist" in rep["problems"], rep
     assert "chatd's interpreter: /nowhere/python does not exist" in rep["problems"], rep
+    # ENG-413 WP6: TandemNode's chatd (QSE_CHATD=node) is not the engine's to check
+    rep = doctor.run(_checkout(serve_env="REPO=/x\nPY=/nowhere/python\nQSE_CHATD=node\n"))
+    assert not [p for p in rep["problems"] if p.startswith("chatd's interpreter")], rep
     rep = doctor.run(_checkout(), need_gb=1e9)
     assert any(p.startswith("the download needs 1e+09 GB and 60 GB left after it") for p in rep["problems"]), rep
 

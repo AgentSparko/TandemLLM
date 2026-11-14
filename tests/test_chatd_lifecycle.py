@@ -36,6 +36,15 @@ SRV-747 moved chatd.sh to app/ops and TandemNode's code to app/; the launchers f
   13 install.sh's chatd_sh and the last message's sandbox installer, with app/ and without
                                                          test_the_installer_finds_the_layout
 
+ENG-413 WP6 (SRV-823, QA SRV-824): QSE_CHATD=node, TandemNode owns chatd (node/control.json `chat`;
+TandemNode's side is TandemApp's tests/test_node_chat.py):
+
+  14 start.sh starts and stops no chatd in chat or engine mode and says so in one line, naming
+     whether a TandemNode answers on TANDEM_NODE_PORT (without one: no Chat tab); the watchdog calls
+     no chatd; bin/tandem start and stop leave chatd alone, status and chat ... go to tandem-node
+     (TANDEM_NODE_BIN), and without one chat says where it lives
+                                                         test_tandemnode_owns_chatd
+
 Run: python tests/test_chatd_lifecycle.py
 """
 
@@ -46,12 +55,14 @@ import re
 import shutil
 import subprocess
 import sys
+import socket
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 import test_ops_scripts as T  # noqa: E402
+from ports import free_port  # noqa: E402
 
 # chatd.sh's stand-in: state in $CHAT_STATE (a file), every call in the markers, with whether the
 # engine answered at that moment (the fake engine touches <repo>/up)
@@ -446,6 +457,84 @@ def test_the_installer_finds_the_layout():
                            capture_output=True, text=True, env=dict(os.environ, SRC=src), timeout=30)
         assert r.returncode == 0 and r.stdout.split() == [os.path.join(src, chatd), sandbox], (have, r.stdout + r.stderr)
         shutil.rmtree(src)
+
+
+
+def _node_port() -> int:
+    p = free_port()
+    assert p != 7700                                 # never the box's own TandemNode
+    return p
+
+
+def test_tandemnode_owns_chatd():
+    import test_engine_only as EO
+    quiet = _node_port()
+    # start.sh, no TandemNode answering: no chatd call, one line that says the Chat tab is missing
+    repo = _chat_box(["start.sh"])
+    r = _start(repo, extra="QSE_CHATD=node\n", TANDEM_NODE_PORT=str(quiet))
+    assert r.returncode == 0 and "healthy after" in r.stdout, r.stdout + r.stderr
+    assert _chat_calls(repo) == [], _marks(repo)
+    said = [ln for ln in r.stdout.splitlines() if "chatd" in ln and not ln.startswith("[start] mode: ")]
+    assert said == ["[start] chatd: TandemNode's (QSE_CHATD=node), and no TandemNode answers on "
+                    f"127.0.0.1:{quiet}: the engine serves without the Chat tab (QSE_CHATD=on gives "
+                    "chatd back to this engine)"], r.stdout
+    # one listening: it runs chatd; a start that finds the engine healthy calls no chatd either
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    s.listen(4)
+    try:
+        port = s.getsockname()[1]
+        repo = _chat_box(["start.sh"])
+        r = _start(repo, extra="QSE_CHATD=node\n", TANDEM_NODE_PORT=str(port))
+        assert "[start] chatd: TandemNode's (QSE_CHATD=node): it runs chatd (tandem-node chat status)" \
+            in r.stdout and _chat_calls(repo) == [], r.stdout
+        r = T._run(repo, "start.sh", FAKE_HEALTHY="1", CHAT_STATE=os.path.join(repo, "chat-up"),
+                   TANDEM_NODE_PORT=str(port))
+        assert "already healthy" in r.stdout and _chat_calls(repo) == [], (r.stdout, _marks(repo))
+    finally:
+        s.close()
+    # the release's template: chat mode starts none, engine mode stops none (TandemNode's switch)
+    for mode in ("chat", "engine"):
+        r, marks, _ = EO._start(mode, chatd_running=True, QSE_CHATD="node", TANDEM_NODE_PORT=str(quiet))
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert not [m for m in marks if m.startswith("chatd.sh")], (mode, marks)
+        assert f"[start] mode: {mode}" in r.stdout and "[start] chatd: TandemNode's (QSE_CHATD=node)" in r.stdout
+    # the watchdog: nothing, not even a status
+    repo = _chat_box(["watchdog.sh"])
+    with open(os.path.join(repo, "ops", "serve.env"), "a") as fh:
+        fh.write("QSE_CHATD=node\n")
+    for _ in range(2):
+        assert T._run(repo, "watchdog.sh", FAKE_HTTP_CODE="200", CHAT_STATE=os.path.join(repo, "chat-up")).returncode == 0
+    assert _chat_calls(repo) == [] and "chatd" not in T._wd_log(repo), (_marks(repo), T._wd_log(repo))
+    # bin/tandem: start and stop leave chatd; status and chat ... are tandem-node's
+    d, marks, env = _tandem()
+    _write(os.path.join(d, "run", "local.env"), "QSE_CHATD=node\n", 0o644)
+    node = os.path.join(d, "fakenode", "tandem-node")
+    _write(node, '#!/bin/bash\necho "tandem-node $*" >> "$MARKERS"\necho "[chat] chatd: this node\'s"\n')
+    env = dict(env, PATH=os.path.join(d, "fakebin") + os.pathsep + "/usr/bin:/bin", TANDEM_NODE_BIN=node)
+    r = _ctl(d, env, "start")
+    assert r.returncode == 0 and _lines(marks) == ["start.sh "], r.stdout + r.stderr
+    r = _ctl(d, env, "status")
+    assert r.returncode == 0 and r.stdout.splitlines()[-1] == "[chat] chatd: this node's", r.stdout
+    assert _lines(marks) == ["tandem-node chat status"]
+    r = _ctl(d, env, "stop", "90")
+    assert r.returncode == 0 and _lines(marks) == ["stop.sh 90"], r.stdout
+    for args in (("chat",), ("chat", "start"), ("chat", "restart"), ("chat", "logs", "5"), ("chat", "stop")):
+        r = _ctl(d, env, *args)
+        assert r.returncode == 0, (args, r.stdout + r.stderr)
+    assert _lines(marks) == ["tandem-node chat", "tandem-node chat start", "tandem-node chat restart",
+                             "tandem-node chat logs 5", "tandem-node chat stop"]
+    # tandem-node on PATH is found too; with neither, chat says where it lives and status says so
+    os.rename(node, os.path.join(d, "fakebin", "tandem-node"))
+    env.pop("TANDEM_NODE_BIN")
+    assert _ctl(d, env, "chat", "status").returncode == 0 and _lines(marks) == ["tandem-node chat status"]
+    os.remove(os.path.join(d, "fakebin", "tandem-node"))
+    r = _ctl(d, env, "chat", "start")
+    assert r.returncode == 2 and "no tandem-node is on PATH" in r.stderr and "tandem-node chat start" in r.stderr, r.stderr
+    r = _ctl(d, env, "status")
+    assert r.stdout.splitlines()[-1] == "[tandem] chat: TandemNode's (QSE_CHATD=node); no tandem-node on PATH " \
+        "(TANDEM_NODE_BIN)", r.stdout
+    assert not [m for m in _lines(marks) if m.startswith("chatd.sh")]
 
 
 if __name__ == "__main__":

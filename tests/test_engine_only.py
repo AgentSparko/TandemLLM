@@ -9,7 +9,8 @@ mode on an upgrade), else engine.
 The test matrix, the Gherkin of OPS-260:
 
   1  the template on a new box (no conductor directory) resolves engine and turns everything beside
-     the engine off, the Flash-Next profile's deciders included; an unknown value is engine, said so
+     the engine off, the Flash-Next profile's deciders included; an unknown value is engine, said so;
+     QSE_CHATD=node (TandemNode owns chatd, ENG-413 WP6) is kept
                                                               test_a_new_box_resolves_engine
   2  the upgrade rule on copied setups: a live-like run/setup.env (CONDUCTOR on, the conductor's
      directory, Laya) with the directory on disk stays chat with its values; QSE_CONDUCTOR_CONFIG=off
@@ -120,7 +121,14 @@ def test_a_new_box_resolves_engine():
     _, env_file, env = _box()
     got, err = _resolve(env_file, env, "QSE_MODE='Chat'\n")
     assert got == ENGINE and "QSE_MODE=Chat is neither engine nor chat: engine" in err, (got, err)
-    return "engine, Flash-Next's Laya included; a typo is engine"
+    # ENG-413 WP6: TandemNode's chatd (QSE_CHATD=node) stays TandemNode's in engine mode, which then
+    # starts none; every other value is off there (tests/test_chatd_lifecycle.py 14)
+    _, env_file, env = _box()
+    got, _ = _resolve(env_file, env, "QSE_CHATD=node\n")
+    assert got == dict(ENGINE, QSE_CHATD="node"), got
+    got, _ = _resolve(env_file, env, "QSE_CHATD=on\n")
+    assert got == ENGINE, got
+    return "engine, Flash-Next's Laya included; a typo is engine; QSE_CHATD=node kept"
 
 
 def test_the_upgrade_keeps_the_mode():
