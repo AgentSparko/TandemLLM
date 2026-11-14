@@ -461,6 +461,38 @@ def battery_b2f(port: int, model: str) -> list:
     return out
 
 
+def battery_b2a(port: int, model: str) -> list:
+    """ENG-413 WP3b's act replay on the real model, the monitor alone under the raw name: requests whose
+    acts the request itself decides, greedy, so two trees give the same tokens and journal rows. A
+    client's reasoning budget (SP1's hidden close at its 64th reasoning token), a call repeated three
+    times with the same failing result (C3 at SP4 and SP3), a plain call (SP3's checks)."""
+    tools = _opencode_tools()
+    hdr = {"User-Agent": OPENCODE_UA}
+    base = {"model": model, "stream": True, "temperature": 0, "logprobs": True, "reasoning_format": "tags"}
+    args = {"command": "python3 pagodacheck.py"}
+    call = {"name": "bash", "arguments": json.dumps(args)}
+    hist = []
+    for i in range(3):
+        hist += [{"role": "assistant", "content": "", "tool_calls": [
+            {"id": f"call_{i}", "type": "function", "function": call}]},
+                 {"role": "tool", "tool_call_id": f"call_{i}", "content": "RESULT: FAIL"}]
+    return [
+        run_one(port, "budget_close", "/v1/chat/completions", dict(
+            base, max_tokens=600, max_reasoning_tokens=64,
+            messages=[{"role": "user", "content": "Explain in two sentences why the sky is blue."}]),
+            headers=dict(hdr, **{"x-session-id": "ses_b2a_budget"})),
+        run_one(port, "repeated_call", "/v1/chat/completions", dict(
+            base, max_tokens=400, tools=tools, **NO_THINK,
+            messages=[{"role": "system", "content": "You are opencode."},
+                      {"role": "user", "content": "Run the check script and fix what fails."}] + hist),
+            headers=dict(hdr, **{"x-session-id": "ses_b2a_c3"})),
+        run_one(port, "plain_call", "/v1/chat/completions", dict(
+            base, max_tokens=400, tools=tools, **NO_THINK,
+            messages=[{"role": "system", "content": "You are opencode."},
+                      {"role": "user", "content": "List the files in the current directory."}]),
+            headers=dict(hdr, **{"x-session-id": "ses_b2a_call"}))]
+
+
 #: the reads, each one JSON answer (`follow=0`: a snapshot of the live view and the log, not their streams)
 B3_GETS = ("/health", "/v1/models", "/metrics", "/v1/replica/identity", "/readyz", "/v1/dashboard/live?follow=0",
            "/v1/dashboard/system", "/v1/dashboard/logs?follow=0", "/v1/dashboard/parallel",
@@ -594,7 +626,7 @@ def normalize_record(doc: dict) -> dict:
     if prefixes:
         doc = _strip(doc, prefixes)
     kind = doc.get("set")
-    if kind in ("b1", "b2", "b2f"):
+    if kind in ("b1", "b2", "b2f", "b2a"):
         out = {"set": kind, "requests": {}}
         for rec in doc["requests"]:
             ords = Ordinals()
@@ -754,7 +786,7 @@ def compare_dirs(base: str, cand: str, allow=(), additive: bool = False, seeded_
             a, b = normalize_record(json.load(fa)), normalize_record(json.load(fb))
         stem = f[:-5]
         entry = {"verdict": "SAME", "gate": [], "info": [], "allowed": []}
-        if a["set"] in ("b1", "b2", "b2f"):
+        if a["set"] in ("b1", "b2", "b2f", "b2a"):
             for name in sorted(set(a["requests"]) | set(b["requests"])):
                 ra, rb = a["requests"].get(name), b["requests"].get(name)
                 if ra is None or rb is None:
@@ -835,6 +867,8 @@ def cmd_capture(a) -> int:
         doc["requests"] = battery_b2(a.port, a.max_tokens_chat)
     elif a.set == "b2f":
         doc["requests"] = battery_b2f(a.port, model)
+    elif a.set == "b2a":
+        doc["requests"] = battery_b2a(a.port, model)
     else:
         doc["routes"] = battery_b3(a.port)
     doc["seconds"] = round(time.monotonic() - t0, 1)
@@ -887,7 +921,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("capture")
     c.add_argument("--port", type=int, required=True)
-    c.add_argument("--set", required=True, choices=("b1", "b2", "b2f", "b3"))
+    c.add_argument("--set", required=True, choices=("b1", "b2", "b2f", "b2a", "b3"))
     c.add_argument("--out", required=True)
     c.add_argument("--name", default="", help="the record's file name (default: the set)")
     c.add_argument("--model", default="", help="b1/b2f: the raw model name (default: /v1/models' first)")

@@ -19,6 +19,7 @@ The test matrix:
      row has no `extra.seed_drawn`: accepted by name on that row only, with the seed sent and
      the baseline's drawn seed TITLE_SEED; anything else there, or a moved token, still fails
                                                                     test_a_sent_title_seed_draws_none
+  3e B2a, WP3b's act replay: greedy requests whose acts the request decides       test_b2a_replays_greedy_acts
   4  a capture refuses port 8000 (the box's engine) before it opens a socket          test_the_live_port_is_refused
   5  over a socket, the fake engine: B1 and B3 from two fresh engines compare equal;
      the monitor fixtures (B2f) make D1, E1, GIVE_UP, C3 and C4 act, and two fresh
@@ -214,6 +215,30 @@ def test_b2_samples_only_with_a_seed():
     assert sampled and all(isinstance(s, int) for _, s in sampled), sampled
     assert dict(sampled)["opencode_title"] == B.TITLE_SEED
     return f"{len(sent)} requests, {len(sampled)} sampled, each with its seed"
+
+
+def test_b2a_replays_greedy_acts():
+    """B2a (ENG-413 WP3b's act replay on the real model, the monitor alone): every request greedy and
+    named by its session, the budget's close at a client cap, the call repeated three times with the
+    same failing result, a plain call; captured and compared as a request set."""
+    sent, orig = [], B.run_one
+
+    def fake(port, name, endpoint, body, headers=None):
+        sent.append((name, copy.deepcopy(body), dict(headers or {})))
+        return {"name": name, "wire": {"content": "", "reasoning": "", "calls": {}}}
+    B.run_one = fake
+    try:
+        B.battery_b2a(1, "qwen38-spark-engine")
+    finally:
+        B.run_one = orig
+    assert [n for n, _, _ in sent] == ["budget_close", "repeated_call", "plain_call"], sent
+    assert all(b["temperature"] == 0 and b["model"] == "qwen38-spark-engine" and h.get("x-session-id")
+               for _, b, h in sent)
+    assert sent[0][1]["max_reasoning_tokens"] == 64
+    calls = [m for m in sent[1][1]["messages"] if m.get("tool_calls")]
+    assert len(calls) == 3 and len({json.dumps(m["tool_calls"][0]["function"]) for m in calls}) == 1
+    assert B.normalize_record({"set": "b2a", "requests": []})["set"] == "b2a"
+    return "3 greedy requests: a budget's close, a repeated call, a plain call"
 
 
 def _title_pair(seed_sent, drawn, token="t", rid="chatcmpl-ti7le001"):
