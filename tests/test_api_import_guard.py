@@ -1,11 +1,14 @@
-"""G5 for ENG-413 WP2a and WP2b (QA ENG-432): the engine's wire format and its observability are
-the engine's own code.
+"""G5 for ENG-413 WP2a, WP2b and WP2c (QA ENG-432): the engine's wire format, its observability and
+the small helpers its setup, probe and disk cache read are the engine's own code.
 
 server/api holds the engine's copies of the modules it took from TandemApp: toolcall, toolformats,
 callrepair, refusal, thinking, argloop (WP2a); metrics, usage, ledger, live, parallel, activity,
 logbuf, dashboard_api, http_body, auth and compaction (WP2b; compaction because it runs with the
-conductor off, tests/test_compaction_trace.py). Only TandemApp's own tree (app/, the extension side)
-imports TandemApp's copies; the engine does not.
+conductor off, tests/test_compaction_trace.py). WP2c copied names out of TandemApp's modules: the
+JSON-schema validator (validate), the residency and roles seeds (seeds), the secret refusal
+(redact), the BM25 index (textindex), the repository check (repository) and chatd's address
+(chat_url). Only TandemApp's own tree (app/, the extension side) imports TandemApp's copies; the
+engine does not.
 
   1  no engine file outside app/ imports one of those modules from TandemApp, by import statement,
      by importlib name or in a code string; no engine script or config names one, except the
@@ -29,6 +32,13 @@ imports TandemApp's copies; the engine does not.
      read the allocator's nested dict without the engine's hook (FORK_CHANGED). A change to either
      copy fails here until it lands in both
                                                                   test_the_copies_are_the_fork
+  7  WP2c: no engine file imports a copied name from TandemApp (`from M import name`); no engine
+     code outside tests/ reads one through TandemApp's module (`M.name`, the conductor's
+     `schema.seed("residency"|"roles")`); the importers the plan names take each from server/api
+                                                                  test_the_helpers_are_the_engines
+  8  each WP2c copy holds exactly the names it took, each statement TandemApp's (docstrings
+     aside), plus what WP2C_OWN names (seeds.seed: the two kinds of schema.seed)
+                                                                  test_the_helper_copies_are_the_fork
 
 CPU, standard library only. Run: python tests/test_api_import_guard.py
 """
@@ -81,6 +91,26 @@ IMPORTERS = {"server/app.py": {"toolformats", "callrepair", "toolcall", "thinkin
              "server/setup_api.py": {"dashboard_api"},
              "server/probe.py": {"ledger"}}
 IMPORTERS["server/app.py"] |= set(WP2B)
+#: ENG-413 WP2c: engine module -> (TandemApp's module, the names copied out of it, in its order)
+WP2C = {"validate": ("tandemapp.conductor.schema", ("ID_RE", "_TYPES", "validate")),
+        "seeds": ("tandemapp.conductor.schema", ("TOKENIZER_NONE", "_role", "ROLES", "RESIDENCY")),
+        "redact": ("tandemapp.conductor.redact", ("PATTERNS", "KINDS", "redact", "merge")),
+        "textindex": ("tandemapp.conductor.libsearch", ("K1", "B", "_WORD", "STOP", "words", "TextIndex")),
+        "repository": ("tandemapp.conductor.transcripts", ("in_repository",)),
+        "chat_url": ("tandemapp.chat_forward", ("target",))}
+#: tests that read TandemApp's copied names on purpose, and why
+HELD = {"tests/test_api_helpers.py": "holds each WP2c copy's answers to TandemApp's"}
+#: what a WP2c copy has of its own, and why
+WP2C_OWN = {"seeds": {"seed"}}       # schema.seed for "residency" and "roles", a fresh copy each
+#: the conductor's seed kinds the engine reads from server/api/seeds.py (the others stay its own)
+SEED_KINDS = ("residency", "roles")
+#: the files WP2c switches (plan section 3.1, WP2c), with the server/api modules each takes
+IMPORTERS_2C = {"server/diskcache.py": {"repository"}, "server/probe.py": {"repository"},
+                "server/mode.py": {"chat_url"}, "server/rolemem.py": {"seeds"},
+                "server/setup/wren.py": {"seeds"}, "server/decider_api.py": {"seeds"},
+                "server/setup/registry.py": {"validate"}, "server/setup/community.py": {"validate"},
+                "server/setup/knowledge.py": {"textindex"}, "server/setup/apply.py": {"redact"},
+                "tests/test_parallel_card.py": {"validate"}}
 #: third-party imports server/api may make, only inside a function or a try (an optional speedup or
 #: a gauge read where the engine runs)
 OPTIONAL = {"server/api/metrics.py": {"torch"}, "server/api/dashboard_api.py": {"numpy"}}
@@ -160,7 +190,7 @@ def test_no_engine_file_imports_them():
 
 def test_api_stands_alone():
     std = set(getattr(sys, "stdlib_module_names", ())) or {
-        "__future__", "ast", "bisect", "collections", "contextlib", "dataclasses", "datetime",
+        "__future__", "ast", "bisect", "collections", "contextlib", "copy", "dataclasses", "datetime",
         "hashlib", "hmac", "importlib", "json", "math", "os", "queue", "re", "secrets", "select",
         "shlex", "shutil", "socket", "sqlite3", "subprocess", "sys", "threading", "time",
         "traceback", "urllib", "uuid", "zlib", "zoneinfo"}
@@ -318,6 +348,112 @@ def test_the_copies_are_the_fork():
     assert not diffs, "the copies parted; land the change in both or record the fork here:\n" + \
         "\n".join(diffs)
     return f"{len(WP2B)} copies are TandemApp's modules as forked"
+
+
+def _copied() -> dict:
+    """TandemApp's module -> the names copied out of it."""
+    out: dict = {}
+    for mod, names in WP2C.values():
+        out.setdefault(mod, set()).update(names)
+    return out
+
+
+def _bound_modules(tree: ast.AST) -> dict:
+    """local name -> TandemApp module, for every `import M as x`, `from P import leaf` of a WP2c
+    source module in `tree`."""
+    srcs = set(_copied())
+    out = {}
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            for a in n.names:
+                if a.name in srcs:
+                    out[a.asname or a.name] = a.name
+        elif isinstance(n, ast.ImportFrom) and n.level == 0 and n.module:
+            for a in n.names:
+                if f"{n.module}.{a.name}" in srcs:
+                    out[a.asname or a.name] = f"{n.module}.{a.name}"
+    return out
+
+
+def test_the_helpers_are_the_engines():
+    copied, bad = _copied(), []
+    py = _files((".py",))
+    for rel in py:
+        if rel in ALLOWED or rel in HELD:
+            continue
+        with open(os.path.join(ROOT, rel), encoding="utf-8", errors="replace") as f:
+            try:
+                tree = ast.parse(f.read())
+            except SyntaxError:
+                continue
+        for line, name in imports_of(tree):
+            mod, _, leaf = name.rpartition(".")
+            if leaf in copied.get(mod, ()):
+                bad.append(f"{rel}:{line} imports {name}")
+        if rel.startswith("tests/"):
+            continue                      # TandemApp's own tests read its seeds and validator
+        bound = _bound_modules(tree)
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id in bound:
+                mod = bound[n.value.id]
+                if n.attr in copied[mod] and n.attr != "_role":
+                    bad.append(f"{rel}:{n.lineno} reads {mod}.{n.attr}")
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "seed" and \
+                    isinstance(n.func.value, ast.Name) and bound.get(n.func.value.id) == "tandemapp.conductor.schema" \
+                    and n.args and isinstance(n.args[0], ast.Constant) and n.args[0].value in SEED_KINDS:
+                bad.append(f"{rel}:{n.lineno} reads the conductor's {n.args[0].value} seed")
+    for rel, want in IMPORTERS_2C.items():
+        with open(os.path.join(ROOT, rel)) as f:
+            got = imports_of(ast.parse(f.read()))
+        took = {name.split(".")[2] for _, name in got
+                if name.startswith("server.api.") and name.split(".")[2] in want}
+        if took != want:
+            bad.append(f"{rel}: takes {sorted(took)} from server/api, wants {sorted(want)}")
+    assert not bad, bad
+    return f"{len(py)} Python files: no copied name taken from TandemApp; {len(IMPORTERS_2C)} importers"
+
+
+def _named(tree: ast.Module) -> dict:
+    """name -> the code of the top-level statement that binds it, docstrings dropped."""
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if isinstance(body, list) and body and isinstance(body[0], ast.Expr) and \
+                isinstance(body[0].value, ast.Constant) and isinstance(body[0].value.value, str):
+            body[0] = ast.Pass()
+    out = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            out[node.name] = ast.unparse(node)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for t in targets:
+                for x in ast.walk(t):
+                    if isinstance(x, ast.Name):
+                        out[x.id] = ast.unparse(node)
+    return out
+
+
+def test_the_helper_copies_are_the_fork():
+    bad = []
+    for eng, (mod, names) in WP2C.items():
+        src = os.path.join(ROOT, "app", *mod.split(".")) + ".py"
+        with open(src) as f:
+            theirs = _named(ast.parse(f.read()))
+        with open(os.path.join(ROOT, "server", "api", eng + ".py")) as f:
+            tree = ast.parse(f.read())
+        ours = _named(tree)
+        extra = set(ours) - set(names) - WP2C_OWN.get(eng, set())
+        if extra:
+            bad.append(f"server/api/{eng}.py: names TandemApp's module does not give it: {sorted(extra)}")
+        for n in names:
+            if ours.get(n) != theirs.get(n):
+                bad.append(f"server/api/{eng}.py: {n} is not {mod}'s")
+        loose = [ast.unparse(x)[:60] for x in tree.body[1:] if not isinstance(
+            x, (ast.Import, ast.ImportFrom, ast.FunctionDef, ast.ClassDef, ast.Assign, ast.AnnAssign))]
+        if loose:
+            bad.append(f"server/api/{eng}.py: statements beside the copied names: {loose}")
+    assert not bad, "the copies parted; land the change in both or record the fork here:\n" + "\n".join(bad)
+    return f"{len(WP2C)} copies, {sum(len(n) for _, n in WP2C.values())} names, each TandemApp's"
 
 
 if __name__ == "__main__":

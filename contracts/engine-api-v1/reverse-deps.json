@@ -264,6 +264,16 @@
     "app/"
    ]
   },
+  "tests/test_api_helpers.py": {
+   "imports": [
+    "tandemapp.chat_forward",
+    "tandemapp.conductor.libsearch:TextIndex",
+    "tandemapp.conductor.redact",
+    "tandemapp.conductor.schema",
+    "tandemapp.conductor.transcripts"
+   ],
+   "reads": []
+  },
   "tests/test_api_import_guard.py": {
    "imports": [
     "tandemapp.conductor.schema"
