@@ -5,8 +5,9 @@ test_chatd_ops.py).
 
   1  install.sh --runtime-only --dry-run stops after the Python environment: no weights, corpus
      or config                                                 test_install_sh_runtime_only_dry_run
-  2  `tandem node` in the bin/tandem install.sh writes: this install's engine, TandemNode's bind
-     rule (`check`, `unit`, a refused 0.0.0.0)                 test_tandem_node_in_bin_tandem
+  2  `tandem node` in the bin/tandem install.sh writes: the venv's tandem-node (ENG-413 WP7) with
+     this install's engine, TandemNode's bind rule (`check`, `unit`, a refused 0.0.0.0)
+                                                               test_tandem_node_in_bin_tandem
   3  make-secrets.sh writes where the engine reads, also from the setup guide's apply job, whose
      environment has no QSE_SECRETS                  test_make_secrets_writes_where_the_engine_reads
   4  make-secrets.sh writes the forward key, and adds it to an older file once
@@ -105,6 +106,12 @@ def test_tandem_node_in_bin_tandem():
     os.makedirs(os.path.join(d, "venv", "bin"))
     os.symlink(sys.executable, os.path.join(d, "venv", "bin", "python"))
     os.symlink(ROOT, os.path.join(d, "src"))
+    # ENG-413 WP7: bin/tandem runs the venv's tandem-node (install.sh --with-chat --app-wheel puts
+    # it there); here TandemApp's agent from its source stands in for the wheel's entry point
+    node = os.path.join(d, "venv", "bin", "tandem-node")
+    with open(node, "w") as f:
+        f.write(f'#!/bin/bash\nPYTHONPATH={os.path.join(ROOT, "app")} exec {sys.executable} -m proxy.nodeagent "$@"\n')
+    os.chmod(node, 0o755)
     with open(os.path.join(d, "bin", "tandem"), "w") as f:
         f.write(script)
     ctl = ["bash", os.path.join(d, "bin", "tandem"), "node"]

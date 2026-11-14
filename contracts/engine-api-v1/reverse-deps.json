@@ -616,6 +616,12 @@
     "app/VERSION"
    ]
   },
+  "tests/test_engine_scripts.py": {
+   "imports": [],
+   "reads": [
+    "app/"
+   ]
+  },
   "tests/test_evaluate.py": {
    "imports": [
     "tandemapp.conductor.incontext",
