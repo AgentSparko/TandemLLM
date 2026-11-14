@@ -257,26 +257,33 @@ class FakeHost:
         ev.update(request_id="r1", messages=sc.body.get("messages", []), tools=sc.body.get("tools", []),
                   n=1, stream=False, prompt_tokens=len(ids), in_think=False, prompt_ids=list(ids),
                   chat=True, tool_names=[t.get("function", {}).get("name") for t in sc.body.get("tools", [])],
-                  thinking_off=False, model=sc.body.get("model"))
+                  thinking_off=False, model=sc.body.get("model"), tool_choice="auto", max_tokens=64,
+                  client="test", constrained=False, profile="", cls="", tool_format="")
         sup = self._call(rec, ext, "supervisor", plan, ev)
         self._ask(rec, sup, "at_request", ev)
         self._call(rec, ext, "extras", plan, "start", {}, fallback=[], check=lambda v: isinstance(v, list))
         blocks, rounds = sc.blocks, 0
         while True:
             for b in range(blocks):
-                self._ask(rec, sup, "at_block", {"reasoning_tokens": b, "inside": True}, 100)
+                self._ask(rec, sup, "at_block", _event("block", reasoning_tokens=b, inside=True,
+                                                       output_tokens=b, pos=len(ids) + b), 100)
                 self._call(rec, ext, "extras", plan, "block", {"n": b}, fallback=[],
                            check=lambda v: isinstance(v, list))
             gave_up = False
             for i in range(sc.calls):
-                act = self._ask(rec, sup, "at_tool_call", {"name": "f", "arguments": "{}", "index": i})
+                call = _event("tool_call", name="f", arguments="{}", index=i, block="", cut=False,
+                              stopped=False, final=False)
+                act = self._ask(rec, sup, "at_tool_call", call)
                 if act and act["kind"] == "REGENERATE_CALL" and rounds < 3:
                     rounds += 1
-                    act = self._ask(rec, sup, "at_tool_call", {"name": "f", "arguments": "{}", "index": i})
+                    act = self._ask(rec, sup, "at_tool_call", call)
                 gave_up = gave_up or bool(act and act["kind"] == "GIVE_UP")
             if gave_up:
                 break
-            act = self._ask(rec, sup, "at_finish", {"kind": "stop", "answer": ""}, 100)
+            act = self._ask(rec, sup, "at_finish", _event("finish", kind="stop", inside=False, answer="",
+                                                          reasoning_tokens=blocks, output_tokens=blocks,
+                                                          pos=len(ids) + blocks, calls="", notes=0,
+                                                          note_calls=0), 100)
             if act and act["kind"] == "CONTINUE_HIDDEN" and rounds < 3:
                 rounds, blocks = rounds + 1, 1
                 sc = Scenario(body=sc.body, prompt=sc.prompt, blocks=1, calls=0)
@@ -293,6 +300,13 @@ class FakeHost:
             except Exception as exc:                               # noqa: BLE001
                 self._sup_failed(rec, "done", exc)
         return rec
+
+
+def _event(event_type: str, **fields) -> dict:
+    """An event with every field ext.json lists for its type (None where the scenario sets none)."""
+    ev = {k: None for k in SPEC["supervisor"]["events"][event_type]}
+    ev.update(fields)
+    return ev
 
 
 class Scenario:
