@@ -7,8 +7,11 @@ logbuf, dashboard_api, http_body, auth and compaction (WP2b; compaction because 
 conductor off, tests/test_compaction_trace.py). WP2c copied names out of TandemApp's modules: the
 JSON-schema validator (validate), the residency and roles seeds (seeds), the secret refusal
 (redact), the BM25 index (textindex), the repository check (repository) and chatd's address
-(chat_url). Only TandemApp's own tree (app/, the extension side) imports TandemApp's copies; the
-engine does not.
+(chat_url). WP5b copied the loop escape's (loopescape: the card's sampling, the escapes' counts), the
+session addresses' (session_tokens: the strip and the registry) and the shadow reader's question form
+(incontext, with inject's closed think block): each runs with the conductor off
+(tests/test_owner_trace.py) or answers the engine's own route. Only TandemApp's own tree (app/, the
+extension side) imports TandemApp's copies; the engine does not.
 
   1  no engine file outside app/ imports one of those modules from TandemApp, by import statement,
      by importlib name or in a code string; no engine script or config names one, except the
@@ -80,6 +83,11 @@ ALLOWED = {
                                "the conductor's notes",
     "tools/app_split_check.sh": "follows the history of TandemApp's own tandemapp/ledger.py in the "
                                 "split; it reads no module",
+    # ENG-413 WP5b: the shadow reader's measurements (plan 3.7: they read both trees; WP10)
+    "tools/shadow_measure.py": "measures the shadow reader with TandemApp's in-context form, the one "
+                               "server/api/incontext.py is held to (WP10)",
+    "tools/shadow_router_eval.py": "evaluates the router's shadow question with TandemApp's in-context "
+                                   "form, the one server/api/incontext.py is held to (WP10)",
 }
 NAMES = re.compile(r"\btandemapp[./](" + "|".join(WP2A + WP2B) + r")\b")
 #: the files the plan switches (section 3.1, WP2a), with the modules each must take from server/api
@@ -97,7 +105,14 @@ WP2C = {"validate": ("tandemapp.conductor.schema", ("ID_RE", "_TYPES", "validate
         "redact": ("tandemapp.conductor.redact", ("PATTERNS", "KINDS", "redact", "merge")),
         "textindex": ("tandemapp.conductor.libsearch", ("K1", "B", "_WORD", "STOP", "words", "TextIndex")),
         "repository": ("tandemapp.conductor.transcripts", ("in_repository",)),
-        "chat_url": ("tandemapp.chat_forward", ("target",))}
+        "chat_url": ("tandemapp.chat_forward", ("target",)),
+        # ENG-413 WP5b
+        "loopescape": ("tandemapp.conductor.loopescape", ("card_sampling", "Escapes")),
+        "session_tokens": ("tandemapp.session_tokens", ("TTL_S", "MAX_SESSIONS", "TOKEN_RE", "PREFIX",
+                                                        "SessionTokens", "strip")),
+        "inject": ("tandemapp.conductor.inject", ("THINK_OFF",)),
+        "incontext": ("tandemapp.conductor.incontext", ("LETTERS", "TURN", "ContextError", "listing",
+                                                        "letter_ids", "answer"))}
 #: tests that read TandemApp's copied names on purpose, and why
 HELD = {"tests/test_api_helpers.py": "holds each WP2c copy's answers to TandemApp's"}
 #: what a WP2c copy has of its own, and why
@@ -113,7 +128,10 @@ IMPORTERS_2C = {"server/diskcache.py": {"repository"}, "server/probe.py": {"repo
                 "server/conductor/residency.py": {"seeds"},
                 "server/setup/registry.py": {"validate"}, "server/setup/community.py": {"validate"},
                 "server/setup/knowledge.py": {"textindex"}, "server/setup/apply.py": {"redact"},
-                "tests/test_parallel_card.py": {"validate"}}
+                "tests/test_parallel_card.py": {"validate"},
+                # ENG-413 WP5b
+                "server/app.py": {"loopescape", "session_tokens"},
+                "server/conductor/shadow.py": {"incontext"}}
 #: third-party imports server/api may make, only inside a function or a try (an optional speedup or
 #: a gauge read where the engine runs)
 OPTIONAL = {"server/api/metrics.py": {"torch"}, "server/api/dashboard_api.py": {"numpy"}}
@@ -251,6 +269,11 @@ from server.api import argloop, callrepair, refusal, thinking, toolcall, toolfor
 from server.api import (activity, auth, compaction, dashboard_api, http_body, ledger, live, logbuf,
                         metrics, parallel, usage)
 from server import compat, endalign
+from server.api import incontext, inject, loopescape, session_tokens
+from server.conductor import shadow
+assert shadow.incontext is incontext and incontext.inject is inject
+print("escapes", sorted(loopescape.Escapes().report().items()))
+print("strip", session_tokens.strip("/s/nWJkUiDZ59TX/v1/laya/ask"))
 assert compat.Refusal is refusal.Refusal
 toolformats.get(None)
 print("forms", ",".join(sorted(toolformats.FORMATS)))
@@ -279,6 +302,9 @@ def test_a_process_loads_no_app_module():
     with open(os.path.join(ROOT, "contracts", "engine-api-v1", "metrics-families.json")) as f:
         assert int(out["families"]) == len(__import__("json").load(f)["families"]), out
     assert out["hermes"] == "hermes", out
+    # ENG-413 WP5b: the loop escape's counts, the session addresses and the shadow's question form
+    assert out["escapes"] == str(sorted({"sessions": 0, "started": 0, "sampled": 0, "back": 0}.items())), out
+    assert out["strip"] == str(("/v1/laya/ask", "nWJkUiDZ59TX")), out
     return "server.api, compat and endalign load no TandemApp module; 3 forms; seed caps; " \
            f"{out['families']} families; the Hermes title call read without the conductor"
 
