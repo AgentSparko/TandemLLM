@@ -56,8 +56,14 @@ tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_to
  13  1.6 is additive (ENG-413 WP6): every 1.5 route is here unchanged; the 1.5 examples validate
      and the 1.6 ones equal them but for engine_api; node/control.json `chat` names QSE_CHATD's
      values, and ops/start.sh, ops/watchdog.sh, serve.env's mode block and the bin/tandem
-     install.sh writes each handle node (the behaviour: tests/test_chatd_lifecycle.py 14)
+     install.sh writes each handle node (the behaviour: tests/test_chatd_lifecycle.py)
                                                                   test_additive_1_6
+ 14  1.7 is additive (ENG-413 WP7): every 1.6 route is here unchanged; the 1.6 examples validate
+     and the 1.7 ones equal them but for engine_api; node/control.json `chat` says the engine runs
+     no chatd (node or off, on read as node, default off) and names the install's flags; the
+     launchers have no chatd launcher and serve.env reads on as node, unset as off (the behaviour:
+     tests/test_chatd_lifecycle.py, tests/test_install_headless.py)
+                                                                  test_additive_1_7
 
 CPU only, no torch, standard library only. Run: python tests/test_engine_api_contract.py
 """
@@ -723,13 +729,13 @@ def test_additive_1_6():
     """ENG-413 WP6: 1.6 adds node/control.json's `chat` (QSE_CHATD=node: TandemNode owns chatd);
     no route or answer changes."""
     from tools import contract_check
-    old, doc = _json("compat", "1.5", "routes.json"), _routes()
+    old, doc = _json("compat", "1.5", "routes.json"), _json("compat", "1.6", "routes.json")   # 1.6 as it was
     assert (old["version"], doc["version"]) == ("1.5", "1.6")
     assert {k: v for k, v in doc.items() if k != "version"} == \
         {k: v for k, v in old.items() if k != "version"}, "1.6 changes no route"
     health = contract_check.load("health", CONTRACT)
     for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
-        a, b = _json(name), _json("compat", "1.5", name)
+        a, b = _json("compat", "1.6", name), _json("compat", "1.5", name)
         assert not contract_check.validate(b, health, root=CONTRACT), name    # a 1.5 engine's answer
         assert {k: v for k, v in a.items() if k != "engine_api"} == \
             {k: v for k, v in b.items() if k != "engine_api"}, name
@@ -740,18 +746,53 @@ def test_additive_1_6():
     assert chat["node_cli"] == "tandem-node chat" and chat["watch"]["starts_per_hour"] == 3
     with open(os.path.join(ROOT, "ops", "start.sh")) as f:
         start = f.read()
-    with open(os.path.join(ROOT, "ops", "watchdog.sh")) as f:
-        wd = f.read()
     with open(os.path.join(ROOT, "ops", "serve.env")) as f:
         env = f.read()
     with open(os.path.join(ROOT, "install.sh")) as f:
         inst = f.read()
     ctl = inst[inst.index("write_control() {"):inst.index("\nCTL\n}\n")]
-    assert chat["start_line"] in start and '"${QSE_CHATD:-on}" = node' in start
-    assert '[ "${QSE_CHATD:-on}" = node ] && return 0' in wd
+    assert chat["start_line"] in start                       # node's line, as 1.6 wrote it
     assert '[ "${QSE_CHATD:-}" = node ] || QSE_CHATD=off' in env
-    assert "TANDEM_NODE_BIN" in ctl and '"$NODE" chat' in ctl and "QSE_CHATD:-on}\" = node" in ctl
-    return "routes unchanged, 1.5 examples valid, control.json chat and the four launchers"
+    assert "TANDEM_NODE_BIN" in ctl and 'exec "$NODE" chat' in ctl
+    return "routes unchanged, 1.5 examples valid, control.json chat and the launchers' node"
+
+
+def test_additive_1_7():
+    """ENG-413 WP7: 1.7: the engine runs no chatd (node or off; on is node, unset is off) and
+    install.sh --with-chat --app-wheel installs TandemApp; no route or answer changes."""
+    from tools import contract_check
+    old, doc = _json("compat", "1.6", "routes.json"), _routes()
+    assert (old["version"], doc["version"]) == ("1.6", "1.7")
+    assert {k: v for k, v in doc.items() if k != "version"} == \
+        {k: v for k, v in old.items() if k != "version"}, "1.7 changes no route"
+    health = contract_check.load("health", CONTRACT)
+    for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
+        a, b = _json(name), _json("compat", "1.6", name)
+        assert not contract_check.validate(b, health, root=CONTRACT), name    # a 1.6 engine's answer
+        assert {k: v for k, v in a.items() if k != "engine_api"} == \
+            {k: v for k, v in b.items() if k != "engine_api"}, name
+        assert a.get("engine_api") in (None, "1.7"), name
+    chat = _json("node", "control.json")["chat"]
+    assert (chat["values"], chat["default"], chat["aliases"]) == (["on", "off", "node"], "off", {"on": "node"})
+    assert chat["engine_launcher"].startswith("none since 1.7")
+    assert chat["install"]["flags"] == ["--with-chat", "--app-wheel"]
+    assert "--app-wheel-sha256" in chat["install"]["about"] and "state/tandemapp-wheel.json" in chat["install"]["about"]
+    texts = {}
+    for rel in ("ops/start.sh", "ops/watchdog.sh", "ops/serve.env", "install.sh"):
+        with open(os.path.join(ROOT, rel)) as f:
+            texts[rel] = f.read()
+    for rel in ("ops/start.sh", "ops/watchdog.sh"):
+        assert "chatd.sh" not in texts[rel], rel
+    env = texts["ops/serve.env"]
+    assert "\nQSE_CHATD_ASKED=${QSE_CHATD:-}\n" in env and "    on) QSE_CHATD=node ;;" in env
+    assert '    "") QSE_CHATD=off ;;' in env and env.index("QSE_CHATD_ASKED=") > env.index("# OPS-260: the mode (QSE_MODE")
+    inst = texts["install.sh"]
+    for flag in chat["install"]["flags"] + ["--app-wheel-sha256"]:
+        assert f"        {flag}) " in inst, flag
+    assert 'APP_STATE="$DIR/state/tandemapp-wheel.json"' in inst
+    assert '"$NODE_BIN" unit --chat on --tandem-dir "$DIR" --port "$NODE_PORT"' in inst
+    assert "^QSE_CHATD_ASKED=" in inst                      # chat.update: the pre-1.7 install's mark
+    return "routes unchanged, 1.6 examples valid, chat: node or off, the install's flags"
 
 
 if __name__ == "__main__":
