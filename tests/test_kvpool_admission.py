@@ -1030,7 +1030,8 @@ def test_srv773_the_served_prompts_end_is_held_after_the_routers_notes():
     finally:
         app.STATE.clear()
     src = open(os.path.join(ROOT, "server", "app.py")).read()
-    tail = src[src.index("prompt, in_think = plan.apply_prompt(prompt, STATE[\"tok\"], in_think)"):]
+    # the router's notes come from the extension's prompt hook (ENG-413 WP3b)
+    tail = src[src.index("ids_, in_think, cids_ = rec.ext.prompt(before_, in_think, conv=conv_id)"):]
     at = tail.index("_hold_served_end(res_, prompt, mm, comp, n_prompt)")
     assert tail.index("prompt, mm = _mm_prompt(prompt, images, rec)") < at, "after the notes and the images"
     assert tail[:at].rstrip().endswith("if par is not None:"), "on a parallel server"

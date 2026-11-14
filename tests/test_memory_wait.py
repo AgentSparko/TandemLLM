@@ -818,6 +818,8 @@ def test_notes_the_server_decides_after_the_admission_are_counted_at_their_cap()
                                  router_cfg={"injection": {"max_note_tokens": 6_000}},
                                  served=lambda prompt, tok, in_think: ([1, 8, 8, 2], [(1, 2)]))
     app.STATE.update(tok=None)
+    from server import ext_app
+    was, app.EXT = app.EXT, ext_app.attach(app.STATE)   # ENG-413 WP3b: the dry run is the extension's
     try:
         assert app._plan_served(plan, None, False) == ([1, 8, 8, 2], [(1, 2)], 6_000)
         plan.context = None
@@ -826,6 +828,7 @@ def test_notes_the_server_decides_after_the_admission_are_counted_at_their_cap()
         assert app._plan_served(plan, None, False) == (None, (), 0), "served as rendered"
         assert app._plan_served(None, None, False) == (None, (), 0), "a raw request"
     finally:
+        app.EXT = was
         app.STATE.clear()
     assert app._served_share(0, [(0, 9)]) == 0 and app._served_share(100, [(40, 7), (100, 5), (180, 3)]) == 107
     return f"508 rows and a 6,000-token cap: {ws / GiB:.2f} GiB"
