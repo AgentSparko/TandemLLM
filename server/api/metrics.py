@@ -341,6 +341,13 @@ conductor_reasoning_tokens_cut_total = REGISTRY.add(Counter(
     "reasoning tokens written before a hidden close cut the block (the size of the blocks the "
     "conductor closed)"))
 
+# ENG-413 WP3a: the extension host (server/ext.py). A hook that raised or answered the wrong shape;
+# the request went on as a headless engine serves it. Nothing on a headless engine.
+ext_errors_total = REGISTRY.add(Counter(
+    "qse_ext_errors_total",
+    "extension hooks that failed (raised, a wrong shape, an act out of place); the request went "
+    "on without them, by hook", ("hook",)))
+
 # --------------------------------------------------------------------------- scrape-time gauges
 #
 # These read the server's own state when Prometheus asks, rather than being accumulated. The
