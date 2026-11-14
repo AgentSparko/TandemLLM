@@ -1,5 +1,5 @@
 {
-  "version": "1.4",
+  "version": "1.5",
   "routes": [
     {
       "method": "POST",
@@ -667,6 +667,193 @@
       ],
       "doc": "200 once the engine's decision models are ready",
       "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/engine/residency/plan",
+      "aliases": [],
+      "group": 9,
+      "used_by": [
+        "dashboard/src/api/client.ts"
+      ],
+      "schema": "engine/residency-plan.schema.json",
+      "doc": "the residency planner's view (OPS-41, OPS-47); the dashboard's rule",
+      "replaces": "/v1/conductor/residency/plan",
+      "since": "1.5",
+      "live": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/engine/disk",
+      "aliases": [],
+      "group": 9,
+      "used_by": [
+        "dashboard/src/api/conductor.ts"
+      ],
+      "schema": "engine/disk.schema.json",
+      "doc": "the disk tier (C1); conductor_write, as the Memory screen's",
+      "replaces": "/v1/conductor/memory/disk",
+      "since": "1.5",
+      "live": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/disk/clear",
+      "aliases": [],
+      "group": 9,
+      "used_by": [
+        "dashboard/src/api/conductor.ts"
+      ],
+      "schema": "engine/disk-clear.schema.json",
+      "doc": "every entry of the disk tier gone (C1); 409 not_running; conductor_write",
+      "replaces": "/v1/conductor/memory/disk/clear",
+      "since": "1.5",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/engine/deciders/status",
+      "aliases": [],
+      "group": 9,
+      "used_by": [
+        "dashboard/src/api/conductor.ts"
+      ],
+      "schema": "engine/deciders-status.schema.json",
+      "doc": "the decision models (ENG-179); the dashboard's rule",
+      "replaces": "/v1/conductor/deciders/*",
+      "since": "1.5",
+      "live": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/deciders/test",
+      "aliases": [],
+      "group": 9,
+      "used_by": [
+        "dashboard/src/api/conductor.ts"
+      ],
+      "doc": "one question to the decision models: /v1/systemone's answer (decision/systemone.schema.json); the dashboard's rule",
+      "replaces": "/v1/conductor/deciders/*",
+      "since": "1.5",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/deciders/autoload",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "doc": "202 {queued}: the on_start models load through the planner; conductor_write",
+      "consumer": "ops/start.sh, once /health answers (the engine's own start); no TandemApp file",
+      "replaces": "/v1/conductor/deciders/*",
+      "since": "1.5",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/deciders/models/{name}/load",
+      "aliases": [],
+      "group": 9,
+      "used_by": [
+        "dashboard/src/api/conductor.ts"
+      ],
+      "schema": "engine/decider-action.schema.json",
+      "doc": "202 started, 409 refused by the residency planner; conductor_write",
+      "replaces": "/v1/conductor/deciders/*",
+      "since": "1.5",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/deciders/models/{name}/unload",
+      "aliases": [],
+      "group": 9,
+      "used_by": [
+        "dashboard/src/api/conductor.ts"
+      ],
+      "schema": "engine/decider-action.schema.json",
+      "doc": "200, 409 not_loaded; conductor_write",
+      "replaces": "/v1/conductor/deciders/*",
+      "since": "1.5",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/engine/narrator/status",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "schema": "engine/narrator-status.schema.json",
+      "doc": "the narrator (P1, N2); the dashboard's rule",
+      "consumer": "the conductor's Narrator settings and a tool's check; no TandemApp file calls it over HTTP (the extension in process: host.engine)",
+      "replaces": "/v1/conductor/narrator/*",
+      "since": "1.5",
+      "live": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/narrator/try",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "schema": "engine/narrator-action.schema.json",
+      "doc": "the lines a list of events gives (at most 64; budget_ms 1 to 10,000, max_tokens 1 to 64); conductor_write",
+      "consumer": "a tool's check; the extension in process (host.engine)",
+      "replaces": "/v1/conductor/narrator/*",
+      "since": "1.5",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/narrator/load",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "schema": "engine/narrator-action.schema.json",
+      "doc": "202 started or queued, 409 role_off or the planner's refusal; the keeper keeps it loaded from then on; conductor_write",
+      "consumer": "ops/start.sh, once /health answers (the engine's own start); no TandemApp file",
+      "replaces": "/v1/conductor/narrator/*",
+      "since": "1.5",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/narrator/unload",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "schema": "engine/narrator-action.schema.json",
+      "doc": "200, 409 not_loaded; the keeper leaves it; conductor_write",
+      "consumer": "a tool; the extension in process (host.engine)",
+      "replaces": "/v1/conductor/narrator/*",
+      "since": "1.5",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/engine/shadow/status",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "schema": "engine/shadow-status.schema.json",
+      "doc": "the shadow reader (SR1); the dashboard's rule",
+      "consumer": "a tool's check; the extension in process (host.engine)",
+      "replaces": "/v1/conductor/shadow/*",
+      "since": "1.5",
+      "live": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/shadow/ask",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "schema": "engine/shadow-ask.schema.json",
+      "doc": "a typed decision over a session's full context; 409 with the reason; conductor_write",
+      "consumer": "a tool's check; the extension in process (host.engine)",
+      "replaces": "/v1/conductor/shadow/*",
+      "since": "1.5",
+      "live": false
     }
   ],
   "engine_screens_until_eng413": [
@@ -674,55 +861,59 @@
       "method": "GET",
       "path": "/v1/conductor/residency/plan",
       "schema": "../conductor-v1/residency-plan.schema.json",
-      "handler": "inproc.ROUTES[residency_plan]",
+      "handler": "host.engine (server/engine_routes.py), through the extension's route",
       "tandem_app": "404 not_found, routes.ENGINE_ONLY",
       "group": 9,
-      "after_eng413": "/v1/engine/residency/plan"
+      "after_eng413": "/v1/engine/residency/plan",
+      "leaves": "ENG-413 WP14: the engine's /v1/engine/residency/plan answers the same body (without the conductor's contract_version) since 1.5"
     },
     {
       "method": "GET",
       "path": "/v1/conductor/memory/disk",
       "schema": "../conductor-v1/memory-disk.schema.json",
-      "handler": "inproc.ROUTES[disk]",
+      "handler": "host.engine (server/engine_routes.py), through the extension's route",
       "tandem_app": "404 not_found, routes.ENGINE_ONLY",
       "group": 9,
-      "after_eng413": "/v1/engine/disk"
+      "after_eng413": "/v1/engine/disk",
+      "leaves": "ENG-413 WP14: the engine's /v1/engine/disk answers the same body (without the conductor's contract_version) since 1.5"
     },
     {
       "method": "POST",
       "path": "/v1/conductor/memory/disk/clear",
       "schema": "../conductor-v1/memory-disk-clear.schema.json",
-      "handler": "inproc.ROUTES[disk]",
+      "handler": "host.engine (server/engine_routes.py), through the extension's route",
       "tandem_app": "404 not_found, routes.ENGINE_ONLY",
       "group": 9,
-      "after_eng413": "/v1/engine/disk/clear"
+      "after_eng413": "/v1/engine/disk/clear",
+      "leaves": "ENG-413 WP14: the engine's /v1/engine/disk/clear answers the same body (without the conductor's contract_version) since 1.5"
     },
     {
       "method": "*",
       "path": "/v1/conductor/deciders/*",
       "schema": "../conductor-v1/deciders-status.schema.json",
-      "handler": "inproc.ROUTES[deciders]",
-      "tandem_app": "status: 200, enabled false, why routes.DECIDERS_OFF_WHY; the rest 404 not_found with that text",
+      "handler": "host.engine (server/engine_routes.py), through the extension's route",
+      "tandem_app": "status: 200, enabled false, why routes.ENGINE_ONLY (since 1.5; until then the engine's off text); the rest 404 not_found with that text",
       "group": 9,
-      "off_why": "this engine serves no decision model: QWEN38_DECIDER_MODELS is empty (set it in ops/serve.env, e.g. laya-english,laya-multilingual,laya-typed-decisions, and restart)",
-      "after_eng413": "/v1/engine/deciders/*"
+      "after_eng413": "/v1/engine/deciders/*",
+      "leaves": "ENG-413 WP14: the engine's /v1/engine/deciders/* answers the same body (without the conductor's contract_version) since 1.5"
     },
     {
       "method": "*",
       "path": "/v1/conductor/narrator/*",
-      "handler": "the narrator inproc.start_narrator starts (state narrator)",
-      "tandem_app": "status: 200, the narrator off; the rest 404 not_found (narrator.OFF_WHY)",
+      "handler": "host.engine (server/engine_routes.py), through the extension's route",
+      "tandem_app": "status: 200, enabled false, why routes.ENGINE_ONLY (since 1.5; until then the engine's off text); the rest 404 not_found with that text",
       "group": 9,
-      "after_eng413": "/v1/engine/narrator/*"
+      "after_eng413": "/v1/engine/narrator/*",
+      "leaves": "ENG-413 WP14: the engine's /v1/engine/narrator/* answers the same body (without the conductor's contract_version) since 1.5"
     },
     {
       "method": "*",
       "path": "/v1/conductor/shadow/*",
-      "handler": "the shadow reader server/conductor/shadow.py start() runs (state shadow)",
-      "tandem_app": "status: 200, enabled false, why routes.SHADOW_OFF_WHY; the rest 404 not_found with that text",
+      "handler": "host.engine (server/engine_routes.py), through the extension's route",
+      "tandem_app": "status: 200, enabled false, why routes.ENGINE_ONLY (since 1.5; until then the engine's off text); the rest 404 not_found with that text",
       "group": 9,
-      "off_why": "this engine serves no shadow reader: QWEN38_SHADOW_MODEL is empty (set it in ops/serve.env, e.g. qwen3.5-0.8b, and restart)",
-      "after_eng413": "/v1/engine/shadow/*"
+      "after_eng413": "/v1/engine/shadow/*",
+      "leaves": "ENG-413 WP14: the engine's /v1/engine/shadow/* answers the same body (without the conductor's contract_version) since 1.5"
     }
   ],
   "app_routes_via_engine": [
@@ -885,58 +1076,6 @@
       ],
       "shape": "error.type not_on_engine, the message names TandemApp",
       "lands_with": "ENG-413 WP14 (the engine serves these until they leave it; the owner's decision of 2026-11-13)"
-    },
-    {
-      "kind": "route",
-      "method": "GET",
-      "path": "/v1/engine/residency/plan",
-      "group": 9,
-      "schema": "../conductor-v1/residency-plan.schema.json",
-      "replaces": "/v1/conductor/residency/plan",
-      "lands_with": "ENG-413 WP5"
-    },
-    {
-      "kind": "route",
-      "method": "GET",
-      "path": "/v1/engine/disk",
-      "group": 9,
-      "schema": "../conductor-v1/memory-disk.schema.json",
-      "replaces": "/v1/conductor/memory/disk",
-      "lands_with": "ENG-413 WP5"
-    },
-    {
-      "kind": "route",
-      "method": "POST",
-      "path": "/v1/engine/disk/clear",
-      "group": 9,
-      "schema": "../conductor-v1/memory-disk-clear.schema.json",
-      "replaces": "/v1/conductor/memory/disk/clear",
-      "lands_with": "ENG-413 WP5"
-    },
-    {
-      "kind": "route",
-      "method": "*",
-      "path": "/v1/engine/deciders/*",
-      "group": 9,
-      "schema": "../conductor-v1/deciders-status.schema.json",
-      "replaces": "/v1/conductor/deciders/*",
-      "lands_with": "ENG-413 WP5"
-    },
-    {
-      "kind": "route",
-      "method": "*",
-      "path": "/v1/engine/narrator/*",
-      "group": 9,
-      "replaces": "/v1/conductor/narrator/*",
-      "lands_with": "ENG-413 WP5"
-    },
-    {
-      "kind": "route",
-      "method": "*",
-      "path": "/v1/engine/shadow/*",
-      "group": 9,
-      "replaces": "/v1/conductor/shadow/*",
-      "lands_with": "ENG-413 WP5"
     }
   ]
 }

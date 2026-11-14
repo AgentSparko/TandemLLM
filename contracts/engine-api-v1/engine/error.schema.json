@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "engine error",
+  "description": "An error of a /v1/engine/* route (ENG-413 WP5, engine API 1.5): 400 bad_request, 401 unauthorized, 404 not_found, 409 (not_running, not_loaded, busy, the planner's reason); its type and message",
+  "type": "object",
+  "required": [
+    "error"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "error": {
+      "type": "object",
+      "required": [
+        "type",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "status": "ok",
+  "stage": {
+    "role": "front",
+    "cut": 12,
+    "link": {
+      "state": "up",
+      "epoch": 1,
+      "reason": null,
+      "transport": "tcp",
+      "bytes": {
+        "tx": 418381824,
+        "rx": 2203648
+      },
+      "peer": {
+        "role": "tail",
+        "lo": 12,
+        "hi": 48,
+        "identity": "a81e5d09c3f7b214"
+      }
+    },
+    "steps": 10214,
+    "state": {
+      "snapshots": 41,
+      "restores": 9,
+      "restore_misses": 1,
+      "quiet_steps": 0,
+      "rounds": 312,
+      "slots": {
+        "0": {}
+      }
+    },
+    "lo": 0,
+    "hi": 12,
+    "layers": 48,
+    "options": {
+      "slots": 8,
+      "graphs": "captured",
+      "caches": "on",
+      "snapshots_gb": 2.0,
+      "cache_dir": "set",
+      "cache_dir_gb": 16.0,
+      "joint_round": "one request a round, each slot's block on its own engine",
+      "kv_cache": "bf16",
+      "images": "refused",
+      "prefill_chunk": 4096,
+      "verify_rows_max": 32,
+      "max_len": 40960,
+      "ple_layers": {
+        "front": [
+          1
+        ],
+        "tail": []
+      },
+      "carry": "H+N bf16, 40960 bytes a row"
+    },
+    "shape": 1,
+    "range": "0:12",
+    "identity": "3f9c2a71d04be856"
+  },
+  "model": "qwen3.8-flash-next",
+  "uptime_s": 3712.4
+}

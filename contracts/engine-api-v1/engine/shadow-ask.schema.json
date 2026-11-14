@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "engine shadow question",
+  "description": "POST /v1/engine/shadow/ask (SR1; ENG-413 WP5): a typed decision over a session's full context: the label, its confidence, each choice's probability, the time it took, how far the reader was behind; 409 with the reason (the reader not ready, an unknown session, an error)",
+  "type": "object",
+  "properties": {
+    "label": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number"
+    },
+    "probs": {
+      "type": "object"
+    },
+    "ms": {
+      "type": "number"
+    },
+    "read": {
+      "type": "integer"
+    },
+    "tail": {
+      "type": "integer"
+    },
+    "behind": {
+      "type": [
+        "integer",
+        "number",
+        "null"
+      ]
+    },
+    "session_tokens": {
+      "type": "integer"
+    },
+    "error": {
+      "type": "object"
+    }
+  }
+}

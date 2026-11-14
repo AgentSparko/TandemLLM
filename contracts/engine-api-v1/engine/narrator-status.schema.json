@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "engine narrator",
+  "description": "GET /v1/engine/narrator/status (P1, N2; ENG-413 WP5): enabled false with why when the engine serves no narrator (no QWEN38_NARRATOR_MODEL, or no extension builds one over its slot); else the narrator's own status (engine-ext-v1 2.1 narrator.status): its settings, its slot, the line limits and the thought summaries' settings",
+  "type": "object",
+  "required": [
+    "enabled",
+    "why"
+  ],
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "why": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "settings": {
+      "type": "object",
+      "required": [
+        "mode",
+        "budget_ms"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "budget_ms": {
+          "type": "integer"
+        }
+      }
+    },
+    "slot": {
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "thoughts": {
+      "type": "object"
+    }
+  }
+}

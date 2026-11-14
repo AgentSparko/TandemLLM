@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "engine shadow reader",
+  "description": "GET /v1/engine/shadow/status (SR1; ENG-413 WP5): enabled false with why when the engine serves no shadow reader (no QWEN38_SHADOW_MODEL, or its start refused it); else the reader's status: its slot, sessions, counts and settings",
+  "type": "object",
+  "required": [
+    "enabled"
+  ],
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "why": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}
