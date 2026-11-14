@@ -38,7 +38,8 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
+from tools import pair_app  # noqa: E402  (ENG-413 WP10: a pair tool, TandemApp's tree)
+pair_app.use()
 
 ROOT = os.path.expanduser("~/.qwen38-spark-engine")
 LEDGER = os.path.join(ROOT, "usage", "ledger.sqlite3")
@@ -81,7 +82,7 @@ def questions(router: dict) -> dict:
 
 
 def tail_of(tok, question: str, choices: dict):
-    from tandemapp.conductor import incontext
+    from server.api import incontext
     text, letters = incontext.listing(choices)
     q = question.replace("{classes}", text) if "{classes}" in question else \
         question + "\n\n" + text + "\n\nAnswer with the letter only."
@@ -132,7 +133,7 @@ def main() -> int:
     from engine.config import resolve_snapshot
     from engine.decision.device import Device, Placement
     from engine.generative.qwen35 import Qwen35Model
-    from tandemapp.conductor import incontext
+    from server.api import incontext
 
     t_start = int(time.time() * 1000)
 

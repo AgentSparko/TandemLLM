@@ -48,7 +48,8 @@ from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+from tools import pair_app  # noqa: E402  (ENG-413 WP10: a pair tool, TandemApp's tree)
+pair_app.use()
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 DOC_SEP = 1 << 30
@@ -330,7 +331,7 @@ def impact(a) -> dict:
     proc = row3.start_server(ns, env, log)
     rows, out_slot = [], None
     try:
-        base = f"http://127.0.0.1:{a.port}/v1/conductor/narrator"
+        base = f"http://127.0.0.1:{a.port}/v1/engine/narrator"
         try:
             urllib.request.urlopen(urllib.request.Request(base + "/load", data=b"{}", headers={
                 "Content-Type": "application/json"}), timeout=60).read()

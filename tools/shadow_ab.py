@@ -19,7 +19,7 @@ Per request: the server's decode rate (`timings.predicted_per_second`), the clie
 tokens after the first over the first to the last token that is not a state line), TTFT on the
 client, the end delay. The gate (Qwen's decode): sr-on's median server rate within 3 % of
 sr-off's, with the off runs' own spread beside it. The shadow's own counts (rows read, questions,
-agreement) from /v1/conductor/shadow/status after the runs.
+agreement) from /v1/engine/shadow/status after the runs.
 
     python tools/shadow_ab.py --runs 6 --out ~/sr1/ab.json
 """
@@ -41,7 +41,8 @@ from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+from tools import pair_app  # noqa: E402  (ENG-413 WP10: a pair tool, TandemApp's tree)
+pair_app.use()
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 GATE = 0.03
@@ -168,7 +169,7 @@ def main(argv=None) -> int:
             print(f"[sr1] warm-up {arm}: {w}", flush=True)
             time.sleep(a.pause_s)
         for _ in range(120):
-            st = get(a.port, "/v1/conductor/shadow/status")
+            st = get(a.port, "/v1/engine/shadow/status")
             if st.get("slot", {}).get("state") == "loaded":
                 break
             time.sleep(2)
@@ -193,7 +194,7 @@ def main(argv=None) -> int:
                     print(f"[sr1] {arm:8s} run {i}: {r}", flush=True)
                     time.sleep(a.pause_s)
             time.sleep(5)
-            out["shadow"] = get(a.port, "/v1/conductor/shadow/status")
+            out["shadow"] = get(a.port, "/v1/engine/shadow/status")
             out["shadow"].pop("recent", None)
     finally:
         row3.stop_server(proc)

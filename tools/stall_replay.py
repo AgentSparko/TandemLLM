@@ -1,7 +1,7 @@
 """Replay the reasoning-loop detector's arms over real reasoning, offline.
 
 The arms are `engine/spec.py`'s `StallArms`, with the parameters of the policy's reasoning-loop
-task (app/ops/supervisor.yaml), so what this prints is what the served monitor would have seen.
+task (TandemApp's ops/supervisor.yaml), so what this prints is what the served monitor would have seen.
 Three sets, as the calibration of 2026-09-30 defined them:
 
     failed   turns that ended with no tool call and no text (an empty stop, or `length`)
@@ -38,7 +38,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
+from tools import pair_app  # noqa: E402  (ENG-413 WP10: a pair tool, TandemApp's tree)
+pair_app.use()
 
 PHRASE = "Considering the limited time"
 MODEL = "qwen38-spark-engine"
@@ -153,7 +154,7 @@ def main() -> int:
     ap.add_argument("--fixture", help="replay this fixture instead of a database")
     ap.add_argument("--write-fixture", help="write the relabelled sets here (.bin.xz)")
     ap.add_argument("--policy", default=None,
-                    help="the policy file (default app/ops/supervisor.yaml)")
+                    help="the policy file (default TandemApp's ops/supervisor.yaml)")
     ap.add_argument("--json", action="store_true", help="print the result as JSON")
     a = ap.parse_args()
     from tandemapp.conductor.monitor import policy

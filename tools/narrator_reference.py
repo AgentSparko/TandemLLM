@@ -20,7 +20,8 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
+from tools import pair_app  # noqa: E402  (ENG-413 WP10: a pair tool, TandemApp's tree)
+pair_app.use()
 
 # kind, facts, extra: one of every kind the conductor says most
 EVENTS = [
