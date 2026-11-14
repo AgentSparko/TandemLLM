@@ -9,9 +9,9 @@
   "engine_ids": 4357,
   "engine_files": 510,
   "to": {
-   "engine": 3209,
+   "engine": 3207,
    "pair": 1123,
-   "tandemapp": 27,
+   "tandemapp": 29,
    "dropped": 0
   },
   "to_note": "destinations: an id of a split file with two homes counts in both",
@@ -5149,7 +5149,9 @@
    ]
   },
   "tests/test_memory_recall_check.py": {
-   "home": "engine",
+   "home": "tandemapp",
+   "to": "tests/test_memory_recall_check.py",
+   "why": "ENG-413 WP10: its tool reads only TandemApp's note store and moved there (tools/memory_recall_check.py); moved with it",
    "ids": [
     "test_seed_refuses_a_served_config",
     "test_seed_refuses_a_memory_with_notes_unless_forced"
