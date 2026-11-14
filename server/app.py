@@ -10198,8 +10198,8 @@ class Handler(BaseHTTPRequestHandler):
                                                rec.completion_tokens):
                 STATE["regenerate"].answered(rec.regen, rec.request_id)   # SRV-241
             live_registry().finish(rec)
-            if rec.sup is not None and STATE.get("monitor") is not None:
-                STATE["monitor"].turn_ended(rec.sup)   # the watch's idle time starts here
+            if rec.sup is not None:
+                EXT.interim("turn_ended", rec.sup)     # the watch's idle time starts here
             if rec.probe is not None:
                 _probe_done(rec)                   # before the row is written: extra.probe
             if STATE.get("conductor") is not None:
@@ -10562,14 +10562,10 @@ class Handler(BaseHTTPRequestHandler):
             STATE["prepared"].seen(conv_id, rec.client_kind)   # the preparer's client kinds
         # SRV-137: keep a reference to the output for the session transcript (never on raw)
         transcribe = plan is not None and plan.active and plan.transcript == "full"
-        # The session monitor (app/tandemapp/conductor/monitor/) runs under the profile: never above its
-        # mode (the raw model name runs it raw), with its task modes, caps and thresholds. With a
-        # profile resolved, X-Tandem says the profile's mode, the router's as much as the monitor's.
-        mon_mode, mon_policy = self._tandem, None
+        # The session monitor runs under the profile (the extension's `supervisor` decides its mode
+        # and policy, ENG-413 WP3b). With a profile resolved, X-Tandem says the profile's mode, the
+        # router's as much as the monitor's.
         if plan is not None:
-            mon_mode = STATE["conductor"].monitor_mode(plan, self._tandem)
-            mon = STATE.get("monitor")
-            mon_policy = STATE["conductor"].monitor_policy(plan, mon.policy if mon else None)
             self._tandem = "raw" if plan.res.mode in ("raw", "off") else plan.res.mode
         # choices, log-probabilities. /14: which answers are read for calls -- every
         # chat answer unless `tool_choice` is none -- the request's tool names for the JSON gate,
@@ -11200,10 +11196,11 @@ class Handler(BaseHTTPRequestHandler):
             hidden_prompt = plan_hidden + (int(prompt.numel()) - len(before)
                                            if replayed or aligned else 0)
             hidden_spans = list(replayed)          # the served prompt's tokens the client lacks
-            mon = STATE.get("monitor")
-            if mon is not None and mon_mode in ("shadow", "on") and not micro:
-                req_ev = conductor.RequestEvent(
-                    cid, messages=body.get("messages") or [],
+            if not micro and not req_x.raw:
+                # the extension's supervisor (engine-ext-v1 `supervisor`, ENG-413 WP3b): None when
+                # the monitor runs raw for this request; the decode loop asks it at SP1-SP3
+                req_ev = ext_mod.Event(
+                    request_id=cid, messages=body.get("messages") or [],
                     tools=(body.get("tools") or []) if parse_calls else [], tool_choice=tool_mode,
                     n=n_choices, stream=stream, prompt_tokens=int(prompt.numel()),
                     in_think=bool(in_think), max_tokens=max_new,
@@ -11213,27 +11210,12 @@ class Handler(BaseHTTPRequestHandler):
                     profile=plan.res.profile if plan is not None and plan.active else "",
                     cls=str((plan.row or {}).get("class_id") or "")
                     if plan is not None and plan.active else "",
-                    tool_format=str(_spec().tool_format or ""))
-                # one session for the router and the monitor: the router's key when it has one
-                sup = rec.sup = mon.begin(
-                    mon_mode, req_ev, prompt.tolist(), rec.conv, policy=mon_policy,
-                    session_key=plan.session.key if plan is not None and plan.active
-                    and plan.session is not None else None)
-                if ui is not None:
-                    sup.on_event = ui.monitor
-                # SP2 reads the answer as the client gets it: without the memory notes the
-                # filter takes out (an answer of notes alone is an empty answer)
-                sup.memory_notes = _memory_takes(plan, chat, n_choices, tool_names)
-                if plan is not None and plan.acts:
-                    sup.adopt(plan.acts)            # the router's outcome note (J1)
-                if plan is not None and plan.outcome is not None and \
-                        plan.outcome["so"]["evaluate"] != "off":
-                    # J1 step 6, E-b: the claim check's note carries the turn's evidence
-                    sup.evidence = (plan.outcome["so"]["evaluate"],
-                                    conductor_outcomes.evidence_text(plan.outcome))
-                sup.memo["client_thinking_off"] = bool(client.off)
-                if getattr(rec, "loop_escape", None):
-                    sup.memo["loop_escape"] = rec.loop_escape       # SRV-475: the escape note
+                    tool_format=str(_spec().tool_format or ""),
+                    prompt_ids=prompt.tolist(), conv=rec.conv, chat=chat,
+                    tool_names=list(tool_names or ()), thinking_off=bool(client.off),
+                    loop_escape=getattr(rec, "loop_escape", None))
+                sup = rec.sup = req_x.supervise(req_ev)
+            if sup is not None:
                 acts = sup.at_request(req_ev)
                 if sup.final_answer:
                     # A1's give-up after the retries (server/api/argloop.py): this answer is the
@@ -12768,18 +12750,6 @@ def _text_chunk(cid, model, created, piece, finish=None, extra: dict | None = No
     if extra:
         body.update(extra)
     return "data: " + json.dumps(body, ensure_ascii=False) + "\n\n"
-
-
-def _memory_takes(plan, chat: bool, n_choices: int, tool_names=()) -> bool | None:
-    """What the memory filter takes out of this request's answer: None (no filter: the stream
-    is the release's), False (the blocks), True (the blocks and the `tandem_memory` calls,
-    unless the client offers a tool of that name: then the calls are its own)."""
-    cond = STATE.get("conductor")
-    if (cond is None or plan is None or not plan.active or not chat or n_choices != 1
-            or not getattr(plan, "memory", None)
-            or plan.memory.get("mode") not in ("on", "shadow")):
-        return None
-    return memblock.TOOL not in (tool_names or ())
 
 
 def _memory_filter(plan, chat: bool, n_choices: int, ui, tool_names=()):
