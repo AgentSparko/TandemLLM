@@ -13704,8 +13704,12 @@ def _ext_at_start(a) -> None:
     engine-ext-v1 or lacks a module attribute, and a QSE_EXT_ARGS that is not a JSON object, stop the
     start here with one line `[ext] REFUSING: ...`. None is a headless engine."""
     global _EXT_MODULE
-    _EXT_MODULE = ext_mod.discover(os.environ.get("QSE_EXT", ""),
-                                   "chat" if conductor_root(a) is not None else "engine")
+    name, mode = os.environ.get("QSE_EXT", ""), "chat" if conductor_root(a) is not None else "engine"
+    if not name.strip() and mode == "engine" and STATE.get("conductor_policy") is not None:
+        # ENG-413 WP3b: the session monitor runs behind the extension too
+        raise ext_mod.Refused("the session monitor (--conductor shadow|on) needs an extension "
+                              "(QSE_EXT is empty)")
+    _EXT_MODULE = ext_mod.discover(name, mode)
     if _EXT_MODULE is not None:
         ext_mod.ext_args({})
         print(f"[ext] QSE_EXT={_EXT_MODULE.__name__}: {_EXT_MODULE.NAME} {_EXT_MODULE.VERSION} "
@@ -13733,7 +13737,9 @@ def _ext_start(a, root, led) -> None:
         interim=SimpleNamespace(root=root, defaults=getattr(a, "conductor_defaults", "builtin"),
                                 identity_name=_identity_name,
                                 own_eta=_own_eta_ms if OWN_ETA == "on" else None,
-                                own_idle=_own_idle_s))
+                                own_idle=_own_idle_s,
+                                # ENG-413 WP3b: the monitor's decisions in Prometheus (SRV-115)
+                                on_conductor_event=metrics.on_conductor_event))
     EXT = ext_mod.start(_EXT_MODULE, host)
     print(f"[ext] on: {EXT.name} {EXT.version} (engine-ext-v1 {EXT.ext_api}); "
           f"{len(EXT.obj.routes)} routes: "
@@ -14730,25 +14736,18 @@ def _serve(a, led) -> None:
     STATE["regenerate"] = (regenerate_mod.Regenerates(
         a.regenerate, a.regenerate_temperature, a.regenerate_top_p, a.regenerate_top_k)
         if a.regenerate != "off" else None)
-    # SRV-475: the loop escape's sessions (the card's sampling is read with the weights)
-    STATE["escapes"] = loopescape_mod.Escapes()
+    # SRV-475: the loop escape's sessions are the extension's (the card's sampling is read with
+    # the weights)
     STATE["dashboard_dir"] = a.dashboard_dir
     STATE["live_hz"] = live_mod.hz_from_env(os.environ.get("QSE_LIVE_HZ"))
     STATE["live_activity"] = getattr(a, "live_activity", "on") == "on" and STATE["live_hz"] > 0
     STATE["live_windows"] = w = live_mod.windows_from_env(os.environ)
     STATE.pop("live", None)                      # built with the settings above
+    # The session monitor (`--conductor shadow|on`, its policy validated before the load) starts with
+    # the extension (ENG-413 WP3b, server/ext_app.py), which puts it into STATE["monitor"]
     pol = STATE.get("conductor_policy")
-    mode = conductor.parse_mode(getattr(a, "conductor", "raw"), "raw")
-    STATE["monitor"] = conductor.Monitor(mode, pol, STATE["tok"]) if pol is not None else None
-    if STATE["monitor"] is not None:
-        # the monitor's decisions are counted in Prometheus (SRV-115); its rows go into the
-        # conductor's journal, opened below with the ledger
-        STATE["monitor"].journal.sinks.append(metrics.on_conductor_event)
-        if a.fake_engine:
-            # a test run never pushes to a phone, whatever its policy says
-            STATE["monitor"].notifier = lambda cfg, title, message: "suppressed: fake engine"
-        if mode != "raw":
-            STATE["monitor"].start_watch(float(getattr(a, "conductor_watch_s", 30.0)))
+    mode = "raw" if getattr(a, "conductor", "raw") in ("raw", "off") else a.conductor
+    STATE["monitor"] = None
     print(f"[conductor] {mode}" + (f", policy {pol.path} version {pol.version}: " + ", ".join(
         f"{t.id}={t.mode}" for t in pol.tasks.values()) if pol is not None else ""), flush=True)
     print(f"[server] live activity {'on' if STATE['live_activity'] else 'off'}, "
@@ -14776,21 +14775,9 @@ def _serve(a, led) -> None:
     # (server/ext_app.py, QSE_EXT=server.ext_app) does what this start did for the conductor: its
     # shipped documents, its journal (the table `conductor_events` in the usage ledger's file), the
     # Conductor and its migrations; it puts the journal and the conductor into STATE
+    # The session monitor alone (no conductor directory) starts there too, with its journal
     _ext_start(a, root, led)
     journal = STATE.get("journal")
-    if journal is None and STATE["monitor"] is not None:
-        # the session monitor without the conductor (engine mode, --conductor shadow|on): its
-        # journal here as before (SRV-115), until the monitor moves behind the hooks (ENG-413 WP3b);
-        # with the ledger off it lives in memory only
-        from tandemapp.conductor.decisions import Journal as CondJournal
-        from tandemapp.conductor.store import Store
-        days = (Store(root, readonly=True).get("settings")[1]["journal"]["retention_days"]
-                if root is not None else 30)
-        journal = STATE["journal"] = CondJournal(STATE["ledger"].path if led is not None
-                                                 else None, retention_days=days)
-        STATE["monitor"].journal.sinks.append(journal.monitor_sink)
-        print(f"[conductor] journal: {journal.path or 'in memory (no ledger)'}, "
-              f"{days} days", flush=True)
     if STATE.get("conductor") is None:
         print("[conductor] off: /v1/models lists only the raw engine", flush=True)
     start_proxy(a)

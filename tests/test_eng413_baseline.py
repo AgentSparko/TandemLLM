@@ -313,8 +313,8 @@ def _free_port() -> int:
 def _fake(port: int, ledger: str, config: str):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.path.dirname(ledger),
            "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin"}
-    if config not in ("-", "off"):
-        env["QSE_EXT"] = "server.ext_app"               # ENG-413 WP3a: chat mode's extension
+    if config != "-":
+        env["QSE_EXT"] = "server.ext_app"               # ENG-413 WP3a/WP3b: the conductor, the monitor
     p = subprocess.Popen([sys.executable, "-c", LAUNCH, "--fake-engine", "--host", "127.0.0.1", "--port", str(port),
                           "--served-model", "qwen38-spark-engine", "--usage-ledger", ledger, "--fake-tps", "4000",
                           "--conductor", "on" if config != "-" else "raw",

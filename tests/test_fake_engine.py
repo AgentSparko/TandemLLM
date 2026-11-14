@@ -272,6 +272,8 @@ def _policy_file(tasks_extra: dict | None = None, only: dict | None = None) -> s
 def _start_conductor(port, mode, policy_path=None, tps="4000"):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ["HOME"],
            "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": ""}
+    if mode not in ("raw", "off"):
+        env["QSE_EXT"] = "server.ext_app"     # ENG-413 WP3b: the monitor runs behind the extension
     ledger = os.path.join(tempfile.mkdtemp(prefix="qse-e2e-"), "ledger.sqlite3")
     args = ["--fake-engine", "--port", str(port), "--served-model", "qwen38-spark-engine",
             "--usage-ledger", ledger, "--fake-tps", tps, "--conductor", mode]

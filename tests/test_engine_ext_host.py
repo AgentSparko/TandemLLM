@@ -541,7 +541,7 @@ def test_chat_mode_through_the_adapter():
         st, _, h = _get(port, "/health")
         assert st == 200 and h["mode"] == "chat" and h["loaded"]["conductor"] is True, h
         (x,) = h["extensions"]
-        assert x["name"] == "tandemapp" and x["ext_api"] == "1.1" and x["version"].startswith("interim"), x
+        assert x["name"] == "tandemapp" and x["ext_api"] == E.EXT_API and x["version"].startswith("interim"), x
         st, _, m = _get(port, "/v1/models")
         assert [y["id"] for y in m["data"]] == ["TandemLLM"], m
         assert _get(port, f"/v1/models/{RAW}")[2]["id"] == "TandemLLM"
