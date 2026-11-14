@@ -15,7 +15,8 @@ state names the speed-guard report this release tree ships (`SHIPPED_GUARD`, und
     SHIPPED_GUARD                     <repo>/release/speed-guard.json (VIS-68)
 
 The engine imports TandemApp's conductor here until ENG-413 (headless engine) moves the conductor
-out of the engine's process (app/contracts/engine-api-v1/README.md).
+out of the engine's process (contracts/engine-api-v1/README.md); since WP3a the host hands these
+handlers to the extension as `host.engine` (server/ext.py), and WP5 serves them as /v1/engine/*.
 """
 
 from __future__ import annotations
