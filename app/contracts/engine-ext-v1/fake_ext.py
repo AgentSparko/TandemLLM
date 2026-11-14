@@ -1,4 +1,7 @@
-"""The smallest engine-ext-v1 1.0 extension (ENG-429, QA ENG-430): every hook, no behaviour of its own.
+"""The smallest engine-ext-v1 extension (ENG-429, QA ENG-430): every hook, no behaviour of its own.
+
+Written against 1.0; its prompt takes 1.2's `info` (a default) and its supervisor has 1.2's
+`check_answer`, so it fits the interface's signatures.
 
 A host's tests load it (QSE_EXT=fake_ext with this folder on the path, or the module object) and
 drive requests through it. `host.args` steers it, so one module covers the failure cases:
@@ -46,6 +49,9 @@ class _Supervisor:
     def at_tool_call(self, event):
         return self._step("at_tool_call")
 
+    def check_answer(self, items, final):
+        return self._step("check_answer")
+
     def at_finish(self, event, room):
         return self._step("at_finish")
 
@@ -83,7 +89,7 @@ class FakeExt:
             return self._hook("plan", None)
         return self._hook("plan", {"active": True, "body": None})
 
-    def prompt(self, plan, ids):
+    def prompt(self, plan, ids, info=None):
         return self._hook("prompt", list(ids))
 
     def supervisor(self, plan, event):

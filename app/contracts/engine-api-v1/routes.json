@@ -1,5 +1,5 @@
 {
-  "version": "1.3",
+  "version": "1.4",
   "routes": [
     {
       "method": "POST",
@@ -839,42 +839,52 @@
       "app_routes_via_engine"
     ]
   },
-  "planned": [
-    {
-      "kind": "field",
-      "what": "/health extensions",
-      "shape": "[{name, version, ext_api}], [] when headless",
-      "lands_with": "ENG-413 WP3a (the extension host)"
-    },
+  "answers": [
     {
       "kind": "answer",
       "what": "404 no_ui",
+      "since": "1.4",
       "paths": [
         "/dashboard",
         "/dashboard/*"
       ],
-      "shape": "error.type no_ui, the message names TandemApp",
-      "lands_with": "ENG-413 WP3a (headless); every engine once the page has left (WP14)"
+      "when": "the engine runs no extension that serves the page (a headless engine, ENG-413 WP3a); the setup-mode server still serves it until it leaves the engine (WP14)",
+      "shape": "error.type and error.code no_ui, the message names TandemApp"
     },
     {
       "kind": "answer",
       "what": "404 not_on_engine",
+      "since": "1.4",
       "paths": [
         "/v1/conductor/*",
-        "/v1/chat-app",
-        "/v1/chat-app/*",
-        "/v1/library*",
-        "/v1/laya*",
+        "/v1/library",
+        "/v1/library/*",
         "/v1/memory",
         "/v1/memory/*",
-        "/s/{token}/*",
+        "/v1/laya",
+        "/v1/laya/*",
+        "/s/{token}/v1/library*",
+        "/s/{token}/v1/memory*",
+        "/s/{token}/v1/laya*",
         "/v1/config",
         "/v1/config/*",
-        "/v1/collect/*",
+        "/v1/collect/*"
+      ],
+      "when": "nothing in the engine's process serves the path: no extension route for it (the conductor's, its library and memory); /v1/laya* without the engine's decision models; /v1/config* and /v1/collect/* with --backends off. A session address answers as the path under it",
+      "shape": "error.type and error.code not_on_engine, the message names TandemApp"
+    }
+  ],
+  "planned": [
+    {
+      "kind": "answer",
+      "what": "404 not_on_engine",
+      "paths": [
+        "/v1/chat-app",
+        "/v1/chat-app/*",
         "/v1/dashboard/session"
       ],
-      "shape": "error.type not_on_engine, the message names TandemApp; only where no extension serves the path",
-      "lands_with": "ENG-413 WP3a"
+      "shape": "error.type not_on_engine, the message names TandemApp",
+      "lands_with": "ENG-413 WP14 (the engine serves these until they leave it; the owner's decision of 2026-11-13)"
     },
     {
       "kind": "route",

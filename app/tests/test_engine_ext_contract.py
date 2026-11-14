@@ -1,10 +1,10 @@
 """The engine extension interface engine-ext-v1, TandemApp's side (ENG-429, QA ENG-430).
 
 contracts/engine-ext-v1 (the engine's, pinned by contracts/engine-api-v1/PIN) is how TandemApp's
-conductor runs inside an engine process in chat mode. Until TandemApp ships its extension
-(tandemapp/engine_ext.py, ENG-413 WP4, tested against fake_host.py), this side holds what it
-already owns: the knobs the extension reads, and that the reference host and the smallest
-extension run in this tree.
+conductor runs inside an engine process in chat mode. This side holds the knobs the extension
+reads, and that the reference host and the smallest extension run in this tree; TandemApp's own
+extension (tandemapp/engine_ext.py, ENG-413 WP4) is held to the reference host by
+tests/test_engine_ext.py.
 
   1  knobs.json is tandemapp/knobs.py DEFAULTS, name for name and default for default
                                                                   test_the_knobs

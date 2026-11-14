@@ -1,4 +1,4 @@
-"""The reference host of engine-ext-v1 1.0 (ENG-429, QA ENG-430): ext.json's rules as code.
+"""The reference host of engine-ext-v1 (ENG-429, QA ENG-430): ext.json's rules as code.
 
 No model and no server. `load` is the discovery and the start, closed on any failure; `FakeHost.serve`
 drives one request through an extension's hooks in ext.json's order, open on any failure of a
@@ -8,6 +8,11 @@ meets an engine. Standard library only; imports neither tree.
 
     ext = load("fake_ext", host)                 # or load(module, host)
     record = host.serve(ext, Scenario(...))      # record["trace"], ["errors"], ["acts"], ["raw"]
+    host.call(ext, name, *args)                  # since 1.3: one of the extension's optional calls
+
+Since 1.3: CALLS, SUP_OPTIONAL and SUP_FIELDS hold the headless value of each optional call, each
+optional supervisor method and each supervisor field (ext.json extension.calls,
+supervisor.optional_methods, supervisor.fields).
 """
 
 from __future__ import annotations
@@ -35,6 +40,60 @@ ENGINE_PREFIXES = ("/v1/chat/completions", "/v1/completions", "/v1/embeddings", 
 ENGINE_DASHBOARD = ("live", "system", "logs", "parallel", "metrics", "summary", "usage", "requests")
 
 
+def _released(call, *a, **kw):
+    return {k: v for k, v in call.items() if not k.startswith("_")}
+
+
+#: since 1.3: the extension's optional calls (ext.json extension.calls), each with the value a
+#: headless engine uses
+CALLS = {
+    "server_mode": lambda header, n: "raw",
+    "served_name": lambda: None,
+    "side_first_max": lambda: 0,
+    "strip_states": lambda messages: (messages, 0),
+    "loop_escape": lambda routing, info: None,
+    "code_class": lambda routing: False,
+    "served": lambda routing, prompt, in_think: None,
+    "in_context": lambda routing, prompt_ids, choice, rows: None,
+    "settle_context": lambda routing, why: None,
+    "ask_in_place": lambda routing, prompt_ids, choice: None,
+    "route_lines": lambda routing, ui: None,
+    "memory_filter": lambda routing, chat, n_choices, ui, tool_names: None,
+    "memory_spans": lambda ids, decode, taken: ([], 0),
+    "answer_mask": lambda routing, chat, body: None,
+    "replayed": lambda session, ids: ids,
+    "turn_ended": lambda supervisor: None,
+    "writer_ban_ids": lambda tokenizer: {},
+    "writer_foreign_call": lambda text: None,
+    "probe_stage": lambda routing: None,
+}
+#: since 1.3: the supervisor's optional methods (ext.json supervisor.optional_methods), headless
+SUP_OPTIONAL = {
+    "apply_request": lambda prompt, in_think, acts: (prompt, in_think),
+    "route_budget": lambda budget, task="route": False,
+    "settle_claim": lambda asker: None,
+    "without_notes": lambda answer: (answer, 0, 0),
+    "as_sent": lambda items, events=None: items,
+    "release_call": _released,
+    "release_block": lambda inner: None,
+    "note_repairs": lambda renamed: None,
+    "argloop_stopped": lambda verdict, name: None,
+}
+#: since 1.3: the supervisor's fields (ext.json supervisor.fields), the value a supervisor that keeps
+#: one answers
+SUP_FIELDS = {
+    "final_answer": lambda: None, "holds_calls": lambda: False, "arms": lambda: None,
+    "watches_blocks": lambda: True, "mode": lambda: "on",
+    "policy": lambda: types.SimpleNamespace(version=0),
+    "acts": lambda: 0, "hidden_tokens": lambda: 0, "acted": lambda: False, "gave_up": lambda: None,
+    "cuts": list, "checked": lambda: True,
+    "req": lambda: types.SimpleNamespace(request_id="", tools_offered=False, n=1, max_tokens=0),
+    "memory_notes": lambda: None, "lift_ids": lambda: None, "on_event": lambda: None,
+    "held_events": lambda: None, "resume_ms": list, "forwarding": lambda: None,
+    "forwarded_at": lambda: None, "can_ask": lambda: False,
+}
+
+
 class Refused(Exception):
     """The engine does not start: one line, '[ext] REFUSING: <why>'."""
 
@@ -46,9 +105,18 @@ class Refused(Exception):
 class Refusal(Exception):
     """What `plan` raises to answer the client with an error (ext.json failure.refusal)."""
 
-    def __init__(self, status: int, type_: str, message: str):
+    def __init__(self, status: int, type_: str, message: str, param: str | None = None):
         super().__init__(message)
         self.status, self.type, self.message = status, type_, message
+        self.param = param                       # since 1.2
+
+
+class NoRoom(ValueError):
+    """Since 1.3: what the engine's callbacks raise when a question asked in place has no room."""
+
+    def __init__(self, why: str = "no_room"):
+        super().__init__(why)
+        self.why = why
 
 
 def _version(text) -> tuple[int, int] | None:
@@ -79,27 +147,50 @@ def _claims_engine_path(prefix: str) -> bool:
 class FakeHost:
     """ext.json's host attributes, a log of every hook call and the failure counters."""
 
-    def __init__(self, mode: str = "chat", args: dict | None = None):
+    def __init__(self, mode: str = "chat", args: dict | None = None, ext_dir: str | None = None,
+                 state: dict | None = None):
         self.ext_api = EXT_API
-        self.engine_api = "1.3"
+        self.engine_api = "1.4"
         self.mode = mode
-        self.state: dict = {}
+        self.state: dict = state if state is not None else {}
         self.lock = None
         self.tokenizer = types.SimpleNamespace(encode=lambda s: [ord(c) for c in s],
                                                decode=lambda ids: "".join(chr(i) for i in ids))
-        self.metrics = types.SimpleNamespace(families=[], add=lambda fam: self.metrics.families.append(fam))
+        self.metrics = types.SimpleNamespace(families=[], events=[],
+                                             add=lambda fam: self.metrics.families.append(fam),
+                                             event=lambda row: self.metrics.events.append(row))
         self.ledger_path = ":memory:"
         self.args = dict(args or {})
         self.engine = {k: (lambda *a, **kw: {}) for k in
                        ("residency_plan", "disk", "disk_clear", "deciders", "narrator", "shadow")}
         self.Refusal = Refusal
+        # since 1.3
+        self.ext_dir = ext_dir
+        self.identity_name = lambda: None
+        self.own_eta = None
+        self.own_idle = lambda: None
+        self.NoRoom = NoRoom
         self.lines: list[str] = []
         self.errors: dict[str, int] = {}
+        self.speaks: dict = {}                   # id(extension object) -> its module's EXT_API
 
     def log(self, line: str) -> None:
         self.lines.append(line)
 
     # ------------------------------------------------------------------------- one request
+
+    def call(self, ext, name: str, *args, **kw):
+        """Since 1.3: one of the extension's optional calls (CALLS), open: a missing method or one
+        that raises answers the headless value; a raise is logged and counted under its name."""
+        fn = getattr(ext, name, None)
+        if fn is None:
+            return CALLS[name](*args, **kw)
+        try:
+            return fn(*args, **kw)
+        except Exception as exc:                                   # noqa: BLE001
+            self.errors[name] = self.errors.get(name, 0) + 1
+            self.log(f"[ext] {name} failed, the request goes on without it: {exc!r}")
+            return CALLS[name](*args, **kw)
 
     def _call(self, rec: dict, ext, name: str, *args, fallback=None, check=None):
         """One hook, open on failure: the error is logged and counted, `fallback` comes back."""
@@ -160,30 +251,48 @@ class FakeHost:
         if plan is None:
             rec["raw"] = True                     # the headless path: no hook asked again
             return rec
-        ids = self._call(rec, ext, "prompt", plan, list(sc.prompt), fallback=list(sc.prompt),
-                         check=lambda v: isinstance(v, list) and all(isinstance(i, int) for i in v))
+        def ids_ok(v):
+            return isinstance(v, list) and all(isinstance(i, int) for i in v)
+        if _version(self.speaks.get(id(ext), "1.0")) < (1, 2):
+            ids = self._call(rec, ext, "prompt", plan, list(sc.prompt), fallback=list(sc.prompt),
+                             check=ids_ok)
+        else:                                     # since 1.2: info, and the answer may be a mapping
+            ids = self._call(rec, ext, "prompt", plan, list(sc.prompt), {"in_think": False, "conv": None},
+                             fallback=list(sc.prompt),
+                             check=lambda v: ids_ok(v) or (isinstance(v, dict) and ids_ok(v.get("ids"))))
+            ids = list(ids["ids"]) if isinstance(ids, dict) else ids
         rec["prompt"] = ids
         ev = {k: None for k in SPEC["supervisor"]["events"]["request"]}
-        ev.update(request_id="r1", messages=sc.body.get("messages", []), tools=sc.body.get("tools", []))
+        ev.update(request_id="r1", messages=sc.body.get("messages", []), tools=sc.body.get("tools", []),
+                  n=1, stream=False, prompt_tokens=len(ids), in_think=False, prompt_ids=list(ids),
+                  chat=True, tool_names=[t.get("function", {}).get("name") for t in sc.body.get("tools", [])],
+                  thinking_off=False, model=sc.body.get("model"), tool_choice="auto", max_tokens=64,
+                  client="test", constrained=False, profile="", cls="", tool_format="")
         sup = self._call(rec, ext, "supervisor", plan, ev)
         self._ask(rec, sup, "at_request", ev)
         self._call(rec, ext, "extras", plan, "start", {}, fallback=[], check=lambda v: isinstance(v, list))
         blocks, rounds = sc.blocks, 0
         while True:
             for b in range(blocks):
-                self._ask(rec, sup, "at_block", {"reasoning_tokens": b, "inside": True}, 100)
+                self._ask(rec, sup, "at_block", _event("block", reasoning_tokens=b, inside=True,
+                                                       output_tokens=b, pos=len(ids) + b), 100)
                 self._call(rec, ext, "extras", plan, "block", {"n": b}, fallback=[],
                            check=lambda v: isinstance(v, list))
             gave_up = False
             for i in range(sc.calls):
-                act = self._ask(rec, sup, "at_tool_call", {"name": "f", "arguments": "{}", "index": i})
+                call = _event("tool_call", name="f", arguments="{}", index=i, block="", cut=False,
+                              stopped=False, final=False)
+                act = self._ask(rec, sup, "at_tool_call", call)
                 if act and act["kind"] == "REGENERATE_CALL" and rounds < 3:
                     rounds += 1
-                    act = self._ask(rec, sup, "at_tool_call", {"name": "f", "arguments": "{}", "index": i})
+                    act = self._ask(rec, sup, "at_tool_call", call)
                 gave_up = gave_up or bool(act and act["kind"] == "GIVE_UP")
             if gave_up:
                 break
-            act = self._ask(rec, sup, "at_finish", {"kind": "stop", "answer": ""}, 100)
+            act = self._ask(rec, sup, "at_finish", _event("finish", kind="stop", inside=False, answer="",
+                                                          reasoning_tokens=blocks, output_tokens=blocks,
+                                                          pos=len(ids) + blocks, calls="", notes=0,
+                                                          note_calls=0), 100)
             if act and act["kind"] == "CONTINUE_HIDDEN" and rounds < 3:
                 rounds, blocks = rounds + 1, 1
                 sc = Scenario(body=sc.body, prompt=sc.prompt, blocks=1, calls=0)
@@ -200,6 +309,13 @@ class FakeHost:
             except Exception as exc:                               # noqa: BLE001
                 self._sup_failed(rec, "done", exc)
         return rec
+
+
+def _event(event_type: str, **fields) -> dict:
+    """An event with every field ext.json lists for its type (None where the scenario sets none)."""
+    ev = {k: None for k in SPEC["supervisor"]["events"][event_type]}
+    ev.update(fields)
+    return ev
 
 
 class Scenario:
@@ -243,4 +359,5 @@ def load(module, host: FakeHost):
     for r in ext.routes:
         if _claims_engine_path(r.get("prefix", "")):
             raise Refused(f"{module.__name__} claims the engine's path {r.get('prefix')}")
+    host.speaks[id(ext)] = module.EXT_API
     return ext

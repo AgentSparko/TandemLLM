@@ -1,6 +1,6 @@
 {
- "version": "1.3",
- "about": "Every family the engine's /metrics can name (engine API 1.3). owner engine: the engine's own; owner ext: registered by the engine extension (engine-ext-v1, today TandemApp's conductor) and absent from a headless engine's page. A family appears in a scrape once it has a row; metrics.md says what each one counts.",
+ "version": "1.4",
+ "about": "Every family the engine's /metrics can name (engine API 1.4). owner engine: the engine's own; owner ext: registered by the engine extension (engine-ext-v1, today TandemApp's conductor) and absent from a headless engine's page. A family appears in a scrape once it has a row; metrics.md says what each one counts.",
  "families": [
   {
    "name": "qse_build_info",
@@ -202,6 +202,14 @@
    "type": "counter",
    "labels": [
     "type"
+   ],
+   "owner": "engine"
+  },
+  {
+   "name": "qse_ext_errors_total",
+   "type": "counter",
+   "labels": [
+    "hook"
    ],
    "owner": "engine"
   },

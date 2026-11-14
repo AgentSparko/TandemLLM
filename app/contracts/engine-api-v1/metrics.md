@@ -1,14 +1,14 @@
-<!-- engine API contract 1.3 (ENG-427): the engine's /metrics families. metrics-families.json is the
-machine-readable list (name, type, labels, owner); this file says what each family counts. Below this
-note is TandemApp's tandemapp/METRICS.md as of the 1.3 contract, unchanged, until the engine's
-metrics move into engine code (ENG-413 WP2b) and this file becomes the source. The conductor's
-families (owner ext) come from the engine extension and are absent on a headless engine. -->
+<!-- engine API contract 1.3 (ENG-427), 1.4 (ENG-429): the engine's /metrics families. metrics-families.json is the
+machine-readable list (name, type, labels, owner); this file says what each family counts. It began
+as TandemApp's tandemapp/METRICS.md as of the 1.3 contract; since ENG-413 WP2b the engine's metrics
+are engine code (server/api/metrics.py) and this file is their source. The conductor's families
+(owner ext) are counted only when the conductor runs; they move to the engine extension later. -->
 
 # Metrics
 
 The server answers `GET /metrics` in the Prometheus text format. Nothing has to be installed for
 it: `prometheus_client` is not on the board and the interpreter there has no pip, so
-`tandemapp/metrics.py` writes the format out by hand.
+`server/api/metrics.py` writes the format out by hand.
 
 ```bash
 curl -s localhost:8000/metrics | head -40
@@ -168,6 +168,14 @@ SRV-115: every decision of the TandemLLM conductor, the router's and the session
 | `qse_conductor_reasoning_tokens_cut_total` | counter | | reasoning tokens written before a hidden close cut the block: the size of the blocks the conductor closed |
 
 `rate(qse_conductor_actions_total[1h])` by task is the Overview's ribbon; `qse_conductor_gave_up_total` going up overnight is the one to alert on. The rows behind every count are in the journal (`GET /v1/conductor/events`).
+
+### The extension host
+
+ENG-413 WP3a (engine API 1.4): the engine's side of engine-ext-v1 (`server/ext.py`). A hook of the loaded extension that raised or answered the wrong shape is counted here, and the request went on as a headless engine serves it. A headless engine, or an extension that never failed, has no row.
+
+| name | type | labels | what |
+|-|-|-|-|
+| `qse_ext_errors_total` | counter | `hook` | extension hooks that failed: `health`, `models`, `route` (a route handler that raised, answered 500 `extension_error`), `stop`, and from the request path `plan`, `prompt`, `supervisor`, `extras`, `follow_ups`, `finish` and the supervisor's methods (`at_request`, `at_block`, `at_tool_call`, `at_finish`, `done`; an act out of its safe point counts here too) |
 
 ### The board
 
@@ -350,7 +358,7 @@ Two alerts are worth having before any dashboard: `rate(qse_errors_total[5m]) > 
 
 ## Where the hooks are, and why they are not in the loop
 
-`tandemapp/metrics.py` wraps four things and `server/app.py` carries an import, a route and one
+`server/api/metrics.py` wraps four things and `server/app.py` carries an import, a route and one
 `install()` call:
 
 | wrapped | gives |
@@ -378,7 +386,7 @@ sees them without a scrape. Open WebUI prints the `usage` of a stream merged wit
 `timings` in its (i) tooltip, and adds the token counts of every chunk that carries `usage`,
 so exactly one chunk of a stream carries them (the finish chunk by default, the separate
 `choices: []` chunk when the client sent `include_usage: true`, none on `include_usage: false` or
-`--usage-default off`). `tandemapp/usage.py::RequestRecord` is the one source; the example below has
+`--usage-default off`). `server/api/usage.py::RequestRecord` is the one source; the example below has
 consistent numbers.
 
 ```json

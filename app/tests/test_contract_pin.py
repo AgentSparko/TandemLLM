@@ -135,7 +135,7 @@ def test_the_hasher_sees_every_edit():
         with open(ext, "rb") as f:
             raw = f.read()
         with open(ext, "wb") as f:
-            f.write(raw.replace(b'"1.0"', b'"1.1"', 1))
+            f.write(raw.replace(b'"engine-ext-v1"', b'"engine-ext-v9"', 1))
         assert tree_id(top) != base, "an edit"
         with open(ext, "wb") as f:
             f.write(raw)

@@ -35,12 +35,17 @@ tests/test_engine_api_contract.py.
      same_origin_json answer auth.json's cases, tandemapp/usage.py TIER_OF is cache.json's,
      tandemapp/conductor/routes.py's two OFF_WHY texts are the screens' off_why, the registry of
      tandemapp/metrics.py names metrics-families.json's families with their types and labels
+     (less the engine host's own counter, 1.4's qse_ext_errors_total)
                                                                   test_values_1_3
   8  1.3 is additive and the moved shapes are the same: the 1.2 examples (compat/1.2/) validate,
      every 1.2 route is still here, contracts/dashboard-v1 keeps byte copies of the engine's
      dashboard/ files and conductor-v1 of decision/systemone.schema.json, the app routes carry
      their after-ENG-413 mark and no TandemApp file calls a planned route
                                                                   test_additive_1_3
+  9  1.4 (ENG-413 WP3a, pinned for WP4) is additive: the 1.3 examples (compat/1.3/) validate,
+     every 1.3 route is still here, the health example's `extensions` names TandemApp's
+     extension on the ext_api PIN says, and the headless answers name no_ui and not_on_engine
+                                                                  test_additive_1_4
 
 Standard library only; the fake engines are threads on loopback ports.
 
@@ -627,7 +632,8 @@ def test_values_1_3():
     off = {e["path"]: e.get("off_why") for e in _routes()["engine_screens_until_eng413"]}
     assert routes.DECIDERS_OFF_WHY == off["/v1/conductor/deciders/*"]
     assert routes.SHADOW_OFF_WHY == off["/v1/conductor/shadow/*"]
-    fams = {f["name"]: f for f in _ex("metrics-families.json")["families"]}
+    fams = {f["name"]: f for f in _ex("metrics-families.json")["families"]
+            if f["name"] not in ENGINE_HOST_ONLY}
     reg = {m.name: m for m in metrics.REGISTRY._metrics}
     assert set(fams) == set(reg), (sorted(set(fams) - set(reg)), sorted(set(reg) - set(fams)))
     for name, m in reg.items():
@@ -635,6 +641,11 @@ def test_values_1_3():
     ext = sorted(n for n, f in fams.items() if f["owner"] == "ext")
     assert ext and all(n.startswith("qse_conductor_") for n in ext), ext
     return f"same_origin on {len(cases)} cases, TIER_OF, 2 OFF_WHY, {len(fams)} families ({len(ext)} ext)"
+
+
+#: families only an engine's extension host has (1.4: the host's failures of an extension's hooks);
+#: TandemApp's registry is the controller's and the conductor's, not the host's
+ENGINE_HOST_ONLY = ("qse_ext_errors_total",)
 
 
 def test_additive_1_3():
@@ -670,6 +681,30 @@ def test_additive_1_3():
     assert not callers, callers
     return f"1.0/1.1/1.2 answers valid, {len(now)} routes, {pairs} dashboard files equal, " \
            f"{len(planned)} planned routes uncalled"
+
+
+def test_additive_1_4():
+    def ok(doc, schema):
+        return not contract_check.validate(doc, schema, root=CONTRACT)
+    health = contract_check.load("health", CONTRACT)
+    old = _ex("compat/1.3/health.example.json")
+    for said in ("1.0", "1.1", "1.2", "1.3"):
+        assert ok(dict(old, engine_api=said), health) and engineapi.read(dict(old, engine_api=said))["ok"]
+    for name in ("health.stage-front.example.json", "health.stage-tail.example.json"):
+        assert ok(_ex("compat/1.3/" + name), health), name
+    now = {(r["method"], r["path"], r.get("port")) for r in _routes()["routes"]}
+    gone = [r["path"] for r in _ex("compat/1.3/routes.json")["routes"]
+            if (r["method"], r["path"], r.get("port")) not in now]
+    assert not gone, gone
+    ex = _ex("health.example.json")
+    assert ok(ex, health) and ex["engine_api"] == engineapi.SPEAKS == "1.4"
+    with open(os.path.join(ROOT, "contracts", "engine-api-v1", "PIN")) as f:
+        pin = dict(ln.split(None, 1) for ln in f.read().splitlines() if ln and not ln.startswith("#"))
+    (x,) = ex["extensions"]
+    assert x["name"] == "tandemapp" and x["ext_api"] == pin["ext_api"].strip(), (x, pin)
+    kinds = {a["what"].split()[-1] for a in _routes()["answers"]}
+    assert {"no_ui", "not_on_engine"} <= kinds, kinds
+    return f"1.0-1.3 answers valid, {len(now)} routes, extensions names tandemapp {x['ext_api']}"
 
 
 if __name__ == "__main__":

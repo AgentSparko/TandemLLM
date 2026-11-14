@@ -17,7 +17,8 @@ and __pycache__ left out) and the dashboard's own reads.
   3  no torch, numpy or triton import at module level outside a try that catches ImportError
                                                                   test_no_bare_heavy_import
   4  torch, numpy and triton are imported only at the sites in HOOKS, each an engine-process hook
-     until ENG-413; every site there still holds its import     test_heavy_imports_only_at_hooks
+     until ENG-413 or of the engine extension (tandemapp/engine_ext.py, which runs in an engine's
+     process); every site there still holds its import          test_heavy_imports_only_at_hooks
   5  the dashboard reads nothing outside app/: new URL(..., import.meta.url), fileURLToPath,
      join/resolve(__dirname, ...) and join/resolve(X, ...) for a name X set from __dirname,
      dirname(fileURLToPath(import.meta.url)), fileURLToPath(new URL(..., import.meta.url)) or
@@ -66,6 +67,8 @@ HOOKS = {
     ("tandemapp/metrics.py", "_gpu_reserved"): "engine-process hook until ENG-413: GPU gauge",
     ("tandemapp/metrics.py", "_unified_free"): "engine-process hook until ENG-413: GPU gauge",
     ("tandemapp/conductor/router.py", "_apply"): "engine-process hook until ENG-413: torch tensors",
+    ("tandemapp/engine_ext.py", "prompt"):
+        "engine-process hook of the engine extension (engine-ext-v1): the router's prompt as a tensor",
     ("tandemapp/dashboard_api.py", "<module>"):
         "engine-process hook until ENG-413: numpy percentiles, sorted() without it",
 }
@@ -504,7 +507,8 @@ def test_heavy_imports_only_at_hooks():
     assert not hits, "\n" + "\n".join(hits)
     stale = sorted(set(HOOKS) - {(rel, func) for rel, _, func, _, _ in found})
     assert not stale, f"HOOKS names sites without a torch, numpy or triton import: {stale}"
-    assert all(why.startswith("engine-process hook until ENG-413") for why in HOOKS.values())
+    assert all(why.startswith(("engine-process hook until ENG-413",
+                               "engine-process hook of the engine extension")) for why in HOOKS.values())
     return f"{len(found)} imports at {len(HOOKS)} sites"
 
 
