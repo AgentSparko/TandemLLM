@@ -10637,39 +10637,35 @@ class Handler(BaseHTTPRequestHandler):
         # profile that acts, never a side request); the router's go out once the plan is applied,
         # the monitor's as they happen, the progress lines (S1) while the request waits, prefills
         # and thinks
-        ui = None
-        ui_doc = (plan.res.doc.get("ui") or {}) if plan is not None else {}
-        if (plan is not None and plan.active and plan.res.mode == "on" and n_choices == 1
-                and ui_doc.get("states") == "on" and plan.side is None
-                and not json_answer):             # SRV-169: a JSON answer's content is the JSON
-            # `ui.narrator`: the narrator writes each line inside its budget (P1), the
-            # template stays the fallback
-            narr = STATE.get("narrator")
-            lines = (narr.for_request()
-                     if narr is not None and ui_doc.get("narrator") == "on" else None)
-            # v3 (`ui.narrator: live`, app/tandemapp/conductor/voice.py): the harness's lines in plain
-            # words and the user's language, the live lines beside them
-            vlang = (voice_mod.lang_of(body.get("messages"))
-                     if ui_doc.get("narrator") == "live" else None)
-            ui = rec.states = states_mod.States(
-                ui_doc.get("kinds"), narrator=lines, voice=vlang,
-                labels=narrator_mod.class_labels(STATE) if vlang is not None else None)
-        # X1: `inline` (a reasoning part a line) on a `reasoning_content` stream, else `content`
-        lines_in = states_mod.channel(ui_doc, fmt)
+        # The extension's state lines (engine-ext-v1 `extras` at `start`, ENG-413 WP3b): the
+        # profile's `ui.states`, TandemLLM's steps as lines the client shows (one choice, a profile
+        # that acts, never a side request); the router's go out once the plan is applied, the
+        # monitor's as they happen, the progress lines (S1) while the request waits, prefills and
+        # thinks. `st_lines` (interim until WP4): the States object, its `ui` section, its channel
+        # (X1: `inline` on a `reasoning_content` stream, else `content`) and progress settings
+        st_lines = None
+        if plan is not None:
+            for item in rec.ext.extras("start", {"n_choices": n_choices, "json_answer": json_answer,
+                                                 "fmt": fmt, "messages": body.get("messages")}):
+                if isinstance(item, dict) and item.get("kind") == "lines":
+                    st_lines = item.get("data")
+        ui = rec.states = st_lines.ui if st_lines is not None else None
+        ui_doc = st_lines.doc if st_lines is not None else {}
+        lines_in = st_lines.channel if st_lines is not None else "content"
         # SRV-245 (UX2's P06, 2026-10-07): a plain API client (curl, an SDK) stores what `content`
         # carries as the answer; the progress lines went there inside the `tags` block. Such a
         # client gets its lines in `reasoning_content` when its format has one, else none
         # (a memory line still goes into the answer: SRV-185)
         plain_lines = rec.client_kind in compat.PLAIN_CLIENTS and (
             lines_in == "content" or fmt in ("tags", "both"))
-        prog = states_mod.progress(ui_doc)
+        prog = st_lines.progress if st_lines is not None else {}
         live_lines = ui is not None and stream and prog["mode"] == "on"
         last_place: list = [None, 0.0]
         # SRV-237/249: Open WebUI's status line for every line said before the first generated
         # token (states.StatusBar), so its "Thought for N seconds" times the thinking alone
-        bar = self._bar = (states_mod.StatusBar()
+        bar = self._bar = (st_lines.status_bar()
                            if ui is not None and stream and chat and n_choices == 1
-                           and rec.client_kind in states_mod.status_clients() else None)
+                           and rec.client_kind in st_lines.status_clients else None)
 
         def bar_out(kinds_lines, write) -> None:
             for kind, line in kinds_lines:
@@ -10711,7 +10707,7 @@ class Handler(BaseHTTPRequestHandler):
                 if lines_in == "inline":
                     # X1: the open reasoning part ends, the line opens the next (states.INLINE)
                     self._early_write(_chunk(cid, model, created, {"tool_calls": []}))
-                    line = states_mod.inline(line)
+                    line = st_lines.inline(line)
                 self._early_write(_chunk(cid, model, created, {key: line}))
 
         def mem_wait(short: float, place: int = 1) -> None:
@@ -10750,7 +10746,7 @@ class Handler(BaseHTTPRequestHandler):
             for _, line in ui.take_kinds():
                 if lines_in == "inline":
                     self._early_write(_chunk(cid, model, created, {"tool_calls": []}))
-                    line = states_mod.inline(line)
+                    line = st_lines.inline(line)
                 self._early_write(_chunk(cid, model, created, {key: line}))
 
         if STATE.get("draining"):
@@ -11195,9 +11191,7 @@ class Handler(BaseHTTPRequestHandler):
                     s1_len += d
             # the router's state lines, now that the plan is applied
             if ui is not None:
-                ui.route(plan.row, plan.injected,
-                         STATE["conductor"].store.peek("packages")[1].get("packages"),
-                         plan.compaction)
+                EXT.interim("route_lines", plan, ui)
             # SP4: the conductor's session monitor sees the request before anything is prefilled,
             # and may add a hidden note at the prompt's tail or set the thinking budget
             sup, client_ids = None, None
@@ -11807,12 +11801,12 @@ class Handler(BaseHTTPRequestHandler):
                             # the steps before the generation at the reasoning's head, the rest
                             # at its end (a non-streamed answer has no moment to show them at);
                             # a plain API client's never in its content (SRV-245)
-                            content, reasoning = states_mod.into_full(
+                            content, reasoning = st_lines.into_full(
                                 content, reasoning, fmt, in_think, ui,
                                 "reasoning" if plain_lines else lines_in)
                         elif ui is not None and ui.log:
                             content += "".join(ui.shown(e) for e in ui.log    # SRV-185's
-                                               if e["kind"] in states_mod.MEMORY_KINDS)
+                                               if e["kind"] in st_lines.MEMORY_KINDS)
                         message = {"role": "assistant", "content": content}
                         if d["calls"]:
                             message["tool_calls"] = d["calls"]
@@ -12017,11 +12011,11 @@ class Handler(BaseHTTPRequestHandler):
 
             def say(kind: str, line: str) -> None:
                 """One state line, in the profile's channel."""
-                if bar is not None and bar.live and kind not in states_mod.MEMORY_KINDS:
+                if bar is not None and bar.live and kind not in st_lines.MEMORY_KINDS:
                     bar_out([(kind, line)], w.write)    # SRV-237: before the first token
                     w.flush()
                     return
-                if plain_lines and kind not in states_mod.MEMORY_KINDS:
+                if plain_lines and kind not in st_lines.MEMORY_KINDS:
                     if fmt == "reasoning_content":
                         send([("reasoning", line)])   # SRV-245: its own field, not the answer
                     return
@@ -12030,10 +12024,10 @@ class Handler(BaseHTTPRequestHandler):
                     # line opens the next one as its title (states.INLINE); never the tool-call
                     # buffer's, never content
                     put(_chunk(cid, model, created, {"tool_calls": []}))
-                    put(_chunk(cid, model, created, {"reasoning_content": states_mod.inline(line)}))
+                    put(_chunk(cid, model, created, {"reasoning_content": st_lines.inline(line)}))
                     w.flush()
                     return
-                if lines_in != "content" and kind in states_mod.MEMORY_KINDS:
+                if lines_in != "content" and kind in st_lines.MEMORY_KINDS:
                     # SRV-185: a note written, changed or forgotten is the user's data: its line
                     # goes into the answer, where every client shows it (`tags` has no place for
                     # a line after the block, and a reasoning line after the answer is not seen)
@@ -12086,8 +12080,8 @@ class Handler(BaseHTTPRequestHandler):
                     pf_next[0] = float("inf")            # not a long prefill: no line
                     return
                 start = int(watch.info.get("start") or 0)
-                ui.add("prefill", n=f"{total - start:,}", rate=states_mod.rate(tps),
-                       left=states_mod.duration(left))
+                ui.add("prefill", n=f"{total - start:,}", rate=st_lines.rate(tps),
+                       left=st_lines.duration(left))
                 tell()
                 pf_next[0] = now + every
 
@@ -12106,8 +12100,7 @@ class Handler(BaseHTTPRequestHandler):
                       if shadow_key is not None and shadow_cfg["narrator"] == "on" else None)
             # v3: one share of Qwen's time for the request's small-model work: the voice first,
             # the shadow's in-turn reading after it (narrator.Share)
-            share = narrator_mod.Share(float((ui_doc.get("live") or {}).get(
-                "share", voice_mod.DEFAULTS["share"]))) if use_voice else None
+            share = st_lines.share() if use_voice else None
             # SR1's in-turn reading runs between two of the turn's own rounds on its thread; with side slots
             # the round runner drives the GPU from its thread, and a lane's slices ran beside every lane's
             # rounds (2026-10-25, 27B at 8 lanes: C1 35.1 / C8 124 with the shadow, 38.8 / 139 without).
@@ -12169,7 +12162,7 @@ class Handler(BaseHTTPRequestHandler):
                         if el >= think_at["s"] or len(ids) >= think_at["n"]:
                             # N2: the narrator's summary of the thought so far, when it can
                             if thoughts is None or not thoughts.mark(ids, el):
-                                ui.add("thinking", elapsed=states_mod.duration(el),
+                                ui.add("thinking", elapsed=st_lines.duration(el),
                                        n=f"{len(ids):,}")
                             think_at["s"] = el + float(prog["thinking_every_s"])
                             think_at["n"] = len(ids) + int(prog["thinking_every_tokens"])
@@ -12790,28 +12783,21 @@ def _memory_takes(plan, chat: bool, n_choices: int, tool_names=()) -> bool | Non
 
 
 def _memory_filter(plan, chat: bool, n_choices: int, ui, tool_names=()):
-    """The stream's memory filter (app/tandemapp/memblock.py) for a plan whose memory is not off: one
-    choice of a chat request; None otherwise (the stream is the release's)."""
-    takes = _memory_takes(plan, chat, n_choices, tool_names)
-    if takes is None:
+    """The stream's memory filter (the extension's, ENG-413 WP3b) for a plan whose memory is not
+    off: one choice of a chat request; None otherwise (the stream is the release's)."""
+    if plan is None:
         return None
-    return STATE["conductor"].memory.filter(plan.memory, ui, calls=takes)
+    return EXT.interim("memory_filter", plan, chat, n_choices, ui, tool_names)
 
 
 def _answer_mask(plan, chat: bool, body: dict):
-    """SRV-625: the secret echo mask (app/tandemapp/conductor/redact.py AnswerMask) for a chat request
-    whose plan's profile has `secret_mask` on or shadow and whose conversation's tool results hold
-    a secret span; None otherwise (the raw path, and every answer with nothing to mask, stays the
+    """SRV-625: the secret echo mask (the extension's, ENG-413 WP3b) for a chat request whose plan's
+    profile has `secret_mask` on or shadow and whose conversation's tool results hold a secret
+    span; None otherwise (the raw path, and every answer with nothing to mask, stays the
     release's byte for byte)."""
     if not chat or plan is None or not plan.active:
         return None
-    mode = conductor_schema.profile_secret_mask(getattr(plan.res, "doc", None) or {})
-    if mode == "off":
-        return None
-    spans = redact_mod.tool_spans(body.get("messages"))
-    if not spans:
-        return None
-    return redact_mod.AnswerMask(spans, replace=mode == "on")
+    return EXT.interim("answer_mask", plan, chat, body)
 
 
 def _answer_mask_done(plan, cid: str, sm) -> None:
@@ -12832,8 +12818,8 @@ def _memory_spans(taken: list[str], ids: list[int], n_prompt: int) -> list:
     if not taken:
         return []
     tok = STATE["tok"]
-    spans, bad = memblock.token_spans(ids, lambda xs: tok.decode(xs, skip_special_tokens=True),
-                                      taken)
+    spans, bad = EXT.interim("memory_spans", ids,
+                             lambda xs: tok.decode(xs, skip_special_tokens=True), taken)
     ctx = STATE.get("last_ctx") or []
     out, at = [], n_prompt
     for k0, k1 in spans:
