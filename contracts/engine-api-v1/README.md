@@ -261,23 +261,16 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 | engine file | app modules |
 |-|-|
 | `server/app.py` | `proxy.collect_api`, `proxy.config`, `proxy.config_api`, `proxy.hostcollect`, `proxy.route`, `proxy.service` (`--backends`, leaves at WP14), `tandemapp.chat_forward` (`/v1/chat-app*`, leaves at WP14), `tandemapp.static` (the page, leaves at WP14) |
-| `tools/class_core_eval.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.router`, `tandemapp.conductor.schema`, `tandemapp.conductor.signals` |
-| `tools/class_fallback_eval.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.router`, `tandemapp.conductor.signals` |
-| `tools/conductor_contract.py` | `tandemapp.conductor.schema` |
 | `tools/conductor_eval.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.schema`, `tandemapp.conductor.signals`, `tandemapp.conductor.store` |
-| `tools/ledger_migrate_check.py` | `tandemapp.ledger` |
-| `tools/ledger_synth.py` | `tandemapp.ledger` |
-| `tools/loop_words_fp.py` | `tandemapp.conductor.monitor.tier0_words` |
-| `tools/memory_measure.py` | `tandemapp.compaction`, `tandemapp.conductor.notes` |
-| `tools/memory_recall_check.py` | `tandemapp.conductor.notes`, `tandemapp.conductor.transcripts` |
 | `tools/narrator_reference.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.schema`, `tandemapp.conductor.states` |
-| `tools/prefill_reuse_e2e.py` | `chatd.render` |
 | `tools/shadow_ab.py` | `tandemapp.conductor.schema`, `tandemapp.conductor.store` |
-| `tools/shadow_measure.py` | `tandemapp.conductor.incontext`, `tandemapp.conductor.narrator`, `tandemapp.conductor.schema` |
-| `tools/shadow_router_eval.py` | `tandemapp.conductor.incontext`, `tandemapp.conductor.schema` |
+| `tools/shadow_measure.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.schema` |
+| `tools/shadow_router_eval.py` | `tandemapp.conductor.schema` |
 | `tools/stall_replay.py` | `tandemapp.conductor.monitor.policy` |
 | `tools/thought_narrator_measure.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.schema`, `tandemapp.conductor.states`, `tandemapp.conductor.store` |
 | `tools/voice_replay.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.states`, `tandemapp.conductor.voice` |
+
+Since ENG-413 WP10 the tools that import TandemApp are the pair tools above, each of which needs the engine and TandemApp's conductor together (`tests/test_api_import_guard.py` PAIR_TOOLS says why), and they find TandemApp only through `tools/pair_app.py` (`TANDEMAPP_SRC`, else the vendored `app/`, else an installed `tandemapp`). The tools that read only TandemApp moved there; `tools/ledger_synth.py` and `tools/ledger_migrate_check.py` read the engine's `server/api/ledger.py`, `tools/contract_check.py` defaults to this folder's `dashboard/`, and no tool calls a screen's old `/v1/conductor/*` path.
 
 Since ENG-413 WP5 `server/conductor/inproc.py`, `server/conductor/residency.py` and `server/decider_api.py` import nothing of TandemApp, and `server/app.py` neither the conductor's routes, store nor monitor: the screens are the engine's (group 9), the documents and the rest come through engine-ext-v1 3.0.
 

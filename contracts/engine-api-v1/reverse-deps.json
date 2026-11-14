@@ -12,24 +12,6 @@
    "tandemapp.chat_forward",
    "tandemapp.static"
   ],
-  "tools/class_core_eval.py": [
-   "tandemapp.conductor.classify:Qwen",
-   "tandemapp.conductor.router:NONE_OPTION",
-   "tandemapp.conductor.router:Router",
-   "tandemapp.conductor.router:_about",
-   "tandemapp.conductor.router:_code_guard",
-   "tandemapp.conductor.router:_qwen_prompt",
-   "tandemapp.conductor.schema",
-   "tandemapp.conductor.signals"
-  ],
-  "tools/class_fallback_eval.py": [
-   "tandemapp.conductor.classify:Qwen",
-   "tandemapp.conductor.router:_code_guard",
-   "tandemapp.conductor.signals"
-  ],
-  "tools/conductor_contract.py": [
-   "tandemapp.conductor.schema"
-  ],
   "tools/conductor_eval.py": [
    "tandemapp.conductor.classify",
    "tandemapp.conductor.classify:Qwen",
@@ -38,42 +20,20 @@
    "tandemapp.conductor.signals",
    "tandemapp.conductor.store:Store"
   ],
-  "tools/ledger_migrate_check.py": [
-   "tandemapp.ledger"
-  ],
-  "tools/ledger_synth.py": [
-   "tandemapp.ledger"
-  ],
-  "tools/loop_words_fp.py": [
-   "tandemapp.conductor.monitor.tier0_words"
-  ],
-  "tools/memory_measure.py": [
-   "tandemapp.compaction",
-   "tandemapp.conductor.notes:NoteStore"
-  ],
-  "tools/memory_recall_check.py": [
-   "tandemapp.conductor.notes:NoteStore",
-   "tandemapp.conductor.transcripts:memory_root"
-  ],
   "tools/narrator_reference.py": [
    "tandemapp.conductor.narrator",
    "tandemapp.conductor.schema",
    "tandemapp.conductor.states:TEXTS"
-  ],
-  "tools/prefill_reuse_e2e.py": [
-   "chatd.render"
   ],
   "tools/shadow_ab.py": [
    "tandemapp.conductor.schema",
    "tandemapp.conductor.store:Store"
   ],
   "tools/shadow_measure.py": [
-   "tandemapp.conductor.incontext",
    "tandemapp.conductor.narrator",
    "tandemapp.conductor.schema"
   ],
   "tools/shadow_router_eval.py": [
-   "tandemapp.conductor.incontext",
    "tandemapp.conductor.schema"
   ],
   "tools/stall_replay.py": [
@@ -118,69 +78,17 @@
    "app/docs",
    "app/packages"
   ],
-  "tools/class_core_eval.py": [
-   "app/"
-  ],
-  "tools/class_fallback_eval.py": [
-   "app/"
-  ],
-  "tools/conductor_contract.py": [
-   "app/",
-   "app/contracts"
-  ],
-  "tools/conductor_eval.py": [
-   "app/"
-  ],
-  "tools/contract_check.py": [
-   "app/contracts"
-  ],
-  "tools/disk_cache_live.py": [
-   "app/tandemapp"
-  ],
-  "tools/ledger_migrate_check.py": [
-   "app/"
-  ],
-  "tools/ledger_synth.py": [
-   "app/"
-  ],
-  "tools/loop_words_fp.py": [
-   "app/"
-  ],
-  "tools/memory_measure.py": [
-   "app/"
-  ],
-  "tools/memory_recall_check.py": [
-   "app/"
-  ],
-  "tools/narrator_reference.py": [
-   "app/"
-  ],
-  "tools/parallel_load.py": [
-   "app/proxy"
-  ],
-  "tools/prefill_reuse_e2e.py": [
-   "app/"
-  ],
-  "tools/shadow_ab.py": [
-   "app/"
-  ],
-  "tools/shadow_measure.py": [
-   "app/"
-  ],
-  "tools/shadow_router_eval.py": [
-   "app/"
-  ],
-  "tools/stall_replay.py": [
-   "app/"
-  ],
-  "tools/thought_narrator_measure.py": [
-   "app/"
-  ],
-  "tools/voice_replay.py": [
+  "tools/pair_app.py": [
    "app/"
   ]
  },
  "tests": {
+  "tests/dash_contract.py": {
+   "imports": [],
+   "reads": [
+    "app/contracts"
+   ]
+  },
   "tests/gpu/setup_wren_gpu.py": {
    "imports": [
     "tandemapp.conductor.narrator"
@@ -219,6 +127,7 @@
     "tandemapp.conductor.schema"
    ],
    "reads": [
+    "app/",
     "app/tandemapp"
    ]
   },
@@ -1483,20 +1392,6 @@
   },
   {
    "files": [
-    "tools/grafana_dashboard.py",
-    "ops/monitoring/qse-engine-dashboard.json",
-    "ops/monitoring/qse-engine-dashboard-configmap.yaml"
-   ],
-   "names": [
-    "app/tandemapp/METRICS.md"
-   ],
-   "marks": [
-    "app/tandemapp/METRICS.md"
-   ],
-   "why": "the Grafana panels follow the /metrics document, in text"
-  },
-  {
-   "files": [
     "manual/generated/engine-knobs.tex",
     "manual/generated/qse-vars.tex",
     "manual/generated/tandem-vars.tex"
@@ -1560,11 +1455,6 @@
   }
  ],
  "copies": [
-  {
-   "kind": "file",
-   "engine": "tools/contract_check.py",
-   "app": "app/tools/contract_check.py"
-  },
   {
    "kind": "file",
    "engine": "LICENSE",
