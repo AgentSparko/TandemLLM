@@ -540,7 +540,7 @@ def _tool_files() -> list[str]:
     return [f for f in _files((".py",) + TEXT_SUFFIXES + (".md", ".json")) if f.startswith("tools/")]
 
 
-_APP_PATH = re.compile(r"""(?<![\w/.$-])app/([\w.-]+)""")
+_APP_PATH = re.compile(r"""(?<![\w/.$-])app/(\w[\w.-]*)""")
 
 
 def _app_path_parts(text: str) -> set:
