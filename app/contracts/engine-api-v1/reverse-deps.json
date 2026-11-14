@@ -10,15 +10,7 @@
    "proxy.route",
    "proxy.service:Service",
    "tandemapp.chat_forward",
-   "tandemapp.conductor.loopescape",
-   "tandemapp.laya_api",
-   "tandemapp.session_tokens",
    "tandemapp.static"
-  ],
-  "server/conductor/shadow.py": [
-   "tandemapp.conductor.incontext",
-   "tandemapp.conductor.inject",
-   "tandemapp.conductor.schema"
   ],
   "tools/class_core_eval.py": [
    "tandemapp.conductor.classify:Qwen",
@@ -1049,6 +1041,12 @@
     "app/tools"
    ]
   },
+  "tests/test_owner_trace.py": {
+   "imports": [],
+   "reads": [
+    "app/tandemapp"
+   ]
+  },
   "tests/test_owui_status.py": {
    "imports": [
     "tandemapp.conductor.states"
@@ -1389,7 +1387,8 @@
   "tests/test_shadow.py": {
    "imports": [
     "tandemapp.conductor.narrator",
-    "tandemapp.conductor.schema"
+    "tandemapp.conductor.schema",
+    "tandemapp.engine_ext"
    ],
    "reads": [
     "app/"

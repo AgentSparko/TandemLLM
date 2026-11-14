@@ -35,6 +35,19 @@ engine's interface engine-ext-v1 at the version PIN names, through the reference
      built-in one, in a new directory); before_load checks the session monitor's policy and gives
      its line, nothing without --conductor shadow|on, and a policy that does not load stops the
      start with the line the engine printed before                  test_the_module_before_the_start
+  9  3.1 (ENG-413 WP5b): Laya is the extension's route over the engine's decision models (the
+     registry deciders(registry) hands in): the reference host finds it for GET, POST and the
+     preflight (a `*` route never answers a preflight); the card 200 with CORS, the preflight 204
+     with no Content-Type, the kit, an ask with its journal row and the session's count on the
+     engine's registry, a driver session's end, any other path no route; before a registry 503
+                                                                  test_laya_is_the_extensions_route
+ 10  3.1: shadow_question is the router's question the engine's shadow reader asked itself until
+     3.0: the question, the classes, the router's own answer and the insertion point, each skip
+     by its reason (structural, side, no_class, classes, no_insertion_point)
+                                                                  test_the_shadow_question
+ 11  3.1: the loop escape steps the engine's counts (state["escapes"]) and the router issues
+     tokens on the engine's registry (state["session_tokens"]); the extension makes no copy of
+     its own when the engine has made them                         test_the_engines_objects
 
 Standard library only (the reference host is loaded by path). Run: python tests/test_engine_ext.py
 """
@@ -116,7 +129,8 @@ def _chat_host():
 def test_the_module_fits_the_interface():
     X = engine_ext
     assert X.EXT_API == SPEC["version"] and H.accepts(X.EXT_API) is None, (X.EXT_API, SPEC["version"])
-    assert H.accepts(X.EXT_API, "1.2") is not None and X.EXT_API == "3.0"
+    assert H.accepts(X.EXT_API, "1.2") is not None and X.EXT_API == "3.1"
+    assert H.accepts(X.EXT_API, "3.0") is not None                    # a 3.0 host does not take it (3.1)
     assert H.accepts(X.EXT_API, "2.1") is not None                    # another major: a 2.x host refuses it
     assert H.accepts("2.0", X.EXT_API) is not None                    # and this host a 2.x extension
     for name, args in (("read_document", ["ext_dir", "name"]), ("before_load", ["args"])):
@@ -375,6 +389,156 @@ def test_the_module_before_the_start():
         raise AssertionError("a bad policy loaded")
     engine_ext.before_load({})
     return f"read_document v0, before_load: {line[:40]}..."
+
+
+# ---------------------------------------------------------------------------- 9, 10, 11 (3.1)
+
+class _Registry:
+    """The engine's decision models as Laya reads them (limits, ready, loaded, ask)."""
+
+    families = ()
+
+    def __init__(self):
+        self.asked = []
+
+    def limits(self, model):
+        return {"context_tokens": 256, "question_tokens": 96, "max_options": 20}
+
+    def ready(self):
+        return True
+
+    def loaded(self):
+        return ["other-decider"]
+
+    def ask(self, text, questions, model="auto", window="idle", deadline_ms=None, source=None):
+        self.asked.append((model, window, source))
+        import concurrent.futures
+        fut = concurrent.futures.Future()
+        fut.set_result({"answers": {q: {"choice": "pass", "probabilities": {"pass": 0.91, "fail": 0.09}}
+                                    for q in questions}, "model": "other-decider"})
+        return fut
+
+
+def _request(method, path, body=None, token=None, session=None):
+    return types.SimpleNamespace(method=method, path=path, query="", headers={"User-Agent": "curl/8"},
+                                 body=body, peer="127.0.0.1", auth=None, session_token=token,
+                                 session=session, allowed=lambda route: None)
+
+
+def test_laya_is_the_extensions_route():
+    host = _chat_host()
+    obj = H.load(engine_ext, host)
+    try:
+        for method, path in (("GET", "/v1/laya"), ("GET", "/v1/laya/kit/laya_drive.py"),
+                             ("POST", "/v1/laya/ask"), ("POST", "/v1/laya/drive/end"),
+                             ("OPTIONS", "/v1/laya/ask"), ("OPTIONS", "/v1/laya")):
+            assert H.route(obj, method, path) == obj._laya, (method, path)
+        assert H.route(obj, "OPTIONS", "/v1/conductor/settings") is None       # `*`: no preflight
+        assert H.route(obj, "DELETE", "/v1/laya/ask") is None
+        st, hd, body = obj._laya(_request("GET", "/v1/laya"))
+        assert st == 503 and json.loads(body)["error"]["type"] == "not_loaded", (st, body)
+        reg = _Registry()
+        obj.deciders(reg)
+        assert obj.registry is reg
+        st, hd, body = obj._laya(_request("GET", "/v1/laya"))
+        card = json.loads(body)
+        assert st == 200 and hd["Access-Control-Allow-Origin"] == "*" and card["route"] == "POST /v1/laya/ask", \
+            (st, hd, card)
+        assert card["limits"]["read_chars"] == int((256 - 96) * 3.5) and card["loaded"] == ["other-decider"]
+        st, hd, body = obj._laya(_request("OPTIONS", "/v1/laya/ask"))
+        assert st == 204 and body == b"" and "Content-Type" not in hd and hd["Access-Control-Allow-Origin"] == "*", \
+            (st, hd)
+        assert hd["Access-Control-Allow-Methods"] == "GET, POST, OPTIONS", hd
+        st, hd, body = obj._laya(_request("GET", "/v1/laya/kit/laya_drive.py"))
+        assert st == 200 and hd["Content-Type"].startswith("text/x-python") and b"def " in body, (st, hd)
+        st, _, body = obj._laya(_request("GET", "/v1/laya/kit/nope.sh"))
+        assert st == 404, (st, body)
+        tokens = host.state["session_tokens"]
+        tok = tokens.token_for("c:ses_laya")
+        notes, note = [], obj.cond.journal.note
+        obj.cond.journal.note = lambda *a, **kw: notes.append((a, kw)) or note(*a, **kw)
+        st, hd, body = obj._laya(_request("POST", "/v1/laya/ask", {
+            "question": "did the test pass?", "choices": ["pass", "fail"], "text": "ok 12 tests"},
+            token=tok, session="c:ses_laya"))
+        out = json.loads(body)
+        assert st == 200 and out["label"] == "pass" and reg.asked == [("auto", "idle", "laya_api")], (st, out)
+        assert tokens.calls("c:ses_laya") == {"laya": 1}, tokens.calls("c:ses_laya")
+        assert [a for a, _ in notes] == [("laya_api", "ask")] and notes[0][1]["session_key"] == "c:ses_laya" \
+            and notes[0][1]["detail"]["session_key"] == "c:ses_laya", notes
+        st, _, body = obj._laya(_request("POST", "/v1/laya/drive/end", {"session": "nobody"}))
+        assert st == 404 and json.loads(body)["error"]["param"] == "session", (st, body)
+        st, _, body = obj._laya(_request("GET", "/v1/laya/other"))
+        assert (st, json.loads(body)) == (404, {"error": {"message": "no route /v1/laya/other",
+                                                          "type": "not_found"}})
+    finally:
+        obj.registry = None
+    return "GET, POST and the preflight routed to Laya; card 200, preflight 204, kit, ask, drive end, no route"
+
+
+class _Routing:
+    def __init__(self, cls="code_edit", source="qwen_context", side=None, classes=3, shadow=None):
+        self.active, self.side = True, side
+        self.row = {"request_id": "r1", "id": "row1", "class_id": cls, "source": source, "confidence": 0.9}
+        if shadow is not None:
+            self.row["shadow"] = shadow
+        ids = [("chat", "a conversation"), ("code_edit", "change code"), ("writing", "write prose")]
+        self.router_cfg = {"classes": [{"id": i, "description": d} for i, d in ids[:classes]]}
+
+
+class _ImTok:
+    unk_token_id = None
+
+    def convert_tokens_to_ids(self, t):
+        return {"<|im_end|>": 258}.get(t, 0)
+
+
+def test_the_shadow_question():
+    from tandemapp.conductor import schema
+    prompt = [1, 2, 258, 3, 4, 258, 5]
+    got = engine_ext.router_question(_Routing(), prompt, _ImTok())
+    assert got == {"at": 5, "question": schema.context_stage({})["question"],
+                   "choices": {"chat": "a conversation", "code_edit": "change code", "writing": "write prose"},
+                   "router": {"class_id": "code_edit", "source": "qwen_context", "confidence": 0.9},
+                   "request_id": "r1", "row_id": "row1"}, got
+    mine = engine_ext.router_question(_Routing(cls=None, shadow={"class_id": "writing", "source": "laya",
+                                                                 "confidence": 0.7}), prompt, _ImTok())
+    assert mine["router"] == {"class_id": "writing", "source": "laya", "confidence": 0.7}, mine
+    for routing, ids, why in ((_Routing(source="structural"), prompt, "structural"),
+                              (_Routing(side={"max_tokens": 8}), prompt, "side"),
+                              (_Routing(cls=None), prompt, "no_class"),
+                              (_Routing(classes=1), prompt, "classes"),
+                              (_Routing(), [1, 2, 3], "no_insertion_point")):
+        assert engine_ext.router_question(routing, ids, _ImTok()) == {"skip": why}, why
+    host = H.FakeHost(state={"tok": _ImTok()})
+    obj = engine_ext.attach(host)
+    assert host.call(obj, "shadow_question", _Routing(), prompt)["at"] == 5 and not host.errors
+    assert _params(obj.shadow_question) == ["routing", "prompt_ids"]
+    return "the question at the last <|im_end|>, the classes, the router's answer; 5 skips"
+
+
+def test_the_engines_objects():
+    from tandemapp.conductor import loopescape
+    made = loopescape.Escapes.__init__
+    count = {"n": 0}
+
+    def counted(self, *a, **kw):
+        count["n"] += 1
+        return made(self, *a, **kw)
+    theirs = loopescape.Escapes()                     # the engine's, made before the start
+    host = _chat_host()
+    host.state["escapes"] = theirs
+    loopescape.Escapes.__init__ = counted
+    try:
+        ext = H.load(engine_ext, host)
+        assert host.state["escapes"] is theirs and count["n"] == 0, count
+        assert host.state["conductor"].router.session_tokens is host.state["session_tokens"]
+        assert ext.state.get("escapes") is theirs
+        fresh = _chat_host()                          # a host that made none: the extension does
+        H.load(engine_ext, fresh)
+        assert isinstance(fresh.state["escapes"], loopescape.Escapes) and count["n"] == 1, count
+    finally:
+        loopescape.Escapes.__init__ = made
+    return "the engine's escapes and session registry used as they are; one made only when none was"
 
 
 if __name__ == "__main__":

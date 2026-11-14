@@ -7,8 +7,9 @@ chat mode: `QSE_EXT=tandemapp.engine_ext`.
                     the ledger's file), the Conductor and its router's wiring, the migrations, the
                     session monitor (also alone, with `--conductor shadow|on` and no directory)
     routes          /v1/conductor/* (its routes), /v1/library* (the package library), /v1/memory*
-                    (the model's own notes), /dashboard* (the page, until it leaves the engine);
-                    each answers (status, headers, body)
+                    (the model's own notes), /dashboard* (the page, until it leaves the engine),
+                    since 3.1 (ENG-413 WP5b) /v1/laya* (Laya over the engine's decision models,
+                    with its preflight); each answers (status, headers, body)
     models          `TandemLLM`, read from the conductor's settings at every /v1/models answer
     health()        its part of /health `loaded`
     hooks           plan, prompt, supervisor (the decode loop's safe points), extras, follow_ups,
@@ -17,14 +18,18 @@ chat mode: `QSE_EXT=tandemapp.engine_ext`.
                     since 3.0 (ENG-413 WP5) what the engine reads of it outside a request: its
                     documents, the library's texts, the shadow switch, the monitor's mode, the
                     narrator over the engine's slot, the role contract, the decision models'
-                    client and the deciders screen's api part, and the memory writer
+                    client and the deciders screen's api part, and the memory writer; since 3.1
+                    the router's question for the engine's shadow reader (shadow_question)
     read_document(ext_dir, name), before_load(args)
                     3.0: the module's own reads before the start (the residency limits, the
                     session monitor's policy)
     attach(host)    tests: the extension object around a conductor or monitor a test built, no start
 
 The engine-only screens are the engine's (`/v1/engine/*`); the conductor's old paths answer over
-the engine's handlers in process (`host.engine`), set on the Conductor as `cond.engine`.
+the engine's handlers in process (`host.engine`), set on the Conductor as `cond.engine`. The session
+addresses' registry (`state["session_tokens"]`) and the loop escape's counts (`state["escapes"]`)
+are the engine's objects (engine-ext-v1 3.1 `state_keys`): the router issues tokens and the loop
+escape steps through them.
 
 The conductor's own code is unchanged: this module wraps it. It is the engine's interim adapter
 (the engine's server/ext_app.py of ENG-413 WP3a/WP3b) moved here, with what that adapter read of the
@@ -39,7 +44,7 @@ import io
 import json
 import time
 
-EXT_API = "3.0"
+EXT_API = "3.1"
 NAME = "tandemapp"
 #: the session monitor runs behind this extension with no conductor directory too
 MONITOR_ALONE = True
@@ -345,7 +350,13 @@ class Ext:
             {"method": "GET", "prefix": "/v1/memory", "handler": self._memory},
             {"method": "POST", "prefix": "/v1/memory", "handler": self._memory},
             {"method": "GET", "prefix": "/dashboard", "handler": self._page},
+            # engine-ext-v1 3.1 (ENG-413 WP5b): Laya over the engine's decision models, and the
+            # preflight of a page's fetch to it
+            {"method": "GET", "prefix": "/v1/laya", "handler": self._laya},
+            {"method": "POST", "prefix": "/v1/laya", "handler": self._laya},
+            {"method": "OPTIONS", "prefix": "/v1/laya", "handler": self._laya},
         ]
+        self.registry = None          # the engine's decision models (deciders(registry))
         self.knobs = _knobs()
 
     @property
@@ -567,8 +578,10 @@ class Ext:
             sess = mon.sessions.get(key) if mon is not None else None
             sig = loopescape.signal(msgs, loopescape.waits_now(sess, msgs, time.time()),
                                     repeats=repeats, wait_s=wait_s)
-            st = self.state.setdefault("escapes", loopescape.Escapes()).step(
-                key, sig, loopescape.turn_of(msgs))
+            esc = self.state.get("escapes")       # the engine's (engine-ext-v1 3.1 state_keys)
+            if esc is None:
+                esc = self.state["escapes"] = loopescape.Escapes()
+            st = esc.step(key, sig, loopescape.turn_of(msgs))
         return {"agentic_default": prof["agentic_default"], "state": st,
                 "sampling": lambda fallback: loopescape.sampling_of(self.state.get("card_sampling"),
                                                                     fallback)}
@@ -680,8 +693,9 @@ class Ext:
 
     def deciders(self, registry):
         """The conductor's in-process client of the engine's decision models: the classify backends
-        `self` and each family."""
+        `self` and each family; since 3.1 also what Laya's routes answer over."""
         from tandemapp.conductor import classify
+        self.registry = registry
 
         def factory(model, timeout_ms):
             return classify.InProcess(registry, model, timeout_ms)
@@ -708,6 +722,11 @@ class Ext:
         from tandemapp.conductor import schema
         return schema.probe_stage(routing.router_cfg)
 
+    def shadow_question(self, routing, prompt_ids):
+        """engine-ext-v1 3.1: the router's class question for the engine's shadow reader at this
+        turn (`router_question`)."""
+        return router_question(routing, prompt_ids, self.state["tok"])
+
     # ------------------------------------------------------------------ routes: (status, headers, body)
     def _conductor(self, request):
         from tandemapp.conductor import routes as conductor_routes
@@ -726,6 +745,31 @@ class Ext:
         r = _Reply(request)
         memory_api.handle(r, self.cond, request.method,
                           request.body if request.method == "POST" else None)
+        return r.answer()
+
+    def _laya(self, request):
+        """Laya for the model's own scripts (tandemapp/laya_api.py) over the engine's decision models:
+        GET /v1/laya, GET /v1/laya/kit/<file>, POST /v1/laya/ask, POST /v1/laya/drive/end and the
+        preflight of each. The engine dispatches only these, and only while it serves decision
+        models (engine-ext-v1 3.1)."""
+        from tandemapp import laya_api
+        r = _Reply(request)
+        path, method = request.path, request.method.upper()
+        if self.registry is None:
+            r._json(503, laya_api.Refused(503, "not_loaded", "the engine has handed over no decision "
+                                                             "models").body(), extra_headers=laya_api.CORS)
+        elif method == "OPTIONS":
+            laya_api.handle_options(r)
+        elif method == "GET" and path == "/v1/laya":
+            laya_api.handle_get(r, self.registry, self.state)
+        elif method == "GET" and path.startswith("/v1/laya/kit/"):
+            laya_api.handle_kit(r, self.state, path[len("/v1/laya/kit/"):])
+        elif method == "POST" and path == "/v1/laya/ask":
+            laya_api.handle_post(r, self.registry, self.state, request.body)
+        elif method == "POST" and path == "/v1/laya/drive/end":
+            laya_api.handle_drive_end(r, self.state, request.body)
+        else:
+            r._json(404, {"error": {"message": f"no route {path}", "type": "not_found"}})
         return r.answer()
 
     def _page(self, request):
@@ -759,8 +803,9 @@ class Ext:
         monitor (until WP3b), in its order."""
         host, state, log = self.host, self.state, self.host.log
         self.start_monitor()
-        from tandemapp.conductor import loopescape
-        state.setdefault("escapes", loopescape.Escapes())   # SRV-475: the engine made them at start
+        if state.get("escapes") is None:        # SRV-475: the engine made them at start (3.1: its own)
+            from tandemapp.conductor import loopescape
+            state["escapes"] = loopescape.Escapes()
         root = host.ext_dir
         if root is None:
             # the session monitor without the conductor (`--conductor shadow|on` alone): its
@@ -830,6 +875,39 @@ def start(host) -> Ext:
     ext = Ext(host)
     ext.boot()
     return ext
+
+
+def router_question(routing, prompt_ids, tok):
+    """The router's class question for the shadow reader (engine-ext-v1 3.1 `shadow_question`; the
+    engine's server/conductor/shadow.py `router_ask` asked it itself until ENG-413 WP5b): the
+    question its in-context stage asks Qwen, the router's classes, its own answer and the insertion
+    point (the prompt's last `<|im_end|>`), or `{skip: why}`: a structural class (the compaction),
+    a side request, no class decided, fewer than two classes, no insertion point."""
+    from tandemapp.conductor import inject, schema
+    row = routing.row or {}
+    if row.get("source") == "structural":
+        return {"skip": "structural"}
+    if getattr(routing, "side", None):
+        return {"skip": "side"}
+    # the router's own class: in classify shadow mode its `shadow` field holds it
+    mine = row.get("shadow") if isinstance(row.get("shadow"), dict) and \
+        row["shadow"].get("class_id") else {}
+    cls = mine.get("class_id") or row.get("class_id")
+    if not cls:
+        return {"skip": "no_class"}
+    router = routing.router_cfg or {}
+    classes = {c["id"]: c.get("description") or c.get("label") or c["id"]
+               for c in router.get("classes") or []}
+    if len(classes) < 2:
+        return {"skip": "classes"}
+    at = inject.insertion_point(prompt_ids, inject.special_id(tok, inject.IM_END))
+    if at is None:
+        return {"skip": "no_insertion_point"}
+    cs = schema.context_stage(router)
+    return {"at": at, "question": cs["question"], "choices": classes,
+            "router": {"class_id": cls, "source": mine.get("source") or row.get("source"),
+                       "confidence": mine.get("confidence") if mine else row.get("confidence")},
+            "request_id": row.get("request_id"), "row_id": row.get("id")}
 
 
 def attach(host) -> Ext:
