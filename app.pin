@@ -1,6 +1,6 @@
 # TandemApp vendored into app/ by tools/app_vendor.sh (ENG-413); never edited by hand
 dir app
-commit c31dab39d4950105acb45be025c68e59ac85a295
-commit_tree 5539d87f88e7ae3b0341649c38c38218e43af0a4
-tree 72d52b921d54f47ddded512127951dc3af8a82e2
+commit f50469e9cf864d672a327afe3b6ab05df5cbdd7f
+commit_tree ab0fe3f276316fd5ea273163655cce69f0bfeef5
+tree e141f55ed7fd41c5a0cd77bc0d39d51657d1299e
 exclude .github/ README.md docs/README.md docs/LICENSE
