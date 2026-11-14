@@ -1,6 +1,6 @@
 {
   "name": "engine-ext-v1",
-  "version": "1.0",
+  "version": "1.1",
   "about": "The in-process extension interface of a TandemLLM engine (ENG-429). Python, not HTTP. The engine owns it; TandemApp's conductor is its first extension. README.md says it in prose; fake_host.py is the reference host and fake_ext.py the smallest extension. A minor step adds a hook, an argument with a default, a host attribute, an event field or an act kind; a major step removes or renames one or changes a meaning.",
   "discovery": {
     "env": "QSE_EXT",
@@ -23,15 +23,15 @@
     "tokenizer": "the served model's tokenizer (encode, decode)",
     "metrics": "the metrics registry handle: add(family) for the families metrics-families.json lists with owner ext",
     "ledger_path": "the ledger file; the extension owns its own tables in it (conductor_events, its version row)",
-    "args": "the parsed command line as a mapping, plus QSE_EXT_ARGS",
+    "args": "the parsed command line as a mapping, and QSE_EXT_ARGS (a JSON object, since 1.1) over it: its keys win",
     "engine": "the engine-only screens in process: residency_plan, disk, disk_clear, deciders, narrator, shadow (the /v1/engine/* handlers)",
     "log": "log(line): one line into the engine's log",
     "Refusal": "the exception plan raises to answer the client with an error: Refusal(status, type, message)"
   },
   "extension": {
     "attributes": {
-      "routes": "[{method, prefix, handler}]: paths the extension serves; handler(request) -> (status, headers, body). A prefix the engine serves itself is refused at start",
-      "models": "[model entry]: added to /v1/models (the TandemLLM alias)",
+      "routes": "[{method, prefix, handler}]: paths the extension serves (method * for any; a prefix ending in / matches below it, any other the path itself and below it); handler(request) -> (status, headers, body), request with method, path, query, headers, body, peer and auth (since 1.1). A prefix the engine serves itself is refused at start",
+      "models": "[model entry]: what /v1/models lists in place of the engine's own model (the TandemLLM alias); since 1.1 read at every /v1/models answer, so it may follow the extension's own documents, and /v1/models/{id} answers an entry of that id, or the first entry for the engine's own model name (a hidden alias)",
       "knobs": "[name]: the QWEN38_* names it reads (knobs.json)"
     },
     "hooks": [
@@ -90,10 +90,10 @@
   },
   "failure": {
     "rule": "closed at start, open per request",
-    "start": "QSE_EXT names a module that does not import, has no EXT_API or one the host does not accept, lacks a hook, raises in start, or claims an engine path; or chat mode is asked with QSE_EXT empty: the engine does not start and prints one line '[ext] REFUSING: <why>' before the weights load. It never falls back to headless when an extension was asked for",
-    "request": "a hook that raises or returns a value of the wrong shape: the engine logs it, counts it (qse_ext_errors_total{hook}, ENG-413 WP3a) and serves the rest of that request as a headless engine would: plan -> raw, prompt -> the ids as built, supervisor -> none from then on, extras -> none, follow_ups and finish -> skipped. Acts already carried out stay; the next request asks the extension again",
+    "start": "QSE_EXT names a module that does not import, has no EXT_API or one the host does not accept, lacks a hook, raises in start, or claims an engine path; or chat mode is asked with QSE_EXT empty: the engine does not start and prints one line '[ext] REFUSING: <why>'. The module's checks (it imports, its attributes, EXT_API, chat without QSE_EXT, QSE_EXT_ARGS) refuse before the weights load; start(host) runs once the served model is loaded, since the host hands it the tokenizer and the engine, and a start that raises, a missing hook or a claimed path refuse before the engine takes its first request (since 1.1 said so). It never falls back to headless when an extension was asked for",
+    "request": "a hook that raises or returns a value of the wrong shape: the engine logs it, counts it (qse_ext_errors_total{hook}: the hook's or the supervisor method's name; models, route and stop too) and serves the rest of that request as a headless engine would: plan -> raw, prompt -> the ids as built, supervisor -> none from then on, extras -> none, follow_ups and finish -> skipped. Acts already carried out stay; the next request asks the extension again",
     "refusal": "plan may raise the host's Refusal(status, type, message): the client gets that error; it is an answer, not a failure",
     "act_out_of_place": "an act whose kind the safe point does not allow is dropped and counted, as an error of that hook",
-    "route": "a handler of the extension's own route that raises: 500 extension_error for that request; there is no headless answer for a path only the extension serves"
+    "route": "a handler of the extension's own route that raises: 500 extension_error for that request, counted as hook route; there is no headless answer for a path only the extension serves"
   }
 }

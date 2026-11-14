@@ -1,6 +1,6 @@
 # Engine extension interface v1
 
-How code that is not the engine's runs inside a TandemLLM engine process: TandemApp's conductor in chat mode (the router's plan, the session monitor in the decode loop, the state and narrated lines, the journal). The engine owns this interface; its version is `1.0`, independent of the engine API (`../engine-api-v1`) and of either release. It is a Python interface, not HTTP: the conductor acts on tokens inside the decode loop, which a second HTTP request cannot reproduce token for token.
+How code that is not the engine's runs inside a TandemLLM engine process: TandemApp's conductor in chat mode (the router's plan, the session monitor in the decode loop, the state and narrated lines, the journal). The engine owns this interface; its version is `1.1`, independent of the engine API (`../engine-api-v1`) and of either release. It is a Python interface, not HTTP: the conductor acts on tokens inside the decode loop, which a second HTTP request cannot reproduce token for token.
 
 | file | what |
 |-|-|
@@ -20,14 +20,14 @@ Both Python files use the standard library only and import neither tree. Each si
 
 ## The host
 
-`ext_api`, `engine_api`, `mode` (engine, chat, setup), `state`, `lock`, `tokenizer`, `metrics` (a registry handle: `add(family)` for the families `../engine-api-v1/metrics-families.json` lists with owner `ext`), `ledger_path` (the extension owns its own tables in the file: `conductor_events` and its version row), `args` (the parsed command line, plus `QSE_EXT_ARGS`), `engine` (the engine-only screens in process: `residency_plan`, `disk`, `disk_clear`, `deciders`, `narrator`, `shadow`, the handlers behind `/v1/engine/*`), `log(line)` and `Refusal`.
+`ext_api`, `engine_api`, `mode` (engine, chat, setup), `state`, `lock`, `tokenizer`, `metrics` (a registry handle: `add(family)` for the families `../engine-api-v1/metrics-families.json` lists with owner `ext`), `ledger_path` (the extension owns its own tables in the file: `conductor_events` and its version row), `args` (the parsed command line, and `QSE_EXT_ARGS`, a JSON object, over it: its keys win), `engine` (the engine-only screens in process: `residency_plan`, `disk`, `disk_clear`, `deciders`, `narrator`, `shadow`, the handlers behind `/v1/engine/*`), `log(line)` and `Refusal`.
 
 ## The extension
 
-Attributes, read once after `start`:
+Attributes, checked once after `start`:
 
-- `routes`: `[{method, prefix, handler}]`, the paths it serves (`/v1/conductor/*`, `/v1/library*`, `/v1/laya*`, `/v1/memory*`, `/s/*` today; `../engine-api-v1/routes.json` `app_routes_via_engine`). A prefix the engine serves itself is refused at start.
-- `models`: entries added to `/v1/models` (the `TandemLLM` alias).
+- `routes`: `[{method, prefix, handler}]`, the paths it serves (`method` `*` for any; a prefix ending in `/` matches the paths below it, any other the path itself and below it; `handler(request)` returns `(status, headers, body)`, `request` has `method`, `path`, `query`, `headers`, `body`, `peer`, `auth`) (`/v1/conductor/*`, `/v1/library*`, `/v1/laya*`, `/v1/memory*`, `/s/*` today; `../engine-api-v1/routes.json` `app_routes_via_engine`). A prefix the engine serves itself is refused at start.
+- `models`: what `/v1/models` lists in place of the engine's own model (the `TandemLLM` alias). The host reads it at every `/v1/models` answer, so it may follow the extension's own documents; `/v1/models/{id}` answers the entry of that id, or the first entry for the engine's own model name (a hidden alias).
 - `knobs`: the `QWEN38_*` names it reads (`knobs.json`).
 
 Hooks:
@@ -65,11 +65,11 @@ Start: import, check `EXT_API`, `start(host)`, read `routes`, `models`, `knobs`.
 
 **Closed at start, open per request.**
 
-- Start: `QSE_EXT` names a module that does not import, has no `EXT_API` or one the host does not accept, lacks a hook, raises in `start`, or claims an engine path; or chat mode is asked with `QSE_EXT` empty. The engine does not start: it prints one line `[ext] REFUSING: <why>` before the weights load. It never falls back to headless when an extension was asked for.
-- A request: a hook that raises or returns a value of the wrong shape is logged and counted (`qse_ext_errors_total{hook}`, with the host in WP3a), and the rest of that request is served as a headless engine would serve it: a failed `plan` serves the request raw, a failed `prompt` keeps the ids as built, a failed supervisor method detaches the supervisor for the rest of the request, failed `extras` add nothing, failed `follow_ups` and `finish` are skipped. Acts already carried out stay. The next request asks the extension again.
+- Start: `QSE_EXT` names a module that does not import, has no `EXT_API` or one the host does not accept, lacks a hook, raises in `start`, or claims an engine path; or chat mode is asked with `QSE_EXT` empty. The engine does not start: it prints one line `[ext] REFUSING: <why>`. The module's own checks (it imports, its attributes, `EXT_API`, chat mode without `QSE_EXT`, a `QSE_EXT_ARGS` that is not a JSON object) refuse before the weights load; `start(host)` runs once the served model is loaded, since the host hands it the tokenizer and the engine, so a start that raises, a missing hook or a claimed path refuses after the load and before the engine takes its first request. It never falls back to headless when an extension was asked for.
+- A request: a hook that raises or returns a value of the wrong shape is logged and counted (`qse_ext_errors_total{hook}`: the hook's or the supervisor method's name, and `models`, `route`, `stop`), and the rest of that request is served as a headless engine would serve it: a failed `plan` serves the request raw, a failed `prompt` keeps the ids as built, a failed supervisor method detaches the supervisor for the rest of the request, failed `extras` add nothing, failed `follow_ups` and `finish` are skipped. Acts already carried out stay. The next request asks the extension again.
 - `plan` may raise the host's `Refusal(status, type, message)`: the client gets that error. That is an answer, not a failure.
 - An act the safe point does not allow is dropped and counted as an error of that method.
-- A handler of the extension's own route that raises answers 500 `extension_error`: there is no headless answer for a path only the extension serves.
+- A handler of the extension's own route that raises answers 500 `extension_error`, counted as `route`: there is no headless answer for a path only the extension serves.
 
 Why: an engine asked for chat mode that came up without its extension would serve different tokens and write no journal without anyone being told, so a refused start with one line is the better failure. Once running, the engine's own answer is always a valid answer and the engine already serves a request raw when the conductor raises (`server/app.py`, the plan's call: "a conductor bug serves the request as raw"), so an extension bug costs that request its conductor, never the engine's availability.
 
@@ -79,9 +79,10 @@ MAJOR.MINOR. A minor step adds a hook, an argument with a default, a host attrib
 
 ## Tests
 
-- The engine (`tests/test_engine_ext_contract.py`): `ext.json` is well formed; `fake_ext.py` has every hook with its arguments; `fake_host.py` drives the order of `ext.json` (a plain request, each act loop); every start failure is refused with one line, every request failure is open; the Python files here import only the standard library; `knobs.json` matches `engine/settings.py` `KNOBS`. The engine's host (WP3a) is held to the same cases.
+- The engine (`tests/test_engine_ext_contract.py`): `ext.json` is well formed; `fake_ext.py` has every hook with its arguments; `fake_host.py` drives the order of `ext.json` (a plain request, each act loop); every start failure is refused with one line, every request failure is open; the Python files here import only the standard library; `knobs.json` matches `engine/settings.py` `KNOBS`. The engine's host (`server/ext.py`, ENG-413 WP3a) is held to the same cases by `tests/test_engine_ext_host.py`: `fake_ext.py` through the real loader, each refusal line on a fake engine, the per-request rule and `qse_ext_errors_total`.
 - TandemApp (`tests/test_engine_ext_contract.py`): `knobs.json` is `tandemapp/knobs.py` `DEFAULTS`; the fake host and the fake extension run in its tree. Its extension (WP4) runs against `fake_host.py`.
 
 ## Changes
 
+- v1.1 (ENG-429, ENG-413 WP3a, the engine's host): says what the first host does where 1.0 was silent. `QSE_EXT_ARGS` is a JSON object over the command line; `models` is read at every `/v1/models` answer and its first entry answers for the engine's own model name; a route's prefix match and its `request`; the refusals of `start(host)` come after the weights load (the host hands over the tokenizer), the module's own before it; `qse_ext_errors_total`'s `hook` values. No hook, attribute or meaning a 1.0 extension relies on changes: a 1.0 extension starts on a 1.1 host.
 - v1.0, first version (ENG-429): discovery, host, hooks, supervisor, order, the failure rule, the knobs.
