@@ -13706,6 +13706,14 @@ def _window_at_start(a) -> None:
         raise SystemExit(f"[server] REFUSING to load: {why}")
 
 
+def loop_escapes():
+    """SRV-475: the loop escape's sessions, which /health's `sampling.loop_escape` reports on every
+    engine and the extension's loop escape steps (TandemApp's loopescape.Escapes until ENG-413 WP4
+    hands /health's part to the extension)."""
+    from tandemapp.conductor import loopescape
+    return loopescape.Escapes()
+
+
 def card_sampling(path):
     """SRV-475: the checkpoint's own sampling (its generation_config.json), which the extension's loop
     escape and `agentic_default: card` decode with; read at the load (TandemApp's loopescape reads
@@ -14670,8 +14678,9 @@ def _serve(a, led) -> None:
     STATE["regenerate"] = (regenerate_mod.Regenerates(
         a.regenerate, a.regenerate_temperature, a.regenerate_top_p, a.regenerate_top_k)
         if a.regenerate != "off" else None)
-    # SRV-475: the loop escape's sessions are the extension's (the card's sampling is read with
-    # the weights)
+    # SRV-475: the loop escape's sessions (the card's sampling is read with the weights); /health's
+    # `sampling.loop_escape` reports them on every engine, the extension's loop escape steps them
+    STATE["escapes"] = loop_escapes()
     STATE["dashboard_dir"] = a.dashboard_dir
     STATE["live_hz"] = live_mod.hz_from_env(os.environ.get("QSE_LIVE_HZ"))
     STATE["live_activity"] = getattr(a, "live_activity", "on") == "on" and STATE["live_hz"] > 0

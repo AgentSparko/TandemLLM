@@ -561,7 +561,7 @@ class Interim:
         i, state, log = self.host.interim, self.state, self.host.log
         self.start_monitor()
         from tandemapp.conductor import loopescape
-        state["escapes"] = loopescape.Escapes()        # SRV-475: the loop escape's sessions
+        state.setdefault("escapes", loopescape.Escapes())   # SRV-475: the engine made them at start
         root = i.root
         if root is None:
             # the session monitor without the conductor (`--conductor shadow|on` alone): its
