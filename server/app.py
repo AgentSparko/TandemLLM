@@ -2769,7 +2769,7 @@ def _runner_back(back: dict, eng, drafter, think, ctx, pos, device, pen, pstop, 
         if sup is not None:
             pos = len(ctx) - 1
         return pos, n_out
-    if act is not None and act.kind == GIVE_UP and why == "sp1":
+    if act is not None and act.kind == ext_mod.GIVE_UP and why == "sp1":
         return None
     for t in _force_close(eng, drafter, think, ctx, pos, device, pen=pen, pstop=pstop, sampler=sampler,
                           act=act, sup=sup, eos=eos, start=start, n_out=n_out):
@@ -3009,6 +3009,9 @@ def _generate_stream(prompt: torch.Tensor, max_new: int, eos: set[int], think=No
     # hidden action forwarded that the client never receives (`_force_close`)
     STATE["last_prompt_n"], STATE["hidden_spans"] = len(ctx), []
     bs = STATE["blocks"] = BlockStats()
+    # ENG-413 WP3b: the decode loop asks the extension's supervisor through the host's Supervision
+    # (each safe point open: a failure detaches it and the loop goes on as a headless engine's)
+    sup = ext_mod.supervising(sup)
     if sup is not None:
         # E2's questions are asked in place at SP2 (`_force_close`); a request that records
         # logprobs keeps its end token's row, so it is never asked
@@ -3397,7 +3400,7 @@ def _generate_stream(prompt: torch.Tensor, max_new: int, eos: set[int], think=No
                             close = _sp1(sup, think, n_out, eng.max_len - pos, len(ctx))
                     if fin is not None or close is not None:
                         # SP2's hidden continue, or SP1's hidden close
-                        if close is not None and close.kind == GIVE_UP:
+                        if close is not None and close.kind == ext_mod.GIVE_UP:
                             return
                         for t in _force_close(eng, drafter, think, ctx, pos, prompt.device,
                                               pen=pen, pstop=pstop, sampler=sampler, lpr=lpr,
@@ -3485,7 +3488,7 @@ def _generate_stream(prompt: torch.Tensor, max_new: int, eos: set[int], think=No
                             close = _sp1(sup, think, n_out, eng.max_len - pos, len(ctx))
                 if fin is not None or close is not None:
                     # SP2: the end token was never forwarded, so it is simply not taken
-                    if close is not None and close.kind == GIVE_UP:
+                    if close is not None and close.kind == ext_mod.GIVE_UP:
                         return
                     for t in _force_close(eng, drafter, think, ctx, pos, prompt.device, pen=pen,
                                           pstop=pstop, sampler=sampler, lpr=lpr,
@@ -3599,7 +3602,7 @@ def _generate_stream(prompt: torch.Tensor, max_new: int, eos: set[int], think=No
                     close = _sp1(sup, think, n_out, eng.max_len - pos, len(ctx))
             if fin is not None or close is not None:
                 # SP2's hidden continue, or SP1's hidden close
-                if close is not None and close.kind == GIVE_UP:
+                if close is not None and close.kind == ext_mod.GIVE_UP:
                     return
                 for t in _force_close(eng, drafter, think, ctx, pos, prompt.device, pen=pen,
                                       pstop=pstop, sampler=sampler, lpr=lpr,
@@ -3743,7 +3746,7 @@ def _ask_in_place(eng, pos: int, device, ids: list[int], letters: list[int]) -> 
     engine lock, as the request is."""
     from engine.model import h2d
     if pos + len(ids) >= eng.max_len:
-        raise incontext_mod.ContextError("no_room")
+        raise ext_mod.NoRoom("no_room")
     eng.settle()                      # as `cache.capture`: a walked state that is not in yet
     saved, length = cache.state_clone(eng), eng.kv.length
     tap, eng.tap = getattr(eng, "tap", None), None      # the probe's prefill tap reads no question
@@ -3876,8 +3879,8 @@ def _sp1(sup, think, n_out: int, room: int, pos: int = 0):
     else None. A client's own budget that is spent closes first, with its streamed phrase."""
     if think is None or not think.inside or think.hit or not sup.watches_blocks:
         return None
-    return sup.at_block(conductor.BlockEvent(think.n, True, think.reason, think.share, n_out,
-                                             pos), room)
+    return sup.at_block(ext_mod.Event(reasoning_tokens=think.n, inside=True, stall=think.reason,
+                                      share=think.share, output_tokens=n_out, pos=pos), room)
 
 
 def _sp2(sup, think, ctx, start: int, n_out: int, room: int, extra=(), end=None):
@@ -3895,7 +3898,7 @@ def _sp2(sup, think, ctx, start: int, n_out: int, room: int, extra=(), end=None)
     if takes is not None and answer:
         # the memory notes the client never gets (server/memblock.py): not the answer's calls,
         # and an answer of notes alone is empty (E1 case M continues it after a hidden result)
-        answer, notes, note_calls = memblock.without_notes(answer, calls=bool(takes))
+        answer, notes, note_calls = sup.without_notes(answer)
     fmt = _tool_format()
     # the checks read the model's own call format as the stream and the final parse do: an
     # arg-key or Pythonic call is a call here too, not a block that does not parse
@@ -3921,22 +3924,23 @@ def _sp2(sup, think, ctx, start: int, n_out: int, room: int, extra=(), end=None)
     if extra and real is not None:
         sup.on_event = held.append
     try:
-        act = sup.at_finish(conductor.FinishEvent(
-            "eos", inside, answer, think.n if think is not None else 0, n_out,
-            len(ctx) + len(extra), calls=calls, notes=notes + note_calls,
+        act = sup.at_finish(ext_mod.Event(
+            kind="eos", inside=inside, answer=answer,
+            reasoning_tokens=think.n if think is not None else 0, output_tokens=n_out,
+            pos=len(ctx) + len(extra), calls=calls, notes=notes + note_calls,
             note_calls=note_calls), room)
     finally:
         if extra and real is not None:
             sup.on_event = real
     if held:
-        if act is not None and act.kind in (CONTINUE_HIDDEN, REGENERATE_CALL):
+        if act is not None and act.kind in (ext_mod.CONTINUE_HIDDEN, ext_mod.REGENERATE_CALL):
             sup.held_events = held             # `_release_held`, once the block is out
         else:
             for ev in held:
                 real(ev)
-    if act is None or act.kind not in (CONTINUE_HIDDEN, REGENERATE_CALL):
+    if act is None or act.kind not in (ext_mod.CONTINUE_HIDDEN, ext_mod.REGENERATE_CALL):
         return None
-    if act.kind == REGENERATE_CALL:
+    if act.kind == ext_mod.REGENERATE_CALL:
         sup.cuts.append(n_out)
     if act.detail.get("ask"):
         act.detail["end"] = end
@@ -4122,14 +4126,8 @@ def _sp3_calls(sup, answer: str, eos: bool, names, types, cuts: list,
 
 
 def _outcome(sup, calls: list, ids: list, in_think: bool, finish: str) -> None:
-    """After the response: its calls into the session state, and, when the monitor decided
-    anything, the outcome into the journal (tool_call, text, empty or gave_up)."""
-    now = time.time()
-    for c in calls:
-        sup.session.record_call(c["function"]["name"], c["function"]["arguments"], now)
-    if not sup.events:
-        sup.finish("")                     # the checks that found nothing are counted
-        return
+    """After the response, the supervisor's `done` (ENG-413 WP3b): the outcome (tool_call, text,
+    empty or gave_up) and the calls, which the extension records in its session and journal."""
     if sup.gave_up:
         outcome = "gave_up"
     elif calls:
@@ -4137,7 +4135,7 @@ def _outcome(sup, calls: list, ids: list, in_think: bool, finish: str) -> None:
     else:
         text = STATE["tok"].decode(ids, skip_special_tokens=True)
         outcome = "text" if _reasoning_head(text, in_think)[1].strip() else "empty"
-    sup.finish(outcome, finish=finish, resume_ms=sup.resume_ms)
+    sup.done(outcome, {"calls": calls, "finish": finish})
 
 
 #: a family that names no ServeSpec: the XML call form, a template that opens the reasoning block
