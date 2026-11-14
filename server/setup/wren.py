@@ -370,11 +370,9 @@ class Wren:
         that has none (the stored ones predate Wren)."""
         from server import decider_api, memlimits
         from server.conductor import residency
-        from server.api import seeds
         st = self.app.STATE
-        cond = st.get("conductor")
-        doc = cond.store.peek("residency")[1] if cond is not None else seeds.seed("residency")
-        roles = cond.store.peek("roles")[1] if cond is not None else seeds.seed("roles")
+        docs = residency.documents(st)
+        doc, roles = docs["residency"], docs["roles"]
         if "wren" not in (doc.get("claims") or {}):
             doc = dict(doc, claims=dict(doc.get("claims") or {}, wren={
                 "gib": claim_gib(name), "basis": "declared",
@@ -389,8 +387,9 @@ class Wren:
                             hold=decider_api.held(service_start=service_start,
                                                   hold_restart=hold_restart),
                             loading=loading or busy_load, engine_peak_gib=peak, engine_now_gib=now)
-        if cond is not None:
-            residency.Journal(cond.root).write(dict(d, kind="check", source=f"engine:{name}"))
+        jr = residency.journal_of(st)
+        if jr is not None:
+            jr.write(dict(d, kind="check", source=f"engine:{name}"))
         return d
 
     def unload(self, why: str = "asked") -> dict:

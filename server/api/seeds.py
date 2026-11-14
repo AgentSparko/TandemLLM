@@ -1,4 +1,4 @@
-"""The built-in residency and roles documents (ENG-413 WP2c).
+"""The built-in residency and roles documents (ENG-413 WP2c), and the deciders one's models (WP5).
 
 What a server without a conductor plans its small models' memory with: the roles (their kind,
 window and contract) and the residency document (floor, margin, the order the roles load in and
@@ -78,7 +78,19 @@ RESIDENCY: dict = {
 }
 
 
+# ENG-413 WP5: the decision models' load policy and each question's model, which a server without
+# the extension's `deciders` document loads by (schema.py `DECIDERS` without its `api`, the
+# extension's part: `deciders_api`)
+DECIDERS: dict = {
+    "models": [{"name": "laya-english", "load": "on_start"},
+               {"name": "laya-typed-decisions", "load": "on_demand"},
+               {"name": "laya-multilingual", "load": "on_demand"}],
+    "questions": {"classify": "auto", "packages": "auto", "judge": "auto", "laya_api": "auto"},
+}
+
+
 def seed(kind: str) -> dict | None:
-    """The built-in version 0 of the `residency` or `roles` document, a fresh copy; None else."""
-    src = {"roles": ROLES, "residency": RESIDENCY}.get(kind)
+    """The built-in version 0 of the `residency`, `roles` or (since ENG-413 WP5) `deciders`
+    document, a fresh copy; None else."""
+    src = {"roles": ROLES, "residency": RESIDENCY, "deciders": DECIDERS}.get(kind)
     return copy.deepcopy(src) if src is not None else None

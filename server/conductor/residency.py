@@ -35,7 +35,9 @@ it. (The decision-model design keeps an unload order for later; it is not built 
 
 `check` exits 0 when allowed and 3 when refused, printing the decision as one JSON line; the ops
 scripts (ops/roles.sh) pass the hold and the running load they see, and the MemAvailable `free`
-reports. `--root` (default ~/.qwen38-spark-engine/conductor) is the conductor's store.
+reports. `--root` (default ~/.qwen38-spark-engine/conductor) is the conductor's directory; its
+documents come from the extension's module (QSE_EXT, its `read_document`, engine-ext-v1 2.1), the
+built-in ones (server/api/seeds.py, version 0) without one (ENG-413 WP5).
 """
 
 from __future__ import annotations
@@ -48,7 +50,8 @@ import sys
 import threading
 import time
 
-from tandemapp.conductor.store import DEFAULT_ROOT, Store
+from server import ext as ext_mod
+from server.api import seeds
 
 REASONS = ("refused_hold", "refused_load_in_progress", "refused_memory", "refused_unknown_role")
 JOURNAL = "residency.jsonl"
@@ -205,11 +208,32 @@ class Journal:
                      and not r.get("allowed")), None)
 
 
-def docs(root: str) -> tuple[dict, dict]:
-    """The current residency and roles documents from the conductor's store (version 0, the
-    built-in ones, when the store has none)."""
-    st = Store(root, readonly=True)
-    return st.get("residency")[1], st.get("roles")[1]
+def docs(root: str, module: str | None = None) -> tuple[dict, dict]:
+    """The current residency and roles documents in the extension's directory `root`, read through
+    its module (`module`, default QSE_EXT); version 0, the built-in ones, without one."""
+    module = os.environ.get("QSE_EXT", "") if module is None else module
+    out = []
+    for name in ("residency", "roles"):
+        got = ext_mod.early_document(module, root, name)
+        out.append(got[1] if got is not None else seeds.seed(name))
+    return out[0], out[1]
+
+
+def documents(state) -> dict:
+    """The running server's residency and roles documents: the extension's (engine-ext-v1 2.1
+    `document`), else the built-in ones; `version` is the residency document's (0: built-in)."""
+    got = ext_mod.document(state, "residency")
+    roles = ext_mod.document(state, "roles")
+    return {"version": got[0] if got is not None else 0,
+            "residency": got[1] if got is not None else seeds.seed("residency"),
+            "roles": roles[1] if roles is not None else seeds.seed("roles")}
+
+
+def journal_of(state) -> "Journal | None":
+    """The residency journal of the running server: in the extension's directory (`state["ext_root"]`,
+    which the start sets from --conductor-config), None without one."""
+    root = state.get("ext_root") if state is not None else None
+    return Journal(root) if root else None
 
 
 def _mem_gib() -> float | None:
@@ -222,7 +246,7 @@ def _mem_gib() -> float | None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m server.conductor.residency")
-    ap.add_argument("--root", default=os.environ.get("QSE_CONDUCTOR_ROOT", DEFAULT_ROOT))
+    ap.add_argument("--root", default=os.environ.get("QSE_CONDUCTOR_ROOT", ext_mod.EXT_DEFAULT_DIR))
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("check")
     c.add_argument("role")

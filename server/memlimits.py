@@ -149,13 +149,11 @@ def apply(state: dict, values: dict) -> list[str]:
 def refresh(state: dict) -> list[str]:
     """A request starts: when the residency document has a new version, its live overrides
     apply now (and a key the document no longer sets goes back to its flag)."""
-    cond = state.get("conductor")
-    if cond is None:
+    from server import ext as ext_mod
+    got = ext_mod.document(state, "residency")     # the extension's (engine-ext-v1 2.1)
+    if got is None:
         return []
-    try:
-        v, doc = cond.store.peek("residency")
-    except Exception:                                              # noqa: BLE001
-        return []
+    v, doc = got
     if v == state.get("limits_version"):
         return []
     state["limits_version"] = v
@@ -308,11 +306,12 @@ def view(state: dict) -> dict:
     args = state.get("args") or {}                 # what the engine loaded with
     flags = state.get("serve_flags") or args       # what serve.env and the command line said
     applied = state.get("limits_applied") or {}
-    cond = state.get("conductor")
+    from server import ext as ext_mod
     over, version = {}, None
-    if cond is not None:
+    got = ext_mod.document(state, "residency")     # the extension's (engine-ext-v1 2.1)
+    if got is not None:
         try:
-            version, doc = cond.store.peek("residency")
+            version, doc = got
             over = doc_section(doc)
         except Exception:                                          # noqa: BLE001
             pass

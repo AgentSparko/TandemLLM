@@ -872,14 +872,13 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
                     planner=planner(state, fake=fake), device=device,
                     log=lambda s: log(s, flush=True),
                     mem_available=lambda: decider_api._mem_available_gib(fake))
-    cond = state.get("conductor")
     disk = _S.get("SHADOW_DISK") or ""
     if disk == "auto":
         disk = os.path.join(os.path.expanduser("~/.qwen38-spark-engine/cache"), "shadow")
     svc = ShadowService(slot, grid=int(_S.get("SHADOW_GRID") or GRID),
                         cap_gib=float(_S.get("SHADOW_GB") or 4.0), disk_dir=disk or None,
                         disk_gib=float(_S.get("SHADOW_DISK_GB") or 20.0),
-                        root=cond.root if cond is not None else None, log=log)
+                        root=_ext_root(state), log=log)
     log(f"[shadow] {name} ({'the narrator slot' if slot is getattr(narr, 'slot', None) else 'own slot'}"
         f"), grid {svc.grid}, cap {svc.cap / 2**30:.1f} GiB, disk {svc.disk_dir or 'off'}: loads "
         f"when a profile with shadow.mode on sends its first turn", flush=True)
@@ -902,30 +901,37 @@ def planner(state: dict, *, fake: bool = False):
     inner = decider_api.planner(state, fake=fake, role="shadow")
 
     def check(name, *, loading, service_start, hold_restart):
-        cond = state.get("conductor")
-        if cond is not None:
-            doc = cond.store.peek("residency")[1]
+        from server import ext as ext_mod
+        got = ext_mod.document(state, "residency")     # the extension's (engine-ext-v1 2.1)
+        if got is not None:
+            doc = got[1]
             if "shadow" not in (doc.get("claims") or {}):
                 from server.conductor import residency
-                from tandemapp.conductor import schema
                 from server.decider_api import _mem_available_gib, held, _other_loading
                 from server import memlimits
                 doc = dict(doc, claims=dict(doc.get("claims") or {}, shadow={
                     "gib": claim_gib(), "basis": "declared",
                     "note": "the shadow reader's model and its session states (SR1)"}))
-                roles = cond.store.peek("roles")[1]
+                roles = residency.documents(state)["roles"]
                 peak, now = memlimits.engine_gib(state)
                 d = residency.check("shadow", _mem_available_gib(fake), doc, roles,
                                     hold=held(service_start=service_start,
                                               hold_restart=hold_restart),
                                     loading=loading or _other_loading(state, "shadow"),
                                     engine_peak_gib=peak, engine_now_gib=now)
-                residency.Journal(cond.root).write(dict(d, kind="check", source=f"engine:{name}"))
+                jr = residency.journal_of(state)
+                if jr is not None:
+                    jr.write(dict(d, kind="check", source=f"engine:{name}"))
                 return d
         return inner(name, loading=loading, service_start=service_start,
                      hold_restart=hold_restart)
 
     return check
+
+
+def _ext_root(state: dict) -> str | None:
+    """The extension's directory the shadow keeps its journal in (`state["ext_root"]`), or None."""
+    return state.get("ext_root") or None
 
 
 def status(state: dict) -> dict:

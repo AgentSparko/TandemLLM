@@ -13,6 +13,9 @@ it. Standard library only, plus the engine's metrics registry for one counter.
     ext.ask(name, ...)       one of the extension's optional calls (CALLS, since 2.0), open; the
                              headless value when headless, missing or raising
     ext.stop()               the engine stops
+    of(state)                the extension the engine loaded (state["ext"]), NULL when headless
+    document(state, name)    an extension document by name ((version, doc)), None: the engine's seed
+    early_document(...)      before the start: the module's read_document (since 2.1), or None
     attach(state)            tests: an extension's object around objects a test built itself
 
 ENG-413 WP3b: the request path asks these hooks and nothing of the conductor. `Request` asks them in
@@ -21,8 +24,10 @@ checked against its method and every failure detaching it for the rest of the re
 are the engine's (the kinds below), carried out by the engine. ENG-413 WP4 (engine-ext-v1 2.0):
 what the request path asked an interim adapter outside the contract is the contract now: the
 optional calls (CALLS), the supervisor's optional methods (SUP_OPTIONAL) and fields (SUP_FIELDS),
-each with the value a headless engine uses, the plan's `routing` and the host's fields. INTERIM
-keeps what ext.json `kept_interim` names (until WP5).
+each with the value a headless engine uses, the plan's `routing` and the host's fields. ENG-413 WP5
+(engine-ext-v1 2.1): what the engine read of the extension's objects outside a request, and the
+memory writer's object, are optional calls too (the 2.1 rows of CALLS); the engine-only screens are
+the engine's `/v1/engine/*` routes, handed to the extension in process as `host.engine`.
 
 The failure rule (ext.json `failure`): closed at start, open per request. `discover` and `start`
 raise Refused, a SystemExit whose text is the one line `[ext] REFUSING: <why>`: a module that does
@@ -43,9 +48,16 @@ import re
 import threading
 
 #: the engine-ext-v1 version this host speaks (contracts/engine-ext-v1/ext.json `version`)
-EXT_API = "2.0"
+EXT_API = "2.1"
 #: the module attributes discovery reads (ext.json discovery.module)
 MODULE_ATTRS = ("EXT_API", "NAME", "VERSION", "start")
+#: since 2.1, optional module functions asked before the start (ext.json discovery.module_optional):
+#: read_document(ext_dir, name) and before_load(args)
+MODULE_OPTIONAL = ("read_document", "before_load")
+#: what the fake-engine guard compares a test's directory with: the conductor's default directory
+#: (TandemApp's tandemapp/conductor/store.py DEFAULT_ROOT, a value copy held by
+#: tests/test_engine_api_contract.py until ENG-413 WP14)
+EXT_DEFAULT_DIR = "~/.qwen38-spark-engine/conductor"
 #: the extension's hooks and their arguments (ext.json extension.hooks)
 HOOKS = {"health": [], "plan": ["request"], "prompt": ["plan", "ids", "info"],
          "supervisor": ["plan", "event"], "extras": ["plan", "point", "info"],
@@ -176,11 +188,14 @@ def check_module(module):
 
 class Host:
     """What the engine hands an extension (ext.json `host`); since 2.0 also `ext_dir`,
-    `identity_name`, `own_eta`, `own_idle`, `NoRoom` and `metrics.event`."""
+    `identity_name`, `own_eta`, `own_idle`, `NoRoom` and `metrics.event`; since 2.1 `engine` holds
+    the /v1/engine/* handlers in process (server/engine_routes.py) and `shipped_guard` the
+    speed-guard report the release tree ships."""
 
     def __init__(self, *, mode: str, engine_api: str, state, lock, tokenizer, registry,
                  ledger_path, args: dict, engine: dict | None = None, log=print, ext_dir=None,
-                 identity_name=None, own_eta=None, own_idle=None, on_event=None):
+                 identity_name=None, own_eta=None, own_idle=None, on_event=None,
+                 shipped_guard=None):
         self.ext_api = EXT_API
         self.engine_api = engine_api
         self.mode = mode
@@ -198,6 +213,7 @@ class Host:
         self.own_eta = own_eta
         self.own_idle = own_idle or (lambda: None)
         self.NoRoom = NoRoom
+        self.shipped_guard = shipped_guard
 
     def log(self, line: str) -> None:
         self._log(line)
@@ -234,6 +250,14 @@ def start(module, host: Host) -> "Loaded":
         obj = module.start(host)
     except BaseException as exc:                                   # noqa: BLE001
         raise Refused(f"{name}.start failed: {exc!r}") from None
+    # closed (2.1, ENG-413 WP5): an extension below 2.1 that routes requests relied on what the engine
+    # read of its objects until 2.0 (its documents, its memory writer); a 2.1 host asks for them
+    # through the 2.1 calls only, so such an extension would lose them without an error
+    want = _version(getattr(module, "EXT_API", ""))
+    if want is not None and want < (2, 1) and (host.state or {}).get("conductor") is not None:
+        raise Refused(f"{name} speaks engine-ext-v1 {module.EXT_API} and routes requests: this engine "
+                      f"reads a routing extension's documents and memory writer through the 2.1 "
+                      f"calls only (it needs 2.1)")
     missing = [h for h in HOOKS if not callable(getattr(obj, h, None))]
     if missing:
         raise Refused(f"{name} lacks the hooks {missing}")
@@ -274,7 +298,7 @@ class Null:
         return Request(None, request)
 
     def ask(self, name: str, *args, **kw):
-        """An optional call's (CALLS, INTERIM) headless value: nothing is asked."""
+        """An optional call's (CALLS) headless value: nothing is asked."""
         return _HEADLESS[name](*args, **kw)
 
     def stop(self) -> None:
@@ -386,10 +410,9 @@ class Loaded(Null):
         return Request(self, request)
 
     def ask(self, name: str, *args, **kw):
-        """One of the optional calls (CALLS, since 2.0; INTERIM, ext.json kept_interim), a method
-        of the extension object: open. An extension without the method is not asked;
-        a raise is logged and counted under the call's name (`interim.<name>` for INTERIM) and the
-        headless value comes back."""
+        """One of the optional calls (CALLS, since 2.0; the 2.1 rows since 2.1), a method of the
+        extension object: open. An extension without the method is not asked; a raise is logged
+        and counted under the call's name and the headless value comes back."""
         fn = getattr(self.obj, name, None)
         if fn is None:
             return _HEADLESS[name](*args, **kw)
@@ -398,7 +421,7 @@ class Loaded(Null):
         except PASS_THROUGH:
             raise
         except Exception as exc:                                   # noqa: BLE001
-            self.failed(name if name in CALLS else f"interim.{name}", exc)
+            self.failed(name, exc)
             return _HEADLESS[name](*args, **kw)
 
     def stop(self) -> None:
@@ -774,15 +797,84 @@ CALLS = {
     "writer_ban_ids": lambda tokenizer: {},
     "writer_foreign_call": lambda text: None,
     "probe_stage": lambda routing: None,
+    # since 2.1 (ENG-413 WP5): what the engine read of the extension's objects outside a request
+    # (the documents, the library, the shadow switch, the monitor's mode), the small models it
+    # builds around the engine's (the narrator over its slot, the role contract, the decision
+    # models' registry) and the memory writer whose hidden turn the engine decodes
+    "document": lambda name: None,
+    "library_text": lambda name: None,
+    "shadow_wanted": lambda: False,
+    "monitor_mode": lambda: None,
+    "narrator": lambda slot: None,
+    "role_errors": lambda fields, name, tokenizer_sha: [],
+    "deciders": lambda registry: None,
+    "deciders_api": lambda doc: None,
+    "memory_writer": lambda: (None, None),
 }
 
-#: outside the interface (ext.json kept_interim, until ENG-413 WP5): the memory writer's object.
-#: Asked like a call (`Loaded.ask`), counted as interim.<name>
-INTERIM = {
-    "writer": lambda: (None, None),
-}
+#: the calls 2.1 added (ext.json since_2_1.calls)
+CALLS_2_1 = ("document", "library_text", "shadow_wanted", "monitor_mode", "narrator",
+             "role_errors", "deciders", "deciders_api", "memory_writer")
+#: the documents `document(name)` answers (ext.json extension.documents)
+DOCUMENTS = ("residency", "roles", "deciders", "settings", "router", "packages")
+#: the memory writer's methods the engine calls, and `stats` (ext.json memory_writer)
+WRITER = ("state", "due", "mark", "gate", "instructions", "apply", "skipped")
 
-_HEADLESS = {**CALLS, **INTERIM}
+_HEADLESS = dict(CALLS)
+
+
+def of(state) -> "Null":
+    """The extension the engine loaded (`state["ext"]`, which the start puts there), NULL when the
+    engine is headless or a test built none."""
+    got = state.get("ext") if state is not None else None
+    return got if got is not None else NULL
+
+
+def document(state, name: str):
+    """The extension's document `name` (one of DOCUMENTS) as (version, doc), or None: the engine
+    then uses its seed (server/api/seeds.py), or nothing."""
+    got = of(state).ask("document", name)
+    if not (isinstance(got, (tuple, list)) and len(got) == 2 and isinstance(got[1], dict)):
+        return None
+    return got[0], got[1]
+
+
+def early_document(module_name: str | None, ext_dir: str | None, name: str):
+    """Before the extension starts (the residency limits before the weights load, the planner's
+    command line): its module's `read_document(ext_dir, name)` as (version, doc), or None when no
+    module is named, it has none, or it fails. Since 2.1."""
+    if not (module_name or "").strip() or ext_dir is None:
+        return None
+    try:
+        fn = getattr(importlib.import_module(module_name.strip()), "read_document", None)
+        got = fn(ext_dir, name) if callable(fn) else None
+    except Exception:                                              # noqa: BLE001
+        return None
+    if not (isinstance(got, (tuple, list)) and len(got) == 2 and isinstance(got[1], dict)):
+        return None
+    return got[0], got[1]
+
+
+def before_load(module, args: dict) -> str | None:
+    """Since 2.1: the module's `before_load(args)`, asked once it is discovered and before the
+    weights load (the session monitor's policy is checked there). A raise refuses the start with one
+    line; a SystemExit of the module's own passes as it is. Its answer is a line for the log.
+    Closed: the session monitor asked (`--conductor shadow|on`) of a module without before_load is
+    refused here, since nothing else would check and hand over its policy (2.0 read it from the
+    engine's state, which 2.1 no longer writes)."""
+    fn = getattr(module, "before_load", None)
+    if not callable(fn):
+        if (args or {}).get("conductor") in ("shadow", "on"):
+            raise Refused(f"the session monitor (--conductor shadow|on) needs engine-ext-v1 2.1's "
+                          f"before_load; {module.__name__} (engine-ext-v1 {module.EXT_API}) has none")
+        return None
+    try:
+        out = fn(dict(args or {}))
+    except SystemExit:
+        raise
+    except BaseException as exc:                                   # noqa: BLE001
+        raise Refused(f"{module.__name__}.before_load failed: {exc!r}") from None
+    return out if isinstance(out, str) else None
 
 
 def attach(state: dict, *, name: str = "tandemapp.engine_ext", log=print, **host):
@@ -792,4 +884,6 @@ def attach(state: dict, *, name: str = "tandemapp.engine_ext", log=print, **host
     module = check_module(importlib.import_module(name))
     h = Host(mode="chat", engine_api="", state=state, lock=None, tokenizer=state.get("tok"),
              registry=None, ledger_path=None, args={}, log=log, **host)
-    return Loaded(module, module.attach(h), h)
+    loaded = Loaded(module, module.attach(h), h)
+    state["ext"] = loaded                       # since 2.1: what of(state) answers
+    return loaded

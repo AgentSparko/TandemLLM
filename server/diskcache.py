@@ -4,7 +4,7 @@ a request hands the prefill, and what the dashboard's Memory screen shows.
     STATE["disk_cache"] = start(STATE, a, journal)   # None: --disk-cache off, the fake engine
     refresh(STATE)                                   # a request starts: the settings' new version
     tag = request_tag(plan, client, prompt_ids, tok) # the client, the injected notes, the head
-    view(STATE)                                      # GET /v1/conductor/memory/disk
+    view(STATE)                                      # GET /v1/engine/disk
 
 `--disk-cache PATH` (serve.env `QSE_DISK_CACHE`, which ops/start.sh passes to the :8000 service
 only, like the ledger) turns the tier on and names its directory; a row, gate or soak server never
@@ -72,13 +72,10 @@ def writes_of(settings: dict | None, a) -> dict:
 
 
 def _settings_doc(state) -> tuple:
-    cond = state.get("conductor")
-    if cond is None:
-        return None, {}
-    try:
-        return cond.store.peek("settings")
-    except Exception:                                              # noqa: BLE001
-        return None, {}
+    """The extension's settings document (engine-ext-v1 2.1 `document`), or (None, {})."""
+    from server import ext as ext_mod
+    got = ext_mod.document(state, "settings")
+    return got if got is not None else (None, {})
 
 
 def _file_id(path: str) -> list:

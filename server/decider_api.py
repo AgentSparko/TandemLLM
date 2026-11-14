@@ -26,7 +26,10 @@ The rest of the file is the wiring `server/app.py` calls: `start()` builds the r
 `QWEN38_DECIDER_*` (None, and nothing of engine/decision imported, when `QWEN38_DECIDER_MODELS` is
 empty), the residency planner's check for every load, and the conductor's in-process client
 (`endpoint: self` or `engine:<family>`, server/conductor/classify.py). `status()` and friends feed
-`/v1/conductor/deciders/*` (server/conductor/routes.py) for the dashboard's Deciders screen.
+`/v1/engine/deciders/*` (server/engine_routes.py) for the dashboard's Deciders screen. ENG-413 WP5:
+the documents are the extension's (`document`, engine-ext-v1 2.1) or the engine's seeds, the role
+contract is the extension's `role_errors`, and the extension gets the registry through `deciders`
+(its in-process client) and answers the screen's `api` part through `deciders_api`.
 """
 
 from __future__ import annotations
@@ -83,14 +86,10 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
                    collate=_S.get("DECIDER_COLLATE"),
                    policy=lambda: load_policy(state), routers=routers(models),
                    log=lambda s: log(s, flush=True), contract=_contract(state))
-    from tandemapp.conductor import classify
-
-    def factory(model, timeout_ms):
-        return classify.InProcess(reg, model, timeout_ms)
-
-    classify.register_backend("self", factory)
-    for fam in reg.families:
-        classify.register_backend(fam, factory)
+    # the extension's in-process client of these models (its classify backends `self` and each
+    # family): engine-ext-v1 2.1 `deciders(registry)`, asked once the registry is built
+    from server import ext as ext_mod
+    ext_mod.of(state).ask("deciders", reg)
     log(f"[deciders] serving {', '.join(reg.order)} on {device or 'no device (fake)'}; idle window "
         f"only (stage A); loads through the residency planner; /v1/systemone on this port",
         flush=True)
@@ -98,22 +97,23 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
 
 
 def _contract(state: dict):
-    """The role contract the registry checks each model against: the conductor's (SRV-133),
-    with the engine's tokenizer hash for a model that would share token ids."""
-    from tandemapp.conductor import schema
+    """The role contract the registry checks each model against: the extension's (SRV-133;
+    engine-ext-v1 2.1 `role_errors`, asked at each check), with the engine's tokenizer hash for a
+    model that would share token ids; none when headless."""
+    from server import ext as ext_mod
 
     def check(fields: dict, name: str) -> list[str]:
-        return schema.role_errors(fields, name, state.get("tokenizer_sha"))
+        got = ext_mod.of(state).ask("role_errors", fields, name, state.get("tokenizer_sha"))
+        return list(got) if isinstance(got, (list, tuple)) else []
 
     return check
 
 
 def _deciders_doc(state: dict) -> dict:
-    from tandemapp.conductor import schema
-    cond = state.get("conductor")
-    if cond is not None:
-        return cond.store.peek("deciders")[1]
-    return schema.seed("deciders")
+    from server import ext as ext_mod
+    from server.api import seeds
+    got = ext_mod.document(state, "deciders")
+    return got[1] if got is not None else seeds.seed("deciders")
 
 
 def load_policy(state: dict) -> dict[str, str]:
@@ -166,18 +166,17 @@ def planner(state: dict, *, fake: bool = False, role: str = "decider"):
 
     def check(name, *, loading, service_start, hold_restart):
         from server.conductor import residency
-        from server.api import seeds
-        cond = state.get("conductor")
-        doc = cond.store.peek("residency")[1] if cond is not None else seeds.seed("residency")
-        roles = cond.store.peek("roles")[1] if cond is not None else seeds.seed("roles")
+        docs = residency.documents(state)
+        doc, roles = docs["residency"], docs["roles"]
         hold = held(service_start=service_start, hold_restart=hold_restart)
         from server import memlimits
         peak, now = memlimits.engine_gib(state)
         d = residency.check(role, _mem_available_gib(fake), doc, roles, hold=hold,
                             loading=loading or _other_loading(state, role),
                             engine_peak_gib=peak, engine_now_gib=now)
-        if cond is not None:
-            residency.Journal(cond.root).write(dict(d, kind="check", source=f"engine:{name}"))
+        jr = residency.journal_of(state)
+        if jr is not None:
+            jr.write(dict(d, kind="check", source=f"engine:{name}"))
         return d
 
     return check
@@ -346,37 +345,36 @@ def readyz(reg, state: dict) -> tuple[int, dict]:
 
 # ---------------------------------------------------------------------- the Deciders screen
 def status(reg, state: dict) -> dict:
-    """`GET /v1/conductor/deciders/status`: what the engine serves, each model's state and
+    """`GET /v1/engine/deciders/status`: what the engine serves, each model's state and
     numbers, the planner's answer for a load now, and the model behind each question id."""
     from server.conductor import residency
-    from server.api import seeds
-    from tandemapp.conductor import schema
-    cond = state.get("conductor")
+    from server import ext as ext_mod
     doc = _deciders_doc(state)
     if reg is None:
         return {"enabled": False, "why": OFF_WHY, "models": [], "planner": None,
                 "last_refusal": None, "questions": [], "families": [], "device": None,
                 "window": "idle", "ready": False}
-    rdoc = cond.store.peek("residency")[1] if cond is not None else seeds.seed("residency")
-    roles = cond.store.peek("roles")[1] if cond is not None else seeds.seed("roles")
+    docs = residency.documents(state)
+    rdoc, roles = docs["residency"], docs["roles"]
     from server import memlimits
     peak, now = memlimits.engine_gib(state)
     plan = residency.check("decider", _mem_available_gib(reg.device is None), rdoc, roles,
                            hold=held(), loading=reg._loading is not None,
                            engine_peak_gib=peak, engine_now_gib=now)
     last = None
-    if cond is not None:
-        last = next((r for r in residency.Journal(cond.root).tail(200)
+    jr = residency.journal_of(state)
+    if jr is not None:
+        last = next((r for r in jr.tail(200)
                      if r.get("kind") == "check" and not r.get("allowed")
                      and str(r.get("source", "")).startswith("engine:")), None)
     picks = reg.picks_by_source()
     questions = [{"id": qid, "model": m, "picks": picks.get(qid, {})}
                  for qid, m in sorted(doc["questions"].items())]
-    from tandemapp import laya_api
     return {"enabled": True, "why": None, "models": reg.status(), "planner": plan,
             "last_refusal": last, "questions": questions, "families": reg.families,
             "device": str(reg.device.device) if reg.device is not None else None,
             "window": "idle", "ready": reg.ready(),
             "unserved": [m["name"] for m in doc["models"] if m["name"] not in reg.models],
-            # L1: Laya for the model's scripts (`/v1/laya/ask`), its settings and counts
-            "api": {**schema.decider_api(doc), "stats": laya_api.stats()}}
+            # L1: Laya for the model's scripts (`/v1/laya/ask`), its settings and counts: the
+            # extension's (engine-ext-v1 2.1 `deciders_api`), None when headless
+            "api": ext_mod.of(state).ask("deciders_api", doc)}

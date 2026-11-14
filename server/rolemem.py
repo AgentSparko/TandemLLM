@@ -550,12 +550,9 @@ def build(state: dict, *, floor_gib: float, meminfo=None, headroom=None, idle=No
 
 def _decider_claim(state: dict) -> float:
     try:
-        cond = state.get("conductor")
         from server.conductor import residency
-        from server.api import seeds
-        doc = cond.store.peek("residency")[1] if cond is not None else seeds.seed("residency")
-        roles = cond.store.peek("roles")[1] if cond is not None else seeds.seed("roles")
-        c = residency.claims(doc, roles).get("decider")
+        docs = residency.documents(state)
+        c = residency.claims(docs["residency"], docs["roles"]).get("decider")
         return float(c["gib"]) if c else 3.0
     except Exception:                                              # noqa: BLE001
         return 3.0

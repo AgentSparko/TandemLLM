@@ -228,6 +228,8 @@ STATE: dict = SlotState()
 # module before the weights load (QSE_EXT), _serve starts it once the served model is loaded
 EXT = ext_mod.NULL
 _EXT_MODULE = None
+#: ENG-413 WP5: the line the extension's before_load gave for the log (its session monitor's policy)
+_EXT_EARLY: str | None = None
 # SRV-747: the conductor's engine-only screens, which TandemApp's routes hand to the engine, and
 # the speed-guard report this release tree ships (VIS-68), which its Compare screen lists
 STATE[conductor_routes.ENGINE_ROUTES] = conductor_inproc.ROUTES
@@ -5727,7 +5729,7 @@ def _writer_look(got: str) -> None:
     mem, _ = _writer_ctx()
     if mem is None:
         return
-    st = mem.writer.stats
+    st = mem.stats
     last = st.get("last_look")
     st["last_look"] = got
     if got != last:
@@ -5748,11 +5750,14 @@ RANK_MEMORY = 3
 
 
 def _writer_ctx():
-    """(the conductor's memory, the writer's settings), or (None, None) without a conductor: the
-    extension's (ENG-413 WP3b, interim)."""
-    if STATE.get("conductor") is None:
+    """(the memory writer, its settings), or (None, None) without one: the extension's
+    (engine-ext-v1 2.1 `memory_writer`; ENG-413 WP5). The engine decodes the writer's hidden turn
+    and asks the writer the rest: state, due, mark, gate, instructions, apply, skipped and its
+    stats."""
+    got = EXT.ask("memory_writer")
+    if not (isinstance(got, (tuple, list)) and len(got) == 2) or got[0] is None:
         return None, None
-    return EXT.ask("writer")
+    return got[0], got[1]
 
 
 def memory_once() -> str:
@@ -5770,7 +5775,7 @@ def memory_once() -> str:
             return "busy"
     idle = time.monotonic() - float(STATE.get("last_end_mono") or 0.0)
     conv = res.owner
-    if mem.writer.state(conv) is None:
+    if mem.state(conv) is None:
         # the resident conversation never came with a memory session (no session id, raw, or a
         # profile with memory off): nothing of it is the writer's (MEM2: the smoke's requests
         # printed "nothing" with the record's numbers)
@@ -5778,11 +5783,11 @@ def memory_once() -> str:
     r = _writer_record(res, conv)
     if r is None:
         return "nothing"
-    trigger = mem.writer.due(conv, r.at, idle, cfg)
+    trigger = mem.due(conv, r.at, idle, cfg)
     if trigger is None:
         return "not_due"
     if trigger == "compaction" and cfg["after_compaction"] == "off":
-        mem.writer.mark(conv, "idle")
+        mem.mark(conv, "idle")
         return "not_due"
     try:
         if decider_api.held():
@@ -5791,10 +5796,10 @@ def memory_once() -> str:
         return "hold"
     if cfg["gate"]:
         t0 = time.perf_counter()
-        ans, how = mem.writer.gate(STATE["conductor"].router, conv)
+        ans, how = mem.gate(conv)
         gate = {"answer": ans, "how": how, "ms": round((time.perf_counter() - t0) * 1e3, 1)}
         if ans == "no":
-            mem.writer.skipped(conv, trigger, "gate_no", r.at, {"gate": gate})
+            mem.skipped(conv, trigger, "gate_no", r.at, {"gate": gate})
             return "gate_no"
     else:
         gate = {"answer": None, "how": "off"}
@@ -5885,7 +5890,7 @@ def _writer_turn(mem, cfg, conv, r, trigger, gate, stop=lambda: False, yielded=N
     at the next chunk or block."""
     tok = STATE["tok"]
     said = ""
-    text, existing = mem.writer.instructions(conv, cfg)
+    text, existing = mem.instructions(conv, cfg)
     tail = compaction_mod.tail_ids(tok, "", text)
     # M3 (2026-10-05): the writer's own NONE. The answer may start with `prefill` (its tokens
     # follow the generation prompt and count as the answer's start), and `<tool_call>` may be
@@ -5899,7 +5904,7 @@ def _writer_turn(mem, cfg, conv, r, trigger, gate, stop=lambda: False, yielded=N
             "ban": sorted(ban) if ban else ("unavailable" if cfg.get("ban_tool_call") else None),
             "prefill": len(pre_ids)}
     if r.at + len(tail) + cap >= int(STATE["max_len"]):
-        mem.writer.skipped(conv, trigger, "too_long", r.at, info)
+        mem.skipped(conv, trigger, "too_long", r.at, info)
         return "too_long"
     res = STATE["resident"]
     saved = (list(res.tokens), res.valid, res.taint, res.owner, res.capturing)
@@ -5946,7 +5951,7 @@ def _writer_turn(mem, cfg, conv, r, trigger, gate, stop=lambda: False, yielded=N
         if cut is not None:
             info["cut"] = cut
         _writer_text(trigger, out)
-        run = mem.writer.apply(conv, out, cfg, trigger, r.at, info)
+        run = mem.apply(conv, out, cfg, trigger, r.at, info)
         said = (f"{len(run['ops'])} op(s)" if run.get("ops") else
                 "NONE" if run.get("answer") == "none" else
                 f"NONE ({run.get('answer')}{f': {cut}, cut' if cut else ''})" if run.get("none")
@@ -5956,20 +5961,20 @@ def _writer_turn(mem, cfg, conv, r, trigger, gate, stop=lambda: False, yielded=N
     except _Preempted:
         why = f"yielded:{yielded.why}" if yielded is not None and yielded.why else "stopped"
         info.update(ms=round((time.perf_counter() - t0) * 1e3), tokens=len(ids))
-        mem.writer.skipped(conv, trigger, why, r.at, info)
+        mem.skipped(conv, trigger, why, r.at, info)
         return why
     except cache.MemoryRefused:
         why = "memory"
-        mem.writer.skipped(conv, trigger, why, r.at, info)
+        mem.skipped(conv, trigger, why, r.at, info)
         return why
     except EndLost:
         why = "end_lost"
-        mem.writer.skipped(conv, trigger, why, r.at, info)
+        mem.skipped(conv, trigger, why, r.at, info)
         return why
     except Exception as exc:                                       # noqa: BLE001
         logbuf.print_exc()
         gpu_health.note(exc, "memory writer", STATE.get("device"))   # SRV-671
-        mem.writer.skipped(conv, trigger, "failed", r.at, info)
+        mem.skipped(conv, trigger, "failed", r.at, info)
         return why
     finally:
         if gen is not None:
@@ -6005,7 +6010,7 @@ def _writer_after_compaction(plan, conv_id) -> None:
     mem, cfg = _writer_ctx()
     if mem is None or plan is None or not getattr(plan, "compaction", False) or not conv_id:
         return
-    mem.writer.mark(conv_id, "compaction")
+    mem.mark(conv_id, "compaction")
     if cfg["mode"] == "off" or cfg["after_compaction"] != "turn":
         return
     res = STATE.get("resident")
@@ -6122,18 +6127,9 @@ SHADOW_RETRY_S = 300.0
 
 
 def _shadow_profiles_on() -> bool:
-    """Does some profile have `shadow.mode: on`?"""
-    cond = STATE.get("conductor")
-    if cond is None:
-        return False
-    for name in cond.store.names():
-        try:
-            _, doc = cond.store.peek("profiles", name)
-        except Exception:                                          # noqa: BLE001
-            continue
-        if shadow_mod.settings_of(doc)["mode"] == "on":
-            return True
-    return False
+    """Does some profile have `shadow.mode: on`? The extension's answer (engine-ext-v1 2.1
+    `shadow_wanted`), False when headless."""
+    return bool(EXT.ask("shadow_wanted"))
 
 
 def shadow_preload_once() -> str | None:
@@ -6331,14 +6327,13 @@ def _memory_event(ev: dict) -> None:
     if kind in ("shed", "shed_chunk", "refused", "estimate_raised"):
         print(f"[memory] {kind} " + " ".join(f"{k}={v}" for k, v in ev.items()
                                              if k not in ("kind", "ts")), flush=True)
-        cond = STATE.get("conductor")
-        if cond is not None:
-            try:
-                from server.conductor import residency
-                residency.Journal(cond.root).write(dict(ev, kind=f"memory_{kind}", role="engine",
-                                                        source="engine"))
-            except Exception:                                      # noqa: BLE001
-                pass
+        try:
+            from server.conductor import residency
+            jr = residency.journal_of(STATE)
+            if jr is not None:
+                jr.write(dict(ev, kind=f"memory_{kind}", role="engine", source="engine"))
+        except Exception:                                          # noqa: BLE001
+            pass
     elif kind == "empty" and STATE.get("verbose"):
         line = _empty_line(ev)
         if line:
@@ -7164,10 +7159,10 @@ def _roles_headroom() -> int | None:
 
 def _roles_start(a) -> None:
     def journal(rec):
-        cond = STATE.get("conductor")
-        if cond is not None:
-            from server.conductor import residency
-            residency.Journal(cond.root).write(rec)
+        from server.conductor import residency
+        jr = residency.journal_of(STATE)
+        if jr is not None:
+            jr.write(rec)
 
     def empty():
         mem = dict.get(STATE, "mem")
@@ -8051,14 +8046,10 @@ def _package_tokens(name: str, text: str | None, sha: str | None) -> int | None:
 
 
 def _library_text(name: str) -> str | None:
-    cond = STATE.get("conductor")
-    if cond is None:
-        return None
-    try:
-        text, _ = cond.library.text(cond.store.peek("packages")[1], name)
-    except Exception:                                              # noqa: BLE001
-        return None
-    return text
+    """A package's text from the extension's library (engine-ext-v1 2.1 `library_text`), None
+    without one."""
+    got = EXT.ask("library_text", name)
+    return got if isinstance(got, str) else None
 
 
 def _account(rec: "usage_mod.RequestRecord") -> None:
@@ -8271,9 +8262,9 @@ def _card_facts() -> dict:
 def _effort_caps() -> dict:
     """The effort levels' reasoning caps a client's effort word maps to: the router document's
     levels when the conductor is loaded (the Routing screen edits them), else their seed."""
-    store = getattr(STATE.get("conductor"), "store", None)
+    got = ext_mod.document(STATE, "router")        # the extension's (engine-ext-v1 2.1)
     try:
-        levels = store.peek("router")[1]["effort"]["levels"] if store is not None else None
+        levels = got[1]["effort"]["levels"] if got is not None else None
     except Exception:                                              # noqa: BLE001
         levels = None
     return thinking_mod.caps(levels)
@@ -8300,10 +8291,10 @@ def _monitor_mode() -> dict:
     """`{"conductor": {"mode": off|shadow|on}}` for the live stream's engine block and the summary's
     status (VIS-44: the header's indicator); empty on a server with no monitor policy, so an
     older dashboard and a server without the monitor show nothing."""
-    mon = STATE.get("monitor")
-    if mon is None:
+    mode = EXT.ask("monitor_mode")                 # the extension's (engine-ext-v1 2.1)
+    if not isinstance(mode, str):
         return {}
-    return {"conductor": {"mode": "off" if mon.mode == "raw" else mon.mode}}
+    return {"conductor": {"mode": "off" if mode == "raw" else mode}}
 
 
 def _slot_blocks(i: int):
@@ -13540,9 +13531,8 @@ def conductor_root(a) -> str | None:
     val = getattr(a, "conductor_config", "off")
     if val in (None, "", "off"):
         return None
-    from tandemapp.conductor.store import DEFAULT_ROOT
     if a.fake_engine and os.path.realpath(os.path.expanduser(val)) == \
-            os.path.realpath(os.path.expanduser(DEFAULT_ROOT)):
+            os.path.realpath(os.path.expanduser(ext_mod.EXT_DEFAULT_DIR)):
         raise SystemExit("[conductor] REFUSING: a fake engine may not use the production conductor "
                          "config; give it a directory of its own")
     return val
@@ -13583,8 +13573,6 @@ def main() -> None:
     # before the minutes of loading: a ledger configuration that must not start stops here (a
     # fake engine is a test run: it may never write the production ledger)
     led = open_ledger(a, test=True if a.fake_engine else None)
-    # and the conductor's policy: a file that does not validate stops the start here too
-    STATE["conductor_policy"] = _conductor_policy(a)
     _limits_at_start(a)
     _window_at_start(a)
     if stage_mod.front(STATE):
@@ -13622,15 +13610,18 @@ def _ext_at_start(a) -> None:
     mode (a conductor directory) needs one; a module that does not import, speaks another
     engine-ext-v1 or lacks a module attribute, and a QSE_EXT_ARGS that is not a JSON object, stop the
     start here with one line `[ext] REFUSING: ...`. None is a headless engine."""
-    global _EXT_MODULE
+    global _EXT_MODULE, _EXT_EARLY
     name, mode = os.environ.get("QSE_EXT", ""), "chat" if conductor_root(a) is not None else "engine"
-    if not name.strip() and mode == "engine" and STATE.get("conductor_policy") is not None:
+    if not name.strip() and mode == "engine" and _monitor_asked(a):
         # ENG-413 WP3b: the session monitor runs behind the extension too
         raise ext_mod.Refused("the session monitor (--conductor shadow|on) needs an extension "
                               "(QSE_EXT is empty)")
     _EXT_MODULE = ext_mod.discover(name, mode)
     if _EXT_MODULE is not None:
         ext_mod.ext_args({})
+        # ENG-413 WP5 (engine-ext-v1 2.1): the module's checks before the weights load (the session
+        # monitor's policy: a file that does not validate stops the start here)
+        _EXT_EARLY = ext_mod.before_load(_EXT_MODULE, ext_mod.ext_args(vars(a)))
         print(f"[ext] QSE_EXT={_EXT_MODULE.__name__}: {_EXT_MODULE.NAME} {_EXT_MODULE.VERSION} "
               f"(engine-ext-v1 {_EXT_MODULE.EXT_API}), started once the model is loaded", flush=True)
     else:
@@ -13644,6 +13635,7 @@ def _ext_start(a, root, led) -> None:
     global EXT
     if _EXT_MODULE is None:
         EXT = ext_mod.NULL
+        STATE["ext"] = EXT
         return
     host = ext_mod.Host(
         mode="chat" if root is not None else "engine", engine_api=engine_api.VERSION, state=STATE,
@@ -13652,11 +13644,13 @@ def _ext_start(a, root, led) -> None:
         args=ext_mod.ext_args(vars(a)), engine=dict(conductor_inproc.ROUTES),
         log=lambda s: print(s, flush=True),
         # engine-ext-v1 1.3: the extension's directory, the identity, the own questions' clock,
-        # and the monitor's decisions in Prometheus (SRV-115)
+        # and the monitor's decisions in Prometheus (SRV-115); 2.1: the release tree's speed-guard
+        # report (VIS-68)
         ext_dir=root, identity_name=_identity_name,
         own_eta=_own_eta_ms if OWN_ETA == "on" else None, own_idle=_own_idle_s,
-        on_event=metrics.on_conductor_event)
+        on_event=metrics.on_conductor_event, shipped_guard=conductor_inproc.SHIPPED_GUARD)
     EXT = ext_mod.start(_EXT_MODULE, host)
+    STATE["ext"] = EXT
     print(f"[ext] on: {EXT.name} {EXT.version} (engine-ext-v1 {EXT.ext_api}); "
           f"{len(EXT.obj.routes)} routes: "
           + ", ".join(f"{r.get('method', '*')} {r['prefix']}" for r in EXT.obj.routes), flush=True)
@@ -13676,9 +13670,12 @@ def _limits_at_start(a) -> None:
         root = None
     if root is not None:
         try:
-            from tandemapp.conductor.store import Store
-            doc = Store(root, readonly=True).get("residency")[1]
-            for line in memlimits.overrides_at_start(a, doc, len_mode=_S.get("LEN_MODE")):
+            # ENG-413 WP5: the document through the extension's module before it starts
+            # (engine-ext-v1 2.1 `read_document`); nothing to read without one
+            got = ext_mod.early_document(os.environ.get("QSE_EXT", ""), root, "residency")
+            if got is None:
+                raise ValueError("no extension module reads it (QSE_EXT)")
+            for line in memlimits.overrides_at_start(a, got[1], len_mode=_S.get("LEN_MODE")):
                 print(f"[memory] the dashboard's limit: {line}", flush=True)
         except Exception as exc:                                   # noqa: BLE001
             print(f"[memory] the residency document's limits were not read: {exc}", flush=True)
@@ -13717,20 +13714,10 @@ def card_sampling(path):
     return loopescape.card_sampling(path)
 
 
-def _conductor_policy(a) -> "conductor.Policy | None":
-    """The monitor's policy for `--conductor shadow|on`, validated before the weights load; None when
-    raw. The monitor itself starts with the extension (ENG-413 WP3b), which reads it from STATE."""
-    mode = a.conductor if getattr(a, "conductor", "raw") in ("shadow", "on") else "raw"
-    if mode == "raw":
-        return None
-    from tandemapp.conductor import monitor as conductor
-    mode = conductor.parse_mode(getattr(a, "conductor", "raw"))
-    if mode in (None, "raw"):
-        return None
-    try:
-        return conductor.load(getattr(a, "conductor_policy", "") or None)
-    except conductor.PolicyError as exc:
-        raise SystemExit(f"[conductor] the policy does not load: {exc}")
+def _monitor_asked(a) -> bool:
+    """`--conductor shadow|on`: the session monitor is asked for. Its policy is the extension's,
+    checked by its module before the weights load (engine-ext-v1 2.1 `before_load`, ENG-413 WP5)."""
+    return getattr(a, "conductor", "raw") in ("shadow", "on")
 
 
 def _blocking_sync() -> None:
@@ -14682,12 +14669,12 @@ def _serve(a, led) -> None:
     STATE["live_windows"] = w = live_mod.windows_from_env(os.environ)
     STATE.pop("live", None)                      # built with the settings above
     # The session monitor (`--conductor shadow|on`, its policy validated before the load) starts with
-    # the extension (ENG-413 WP3b; tandemapp.engine_ext since WP4), which puts it into STATE["monitor"]
-    pol = STATE.get("conductor_policy")
+    # the extension (ENG-413 WP3b; tandemapp.engine_ext since WP4), which puts it into STATE["monitor"];
+    # its policy line is the one the module's before_load gave (engine-ext-v1 2.1)
     mode = "raw" if getattr(a, "conductor", "raw") in ("raw", "off") else a.conductor
     STATE["monitor"] = None
-    print(f"[conductor] {mode}" + (f", policy {pol.path} version {pol.version}: " + ", ".join(
-        f"{t.id}={t.mode}" for t in pol.tasks.values()) if pol is not None else ""), flush=True)
+    print(f"[conductor] {mode}" + (f", {_EXT_EARLY}" if _monitor_asked(a) and _EXT_EARLY else ""),
+          flush=True)
     print(f"[server] live activity {'on' if STATE['live_activity'] else 'off'}, "
           f"{STATE['live_hz'] if STATE['live_activity'] else 1} Hz while busy; live rates from "
           f"decoded token {w['decode_warmup_tokens']} and after prefill chunk "
@@ -14703,6 +14690,8 @@ def _serve(a, led) -> None:
     a.port = httpd.server_address[1]
     STATE["port"] = a.port
     root = conductor_root(a)
+    # ENG-413 WP5: the extension's directory, where the residency journal and the shadow's are kept
+    STATE["ext_root"] = os.path.realpath(os.path.expanduser(root)) if root is not None else None
     # One location per skill in opencode's skills list (server/skillcanon.py)
     STATE["skill_canon"] = (skillcanon_mod.SkillCanon(os.path.join(root, "skill-locations.json"))
                             if root is not None else None)
