@@ -5,10 +5,11 @@ server/app.py asks the conductor and its session monitor only through the extens
 interim calls server/ext.py names. tests/test_ext_trace.py holds the tokens and the journal equal;
 this file holds the seam itself.
 
-  1  the import guard: server/app.py imports TandemApp's conductor only where ALLOWED says why
-     (none on the request path; WP5 took out the routes, the store and the monitor), by statement
-     or by name; server/ext.py, server/round_runner.py, server/fake_engine.py and (WP5) the
-     screens' and the documents' readers import none of TandemApp
+  1  the import guard: server/app.py imports TandemApp only where ALLOWED says why: since WP5b only
+     what WP14 removes (the --backends proxy, the page, the chat-app forward; the finder in
+     server/__init__.py works by path) (WP5 took out the routes, the store and the monitor; WP5b
+     Laya, the session addresses, the loop escape and the shadow's question), by statement or by
+     name; no other file under server/ imports any of TandemApp
                                                               test_the_request_path_imports_no_conductor
   2  the optional calls (engine-ext-v1 2.0, 3.0): every name of CALLS and SUP_OPTIONAL is the
      extension's; a headless engine (NULL) answers each with its headless value and asks nothing;
@@ -64,19 +65,19 @@ RAW = "qwen38-spark-engine"
 #: fake-engine guard's directory is a value copy, the residency limits come through the module's
 #: read_document) and its monitor (the policy is checked by the module's before_load)
 ALLOWED = {
-    ("tandemapp.conductor.loopescape", "card_sampling"): "the load: the checkpoint's sampling "
-                                                         "(owner: ENG-413 follow-up, /health's part)",
-    ("tandemapp.conductor.loopescape", "loop_escapes"): "startup: the loop escape's sessions, which "
-                                                        "/health reports on every engine (the same)",
     ("tandemapp.static", None): "WP14: setup mode's page",
-    ("tandemapp.laya_api", None): "Laya's routes with the engine's decision models (owner: the "
-                                  "Laya move, plan 3.1 (d) then (b))",
     ("tandemapp.chat_forward", None): "WP14: /v1/chat-app leaves the engine",
-    ("tandemapp.session_tokens", None): "the session addresses /s/<token> (owner: with Laya, the "
-                                        "library and the memory routes, plan 3.1 (d))",
 }
 #: what WP5 took out of server/app.py: none of it may come back
 GONE_WP5 = ("tandemapp.conductor.routes", "tandemapp.conductor.store", "tandemapp.conductor.monitor")
+#: what WP5b took out of server/: Laya (the extension's route), the session addresses, the loop
+#: escape and the shadow reader's question form (the engine's server/api copies), the router's
+#: question (the extension's shadow_question); none of it may come back
+GONE_WP5B = ("tandemapp.laya_api", "tandemapp.session_tokens", "tandemapp.conductor.loopescape",
+             "tandemapp.conductor.incontext", "tandemapp.conductor.inject", "tandemapp.conductor.schema")
+#: ENG-413 WP5b, the G5 list: the only engine files under server/ that may import TandemApp, each
+#: with the modules WP14 removes with it
+WP14 = {"server/app.py": ("proxy", "tandemapp.static", "tandemapp.chat_forward")}
 #: --backends: the proxy in the engine's process, with the engine's conductor as its harness (it
 #: leaves the engine with the controller, WP7/WP14); none of these functions is the request path
 for _fn in ("start_proxy", "do_POST", "_proxied", "_config", "_hosts", "_system", "_cache_peek"):
@@ -123,6 +124,22 @@ def test_the_request_path_imports_no_conductor():
     assert not bad, f"server/app.py imports TandemApp outside ALLOWED: {bad}"
     back = sorted(m for m, _ in got if m.startswith(GONE_WP5))
     assert not back, f"WP5 took these out of server/app.py: {back}"
+    back = sorted(m for m, _ in got if m.startswith(GONE_WP5B))
+    assert not back, f"WP5b took these out of server/app.py: {back}"
+    # the G5 list: no other file under server/ imports TandemApp; server/app.py only what WP14 removes
+    seen = {}
+    for base, dirs, names in os.walk(os.path.join(ROOT, "server")):
+        dirs[:] = sorted(d for d in dirs if d != "__pycache__")
+        for n in sorted(names):
+            if n.endswith(".py"):
+                rel = os.path.relpath(os.path.join(base, n), ROOT).replace(os.sep, "/")
+                mods = {m for m, _ in _imports(rel)}
+                if mods:
+                    seen[rel] = sorted(mods)
+    assert set(seen) == set(WP14), seen
+    for rel, mods in seen.items():
+        out = [m for m in mods if not any(m == w or m.startswith(w + ".") for w in WP14[rel])]
+        assert not out, (rel, out)
     for path in ("server/conductor/inproc.py", "server/conductor/residency.py", "server/decider_api.py",
                  "server/engine_routes.py", "server/memlimits.py", "server/diskcache.py",
                  "server/rolemem.py"):

@@ -19,7 +19,9 @@ The test matrix (a random tiny Qwen3.5 checkpoint, test_thoughts' `tiny_dir`, on
     6  the service: turns fed (host only), read in `work` until the deadline or `stop()`, before
        every chunk; status                                                       test_the_service
     7  the router's question at the turn's insertion point, answered in the idle window, journaled
-       with the router's class, the agreement and how far behind the shadow was    test_the_router_question
+       with the router's class, the agreement and how far behind the shadow was; the question is
+       the extension's (engine-ext-v1 3.1 `shadow_question`, TandemApp's `router_question`), the
+       reader skips and counts what it says                                       test_the_router_question
     8  the cap: the least recently used session goes to the disk and comes back exact when it is
        fed again; a drain writes every one                                       test_the_cap_and_the_disk
     9  `ask` over the whole session: a typed answer, the letters' softmax           test_ask
@@ -316,17 +318,24 @@ def test_a_model_the_reader_was_not_validated_on_gets_no_reader():
 
 def test_the_router_question():
     import json
+    from tandemapp import engine_ext       # the extension's question (engine-ext-v1 3.1)
+
+    def q(plan, ids):
+        return engine_ext.router_question(plan, ids, Tok())
     svc = service()
     cfg = {"router": "shadow", "router_min_tokens": 10}
     prompt, ans = turns(6, n=2)[-1]
-    ask = svc.router_ask(Plan(), prompt, Tok(), cfg)
+    ask = svc.router_ask(Plan(), prompt, cfg, question=q)
     assert ask is not None and ask["raw_at"] == len(prompt) - 1, ask
     assert ask["router"]["class_id"] == "code_edit" and set(ask["choices"]) == {"chat", "code_edit",
                                                                               "writing"}
-    # not asked: short prompt, structural, off
-    assert svc.router_ask(Plan(), prompt, Tok(), dict(cfg, router_min_tokens=10**6)) is None
-    assert svc.router_ask(Plan(source="structural"), prompt, Tok(), cfg) is None
-    assert svc.router_ask(Plan(), prompt, Tok(), dict(cfg, router="off")) is None
+    # not asked: short prompt, structural, off; no extension's question (headless) asks nothing
+    assert svc.router_ask(Plan(), prompt, dict(cfg, router_min_tokens=10**6), question=q) is None
+    assert svc.router_ask(Plan(source="structural"), prompt, cfg, question=q) is None
+    assert svc.router_ask(Plan(), prompt, dict(cfg, router="off"), question=q) is None
+    before = dict(svc.router)
+    assert svc.router_ask(Plan(), prompt, cfg) is None and dict(svc.router) == before
+    assert svc.router["skip_short"] == 1 and svc.router["skip_structural"] == 1, dict(svc.router)
     svc.begin_turn("h:x", prompt, ask=ask)
     svc.end_turn("h:x", ans)
     svc.work(deadline=svc.clock() + 60)

@@ -196,10 +196,10 @@ def test_start_is_closed():
              refused(X, args={"route": "/v1/engine/disk"})]
     assert "QSE_EXT is empty" in lines[0] and "needs engine-ext-v1 3.9" in lines[4], lines
     # 2.0 (ENG-413 WP4): a 1.x extension is refused at start, one line, whatever its minor
-    assert lines[3] == "[ext] REFUSING: the extension speaks engine-ext-v1 1.3; this engine speaks 3.0", lines[3]
+    assert lines[3] == "[ext] REFUSING: the extension speaks engine-ext-v1 1.3; this engine speaks 3.1", lines[3]
     for old in ("1.0", "1.2", "1.9"):
         assert refused(variant(EXT_API=old)) == f"[ext] REFUSING: the extension speaks engine-ext-v1 {old}; " \
-            f"this engine speaks 3.0", old
+            f"this engine speaks 3.1", old
 
     class NoHook:
         routes, models, knobs = [], [], []
@@ -211,7 +211,7 @@ def test_start_is_closed():
     # 3.0 (ENG-413 WP5): every 2.x extension is refused, one line, whatever its minor
     for old in ("2.0", "2.1", "2.9"):
         assert refused(variant(EXT_API=old)) == f"[ext] REFUSING: the extension speaks engine-ext-v1 {old}; " \
-            f"this engine speaks 3.0", old
+            f"this engine speaks 3.1", old
     assert H.load(X, H.FakeHost(args={"route": "/v1/conductor/"})) is not None
     assert H.load(X, H.FakeHost(args={"route": "/v1/dashboard/session"})) is not None
     return f"{len(lines) + 1} start failures refused with one line; headless and older minors start"

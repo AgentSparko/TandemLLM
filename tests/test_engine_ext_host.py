@@ -6,7 +6,9 @@ The test matrix (the Gherkin of ENG-429's host part):
 
   1  server/ext.py says what contracts/engine-ext-v1/ext.json says: its version, the module
      attributes, every hook and supervisor method with its arguments, the safe points' acts, the
-     request fields; the engine's paths are fake_host.py's; it imports the standard library only
+     request fields; the engine's paths are fake_host.py's; it imports the standard library only;
+     3.1: shadow_question, the engine's objects in state_keys, and the route rule (a preflight
+     goes only to a route that names OPTIONS, as fake_host.py's `route`)
                                                                   test_the_host_is_the_interface
   2  fake_ext.py through the real loader (QSE_EXT by name) and the real Request asks the same hooks
      in the same order as the reference host, for a plain request, a tool call, CONTINUE_HIDDEN,
@@ -175,6 +177,21 @@ def _the_2_0_surface(s: dict, H) -> None:
     assert not hasattr(E, "INTERIM") and "writer" not in kept and "--backends" in kept, kept
     assert all(k["why"] and k["until"] == "ENG-413 WP14" for k in s["kept_interim"])
     assert set(E.CALLS_3_0) == {c["name"] for c in s["extension"]["calls"] if c.get("since") == "3.0"}
+    # 3.1 (ENG-413 WP5b): the router's shadow question; the engine's objects the extension uses
+    assert set(E.CALLS_3_1) == {c["name"] for c in s["extension"]["calls"] if c.get("since") == "3.1"} \
+        == {"shadow_question"}
+    assert E.NULL.ask("shadow_question", None, [1, 2]) is None
+    assert {"escapes", "session_tokens"} <= set(s["state_keys"]) and "since_3_1" in s
+    # the route rule: a preflight goes only to a route that names OPTIONS (engine and reference host)
+    every, pre = (lambda r: "every"), (lambda r: "pre")
+    obj = types.SimpleNamespace(routes=[{"method": "*", "prefix": "/v1/conductor/", "handler": every},
+                                        {"method": "GET", "prefix": "/v1/laya", "handler": every},
+                                        {"method": "OPTIONS", "prefix": "/v1/laya", "handler": pre}])
+    got = E.Loaded(types.SimpleNamespace(NAME="t", VERSION="0"), obj, None)
+    for method, path, want in (("GET", "/v1/conductor/x", every), ("OPTIONS", "/v1/conductor/x", None),
+                               ("OPTIONS", "/v1/laya/ask", pre), ("options", "/v1/laya", pre),
+                               ("GET", "/v1/laya/kit/a.py", every), ("POST", "/v1/laya/ask", None)):
+        assert got.route(method, path) is want and H.route(obj, method, path) is want, (method, path)
     assert set(E.DOCUMENTS) == set(s["extension"]["documents"]) and set(E.WRITER) == set(s["memory_writer"]["methods"])
     assert set(E.MODULE_OPTIONAL) == set(s["discovery"]["module_optional"])
     assert {"shipped_guard", "engine"} <= set(s["host"]) and "conductor" in s["state_keys"]
@@ -315,8 +332,8 @@ def test_start_is_closed():
         assert a.replace("fake_ext", "M").replace("variant_ext", "M") == \
             b.replace("engine_ext_ref_fake_ext", "M").replace("variant_ext", "M"), (a, b)
         lines.append(a)
-    assert "QSE_EXT is empty" in lines[0] and lines[3] == "[ext] REFUSING: the extension speaks engine-ext-v1 1.3; this engine speaks 3.0", lines
-    assert lines[-2:] == [f"[ext] REFUSING: the extension speaks engine-ext-v1 {v}; this engine speaks 3.0"
+    assert "QSE_EXT is empty" in lines[0] and lines[3] == "[ext] REFUSING: the extension speaks engine-ext-v1 1.3; this engine speaks 3.1", lines
+    assert lines[-2:] == [f"[ext] REFUSING: the extension speaks engine-ext-v1 {v}; this engine speaks 3.1"
                           for v in ("2.0", "2.1")], lines[-2:]
     assert E.discover("", "engine") is None and E.NULL.listing() == [] and E.NULL.route("GET", "/x") is None
     # an older minor starts; the extension's own paths are fine
@@ -454,10 +471,10 @@ def test_the_engine_refuses_to_start():
     cdir = tempfile.mkdtemp(prefix="ext-cond-")
     before = [({}, cdir, "chat mode needs an extension (QSE_EXT is empty)"),
               ({"QSE_EXT": "no_such_extension_module_x"}, None, "QSE_EXT=no_such_extension_module_x does not import"),
-              ({"QSE_EXT": "ext_major1"}, None, "the extension speaks engine-ext-v1 1.3; this engine speaks 3.0"),
+              ({"QSE_EXT": "ext_major1"}, None, "the extension speaks engine-ext-v1 1.3; this engine speaks 3.1"),
               # 3.0 (ENG-413 WP5): a 2.x extension is refused before the weights load, in chat mode too
-              ({"QSE_EXT": "ext_major2"}, None, "the extension speaks engine-ext-v1 2.0; this engine speaks 3.0"),
-              ({"QSE_EXT": "ext_major2"}, cdir, "the extension speaks engine-ext-v1 2.0; this engine speaks 3.0"),
+              ({"QSE_EXT": "ext_major2"}, None, "the extension speaks engine-ext-v1 2.0; this engine speaks 3.1"),
+              ({"QSE_EXT": "ext_major2"}, cdir, "the extension speaks engine-ext-v1 2.0; this engine speaks 3.1"),
               ({"QSE_EXT": "fake_ext", "QSE_EXT_ARGS": "[1]"}, None, "QSE_EXT_ARGS is not a JSON object")]
     after = [({"QSE_EXT": "ext_nohook"}, None, "ext_nohook lacks the hooks"),
              ({"QSE_EXT": "fake_ext", "QSE_EXT_ARGS": '{"fail": "start"}'}, None, "fake_ext.start failed"),
