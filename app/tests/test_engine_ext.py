@@ -330,7 +330,9 @@ def test_the_calls_outside_a_request():
     v, doc = ext.document("residency")
     assert (v, doc) == tuple(cond.store.peek("residency")) and "claims" in doc
     assert ext.document("router")[1]["effort"]["levels"]
-    assert ext.shadow_wanted() is False and ext.monitor_mode() is None
+    wanted = any(((cond.store.peek("profiles", n)[1] or {}).get("shadow") or {}).get("mode") == "on"
+                 for n in cond.store.names())
+    assert ext.shadow_wanted() is wanted and ext.monitor_mode() is None      # the shipped profiles
     assert ext.role_errors({}, "narrator", None), "an empty role breaks the contract"
     api = ext.deciders_api(cond.store.peek("deciders")[1])
     assert {"mode", "stats"} <= set(api), api
