@@ -10,7 +10,7 @@ The test matrix, the Gherkin of OPS-260:
 
   1  the template on a new box (no conductor directory) resolves engine and turns everything beside
      the engine off, the Flash-Next profile's deciders included; an unknown value is engine, said so;
-     QSE_CHATD=node (TandemNode owns chatd, ENG-413 WP6) is kept
+     QSE_CHATD=node (TandemNode owns chatd, ENG-413 WP6) is kept, on is off there
                                                               test_a_new_box_resolves_engine
   2  the upgrade rule on copied setups: a live-like run/setup.env (CONDUCTOR on, the conductor's
      directory, Laya) with the directory on disk stays chat with its values; QSE_CONDUCTOR_CONFIG=off
@@ -19,19 +19,18 @@ The test matrix, the Gherkin of OPS-260:
                                                               test_the_upgrade_keeps_the_mode
   3  ops/start.sh per mode, against a fake engine: engine passes --conductor raw and
      --conductor-config off, the engine's environment has no decision models, no autoload or
-     narrator call, no role and no chatd; chat passes the conductor, asks the autoload, starts chatd;
-     the switch to engine stops a running chatd of this tree (not for a hold's restart), and
-     app/ops/chatd.sh stop --this-tree leaves another tree's chatd running (Linux only)
-                                                              test_start_flags_per_mode
-                                                              test_chatd_stop_this_tree_only
+     narrator call, no role; chat passes the conductor and asks the autoload. Neither mode starts
+     or stops chatd (ENG-413 WP7: TandemApp's TandemNode runs it; tests/test_chatd_lifecycle.py),
+     a running one included                                    test_start_flags_per_mode
   4  /health and /v1/models of a fake-engine server report the mode and what is loaded, chatd up or
      down by a connect to QSE_CHAT_URL                         test_health_reports_the_mode
      a QSE_CHAT_URL whose port is no port is chatd down, a report that raises is an error in
      `loaded`, and /v1/models builds its copy at most once a TTL
                                                               test_the_mode_report_reads_what_is_loaded
-  5  install.sh: a new install writes engine, --with-chat chat, a re-run keeps the mode, a config
-     from before the key keeps what the box ran, --engine-only turns the chat off, and run/local.env
-     is read before the mode block (Linux only)                test_install_mode
+  5  install.sh: a new install writes engine, --with-chat (with TandemApp's wheel, ENG-413 WP7)
+     chat, a re-run keeps the mode, a config from before the key keeps what the box ran,
+     --engine-only turns the chat off, and run/local.env is read before the mode block (Linux only)
+                                                              test_install_mode
   6  the Setup Guide's switch: every model's Chat (beta) component writes QSE_MODE, is off by
      default with its dependents; switched on it brings Laya (and the 27B's shadow reader) as before
      this change, and Flash-Next's and Ornith's decision models are the same as --with-chat's
@@ -122,7 +121,7 @@ def test_a_new_box_resolves_engine():
     got, err = _resolve(env_file, env, "QSE_MODE='Chat'\n")
     assert got == ENGINE and "QSE_MODE=Chat is neither engine nor chat: engine" in err, (got, err)
     # ENG-413 WP6: TandemNode's chatd (QSE_CHATD=node) stays TandemNode's in engine mode, which then
-    # starts none; every other value is off there (tests/test_chatd_lifecycle.py 14)
+    # starts none; every other value is off there (tests/test_chatd_lifecycle.py 3)
     _, env_file, env = _box()
     got, _ = _resolve(env_file, env, "QSE_CHATD=node\n")
     assert got == dict(ENGINE, QSE_CHATD="node"), got
@@ -142,7 +141,7 @@ def test_the_upgrade_keeps_the_mode():
     got, _ = _resolve(env_file, env, LIVE_OVERLAY)
     assert got == {"QSE_MODE": "chat", "CONDUCTOR": "on", "QSE_CONDUCTOR_CONFIG": cdir,
                    "QWEN38_DECIDER_MODELS": LAYA, "QWEN38_NARRATOR_MODEL": "", "QWEN38_SHADOW_MODEL": "",
-                   "ROLES_AUTOLOAD": "", "QSE_CHATD": "<unset>"}, got
+                   "ROLES_AUTOLOAD": "", "QSE_CHATD": "off"}, got     # ENG-413 WP7: unset is off
     # a box on the template's own values (no overlay) with the directory: chat, the profile's Laya
     got, _ = _resolve(env_file, env)
     assert (got["QSE_MODE"], got["CONDUCTOR"], got["QSE_CONDUCTOR_CONFIG"], got["QWEN38_DECIDER_MODELS"]) == \
@@ -226,7 +225,7 @@ def test_start_flags_per_mode():
     assert argv[argv.index("--conductor") + 1] == "raw" and argv[argv.index("--conductor-config") + 1] == "off", argv
     assert "env deciders= narrator= mode=engine" in marks, marks
     assert not any("deciders/autoload" in m or "narrator/load" in m for m in marks), marks
-    assert "roles none" in marks and not any(m.startswith("chatd.sh start") for m in marks), marks
+    assert "roles none" in marks and not any(m.startswith("chatd.sh") for m in marks), marks
     assert "[start] mode: engine" in r.stdout and "[start] chatd: off (engine only" in r.stdout, r.stdout
     r, marks, cdir = _start("chat")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -234,49 +233,13 @@ def test_start_flags_per_mode():
     assert argv[argv.index("--conductor") + 1] == "on" and argv[argv.index("--conductor-config") + 1] == cdir, argv
     assert f"env deciders={LAYA} narrator=qwen3.5-2b mode=chat" in marks, marks
     assert any("deciders/autoload" in m for m in marks) and any("narrator/load" in m for m in marks), marks
-    assert "roles decider" in marks and "chatd.sh start" in marks, marks
-    assert "[start] mode: chat" in r.stdout, r.stdout
-    # the switch to engine (the guide's off, local.env and a restart): the chat's chatd stops too,
-    # this tree's only; a hold's restart leaves it
-    r, marks, _ = _start("engine", chatd_running=True)
-    assert r.returncode == 0 and "chatd.sh stop --this-tree" in marks, marks
-    assert not any(m.startswith("chatd.sh start") for m in marks), marks
-    r, marks, _ = _start("engine", chatd_running=True, HOLD_RESTART="1")
-    assert not any(m.startswith("chatd.sh stop") for m in marks), marks
-    r, marks, _ = _start("chat", chatd_running=True)
-    assert not any(m.startswith(("chatd.sh stop", "chatd.sh start")) for m in marks), marks
-    return "engine: raw, off, nothing beside it, a running chatd stopped; chat: the conductor, the autoload, chatd"
-
-
-def test_chatd_stop_this_tree_only():
-    if not os.path.isdir("/proc/self"):
-        print("    (skipped: the tree check reads /proc -- run it on the box)")
-        return "skipped off Linux"
-    d = tempfile.mkdtemp(prefix="engonly-chatd-")
-    data, other = os.path.join(d, "data"), os.path.join(d, "other")
-    os.makedirs(data)
-    os.makedirs(other)
-    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": d, "REPO": ROOT, "QSE_CHAT_DATA": data,
-           "QSE_CHATD_ENV": os.path.join(d, "none.env"), "QSE_CHAT_URL": "http://127.0.0.1:9"}
-    procs = []
-    try:
-        for cwd, kept in ((other, True), (os.path.join(ROOT, "app"), False)):
-            p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", "-m", "chatd"], cwd=cwd)
-            procs.append(p)
-            with open(os.path.join(data, "chatd.pid"), "w") as fh:
-                fh.write(f"{p.pid}\n")
-            r = subprocess.run(["bash", os.path.join(ROOT, "app", "ops", "chatd.sh"), "stop", "--this-tree"], env=env,
-                               capture_output=True, text=True, timeout=60)
-            assert r.returncode == 0, r.stdout + r.stderr
-            if kept:
-                assert p.poll() is None and "another tree's chatd" in r.stdout, r.stdout
-            else:
-                assert p.wait(timeout=30) is not None and "[chatd] stopped" in r.stdout, r.stdout
-    finally:
-        for p in procs:
-            p.kill()
-        shutil.rmtree(d, ignore_errors=True)
-    return "another tree's chatd stays; this tree's stops"
+    assert "roles decider" in marks and not any(m.startswith("chatd.sh") for m in marks), marks
+    assert "[start] mode: chat" in r.stdout and "[start] chatd: off (QSE_CHATD=off" in r.stdout, r.stdout
+    # ENG-413 WP7: no chatd launcher in either mode, a running chatd included (TandemNode's switch)
+    for mode in ("engine", "chat"):
+        r, marks, _ = _start(mode, chatd_running=True)
+        assert r.returncode == 0 and not any(m.startswith("chatd.sh") for m in marks), (mode, marks)
+    return "engine: raw, off, nothing beside it; chat: the conductor, the autoload; no chatd in either"
 
 
 # --------------------------------------------------------------------------- /health and /v1/models
@@ -428,7 +391,13 @@ def _line(box: dict) -> str:
 
 
 def _rerun(box: dict, *extra: str) -> None:
-    args = [a for a in box["args"] if a not in ("--with-chat", "--engine-only")] + list(extra)
+    args, skip = [], False
+    for a in box["args"]:
+        if skip or a in ("--with-chat", "--engine-only", "--app-wheel"):
+            skip = a == "--app-wheel"               # and its file
+            continue
+        args.append(a)
+    args += list(extra)
     r = subprocess.run(args, env=box["env"], capture_output=True, text=True, timeout=600, stdin=subprocess.DEVNULL)
     assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-3000:]
 
@@ -450,13 +419,11 @@ def test_install_mode():
     assert _mode_of(box) == "chat"
     with open(local, "w") as fh:
         fh.write("QSE_STATUS_PORT=\n")
-    # --with-chat; a re-run keeps it; --engine-only turns it off
-    _rerun(box, "--with-chat")
-    assert _line(box) == "QSE_MODE=chat" and _mode_of(box) == "chat"
-    _rerun(box)
-    assert _line(box) == "QSE_MODE=chat"
+    # --engine-only keeps it engine; a re-run keeps what it wrote
     _rerun(box, "--engine-only")
     assert _line(box) == "QSE_MODE=engine" and _mode_of(box) == "engine"
+    _rerun(box)
+    assert _line(box) == "QSE_MODE=engine"
     # a config from before the key: the re-run leaves the mode empty, and the box keeps what it ran
     with open(serve) as fh:
         old = "".join(ln for ln in fh if not ln.startswith("QSE_MODE="))
@@ -466,9 +433,18 @@ def test_install_mode():
     assert _line(box) == "QSE_MODE=" and _mode_of(box) == "engine"
     os.makedirs(os.path.join(box["home"], ".qwen38-spark-engine", "conductor"), exist_ok=True)
     assert _mode_of(box) == "chat"
-    # a new install with --with-chat
-    box2 = I.install("engonly-chat", True, I.free_port(), ("--with-chat",))
+    # --with-chat (ENG-413 WP7: with TandemApp's wheel, tests/test_install_headless.py); a re-run
+    # keeps it; --engine-only turns it off
+    import test_install_headless as H
+    w = H.wheel()
+    if w is None:
+        return "engine, engine-only, old config, local.env; --with-chat skipped: no TandemApp source"
+    box2 = H.install("engonly-chat", "--with-chat", "--app-wheel", w, setup=True)
     assert _line(box2) == "QSE_MODE=chat" and _mode_of(box2) == "chat"
+    _rerun(box2)
+    assert _line(box2) == "QSE_MODE=chat"
+    _rerun(box2, "--engine-only")
+    assert _line(box2) == "QSE_MODE=engine" and _mode_of(box2) == "engine"
     return "new: engine; --with-chat: chat; re-run keeps; old config keeps what it ran; local.env counts"
 
 

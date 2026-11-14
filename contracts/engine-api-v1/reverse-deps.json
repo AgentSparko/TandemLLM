@@ -556,6 +556,12 @@
    ],
    "reads": []
   },
+  "tests/test_doctor.py": {
+   "imports": [],
+   "reads": [
+    "app/"
+   ]
+  },
   "tests/test_effort_by_size.py": {
    "imports": [
     "app/tools/tandem_eval.py",
@@ -608,13 +614,6 @@
    "imports": [],
    "reads": [
     "app/VERSION"
-   ]
-  },
-  "tests/test_engine_only.py": {
-   "imports": [],
-   "reads": [
-    "app/",
-    "app/ops"
    ]
   },
   "tests/test_evaluate.py": {
@@ -719,10 +718,12 @@
     "app/docs"
    ]
   },
-  "tests/test_install_ops_copy.py": {
+  "tests/test_install_headless.py": {
    "imports": [],
    "reads": [
-    "app/ops"
+    "app/",
+    "app/ops",
+    "app/tools"
    ]
   },
   "tests/test_judge.py": {
@@ -1681,47 +1682,6 @@
  "not_ast": [
   {
    "files": [
-    "install.sh"
-   ],
-   "names": [
-    "app/ops/chatd.sh",
-    "app/proxy/nodeagent.py",
-    "app/ops/sandbox/install.sh"
-   ],
-   "marks": [
-    "if [ -f \"$SRC/app/ops/chatd.sh\" ]; then echo \"$SRC/app/ops/chatd.sh\"",
-    "if [ -d \"$app/app/proxy\" ]; then app=\"$app/app\"; fi",
-    "CHATD=\"$REPO/app/ops/chatd.sh\"",
-    "SBX=app/ops/sandbox/install.sh"
-   ],
-   "why": "chatd_sh(), bin/tandem's `tandem node` (proxy.nodeagent from src/app) and its chatd launcher, and the Done summary's sandbox installer; each falls back to the layout before SRV-747"
-  },
-  {
-   "files": [
-    "ops/start.sh"
-   ],
-   "names": [
-    "app/ops/chatd.sh"
-   ],
-   "marks": [
-    "local sh=\"$REPO/app/ops/chatd.sh\""
-   ],
-   "why": "the engine's start starts TandemApp's chatd"
-  },
-  {
-   "files": [
-    "ops/watchdog.sh"
-   ],
-   "names": [
-    "app/ops/chatd.sh"
-   ],
-   "marks": [
-    "sh=\"$REPO/app/ops/chatd.sh\""
-   ],
-   "why": "the watchdog restarts TandemApp's chatd"
-  },
-  {
-   "files": [
     "tools/release_gate_setup.sh"
    ],
    "names": [
@@ -1796,20 +1756,6 @@
     "texttt{app/"
    ],
    "why": "tables manual/tools/gen_reference.py and http_ref.py write from the app sources (the flag, route, header and error tables too, without a path in their text)"
-  },
-  {
-   "files": [
-    "ops/executables.txt"
-   ],
-   "names": [
-    "app/ops/chatd.sh",
-    "app/tools/proxy_e2e.sh"
-   ],
-   "marks": [
-    "app/ops/chatd.sh",
-    "app/tools/proxy_e2e.sh"
-   ],
-   "why": "the executable bit list covers TandemApp's scripts"
   },
   {
    "files": [

@@ -1143,7 +1143,8 @@ def test_the_box_engine_starts_beside_a_peer_and_keeps_its_status_and_chatd():
     r, marks = _peer_start({}, peers=[(4400, PEER_PORT, "p1")])
     assert r.returncode == 0 and "healthy" in r.stdout, r.stdout + r.stderr
     kinds = [ln.split()[0] for ln in marks.splitlines()]
-    assert "status-py" in kinds and "chatd.sh" in kinds and "roles" in kinds, marks
+    # ENG-413 WP7: the box's engine keeps its status file and roles; chatd is TandemNode's, never here
+    assert "status-py" in kinds and "roles" in kinds and "chatd.sh" not in kinds, marks
     assert "--port 18998" in marks
 
 
@@ -1276,11 +1277,9 @@ def test_peers_in_the_process_table():
 
 
 def test_the_scripts_parse():
-    # chatd.sh is TandemApp's, in app/ops (SRV-747); start.sh and the watchdog run it
-    app_ops = os.path.join(os.path.dirname(OPS), "app", "ops")
+    # chatd.sh is TandemApp's and the engine runs none (ENG-413 WP7): TandemApp's tests parse it
     for path in [os.path.join(OPS, name) for name in ("watchdog.sh", "start.sh", "stop.sh", "hold.sh",
-                                                      "engines.sh", "gate.sh", "roles.sh", "make-secrets.sh")] \
-            + [os.path.join(app_ops, "chatd.sh")]:
+                                                      "engines.sh", "gate.sh", "roles.sh", "make-secrets.sh")]:
         assert os.path.isfile(path), path
         r = subprocess.run(["bash", "-n", path], capture_output=True, text=True)
         assert r.returncode == 0, f"{path}: {r.stderr}"

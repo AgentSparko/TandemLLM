@@ -36,9 +36,9 @@ ENG-359 (release 0.11.0): the same install takes Nemotron 3.5 Super VL's default
 
 OPS-149: the setup message
 
-  8  install.sh --setup ends with the Setup Guide's address on the box, the ssh tunnel from another
-     computer and --host 0.0.0.0, and no profile to switch to; the Chat tab starts once the setup
-     is done (OPS-155)                                                 test_the_setup_message
+  8  install.sh --setup ends with the engine's address on the box for the Setup Guide, the ssh tunnel
+     from another computer and --host 0.0.0.0, and no profile to switch to; no page on the engine
+     port and no chat on an engine-only setup (ENG-413 WP7)          test_the_setup_message
 
 Run: python tests/test_fresh_install.py   (3 and 4 need Linux: install.sh stops anywhere else)
 """
@@ -280,14 +280,15 @@ def test_the_setup_message():
         return
     out = re.sub(r"\x1b\[[0-9;]*m", "", box["out"])
     tail = out[out.index("Setup mode"):]
-    assert "no model is loaded yet. Open the Setup Guide in a browser and pick a model there." in tail, tail
-    assert "On this machine:        http://127.0.0.1:18996/dashboard/#/setup" in tail, tail
+    assert "no model is loaded yet. Point the Setup Guide at this engine and pick a model there:" in tail, tail
+    assert "TandemApp's Setup page, with this engine's address" in tail and "/dashboard" not in tail, tail
+    assert "On this machine:        http://127.0.0.1:18996\n" in tail, tail
     assert re.search(r"From another computer:  ssh -L 18996:127\.0\.0\.1:18996 \S+@\S+", tail), tail
-    assert "then open http://127.0.0.1:18996/dashboard/#/setup on that computer" in tail, tail
+    assert "then http://127.0.0.1:18996 on that computer" in tail, tail
     assert "--host 0.0.0.0" in tail and "use-profile.sh" not in tail, tail
-    # OPS-155: the Chat tab waits for the setup, and says how to see chatd
-    assert "The Chat tab starts with the engine once the setup is done (" in tail and \
-        "/bin/tandem chat status) when Chat (beta) is on in the guide" in tail, tail   # OPS-260
+    # ENG-413 WP7: an engine-only setup says how the chat comes (TandemApp's wheel); with it,
+    # TandemNode starts chatd once the setup is done (tests/test_install_headless.py)
+    assert "Engine only, the default: no chat (install.sh --with-chat --app-wheel FILE adds it)." in tail, tail
 
 
 def test_a_setup_install_takes_an_exl3_profile():

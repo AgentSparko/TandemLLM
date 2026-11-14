@@ -10,7 +10,8 @@ The test matrix (the Gherkin of OPS-149):
                                                              test_how_to_open_the_guide
   3  each has an "Advanced: from the command line" part whose first command is use-profile.sh --list
                                                              test_the_command_line_is_advanced
-  4  install.sh's setup message names the Setup Guide's address on the box, the ssh tunnel and
+  4  install.sh's setup message names the engine's address on the box for the Setup Guide
+     (TandemApp's page since ENG-413 WP7: the engine serves only the Setup API), the ssh tunnel and
      --host 0.0.0.0 (tests/test_fresh_install.py runs it on Linux)   test_the_installer_says_where
   5  no README, docs (docs/, app/docs/, the READMEs of app/contracts/), manual or dashboard text counts
      the models ("five models", "three models")              test_no_model_count
@@ -96,9 +97,11 @@ def test_the_command_line_is_advanced():
 def test_the_installer_says_where():
     src = _read("install.sh")
     msg = src[src.index("# no model is loaded yet"):src.index("    exit 0\nfi\nif [ \"$START\" != 1 ]")]
-    for want in ("Open the Setup Guide in a browser and pick a model", "http://127.0.0.1:%s/dashboard/#/setup",
-                 "ssh -L %s:127.0.0.1:%s", "--host 0.0.0.0", "From your network:"):
+    for want in ("Point the Setup Guide at this engine and pick a model", "http://127.0.0.1:%s\\n",
+                 "only the Setup API (/v1/setup/*)", "ssh -L %s:127.0.0.1:%s", "--host 0.0.0.0",
+                 "From your network:"):
         assert want in msg, want
+    assert "/dashboard" not in msg
 
 
 # a count of the models: "five models", "3 models", "all five share"; not "the Qwen3.8 models" or a

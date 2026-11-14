@@ -218,9 +218,12 @@ def test_before_an_apply():
 def test_the_lists_agree():
     listed = [ln.strip() for ln in open(os.path.join(ROOT, "ops", "executables.txt"))
               if ln.strip() and not ln.startswith("#")]
+    # ENG-413 WP7: the engine's own files; TandemApp's vendored app/ keeps its modes and leaves at WP14
+    assert not [f for f in listed if f.startswith("app/")], listed
     git = subprocess.run(["git", "-C", ROOT, "ls-files", "-s"], capture_output=True, text=True)
     if git.returncode == 0 and git.stdout:
         modes = [ln.split(None, 3)[3] for ln in git.stdout.splitlines() if ln.startswith("100755")]
+        modes = [f for f in modes if not f.startswith("app/")]
         assert sorted(listed) == sorted(modes), set(listed) ^ set(modes)
     else:
         print("    (no git here: the manifest against the files' own modes)")
