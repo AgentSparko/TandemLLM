@@ -19,8 +19,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
-from tandemapp import ledger  # noqa: E402
+from server.api import ledger  # noqa: E402  (the engine's ledger, ENG-413 WP2b)
 
 CLIENTS = (("k:3f9a1c0e2b7d", "open-webui", 0.78), ("k:91c2e4aa0b11", "curl", 0.17),
            ("k:5d0e7fb2c9a4", "dashboard", 0.05))

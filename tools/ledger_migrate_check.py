@@ -18,9 +18,8 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
 
-from tandemapp import ledger  # noqa: E402
+from server.api import ledger  # noqa: E402  (the engine's ledger, ENG-413 WP2b)
 
 SUMS = "COUNT(*), SUM(COALESCE(prompt_tokens, 0)), SUM(COALESCE(completion_tokens, 0)), " \
        "MIN(ts_ms), MAX(ts_ms)"
