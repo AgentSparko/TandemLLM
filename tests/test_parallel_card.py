@@ -59,7 +59,7 @@ import yaml  # noqa: E402
 os.environ.setdefault("QSE_COMMUNITY_DIR", tempfile.mkdtemp(prefix="parcard-community-"))
 os.environ.setdefault("QSE_COMMUNITY_URL", "off")
 
-from tandemapp.conductor.schema import validate  # noqa: E402
+from server.api.validate import validate  # noqa: E402
 from server.setup import registry  # noqa: E402
 from tools import parallel_card as pc  # noqa: E402
 

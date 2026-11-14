@@ -61,37 +61,10 @@
    "tandemapp.conductor.schema",
    "tandemapp.laya_api"
   ],
-  "server/diskcache.py": [
-   "tandemapp.conductor.transcripts:in_repository"
-  ],
   "server/memory_api.py": [
    "tandemapp.conductor.notes",
    "tandemapp.library_api:Rate",
    "tandemapp.library_api:Refused"
-  ],
-  "server/mode.py": [
-   "tandemapp.chat_forward"
-  ],
-  "server/probe.py": [
-   "tandemapp.conductor.transcripts:in_repository"
-  ],
-  "server/rolemem.py": [
-   "tandemapp.conductor.schema"
-  ],
-  "server/setup/apply.py": [
-   "tandemapp.conductor.redact:redact"
-  ],
-  "server/setup/community.py": [
-   "tandemapp.conductor.schema:validate"
-  ],
-  "server/setup/knowledge.py": [
-   "tandemapp.conductor.libsearch:TextIndex"
-  ],
-  "server/setup/registry.py": [
-   "tandemapp.conductor.schema:validate"
-  ],
-  "server/setup/wren.py": [
-   "tandemapp.conductor.schema"
   ],
   "tools/class_core_eval.py": [
    "tandemapp.conductor.classify:Qwen",
@@ -1114,9 +1087,7 @@
    ]
   },
   "tests/test_parallel_card.py": {
-   "imports": [
-    "tandemapp.conductor.schema:validate"
-   ],
+   "imports": [],
    "reads": [
     "app/"
    ]

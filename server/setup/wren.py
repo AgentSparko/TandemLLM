@@ -370,11 +370,11 @@ class Wren:
         that has none (the stored ones predate Wren)."""
         from server import decider_api, memlimits
         from server.conductor import residency
-        from tandemapp.conductor import schema
+        from server.api import seeds
         st = self.app.STATE
         cond = st.get("conductor")
-        doc = cond.store.peek("residency")[1] if cond is not None else schema.seed("residency")
-        roles = cond.store.peek("roles")[1] if cond is not None else schema.seed("roles")
+        doc = cond.store.peek("residency")[1] if cond is not None else seeds.seed("residency")
+        roles = cond.store.peek("roles")[1] if cond is not None else seeds.seed("roles")
         if "wren" not in (doc.get("claims") or {}):
             doc = dict(doc, claims=dict(doc.get("claims") or {}, wren={
                 "gib": claim_gib(name), "basis": "declared",

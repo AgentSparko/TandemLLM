@@ -296,7 +296,7 @@ class Ring:
         self._next_prune = 0.0
         self.stats = {"requests": 0, "records": 0, "bytes": 0, "skipped": 0, "missed": 0,
                       "day_cap": 0, "failed": 0, "dropped": 0, "pruned": 0}
-        from tandemapp.conductor.transcripts import in_repository
+        from server.api.repository import in_repository
         self.repo = in_repository(self.root)
         if self.repo is not None:
             raise ValueError(f"the probe snapshots may not live inside a repository "

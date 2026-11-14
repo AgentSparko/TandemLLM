@@ -166,10 +166,10 @@ def planner(state: dict, *, fake: bool = False, role: str = "decider"):
 
     def check(name, *, loading, service_start, hold_restart):
         from server.conductor import residency
-        from tandemapp.conductor import schema
+        from server.api import seeds
         cond = state.get("conductor")
-        doc = cond.store.peek("residency")[1] if cond is not None else schema.seed("residency")
-        roles = cond.store.peek("roles")[1] if cond is not None else schema.seed("roles")
+        doc = cond.store.peek("residency")[1] if cond is not None else seeds.seed("residency")
+        roles = cond.store.peek("roles")[1] if cond is not None else seeds.seed("roles")
         hold = held(service_start=service_start, hold_restart=hold_restart)
         from server import memlimits
         peak, now = memlimits.engine_gib(state)
@@ -349,6 +349,7 @@ def status(reg, state: dict) -> dict:
     """`GET /v1/conductor/deciders/status`: what the engine serves, each model's state and
     numbers, the planner's answer for a load now, and the model behind each question id."""
     from server.conductor import residency
+    from server.api import seeds
     from tandemapp.conductor import schema
     cond = state.get("conductor")
     doc = _deciders_doc(state)
@@ -356,8 +357,8 @@ def status(reg, state: dict) -> dict:
         return {"enabled": False, "why": OFF_WHY, "models": [], "planner": None,
                 "last_refusal": None, "questions": [], "families": [], "device": None,
                 "window": "idle", "ready": False}
-    rdoc = cond.store.peek("residency")[1] if cond is not None else schema.seed("residency")
-    roles = cond.store.peek("roles")[1] if cond is not None else schema.seed("roles")
+    rdoc = cond.store.peek("residency")[1] if cond is not None else seeds.seed("residency")
+    roles = cond.store.peek("roles")[1] if cond is not None else seeds.seed("roles")
     from server import memlimits
     peak, now = memlimits.engine_gib(state)
     plan = residency.check("decider", _mem_available_gib(reg.device is None), rdoc, roles,

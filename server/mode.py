@@ -16,7 +16,7 @@ import socket
 import threading
 import time
 
-from tandemapp import chat_forward
+from server.api import chat_url
 
 CHATD_TTL_S = 5.0
 CHATD_CONNECT_S = 0.25
@@ -33,9 +33,9 @@ def chatd_up(clock=time.monotonic, connect=None) -> bool:
             return _chatd["up"]
     try:
         if connect is not None:
-            up = bool(connect(chat_forward.target()))
+            up = bool(connect(chat_url.target()))
         else:
-            with socket.create_connection(chat_forward.target(), timeout=CHATD_CONNECT_S):
+            with socket.create_connection(chat_url.target(), timeout=CHATD_CONNECT_S):
                 up = True
     except (OSError, ValueError):          # ValueError: a QSE_CHAT_URL whose port is not a port
         up = False

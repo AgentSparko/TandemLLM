@@ -552,9 +552,9 @@ def _decider_claim(state: dict) -> float:
     try:
         cond = state.get("conductor")
         from server.conductor import residency
-        from tandemapp.conductor import schema
-        doc = cond.store.peek("residency")[1] if cond is not None else schema.seed("residency")
-        roles = cond.store.peek("roles")[1] if cond is not None else schema.seed("roles")
+        from server.api import seeds
+        doc = cond.store.peek("residency")[1] if cond is not None else seeds.seed("residency")
+        roles = cond.store.peek("roles")[1] if cond is not None else seeds.seed("roles")
         c = residency.claims(doc, roles).get("decider")
         return float(c["gib"]) if c else 3.0
     except Exception:                                              # noqa: BLE001

@@ -230,16 +230,7 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 | `server/conductor/residency.py` | `tandemapp.conductor.store` |
 | `server/conductor/shadow.py` | `tandemapp.conductor.incontext`, `tandemapp.conductor.inject`, `tandemapp.conductor.schema` |
 | `server/decider_api.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.schema`, `tandemapp.laya_api` |
-| `server/diskcache.py` | `tandemapp.conductor.transcripts` |
 | `server/memory_api.py` | `tandemapp.conductor.notes`, `tandemapp.library_api` |
-| `server/mode.py` | `tandemapp.chat_forward` |
-| `server/probe.py` | `tandemapp.conductor.transcripts` |
-| `server/rolemem.py` | `tandemapp.conductor.schema` |
-| `server/setup/apply.py` | `tandemapp.conductor.redact` |
-| `server/setup/community.py` | `tandemapp.conductor.schema` |
-| `server/setup/knowledge.py` | `tandemapp.conductor.libsearch` |
-| `server/setup/registry.py` | `tandemapp.conductor.schema` |
-| `server/setup/wren.py` | `tandemapp.conductor.schema` |
 | `tools/class_core_eval.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.router`, `tandemapp.conductor.schema`, `tandemapp.conductor.signals` |
 | `tools/class_fallback_eval.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.router`, `tandemapp.conductor.signals` |
 | `tools/conductor_contract.py` | `tandemapp.conductor.schema` |
@@ -261,6 +252,8 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 Since ENG-413 WP2a the wire format is the engine's own: `server/api/` holds its copies of `toolcall`, `toolformats`, `callrepair`, `refusal`, `thinking` and `argloop`, and no engine file imports TandemApp's (`tests/test_api_import_guard.py`). TandemApp keeps its copies for its extension and its controller; both pass `toolcalls/`.
 
 Since ENG-413 WP2b what the engine reports of itself is its own too: `server/api/` holds its copies of `metrics` (the registry and the `qse_*` families; `metrics.md` here is their document), `usage`, `ledger` (the request tables), `live`, `parallel`, `activity`, `logbuf`, `dashboard_api` (the `/v1/dashboard/*` reads and `GpuSampler`), `http_body` `auth` (the tokens, trusted loopback, the session check, `same_origin`) and `compaction` (it runs with the conductor off: the engine tells a compaction request by its shape, `tests/test_compaction_trace.py`), and no engine file imports TandemApp's. The ledger file keeps its two owners: the engine writes `requests` and `meta`, the conductor's journal `conductor_events` and `conductor_texts`, with the schema unchanged (`tests/test_ledger_owners.py`). The TandemApp tools that read the ledger or the compaction texts stay on TandemApp's copy until they move.
+
+Since ENG-413 WP2c the small helpers the setup, the probe and the disk cache read are the engine's own as well: `server/api/` holds copies of the conductor's JSON-schema `validate` (the setup registry and the community index), its `residency` and `roles` seeds (`seeds`: the decision models' planner, the role memory, Wren's planner), the secret refusal `redact` (the setup jobs' logs), the BM25 `TextIndex` (`textindex`: Wren's knowledge), `in_repository` (`repository`: the disk cache and the probe refuse a directory in a git work tree) and chatd's address (`chat_url`: `/health` `loaded.chatd`). Each copy holds only the names it took, held to TandemApp's by `tests/test_api_import_guard.py`, and answers as TandemApp's does (`tests/test_api_helpers.py`). Wren's index takes TandemApp's package texts and `app/docs/proxy.md` as extra knowledge (`Knowledge(packages=..., app_docs=...)`); without them it holds the engine's own documents. `server/decider_api.py` still reads the conductor's classifier, role contract, `deciders` document and Laya's counts, and `server/conductor/residency.py` the conductor's store: the extension hands those in (WP3, WP5).
 
 `reverse-deps.json` also lists the engine's reads of app files (`reads`: the knob rows, the manual's generators, the setup knowledge index, the contracts), the engine test files that reach app code (`tests`), the reads the AST cannot see (`not_ast`: install.sh, ops/start.sh and ops/watchdog.sh starting chatd and TandemNode from `app/`, the models' docs links, the Grafana panels, the manual's tables) and the copies both trees keep equal until the split (`copies`: `same_origin`, `TIER_OF`, the `OFF_WHY` texts, the test helpers, `contract_check`, the licenses, the setup fixtures). At the split the engine takes byte copies of what it reads here, its own `/metrics` document and registry, and its own helpers; the app-only tools and tests move to `app/`.
 

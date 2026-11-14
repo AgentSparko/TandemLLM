@@ -46,7 +46,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from tandemapp.conductor.schema import validate
+from server.api.validate import validate
 from server.setup import registry
 
 DEFAULT_URL = "https://raw.githubusercontent.com/0xBakeer/TandemLLM/main/models/community-index.json"
