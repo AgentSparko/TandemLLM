@@ -218,7 +218,7 @@ def test_the_server_refuses_to_start_on_a_bad_policy_and_ignores_it_raw():
     path = os.path.join(tempfile.mkdtemp(), "bad.yaml")
     with open(path, "w") as f:
         f.write("version: 1\ncaps: {}\n")
-    # ENG-413 WP5: the extension's module checks the policy before the load (engine-ext-v1 2.1
+    # ENG-413 WP5: the extension's module checks the policy before the load (engine-ext-v1 3.0
     # before_load, which server/app.py's start asks through server/ext.py)
     import importlib
     from server import ext as ext_mod

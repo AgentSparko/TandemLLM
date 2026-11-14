@@ -10,7 +10,7 @@ this file holds the seam itself.
      or by name; server/ext.py, server/round_runner.py, server/fake_engine.py and (WP5) the
      screens' and the documents' readers import none of TandemApp
                                                               test_the_request_path_imports_no_conductor
-  2  the optional calls (engine-ext-v1 2.0, 2.1): every name of CALLS and SUP_OPTIONAL is the
+  2  the optional calls (engine-ext-v1 2.0, 3.0): every name of CALLS and SUP_OPTIONAL is the
      extension's; a headless engine (NULL) answers each with its headless value and asks nothing;
      the act kinds are the monitor's; the own questions' User-Agent is TandemApp's
                                                               test_the_optional_calls_are_named
@@ -168,7 +168,7 @@ def test_the_optional_calls_are_named():
     host = E.Host(mode="chat", engine_api="", state={}, lock=None, tokenizer=None, registry=None,
                   ledger_path=None, args={})
     obj = A.attach(host)
-    names = set(E.CALLS)                     # 2.1: the writer is memory_writer, a call
+    names = set(E.CALLS)                     # 3.0: the writer is memory_writer, a call
     have = {n for n in names if callable(getattr(obj, n, None))}
     assert names == have and A.EXT_API == E.EXT_API, (sorted(names - have), A.EXT_API)
     watch = {n for n in vars(A.Watch) if not n.startswith("_")}
@@ -322,7 +322,7 @@ FAILING = '''"""A test extension: TandemApp's extension with one method failing 
 from tandemapp import engine_ext as A
 
 EXT_API, NAME, VERSION = A.EXT_API, "failing", "0"
-read_document, before_load = A.read_document, A.before_load     # engine-ext-v1 2.1's module functions
+read_document, before_load = A.read_document, A.before_load     # engine-ext-v1 3.0's module functions
 HOOKS = ("plan", "prompt", "extras", "follow_ups", "finish")
 
 

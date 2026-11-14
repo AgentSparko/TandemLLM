@@ -148,7 +148,7 @@ def test_the_order():
     seen = []
 
     class Later:
-        EXT_API, NAME, VERSION, __name__ = "2.0", "later", "0", "later"
+        EXT_API, NAME, VERSION, __name__ = "3.0", "later", "0", "later"
 
         @staticmethod
         def start(host):
@@ -188,18 +188,18 @@ def test_start_is_closed():
              refused("no_such_extension_module_x"),
              refused(variant(EXT_API=None)),
              refused(variant(EXT_API="1.3")),
-             refused(variant(EXT_API="2.9")),
+             refused(variant(EXT_API="3.9")),
              refused(variant(EXT_API="one")),
              refused(X, args={"fail": "start"}),
              refused(X, args={"route": "/v1/chat/completions"}),
              refused(X, args={"route": "/v1/dashboard/live"}),
              refused(X, args={"route": "/v1/engine/disk"})]
-    assert "QSE_EXT is empty" in lines[0] and "needs engine-ext-v1 2.9" in lines[4], lines
+    assert "QSE_EXT is empty" in lines[0] and "needs engine-ext-v1 3.9" in lines[4], lines
     # 2.0 (ENG-413 WP4): a 1.x extension is refused at start, one line, whatever its minor
-    assert lines[3] == "[ext] REFUSING: the extension speaks engine-ext-v1 1.3; this engine speaks 2.1", lines[3]
+    assert lines[3] == "[ext] REFUSING: the extension speaks engine-ext-v1 1.3; this engine speaks 3.0", lines[3]
     for old in ("1.0", "1.2", "1.9"):
         assert refused(variant(EXT_API=old)) == f"[ext] REFUSING: the extension speaks engine-ext-v1 {old}; " \
-            f"this engine speaks 2.1", old
+            f"this engine speaks 3.0", old
 
     class NoHook:
         routes, models, knobs = [], [], []
@@ -207,7 +207,11 @@ def test_start_is_closed():
     # headless: no extension asked for, outside chat mode
     assert H.load("", H.FakeHost(mode="engine")) is None
     # an older minor starts on this host; the extension's own routes are fine
-    assert H.accepts("2.0", "2.4") is None and H.accepts("1.3", "2.0") is not None
+    assert H.accepts("3.0", "3.4") is None and H.accepts("1.3", "3.0") is not None
+    # 3.0 (ENG-413 WP5): every 2.x extension is refused, one line, whatever its minor
+    for old in ("2.0", "2.1", "2.9"):
+        assert refused(variant(EXT_API=old)) == f"[ext] REFUSING: the extension speaks engine-ext-v1 {old}; " \
+            f"this engine speaks 3.0", old
     assert H.load(X, H.FakeHost(args={"route": "/v1/conductor/"})) is not None
     assert H.load(X, H.FakeHost(args={"route": "/v1/dashboard/session"})) is not None
     return f"{len(lines) + 1} start failures refused with one line; headless and older minors start"

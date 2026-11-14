@@ -969,7 +969,7 @@ class _Store:
 
 
 class _Cond:
-    """The extension as server/memlimits.py asks it (ENG-413 WP5: engine-ext-v1 2.1 `document`,
+    """The extension as server/memlimits.py asks it (ENG-413 WP5: engine-ext-v1 3.0 `document`,
     under state["ext"]): its residency document and version."""
 
     def __init__(self, v, doc):

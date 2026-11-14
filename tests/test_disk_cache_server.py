@@ -62,7 +62,7 @@ class Store:
 
 class Cond:
     """The conductor as the disk screen's paths use it, and (ENG-413 WP5) the extension the engine
-    asks for the settings document (engine-ext-v1 2.1 `document`, state["ext"]); `engine` is the
+    asks for the settings document (engine-ext-v1 3.0 `document`, state["ext"]); `engine` is the
     engine's screens handed over in process (host.engine)."""
 
     def __init__(self, state, v=1, doc=None):

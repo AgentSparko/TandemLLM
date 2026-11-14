@@ -107,7 +107,7 @@ def _planner_on(mem_gib, root, *, hold_file=None):
     state = {}
 
     class Ext:
-        """The extension as the planner asks it (ENG-413 WP5, engine-ext-v1 2.1 `document`)."""
+        """The extension as the planner asks it (ENG-413 WP5, engine-ext-v1 3.0 `document`)."""
 
         def __init__(self):
             from tandemapp.conductor.store import Store

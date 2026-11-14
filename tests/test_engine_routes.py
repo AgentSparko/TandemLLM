@@ -398,7 +398,7 @@ def test_both_paths_answer_alike():
     e = Engine(chat=True)
     try:
         st, raw, _ = e.call("GET", "/health")
-        assert [x["ext_api"] for x in json.loads(raw)["extensions"]] == ["2.1"], raw
+        assert [x["ext_api"] for x in json.loads(raw)["extensions"]] == ["3.0"], raw
         pairs = (("GET", "/v1/engine/residency/plan", "/v1/conductor/residency/plan"),
                  ("GET", "/v1/engine/disk", "/v1/conductor/memory/disk"),
                  ("GET", "/v1/engine/deciders/status", "/v1/conductor/deciders/status"),

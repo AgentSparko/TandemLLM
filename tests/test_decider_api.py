@@ -333,7 +333,7 @@ def test_a_refused_load_is_a_409_with_the_planners_numbers():
                    log=lambda s: None)
 
     class Cond:
-        # ENG-413 WP5: the engine's screen handed over in process (engine-ext-v1 2.1 host.engine)
+        # ENG-413 WP5: the engine's screen handed over in process (engine-ext-v1 3.0 host.engine)
         engine = engine_routes.in_process({"deciders": reg})
 
     st, out, _ = routes._deciders(Cond, "POST", ["models", "other-decider", "load"], {})

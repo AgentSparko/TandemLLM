@@ -710,7 +710,7 @@ def test_additive_1_5():
         assert strip(a) == strip(b), name
         assert a.get("engine_api") in (None, "1.5"), name
     ex = _json("health.example.json")
-    assert [x["ext_api"] for x in ex["extensions"]] == ["2.1"], ex["extensions"]
+    assert [x["ext_api"] for x in ex["extensions"]] == ["3.0"], ex["extensions"]
     return f"{len(old['routes'])} 1.4 routes kept, {len(g9)} group 9 routes replacing {len(screens)} screens"
 
 

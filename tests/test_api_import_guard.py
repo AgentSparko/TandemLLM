@@ -308,7 +308,7 @@ FORK_ADDED = {"ledger": {"SIDE_SHAPES", "_text", "side_shape"},
 FORK_CHANGED = {("metrics", "_gpu_memory"): "reads _allocator without the hook",
                 ("metrics", "_gpu_reserved"): "reads _allocator without the hook",
                 # ENG-413 WP5: own_work reads the memory writer's numbers through the extension
-                # (engine-ext-v1 2.1 memory_writer), not the conductor's object in the state
+                # (engine-ext-v1 3.0 memory_writer), not the conductor's object in the state
                 ("metrics", "install"): "own_work asks the extension's memory_writer"}
 
 

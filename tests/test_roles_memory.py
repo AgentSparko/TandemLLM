@@ -185,7 +185,7 @@ def test_the_shadow_loads_ahead():
                                          "claim_gib": 6.5})
     profiles = {"coding": {"shadow": {"mode": "off"}}, "chat": {}}
     keep_ext = app.EXT
-    # ENG-413 WP5: whether a profile wants the reader is the extension's answer (engine-ext-v1 2.1
+    # ENG-413 WP5: whether a profile wants the reader is the extension's answer (engine-ext-v1 3.0
     # shadow_wanted), here over the same profiles
     app.EXT = types.SimpleNamespace(ask=lambda name, *a: name == "shadow_wanted" and any(
         ((d or {}).get("shadow") or {}).get("mode") == "on" for d in profiles.values()))

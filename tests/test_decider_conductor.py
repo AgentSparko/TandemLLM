@@ -56,7 +56,7 @@ def _engine(models="other-decider", lock=None, factory=None):
     state = _state()
     cond = state["conductor"] = Conductor(tempfile.mkdtemp(prefix="dec-cond-"), state=state,
                                           journal=False, factory=factory)
-    # ENG-413 WP5: the engine reaches the conductor through its extension (engine-ext-v1 2.1): its
+    # ENG-413 WP5: the engine reaches the conductor through its extension (engine-ext-v1 3.0): its
     # documents, and its in-process client of the decision models (`deciders`)
     from server import ext as ext_mod
     ext_mod.attach(state)

@@ -261,7 +261,7 @@ def test_a_failed_shadow_load_is_tried_again():
     m = Missing("qwen3.5-0.8b")
     s = Slot(m, role="shadow", gate=threading.Lock(), log=lambda x: None, clock=lambda: now[0])
     keep_ext = app.EXT
-    # ENG-413 WP5: a profile wants the reader: the extension's answer (engine-ext-v1 2.1 shadow_wanted)
+    # ENG-413 WP5: a profile wants the reader: the extension's answer (engine-ext-v1 3.0 shadow_wanted)
     app.EXT = types.SimpleNamespace(ask=lambda name, *a: name == "shadow_wanted")
     try:
         app.STATE.update(shadow=types.SimpleNamespace(slot=s), narrator=None, deciders=None,
