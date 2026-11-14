@@ -1,5 +1,5 @@
 {
- "version": "2.1",
+ "version": "3.0",
  "about": "The QWEN38_* knobs the engine extension reads (engine-ext-v1 1.0, unchanged in 1.1): name -> default. The engine's registry (engine/settings.py KNOBS) carries the same names with the same defaults, its owner an app/... label; TandemApp's tandemapp/knobs.py DEFAULTS is the extension's own copy. A knob the extension starts reading is added here in a minor step.",
  "prefix": "QWEN38_",
  "knobs": {

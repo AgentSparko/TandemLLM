@@ -3,8 +3,8 @@ engine's interface engine-ext-v1 at the version PIN names, through the reference
 (contracts/engine-ext-v1/fake_host.py). No engine and no model: the host is the reference's.
 
   1  the module is an extension of the pinned interface: EXT_API is ext.json's version and the
-     reference host takes it (a 1.x or a 2.0 host does not: 2.1), NAME tandemapp, VERSION TandemApp's
-     release, every hook, every optional call (extension.calls, 2.1's included) and the module's
+     reference host takes it (a 1.x or a 2.x host does not: 3.0), NAME tandemapp, VERSION TandemApp's
+     release, every hook, every optional call (extension.calls, 3.0's included) and the module's
      optional functions with exactly ext.json's arguments, no interim `writer` and nothing kept
      interim of it, the knobs knobs.json's                           test_the_module_fits_the_interface
   2  start is closed: with neither a conductor directory nor the monitor's policy the reference
@@ -22,16 +22,16 @@ engine's interface engine-ext-v1 at the version PIN names, through the reference
      the engine's refusal from allowed() passes as it is (401 with its header), /v1/memory
      without a session address 403 with its journal row, the page and the library answer; a
      route that writes nothing is an error the host counts           test_the_routes_answer
-  6  2.1 (ENG-413 WP5): the conductor's engine screens answer over host.engine: the handler's body
+  6  3.0 (ENG-413 WP5): the conductor's engine screens answer over host.engine: the handler's body
      plus contract_version, a Refusal as the conductor's own error (no contract_version), the base
      its messages name is the conductor's path; with no engine (the controller) the status screens
      say ENGINE_ONLY and the rest 404; the release tree's speed-guard report reaches the Conductor
                                                                   test_the_engine_screens
-  7  2.1: the calls outside a request: document, library_text, shadow_wanted, monitor_mode,
+  7  3.0: the calls outside a request: document, library_text, shadow_wanted, monitor_mode,
      role_errors, deciders_api, narrator over a slot (its status), deciders (the classify backends
      registered), memory_writer (the writer with gate(conv) asking the conductor's router)
                                                                   test_the_calls_outside_a_request
-  8  2.1, the module before the start: read_document reads the stored document (version 0, the
+  8  3.0, the module before the start: read_document reads the stored document (version 0, the
      built-in one, in a new directory); before_load checks the session monitor's policy and gives
      its line, nothing without --conductor shadow|on, and a policy that does not load stops the
      start with the line the engine printed before                  test_the_module_before_the_start
@@ -116,8 +116,9 @@ def _chat_host():
 def test_the_module_fits_the_interface():
     X = engine_ext
     assert X.EXT_API == SPEC["version"] and H.accepts(X.EXT_API) is None, (X.EXT_API, SPEC["version"])
-    assert H.accepts(X.EXT_API, "1.2") is not None and X.EXT_API == "2.1"
-    assert H.accepts(X.EXT_API, "2.0") is not None                    # a 2.0 host has no 2.1 calls
+    assert H.accepts(X.EXT_API, "1.2") is not None and X.EXT_API == "3.0"
+    assert H.accepts(X.EXT_API, "2.1") is not None                    # another major: a 2.x host refuses it
+    assert H.accepts("2.0", X.EXT_API) is not None                    # and this host a 2.x extension
     for name, args in (("read_document", ["ext_dir", "name"]), ("before_load", ["args"])):
         assert name in SPEC["discovery"]["module_optional"] and _params(getattr(X, name)) == args, name
     assert X.NAME == "tandemapp" and X.VERSION == (release() or "0"), (X.NAME, X.VERSION)
@@ -253,7 +254,7 @@ def test_the_routes_answer():
     return "the conductor's settings, a refusal as the engine gives it, memory 403, the page, the library"
 
 
-# ---------------------------------------------------------------------------- 6, 7, 8 (2.1)
+# ---------------------------------------------------------------------------- 6, 7, 8 (3.0)
 
 def test_the_engine_screens():
     from tandemapp.conductor import routes

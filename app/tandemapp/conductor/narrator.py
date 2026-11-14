@@ -188,7 +188,7 @@ class Narrator:
         return {"mode": r.get("mode", "on"), "budget_ms": int(r.get("latency_budget_ms") or 150)}
 
     def status(self) -> dict:
-        """The engine's `GET /v1/engine/narrator/status` for this narrator (engine-ext-v1 2.1
+        """The engine's `GET /v1/engine/narrator/status` for this narrator (engine-ext-v1 3.0
         narrator.status): its settings, its slot, the line limits and the thought summaries."""
         return {"enabled": True, "why": None, "settings": self.settings(), "slot": self.slot.status(),
                 "limits": {"max_words": MAX_WORDS, "max_tokens": MAX_TOKENS,
@@ -650,7 +650,7 @@ def _duration(s: float) -> str:
 # ---------------------------------------------------------------------- the server's wiring
 # The narrator's model and its slot load in the engine's process: the engine builds the slot
 # (server/conductor/inproc.py start_narrator) and this extension the `Narrator` over it
-# (tandemapp/engine_ext.py `narrator`, engine-ext-v1 2.1; ENG-413 WP5).
+# (tandemapp/engine_ext.py `narrator`, engine-ext-v1 3.0; ENG-413 WP5).
 def configured() -> str:
     return (_S.get("NARRATOR_MODEL") or "").strip()
 

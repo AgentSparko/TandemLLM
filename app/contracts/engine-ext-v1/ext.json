@@ -1,7 +1,7 @@
 {
   "name": "engine-ext-v1",
-  "version": "2.1",
-  "about": "The in-process extension interface of a TandemLLM engine (ENG-429); version 2.0 since ENG-413 WP4 (changed_from_1), 2.1 since WP5 (since_2_1). Python, not HTTP. The engine owns it; TandemApp's conductor is its first extension. README.md says it in prose; fake_host.py is the reference host and fake_ext.py the smallest extension. A minor step adds a hook, an argument with a default, a host attribute, an event field or an act kind; a major step removes or renames one or changes a meaning.",
+  "version": "3.0",
+  "about": "The in-process extension interface of a TandemLLM engine (ENG-429); version 2.0 since ENG-413 WP4 (changed_from_1), 3.0 since WP5 (changed_from_2, since_3_0). Python, not HTTP. The engine owns it; TandemApp's conductor is its first extension. README.md says it in prose; fake_host.py is the reference host and fake_ext.py the smallest extension. A minor step adds a hook, an argument with a default, a host attribute, an event field or an act kind; a major step removes or renames one or changes a meaning.",
   "discovery": {
     "env": "QSE_EXT",
     "default": "",
@@ -13,8 +13,8 @@
       "start": "start(host) -> the extension object"
     },
     "module_optional": {
-      "read_document": "since 2.1: read_document(ext_dir, name) -> [version, doc] or None: one of extension.documents in the extension's directory before it starts (the engine reads the residency document's memory limits before the weights load, the residency planner's command line its documents); a raise or None: the engine goes on without it",
-      "before_load": "since 2.1: before_load(args) -> str or None, asked once the module is discovered and before the weights load (the session monitor's policy is checked there); a raise refuses the start with one line, a SystemExit of its own passes as it is; the answer is a line for the engine's log"
+      "read_document": "since 3.0: read_document(ext_dir, name) -> [version, doc] or None: one of extension.documents in the extension's directory before it starts (the engine reads the residency document's memory limits before the weights load, the residency planner's command line its documents); a raise or None: the engine goes on without it",
+      "before_load": "since 3.0: before_load(args) -> str or None, asked once the module is discovered and before the weights load (the session monitor's policy is checked there); a raise refuses the start with one line, a SystemExit of its own passes as it is; the answer is a line for the engine's log"
     },
     "accepts": "the same MAJOR as the host and a MINOR at or below the host's"
   },
@@ -28,7 +28,7 @@
     "metrics": "the metrics registry handle: add(family) for the families metrics-families.json lists with owner ext; since 2.0 event(row): one journal row of the extension (its decisions) counted in those families",
     "ledger_path": "the ledger file; the extension owns its own tables in it (conductor_events, its version row)",
     "args": "the parsed command line as a mapping, and QSE_EXT_ARGS (a JSON object, since 1.1) over it: its keys win",
-    "engine": "the engine-only screens in process, the handlers behind /v1/engine/* (engine API 1.5, group 9); since 2.1 residency_plan(), disk(), disk_clear(), deciders(method, rest, body[, base]), narrator(method, what, body[, base]), shadow(method, what, body[, base]), each answering (status, body) with the body /v1/engine/* answers, or raising the host's Refusal(status, type, message); base is the path an error message names (default /v1/engine/<screen>)",
+    "engine": "the engine-only screens in process, the handlers behind /v1/engine/* (engine API 1.5, group 9); since 3.0 residency_plan(), disk(), disk_clear(), deciders(method, rest, body[, base]), narrator(method, what, body[, base]), shadow(method, what, body[, base]), each answering (status, body) with the body /v1/engine/* answers, or raising the host's Refusal(status, type, message); base is the path an error message names (default /v1/engine/<screen>)",
     "log": "log(line): one line into the engine's log",
     "Refusal": "the exception plan raises to answer the client with an error: Refusal(status, type, message), since 1.2 with a fourth argument param (the request field it names, in the error's param)",
     "ext_dir": "since 2.0: the directory the engine was given for the extension's own documents (--conductor-config), or None (the extension runs without one: chat mode always has one)",
@@ -36,7 +36,7 @@
     "own_eta": "since 2.0: own_eta(texts, max_new) -> milliseconds or None, how long the engine's own model would take to answer a question of the extension now; the attribute is None when the engine keeps no estimate (QWEN38_OWN_ETA off)",
     "own_idle": "since 2.0: own_idle() -> seconds or None, how long no client request has been decoding (None: one is decoding now)",
     "NoRoom": "since 2.0: the exception the engine's callbacks raise inside in_context, ask_in_place and settle_claim when the window has no room for the question (its why: no_room)",
-    "shipped_guard": "since 2.1: the path of the speed-guard report the engine's release tree ships (release/speed-guard.json; it may not exist)"
+    "shipped_guard": "since 3.0: the path of the speed-guard report the engine's release tree ships (release/speed-guard.json; it may not exist)"
   },
   "extension": {
     "attributes": {
@@ -54,7 +54,7 @@
       {"name": "finish", "args": ["plan", "row"], "returns": "None", "phase": "request", "when": "the request's ledger row is written: the extension writes its journal rows"},
       {"name": "stop", "args": [], "returns": "None", "phase": "shutdown", "when": "the engine stops"}
     ],
-    "calls_about": "since 2.0: optional methods of the extension object the request path asks, each open like a hook (a raise or a missing method: the headless value; a raise is counted under the call's name). routing is the plan's routing object. Since 2.1 also what the engine reads of the extension outside a request (the rows marked since 2.1); documents lists the names document answers",
+    "calls_about": "since 2.0: optional methods of the extension object the request path asks, each open like a hook (a raise or a missing method: the headless value; a raise is counted under the call's name). routing is the plan's routing object. Since 3.0 also what the engine reads of the extension outside a request (the rows marked since 3.0); documents lists the names document answers",
     "calls": [
       {"name": "server_mode", "args": ["header", "n"], "returns": "str", "headless": "raw", "when": "before plan: the extension's mode for the request (raw, shadow or on), lowered by the client's X-Tandem header (header), never above shadow for n > 1 choices; the engine names it in the X-Tandem answer header"},
       {"name": "served_name", "args": [], "returns": "str or None", "headless": "None", "when": "the model name the engine answers under while the extension routes requests (TandemLLM); None: the engine's own"},
@@ -75,15 +75,15 @@
       {"name": "writer_ban_ids", "args": ["tokenizer"], "returns": "{id: bias}", "headless": "{}", "when": "the memory writer's own turn: the logit biases that keep it from opening another tool's call"},
       {"name": "writer_foreign_call", "args": ["text"], "returns": "int or None", "headless": "None", "when": "the memory writer's own turn: where its answer turns into a call of another tool (the engine cuts there), or None"},
       {"name": "probe_stage", "args": ["routing"], "returns": "mapping or None", "headless": "None", "when": "a request with a probe capture: the router's probe stage settings ({mode, ...}; mode off or None: no stage)"},
-      {"name": "document", "args": ["name"], "returns": "[version, doc] or None", "headless": "None", "when": "outside a request: one of extension.documents by name (version 0: the extension's built-in one); None: the engine uses its seed (server/api/seeds.py) or nothing", "since": "2.1"},
-      {"name": "library_text", "args": ["name"], "returns": "str or None", "headless": "None", "when": "a package's text from the extension's library (the engine counts its tokens)", "since": "2.1"},
-      {"name": "shadow_wanted", "args": [], "returns": "bool", "headless": "false", "when": "the shadow reader's first load: whether some request of the extension wants it (a profile with shadow.mode on)", "since": "2.1"},
-      {"name": "monitor_mode", "args": [], "returns": "str or None", "headless": "None", "when": "the live view and the summary: the session monitor's mode (raw, shadow or on), None without a monitor", "since": "2.1"},
-      {"name": "narrator", "args": ["slot"], "returns": "narrator or None", "headless": "None", "when": "the start: the narrator over the engine's slot for QWEN38_NARRATOR_MODEL, with what narrator names; None: no narrator", "since": "2.1"},
-      {"name": "role_errors", "args": ["fields", "name", "tokenizer_sha"], "returns": "list[str]", "headless": "[]", "when": "each check of a small model the engine serves (the decision models, the narrator): the role contract's violations; [] passes", "since": "2.1"},
-      {"name": "deciders", "args": ["registry"], "returns": "None", "headless": "None", "when": "the start, once the engine's decision models' registry is built: the extension's in-process client of them", "since": "2.1"},
-      {"name": "deciders_api", "args": ["doc"], "returns": "mapping or None", "headless": "None", "when": "/v1/engine/deciders/status: the api part (the extension's use of the decision models and its counts) for the deciders document doc", "since": "2.1"},
-      {"name": "memory_writer", "args": [], "returns": "[writer, settings] or [None, None]", "headless": "[None, None]", "when": "the engine's idle look and a compaction's end: the memory writer, whose hidden turn the engine decodes, with what memory_writer names, and its settings (mode, after_compaction, gate, max_tokens, prefill, ban_tool_call and the rest the writer's due reads)", "since": "2.1"}
+      {"name": "document", "args": ["name"], "returns": "[version, doc] or None", "headless": "None", "when": "outside a request: one of extension.documents by name (version 0: the extension's built-in one); None: the engine uses its seed (server/api/seeds.py) or nothing", "since": "3.0"},
+      {"name": "library_text", "args": ["name"], "returns": "str or None", "headless": "None", "when": "a package's text from the extension's library (the engine counts its tokens)", "since": "3.0"},
+      {"name": "shadow_wanted", "args": [], "returns": "bool", "headless": "false", "when": "the shadow reader's first load: whether some request of the extension wants it (a profile with shadow.mode on)", "since": "3.0"},
+      {"name": "monitor_mode", "args": [], "returns": "str or None", "headless": "None", "when": "the live view and the summary: the session monitor's mode (raw, shadow or on), None without a monitor", "since": "3.0"},
+      {"name": "narrator", "args": ["slot"], "returns": "narrator or None", "headless": "None", "when": "the start: the narrator over the engine's slot for QWEN38_NARRATOR_MODEL, with what narrator names; None: no narrator", "since": "3.0"},
+      {"name": "role_errors", "args": ["fields", "name", "tokenizer_sha"], "returns": "list[str]", "headless": "[]", "when": "each check of a small model the engine serves (the decision models, the narrator): the role contract's violations; [] passes", "since": "3.0"},
+      {"name": "deciders", "args": ["registry"], "returns": "None", "headless": "None", "when": "the start, once the engine's decision models' registry is built: the extension's in-process client of them", "since": "3.0"},
+      {"name": "deciders_api", "args": ["doc"], "returns": "mapping or None", "headless": "None", "when": "/v1/engine/deciders/status: the api part (the extension's use of the decision models and its counts) for the deciders document doc", "since": "3.0"},
+      {"name": "memory_writer", "args": [], "returns": "[writer, settings] or [None, None]", "headless": "[None, None]", "when": "the engine's idle look and a compaction's end: the memory writer, whose hidden turn the engine decodes, with what memory_writer names, and its settings (mode, after_compaction, gate, max_tokens, prefill, ban_tool_call and the rest the writer's due reads)", "since": "3.0"}
     ],
     "documents": {"residency": "the residency planner's document: claims, floor, margin, order and its engine section (the memory limits)", "roles": "the roles: each small model's kind, window, claim and contract", "deciders": "the decision models' load policy (models: name, load) and each question's model", "settings": "the extension's settings: memory.disk_cache, the disk tier's settings", "router": "the router's settings: effort.levels, the effort words' reasoning caps", "packages": "the library's packages"}
   },
@@ -219,17 +219,17 @@
     "routes": "a route handler answers (status, headers, body) only"
   },
   "memory_writer": {
-    "about": "since 2.1: what memory_writer answers. The engine looks while it is idle and after a compaction, decodes the writer's turn itself (the record, the instructions, the prefill, the banned ids, scratch rows, its stop rule) and asks the writer the rest; conv is the conversation's id",
+    "about": "since 3.0: what memory_writer answers. The engine looks while it is idle and after a compaction, decodes the writer's turn itself (the record, the instructions, the prefill, the banned ids, scratch rows, its stop rule) and asks the writer the rest; conv is the conversation's id",
     "methods": {"state": "state(conv) -> object or None: the conversation's writer state (None: none of it is the writer's)", "due": "due(conv, at, idle_s, settings) -> trigger or None: why it is due now (idle, compaction, ...)", "mark": "mark(conv, trigger) -> None", "gate": "gate(conv) -> [answer, how]: the extension's own gate question (answer no: skipped)", "instructions": "instructions(conv, settings) -> [text, existing]: the writer's user turn and the notes it has", "apply": "apply(conv, text, settings, trigger, at, info) -> mapping: the turn's answer applied (ops, answer, none)", "skipped": "skipped(conv, trigger, why, at, info) -> None"},
     "fields": {"stats": "mapping: the writer's numbers (read for /metrics; the engine writes last_look and last_look_since_ms)"}
   },
   "narrator": {
-    "about": "since 2.1: what narrator(slot) answers, built over the engine's slot (its model, the residency planner, the journal). The engine serves /v1/engine/narrator/* over it, keeps it loaded and hands it to the decode loop",
+    "about": "since 3.0: what narrator(slot) answers, built over the engine's slot (its model, the residency planner, the journal). The engine serves /v1/engine/narrator/* over it, keeps it loaded and hands it to the decode loop",
     "fields": {"slot": "the slot the engine handed in"},
     "methods": {"settings": "settings() -> {mode, budget_ms}: the role's settings (mode off: nothing loads)", "status": "status() -> mapping: /v1/engine/narrator/status for a narrator that runs (enabled true, settings, slot, limits, thoughts)", "try_events": "try_events(events, budget_ms, max_tokens) -> list: /v1/engine/narrator/try's lines", "for_voice": "for_voice(ui, lang, opened, close_id, decode, share, settings) -> object or None: the decode loop's voice lines", "for_thoughts": "for_thoughts(ui, opened, close_id, decode, reader) -> object or None: the decode loop's thought summaries"}
   },
   "state_keys": {
-    "about": "since 2.1: the keys of host.state the extension writes and what the engine does with each; outside the hooks, calls and fields named in this file the engine reads no attribute of an extension's object",
+    "about": "since 3.0: the keys of host.state the extension writes and what the engine does with each; outside the hooks, calls and fields named in this file the engine reads no attribute of an extension's object",
     "conductor": "the extension routes requests (chat mode): the engine reads only whether it is set",
     "monitor": "the session monitor: the engine reads only whether it is set, and hands its policy to the --backends proxy (the one hand-over left, until WP14)",
     "journal": "the extension's journal: the engine calls close() at the drain",
@@ -244,14 +244,22 @@
     "routes": "a route's request gains allowed(route) -> None or the engine's refusal (status, headers, body), session_token and session (the session address /s/<token> the path came under, and the session key it names, or None)",
     "NoRoom": "host.NoRoom: what the engine's callbacks raise when a question asked in place has no room in the window"
   },
-  "since_2_1": {
-    "why": "ENG-413 WP5: what 2.0 kept_interim listed is the interface or the engine's own; every addition is optional, so a 2.0 extension starts on a 2.1 host and each new call answers its headless value for it",
-    "calls": "document, library_text, shadow_wanted, monitor_mode, narrator, role_errors, deciders, deciders_api and memory_writer (extension.calls, since 2.1), with extension.documents, memory_writer and narrator",
-    "host": "engine holds the /v1/engine/* handlers with the 2.1 signatures (until 2.0 the engine handed over nothing through it; TandemApp's routes took the handlers out of the server's state); shipped_guard",
+  "changed_from_2": {
+    "why": "3.0 (ENG-413 WP5): a 2.x extension that routes requests relied on the engine reading its objects (its documents, its memory writer) and on the engine writing the monitor's policy into the state; a 3.0 host does neither, so such an extension would run with the built-in documents, no memory writer and no monitor, other tokens, without an error. The host takes major 3 only: every 2.x (and 1.x) extension is refused at start with one line, before the weights load",
+    "writer": "the interim writer() call is gone: memory_writer answers the writer itself (gate(conv): the extension asks its own router)",
+    "reads": "the engine no longer reads state['conductor'] (store, library, router, root, memory) or state['monitor'] outside the hooks: document, library_text, shadow_wanted, monitor_mode and memory_writer answer; state_keys says what is left",
+    "policy": "the engine no longer validates the monitor's policy or writes state['conductor_policy']: the module's before_load does",
+    "engine": "host.engine's handlers take no conductor: residency_plan(), disk(), disk_clear(), deciders(method, rest, body[, base]), narrator(...), shadow(...), answering (status, body) or raising the host's Refusal",
+    "narrator": "the engine builds the narrator's slot and asks narrator(slot) for the narrator; the role contract is role_errors, the decision models' client deciders(registry)"
+  },
+  "since_3_0": {
+    "why": "ENG-413 WP5: what 2.0 kept_interim listed is the interface or the engine's own (changed_from_2 says why this is a major step)",
+    "calls": "document, library_text, shadow_wanted, monitor_mode, narrator, role_errors, deciders, deciders_api and memory_writer (extension.calls, since 3.0), with extension.documents, memory_writer and narrator",
+    "host": "engine holds the /v1/engine/* handlers with the 3.0 signatures (until 2.0 the engine handed over nothing through it; TandemApp's routes took the handlers out of the server's state); shipped_guard",
     "module": "read_document and before_load (discovery.module_optional)",
     "writer": "the interim writer() call is gone: memory_writer answers the writer itself, with gate(conv) (the extension asks its own router)",
     "state": "state_keys: what the engine reads of the keys the extension writes",
-    "closed": "two start refusals (failure.start): the session monitor without the module's before_load, and an extension below 2.1 that routes requests; a 2.0 extension that does neither (a plain route extension, fake_ext.py) starts as before"
+    "closed": "the session monitor asked of a module without before_load is refused at start (failure.start)"
   },
   "kept_interim": [
     {"what": "state['conductor'] and state['monitor'].policy handed to the --backends proxy", "where": "server/app.py start_proxy", "why": "the --backends proxy in the engine's process is TandemApp's own code (proxy.service, imported by the engine) and runs TandemApp's conductor as its harness; it leaves the engine with ENG-413 WP14 (routes and paths marked to leave go then, the owner's decision of 2026-11-13), so it does not become part of the interface", "until": "ENG-413 WP14"}
@@ -268,7 +276,7 @@
   },
   "failure": {
     "rule": "closed at start, open per request",
-    "start": "QSE_EXT names a module that does not import, has no EXT_API or one the host does not accept, lacks a hook, raises in start, or claims an engine path; or chat mode is asked with QSE_EXT empty: the engine does not start and prints one line '[ext] REFUSING: <why>'. The module's checks (it imports, its attributes, EXT_API, chat without QSE_EXT, QSE_EXT_ARGS) refuse before the weights load; start(host) runs once the served model is loaded, since the host hands it the tokenizer and the engine, and a start that raises, a missing hook or a claimed path refuse before the engine takes its first request (since 1.1 said so). It never falls back to headless when an extension was asked for. Since 2.1 also: the session monitor asked (--conductor shadow|on) of a module without before_load (nothing would check and hand over its policy), and an extension below 2.1 that routes requests (it sets state['conductor']): a 2.1 host reads its documents and memory writer through the 2.1 calls only, so it would lose them without an error",
+    "start": "QSE_EXT names a module that does not import, has no EXT_API or one the host does not accept, lacks a hook, raises in start, or claims an engine path; or chat mode is asked with QSE_EXT empty: the engine does not start and prints one line '[ext] REFUSING: <why>'. The module's checks (it imports, its attributes, EXT_API, chat without QSE_EXT, QSE_EXT_ARGS) refuse before the weights load; start(host) runs once the served model is loaded, since the host hands it the tokenizer and the engine, and a start that raises, a missing hook or a claimed path refuse before the engine takes its first request (since 1.1 said so). It never falls back to headless when an extension was asked for. Since 3.0 also: the session monitor asked (--conductor shadow|on) of a module without before_load (nothing would check and hand over its policy)",
     "request": "a hook that raises or returns a value of the wrong shape: the engine logs it, counts it (qse_ext_errors_total{hook}: the hook's or the supervisor method's name; models, route and stop too) and serves the rest of that request as a headless engine would: plan -> raw, prompt -> the ids as built, supervisor -> none from then on, extras -> none, follow_ups and finish -> skipped. Acts already carried out stay; the next request asks the extension again",
     "refusal": "plan may raise the host's Refusal(status, type, message): the client gets that error; it is an answer, not a failure",
     "act_out_of_place": "an act whose kind the safe point does not allow is dropped and counted, as an error of that hook",

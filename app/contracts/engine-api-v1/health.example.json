@@ -29,7 +29,7 @@
     {
       "name": "tandemapp",
       "version": "0.15.0",
-      "ext_api": "2.1"
+      "ext_api": "3.0"
     }
   ]
 }

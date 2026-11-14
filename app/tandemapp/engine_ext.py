@@ -14,12 +14,12 @@ chat mode: `QSE_EXT=tandemapp.engine_ext`.
     hooks           plan, prompt, supervisor (the decode loop's safe points), extras, follow_ups,
                     finish, stop
     calls           the request path's optional calls (engine-ext-v1 2.0 `extension.calls`), and
-                    since 2.1 (ENG-413 WP5) what the engine reads of it outside a request: its
+                    since 3.0 (ENG-413 WP5) what the engine reads of it outside a request: its
                     documents, the library's texts, the shadow switch, the monitor's mode, the
                     narrator over the engine's slot, the role contract, the decision models'
                     client and the deciders screen's api part, and the memory writer
     read_document(ext_dir, name), before_load(args)
-                    2.1: the module's own reads before the start (the residency limits, the
+                    3.0: the module's own reads before the start (the residency limits, the
                     session monitor's policy)
     attach(host)    tests: the extension object around a conductor or monitor a test built, no start
 
@@ -39,7 +39,7 @@ import io
 import json
 import time
 
-EXT_API = "2.1"
+EXT_API = "3.0"
 NAME = "tandemapp"
 #: the session monitor runs behind this extension with no conductor directory too
 MONITOR_ALONE = True
@@ -56,12 +56,12 @@ def _version() -> str:
 VERSION = _version()
 
 
-#: engine-ext-v1 2.1: what before_load read before the weights load (the session monitor's policy)
+#: engine-ext-v1 3.0: what before_load read before the weights load (the session monitor's policy)
 _EARLY: dict = {"policy": None}
 
 
 def read_document(ext_dir, name):
-    """engine-ext-v1 2.1 `read_document`: the stored document `name` in the conductor's directory,
+    """engine-ext-v1 3.0 `read_document`: the stored document `name` in the conductor's directory,
     before the extension starts: [version, doc] (version 0: the built-in one)."""
     from tandemapp.conductor.store import Store
     v, doc = Store(ext_dir, readonly=True).get(name)
@@ -69,7 +69,7 @@ def read_document(ext_dir, name):
 
 
 def before_load(args):
-    """engine-ext-v1 2.1 `before_load`: the session monitor's policy for `--conductor shadow|on`,
+    """engine-ext-v1 3.0 `before_load`: the session monitor's policy for `--conductor shadow|on`,
     validated before the weights load (a file that does not validate stops the start); its line
     for the engine's log, or None when the monitor is not asked for."""
     _EARLY["policy"] = None
@@ -94,7 +94,7 @@ def _policy(state):
 
 
 class _Writer:
-    """engine-ext-v1 2.1 `memory_writer`: the conductor's memory writer as the engine asks it; `gate`
+    """engine-ext-v1 3.0 `memory_writer`: the conductor's memory writer as the engine asks it; `gate`
     asks the conductor's own router."""
 
     def __init__(self, cond):
@@ -127,7 +127,7 @@ class _Writer:
 
 
 def _screens(host) -> dict:
-    """The engine's screens (`host.engine`, engine-ext-v1 2.1) as the conductor's routes call them:
+    """The engine's screens (`host.engine`, engine-ext-v1 3.0) as the conductor's routes call them:
     the host's Refusal becomes the conductor's ApiError, so an error is answered as before."""
     from tandemapp.conductor.routes import ApiError
     refusal = getattr(host, "Refusal", None)
@@ -625,7 +625,7 @@ class Ext:
             w = getattr(supervisor, "_obj", supervisor)
             mon.turn_ended(w._sup if isinstance(w, Watch) else w)   # the watch's idle time starts here
 
-    # ------------------------------------------------------------------ 2.1: outside a request
+    # ------------------------------------------------------------------ 3.0: outside a request
     def memory_writer(self):
         """(the memory writer, its settings), or (None, None) without one."""
         cond = self.cond
@@ -795,7 +795,7 @@ class Ext:
         cond = state["conductor"] = Conductor(
             root, state=state, journal=journal,
             monitor_seed=mon.policy.data if mon is not None else None)
-        # engine-ext-v1 2.1: the engine's screens for the conductor's old paths, and the speed-guard
+        # engine-ext-v1 3.0: the engine's screens for the conductor's old paths, and the speed-guard
         # report the release tree ships (the Compare screen)
         cond.engine, cond.shipped_guard = _screens(host), getattr(host, "shipped_guard", None)
         import os

@@ -116,7 +116,7 @@ from tandemapp.conductor.store import ConfigError
 CONTRACT = "1.0"
 #: ENG-413 WP5: the engine-only screens are the engine's (`/v1/engine/*`, engine API 1.5); an engine
 #: that runs this conductor in its own process hands their handlers over in process (engine-ext-v1
-#: 2.1 `host.engine`), which tandemapp.engine_ext sets as `cond.engine`, with the speed-guard report
+#: 3.0 `host.engine`), which tandemapp.engine_ext sets as `cond.engine`, with the speed-guard report
 #: its release tree ships as `cond.shipped_guard` (VIS-68). tandem-app runs no engine: it has neither
 #: and answers the screens with ENGINE_ONLY
 ENGINE_ONLY = "an engine screen: this server runs no TandemLLM engine in its process"
@@ -419,7 +419,7 @@ def _route(handler, cond, method, parts, q, body, auth):
         # VIS-68: a release tree ships its own speed-guard report (release/speed-guard.json, written in
         # the fold by tools/speed_guard.py ship), so a release's build line reads its result out of
         # the box; a report of the box's own for the same build comes first. The engine names the
-        # file (cond.shipped_guard, engine-ext-v1 2.1 host.shipped_guard); tandem-app has none
+        # file (cond.shipped_guard, engine-ext-v1 3.0 host.shipped_guard); tandem-app has none
         shipped = getattr(cond, "shipped_guard", None)
         if shipped:
             try:
@@ -813,7 +813,7 @@ def _deciders(cond, method: str, rest: list[str], body: dict):
 
 
 def _screen(cond, name: str):
-    """An engine screen's handler (engine-ext-v1 2.1 `host.engine`, as `cond.engine`), or None."""
+    """An engine screen's handler (engine-ext-v1 3.0 `host.engine`, as `cond.engine`), or None."""
     return (getattr(cond, "engine", None) or {}).get(name)
 
 

@@ -48,7 +48,7 @@ class Conductor:
         else inside the config directory)."""
         self.state = state if state is not None else {}
         # ENG-413 WP5: the engine's screens in process and its shipped speed-guard report, set by
-        # tandemapp.engine_ext from the host (engine-ext-v1 2.1); none in tandem-app
+        # tandemapp.engine_ext from the host (engine-ext-v1 3.0); none in tandem-app
         self.engine: dict = {}
         self.shipped_guard: str | None = None
         self.root = os.path.realpath(os.path.expanduser(root or DEFAULT_ROOT))
