@@ -20,7 +20,7 @@ the setup marker; secrets, weights and configuration are reported, never changed
                  default) is mode 600                                                  chmod 600
                  one in another place than the engine reads is reported
     python       the engine's interpreter (serve.env PY) runs; chatd's (CHATD_PY, else PY) runs,
-                 unless QSE_CHATD=off
+                 unless QSE_CHATD=off, or node (TandemNode runs chatd, ENG-413 WP6)
     pids         logs/engine.pid and chatd's pid file name a live process of theirs      removed
     pause        a hold's .watchdog.off older than WATCHDOG_PAUSE_MAX (2400 s)          removed
     marker       run/setup-pending names a HOST start.sh takes                rewritten 127.0.0.1
@@ -237,7 +237,7 @@ def check_python(rep: Report, env: dict) -> None:
     why = _runs(env.get("PY", ""), "import sys; assert sys.version_info >= (3, 11), sys.version")
     rep.add("python", "problem" if why else "ok", f"the engine's interpreter: {why}" if why else
             f"the engine's interpreter runs ({env.get('PY')})")
-    if (os.environ.get("QSE_CHATD") or env.get("QSE_CHATD") or "on") == "off":
+    if (os.environ.get("QSE_CHATD") or env.get("QSE_CHATD") or "on") in ("off", "node"):
         return
     py = os.environ.get("CHATD_PY") or env.get("CHATD_PY") or env.get("PY", "")
     why = _runs(py, "import sys; assert sys.version_info >= (3, 9), sys.version")

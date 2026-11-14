@@ -990,12 +990,21 @@ engine_alive() { [ -f "$REPO/logs/engine.pid" ] && kill -0 "$(cat "$REPO/logs/en
 # (ops/chatd.sh in a checkout from before SRV-747; TandemApp's launcher, run from here until
 # ENG-413). start starts it once the engine answers, stop stops it first (open runs end
 # `interrupted`, Continue resumes them), restart leaves it running; QSE_CHATD=off (local.env) keeps
-# start from starting it.
+# start from starting it. QSE_CHATD=node (SRV-823): TandemNode owns chatd, so start and stop leave
+# it alone and tandem chat runs tandem-node chat (TANDEM_NODE_BIN, else tandem-node on PATH).
 CHATD="$REPO/app/ops/chatd.sh"
 [ -f "$CHATD" ] || CHATD="$REPO/ops/chatd.sh"
+NODE="${TANDEM_NODE_BIN:-$(command -v tandem-node 2>/dev/null || true)}"
+node_chat() {
+    if [ -n "$NODE" ]; then exec "$NODE" chat "$@"; fi
+    echo "[tandem] chat: TandemNode runs chatd here (QSE_CHATD=node) and no tandem-node is on PATH:" \
+         "TandemApp's tandem-node chat ${1:-status}, or set TANDEM_NODE_BIN" >&2
+    exit 2
+}
 chat_up() { bash "$CHATD" status >/dev/null 2>&1; }
 chat_auto() {
     [ "${QSE_CHATD:-on}" = off ] && return 0
+    [ "${QSE_CHATD:-on}" = node ] && return 0          # TandemNode's
     [ -f "$REPO/run/setup-pending" ] && return 0       # setup mode: the Chat tab waits for the setup
     chat_up && return 0
     bash "$CHATD" start || echo "[tandem] WARNING: chatd did not start (above); the engine serves without the Chat tab. Log: $REPO/logs/chatd.log" >&2
@@ -1017,6 +1026,11 @@ print("[tandem] stage: the %s, layers %s, link %s (epoch %s)%s" % (s.get("role")
 ' 2>/dev/null || true
 }
 chat_line() {
+    if [ "${QSE_CHATD:-on}" = node ]; then
+        if [ -n "$NODE" ]; then "$NODE" chat status 2>&1 | head -1 || true
+        else echo "[tandem] chat: TandemNode's (QSE_CHATD=node); no tandem-node on PATH (TANDEM_NODE_BIN)"; fi
+        return 0
+    fi
     if [ "${QSE_MODE:-}" = engine ] && ! chat_up; then echo "[tandem] chat: off (engine only; QSE_MODE=chat in $RUN/local.env, then restart, turns it on)"; return 0; fi
     if [ "${QSE_CHATD:-on}" = off ] && ! chat_up; then echo "[tandem] chat: off (QSE_CHATD=off)"; return 0; fi
     bash "$CHATD" status 2>&1 | head -1 || true
@@ -1110,7 +1124,7 @@ PY
 
 case "${1:-}" in
     start) start ;;
-    stop) bash "$CHATD" stop || true; bash "$RUN/ops/stop.sh" "${2:-60}" ;;
+    stop) [ "${QSE_CHATD:-on}" = node ] || bash "$CHATD" stop || true; bash "$RUN/ops/stop.sh" "${2:-60}" ;;
     restart) bash "$RUN/ops/stop.sh" "${2:-60}"; start ;;
     status)
         rc=0
@@ -1123,6 +1137,7 @@ case "${1:-}" in
     logs) tail -n "${2:-100}" -f "$REPO/logs/engine.log" ;;
     env) cat "$ENV_FILE" ;;
     chat)
+        if [ "${QSE_CHATD:-on}" = node ]; then shift; node_chat "$@"; fi
         case "${2:-status}" in
             start|stop|restart|status) bash "$CHATD" "${2:-status}" ;;
             logs) tail -n "${3:-100}" -f "$REPO/logs/chatd.log" ;;

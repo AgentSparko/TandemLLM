@@ -65,13 +65,27 @@ LOGLINK="$LOGS/engine.log"
 # start is a warning: the engine is up either way. ops/stop.sh never stops it, so an engine
 # restart, the watchdog's included, never ends a chat run; `tandem stop` does. Until ENG-413.
 # Engine mode (OPS-260) stops a chatd this checkout started, so the Chat (beta) switch's off ends it.
+# QSE_CHATD=node (ENG-413 WP6, SRV-823; node/control.json `chat`): TandemNode owns chatd, so nothing
+# here starts or stops it, in any mode; one line says so, and whether a TandemNode answers on
+# 127.0.0.1:TANDEM_NODE_PORT (7700): without one this engine serves without the Chat tab.
 load_secrets() {
     SECRETS="${QSE_SECRETS:-${QSE_STATE_DIR:+$QSE_STATE_DIR/secrets.env}}"
     SECRETS="${SECRETS:-$HOME/.qwen38-spark-engine/secrets.env}"
     if [ -f "$SECRETS" ]; then set -a; . "$SECRETS"; set +a; fi
 }
+node_answers() { (exec 3<>"/dev/tcp/127.0.0.1/${TANDEM_NODE_PORT:-7700}") 2>/dev/null; }
 start_chatd() {
     [ -z "$PEER" ] || return 0                     # a peer starts no chatd
+    if [ "${QSE_CHATD:-on}" = node ]; then
+        if node_answers; then
+            echo "[start] chatd: TandemNode's (QSE_CHATD=node): it runs chatd (tandem-node chat status)"
+        else
+            echo "[start] chatd: TandemNode's (QSE_CHATD=node), and no TandemNode answers on" \
+                 "127.0.0.1:${TANDEM_NODE_PORT:-7700}: the engine serves without the Chat tab" \
+                 "(QSE_CHATD=on gives chatd back to this engine)"
+        fi
+        return 0
+    fi
     local sh="$REPO/app/ops/chatd.sh"
     [ -f "$sh" ] || sh="$REPO/ops/chatd.sh"
     if [ "${QSE_CHATD:-on}" = "off" ]; then

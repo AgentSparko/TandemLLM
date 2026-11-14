@@ -25,10 +25,12 @@ say() { echo "$(date -Is) $*" >> "$WD"; }
 # line until the next hour; a chatd found running clears the count. QSE_CHATD=off or setup mode
 # (run/setup-pending): nothing. The launcher is the checkout's app/ops/chatd.sh, TandemApp's (until
 # ENG-413), else ops/chatd.sh (a checkout from before SRV-747); with neither, one line an hour says
-# so (logs/watchdog.nochatd: that hour).
+# so (logs/watchdog.nochatd: that hour). QSE_CHATD=node: TandemNode's watcher has this rule
+# (ENG-413 WP6, SRV-823), so nothing here.
 chatd_check() {
     local f="$LOGS/watchdog.chatd" sh="$REPO/app/ops/chatd.sh" hour h n
     [ "${QSE_CHATD:-on}" = "off" ] && return 0
+    [ "${QSE_CHATD:-on}" = node ] && return 0
     [ ! -f "$REPO/run/setup-pending" ] || return 0
     [ -f "$sh" ] || sh="$REPO/ops/chatd.sh"
     if [ ! -f "$sh" ]; then
