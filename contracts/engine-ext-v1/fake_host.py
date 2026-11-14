@@ -9,6 +9,7 @@ meets an engine. Standard library only; imports neither tree.
     ext = load("fake_ext", host)                 # or load(module, host)
     record = host.serve(ext, Scenario(...))      # record["trace"], ["errors"], ["acts"], ["raw"]
     host.call(ext, name, *args)                  # since 2.0: one of the extension's optional calls
+    route(ext, method, path)                     # since 3.1: the handler the engine dispatches to
 
 Since 2.0: CALLS, SUP_OPTIONAL and SUP_FIELDS hold the headless value of each optional call, each
 optional supervisor method and each supervisor field (ext.json extension.calls,
@@ -76,6 +77,8 @@ CALLS = {
     "deciders": lambda registry: None,
     "deciders_api": lambda doc: None,
     "memory_writer": lambda: (None, None),
+    # since 3.1: the router's question for the shadow reader
+    "shadow_question": lambda routing, prompt_ids: None,
 }
 #: since 2.0: the supervisor's optional methods (ext.json supervisor.optional_methods), headless
 SUP_OPTIONAL = {
@@ -152,6 +155,24 @@ def _claims_engine_path(prefix: str) -> bool:
     if prefix.startswith("/v1/dashboard/"):
         return prefix[len("/v1/dashboard/"):].split("/")[0] in ENGINE_DASHBOARD
     return any(prefix.startswith(p) or p.startswith(prefix.rstrip("*")) for p in ENGINE_PREFIXES)
+
+
+def _matches(prefix: str, path: str) -> bool:
+    if prefix.endswith("/"):
+        return path.startswith(prefix) or path == prefix.rstrip("/")
+    return path == prefix or path.startswith(prefix + "/")
+
+
+def route(ext, method: str, path: str):
+    """The handler of the extension's route for `method` and `path` (ext.json
+    extension.attributes.routes), or None. Since 3.1 a preflight (OPTIONS) goes only to a route
+    that names OPTIONS, never to a `*` one."""
+    want = method.upper()
+    for r in ext.routes:
+        m = str(r.get("method") or "*").upper()
+        if (m == want or (m == "*" and want != "OPTIONS")) and _matches(r.get("prefix", ""), path):
+            return r["handler"]
+    return None
 
 
 class FakeHost:

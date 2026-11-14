@@ -1,6 +1,6 @@
 {
   "name": "engine-ext-v1",
-  "version": "3.0",
+  "version": "3.1",
   "about": "The in-process extension interface of a TandemLLM engine (ENG-429); version 2.0 since ENG-413 WP4 (changed_from_1), 3.0 since WP5 (changed_from_2, since_3_0). Python, not HTTP. The engine owns it; TandemApp's conductor is its first extension. README.md says it in prose; fake_host.py is the reference host and fake_ext.py the smallest extension. A minor step adds a hook, an argument with a default, a host attribute, an event field or an act kind; a major step removes or renames one or changes a meaning.",
   "discovery": {
     "env": "QSE_EXT",
@@ -40,7 +40,7 @@
   },
   "extension": {
     "attributes": {
-      "routes": "[{method, prefix, handler}]: paths the extension serves (method * for any; a prefix ending in / matches below it, any other the path itself and below it); handler(request) -> (status, headers, body), request with method, path, query, headers, body, peer and auth (since 1.1), and since 2.0 allowed(route) (None, or the engine's refusal (status, headers, body) for that access rule), session_token and session (the session address /s/<token> the path came under and the session key it names, else None). A prefix the engine serves itself is refused at start",
+      "routes": "[{method, prefix, handler}]: paths the extension serves (method * for any; a prefix ending in / matches below it, any other the path itself and below it); handler(request) -> (status, headers, body), request with method, path, query, headers, body, peer and auth (since 1.1), and since 2.0 allowed(route) (None, or the engine's refusal (status, headers, body) for that access rule), session_token and session (the session address /s/<token> the path came under and the session key it names, else None). A prefix the engine serves itself is refused at start. Since 3.1 a route may name OPTIONS: the engine asks it for the preflight (OPTIONS) of a path it dispatches to the extension (Laya's, /v1/laya*), never a * route; an answer with status 204 goes out without a Content-Type",
       "models": "[model entry]: what /v1/models lists in place of the engine's own model (the TandemLLM alias); since 1.1 read at every /v1/models answer, so it may follow the extension's own documents, and /v1/models/{id} answers an entry of that id, or the first entry for the engine's own model name (a hidden alias)",
       "knobs": "[name]: the QWEN38_* names it reads (knobs.json)"
     },
@@ -83,7 +83,8 @@
       {"name": "role_errors", "args": ["fields", "name", "tokenizer_sha"], "returns": "list[str]", "headless": "[]", "when": "each check of a small model the engine serves (the decision models, the narrator): the role contract's violations; [] passes", "since": "3.0"},
       {"name": "deciders", "args": ["registry"], "returns": "None", "headless": "None", "when": "the start, once the engine's decision models' registry is built: the extension's in-process client of them", "since": "3.0"},
       {"name": "deciders_api", "args": ["doc"], "returns": "mapping or None", "headless": "None", "when": "/v1/engine/deciders/status: the api part (the extension's use of the decision models and its counts) for the deciders document doc", "since": "3.0"},
-      {"name": "memory_writer", "args": [], "returns": "[writer, settings] or [None, None]", "headless": "[None, None]", "when": "the engine's idle look and a compaction's end: the memory writer, whose hidden turn the engine decodes, with what memory_writer names, and its settings (mode, after_compaction, gate, max_tokens, prefill, ban_tool_call and the rest the writer's due reads)", "since": "3.0"}
+      {"name": "memory_writer", "args": [], "returns": "[writer, settings] or [None, None]", "headless": "[None, None]", "when": "the engine's idle look and a compaction's end: the memory writer, whose hidden turn the engine decodes, with what memory_writer names, and its settings (mode, after_compaction, gate, max_tokens, prefill, ban_tool_call and the rest the writer's due reads)", "since": "3.0"},
+      {"name": "shadow_question", "args": ["routing", "prompt_ids"], "returns": "mapping or None", "headless": "None", "when": "a turn feeds the shadow reader under a profile with shadow.router: shadow and its prompt has at least router_min_tokens tokens: the router's class question for the reader, {at, question, choices, router, request_id, row_id} (at: the prompt's insertion point, its last <|im_end|>; choices: {class id: description}; router: the router's own {class_id, source, confidence}), or {skip: why} (structural, side, no_class, classes or no_insertion_point: the reader counts it), or None (not asked). The engine puts the question to the reader at the insertion point and journals the reader's answer beside the router's (/v1/engine/shadow/status router)", "since": "3.1"}
     ],
     "documents": {"residency": "the residency planner's document: claims, floor, margin, order and its engine section (the memory limits)", "roles": "the roles: each small model's kind, window, claim and contract", "deciders": "the decision models' load policy (models: name, load) and each question's model", "settings": "the extension's settings: memory.disk_cache, the disk tier's settings", "router": "the router's settings: effort.levels, the effort words' reasoning caps", "packages": "the library's packages"}
   },
@@ -233,7 +234,8 @@
     "conductor": "the extension routes requests (chat mode): the engine reads only whether it is set",
     "monitor": "the session monitor: the engine reads only whether it is set, and hands its policy to the --backends proxy (the one hand-over left, until WP14)",
     "journal": "the extension's journal: the engine calls close() at the drain",
-    "escapes": "the loop escape's sessions (setdefault: the engine makes them at its start)"
+    "escapes": "the loop escape's sessions: the engine's object, made at its start on every engine (server/api/loopescape.py Escapes; its methods named since 3.1): step(key, signal, turn) -> the request's escape record or None, report() -> {sessions, started, sampled, back}, which /health sampling.loop_escape shows; the extension's loop_escape call steps it (setdefault: the engine has made it)",
+    "session_tokens": "since 3.1: the session addresses' registry: the engine's object, made at its start on every engine (server/api/session_tokens.py SessionTokens, a 0600 file in ext_dir): token_for(key) -> token (issued at a session's first request), key_for(token), note(key, kind), calls(key), report(); the engine strips /s/<token> from every path and hands a route session_token and session; the extension's router issues the tokens through it and writes nothing else under the key"
   },
   "since_2_0": {
     "host": "ext_dir, identity_name, own_eta, own_idle and metrics.event: what an extension read of the engine outside the interface until 1.2",
@@ -260,6 +262,13 @@
     "writer": "the interim writer() call is gone: memory_writer answers the writer itself, with gate(conv) (the extension asks its own router)",
     "state": "state_keys: what the engine reads of the keys the extension writes",
     "closed": "the session monitor asked of a module without before_load is refused at start (failure.start)"
+  },
+  "since_3_1": {
+    "why": "ENG-413 WP5b: the last engine-side imports of TandemApp's code are the engine's own or the extension's: the router's shadow question is a call, Laya's routes are the extension's, the session addresses and the loop escape's counts are the engine's objects",
+    "calls": "shadow_question (extension.calls, since 3.1)",
+    "routes": "a route may name OPTIONS (the preflight of Laya's routes); a 204 answer has no Content-Type",
+    "state": "state_keys session_tokens, and the methods of escapes: the engine's objects the extension uses",
+    "laya": "/v1/laya* is the extension's route over the engine's decision models (deciders(registry), since 3.0): with decision models the engine dispatches GET /v1/laya, GET /v1/laya/kit/<file>, POST /v1/laya/ask, POST /v1/laya/drive/end and their preflights to it, any other path under /v1/laya stays no route; without decision models 404 not_on_engine as since 1.4. An extension that serves none of them answers 404 not_on_engine there (the engine served Laya itself until 3.0)"
   },
   "kept_interim": [
     {"what": "state['conductor'] and state['monitor'].policy handed to the --backends proxy", "where": "server/app.py start_proxy", "why": "the --backends proxy in the engine's process is TandemApp's own code (proxy.service, imported by the engine) and runs TandemApp's conductor as its harness; it leaves the engine with ENG-413 WP14 (routes and paths marked to leave go then, the owner's decision of 2026-11-13), so it does not become part of the interface", "until": "ENG-413 WP14"}

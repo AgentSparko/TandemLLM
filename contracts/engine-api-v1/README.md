@@ -256,8 +256,7 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 
 | engine file | app modules |
 |-|-|
-| `server/app.py` | `proxy.collect_api`, `proxy.config`, `proxy.config_api`, `proxy.hostcollect`, `proxy.route`, `proxy.service` (`--backends`, leaves at WP14), `tandemapp.chat_forward` (`/v1/chat-app*`, leaves at WP14), `tandemapp.static` (the page, leaves at WP14), `tandemapp.laya_api` (Laya on the engine's decision models), `tandemapp.session_tokens` (the session addresses), `tandemapp.conductor.loopescape` (`/health` `sampling.loop_escape`'s sessions and the card's sampling) |
-| `server/conductor/shadow.py` | `tandemapp.conductor.incontext`, `tandemapp.conductor.inject`, `tandemapp.conductor.schema` (the shadow reader's in-context questions) |
+| `server/app.py` | `proxy.collect_api`, `proxy.config`, `proxy.config_api`, `proxy.hostcollect`, `proxy.route`, `proxy.service` (`--backends`, leaves at WP14), `tandemapp.chat_forward` (`/v1/chat-app*`, leaves at WP14), `tandemapp.static` (the page, leaves at WP14) |
 | `tools/class_core_eval.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.router`, `tandemapp.conductor.schema`, `tandemapp.conductor.signals` |
 | `tools/class_fallback_eval.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.router`, `tandemapp.conductor.signals` |
 | `tools/conductor_contract.py` | `tandemapp.conductor.schema` |
@@ -277,6 +276,8 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 | `tools/voice_replay.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.states`, `tandemapp.conductor.voice` |
 
 Since ENG-413 WP5 `server/conductor/inproc.py`, `server/conductor/residency.py` and `server/decider_api.py` import nothing of TandemApp, and `server/app.py` neither the conductor's routes, store nor monitor: the screens are the engine's (group 9), the documents and the rest come through engine-ext-v1 3.0.
+
+Since ENG-413 WP5b the only engine file under `server/` that imports TandemApp is `server/app.py`, and only what WP14 removes (the `--backends` proxy, the page, the chat-app forward; the finder in `server/__init__.py` works by path). The session addresses (`server/api/session_tokens.py`: the engine strips `/s/<token>` from every path and keeps the registry `/v1/cache/stats` reports) and the loop escape's engine part (`server/api/loopescape.py`: the card's sampling, which every sampled request that names no filter runs with, and the escapes' counts `/health` `sampling.loop_escape` reports) are the engine's own, as is the shadow reader's question form (`server/api/incontext.py`, which `POST /v1/engine/shadow/ask` answers with); each runs with the conductor off (`tests/test_owner_trace.py`). Laya (`/v1/laya*`) is the extension's route over the engine's decision models, as `app_routes_via_engine` says (`extension`), and the router's question to the shadow reader is the extension's call (engine-ext-v1 3.1 `shadow_question`). An engine with decision models and no extension answers `/v1/laya*` 404 `not_on_engine` (it served Laya itself before WP5b); `ops/serve.env`'s engine mode loads no decision model, so a started engine answers as before.
 
 Since ENG-413 WP2a the wire format is the engine's own: `server/api/` holds its copies of `toolcall`, `toolformats`, `callrepair`, `refusal`, `thinking` and `argloop`, and no engine file imports TandemApp's (`tests/test_api_import_guard.py`). TandemApp keeps its copies for its extension and its controller; both pass `toolcalls/`.
 
