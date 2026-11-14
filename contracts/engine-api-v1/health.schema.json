@@ -39,6 +39,31 @@
       ],
       "description": "setup in setup mode (--setup); else engine (the engine alone) or chat (the conductor on), server/mode.py"
     },
+    "extensions": {
+      "type": "array",
+      "description": "since 1.4 (ENG-413 WP3a, server/ext.py): the engine-ext-v1 extension this engine runs, [] on a headless engine; absent on an engine before 1.4 and on the setup-mode and status responder answers",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "version",
+          "ext_api"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "ext_api": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+$"
+          }
+        }
+      }
+    },
     "assistant": {
       "type": "string",
       "description": "setup mode: Wren's state"

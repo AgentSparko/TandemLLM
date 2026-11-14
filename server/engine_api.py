@@ -9,7 +9,9 @@ meaning. An engine whose /health has no `engine_api` (every engine up to 0.15.x)
 adds GET /v1/replica/identity (SRV-741). 1.2 adds the optional `split` ask and block of POST
 /v1/setup/estimate and the optional `stage` block of /health (SRV-817). 1.3 moves the contract to
 the engine and writes down the engine's reads, metrics, tool-call parsing and copied values; no
-answer changes (ENG-427). Standard library only, nothing imported.
+answer changes (ENG-427). 1.4 adds the optional `extensions` field of the full /health answer and
+the 404 answers `no_ui` and `not_on_engine` of a path nothing in the engine serves (ENG-413 WP3a,
+the extension host). Standard library only, nothing imported.
 """
 
-VERSION = "1.3"
+VERSION = "1.4"
