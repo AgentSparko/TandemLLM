@@ -99,11 +99,10 @@ from server import probe as probe_mod  # noqa: E402
 from server import diskcache as diskcache_mod  # noqa: E402
 from server import identity as identity_mod  # noqa: E402  (SRV-741 the replica identity)
 from server import stage as stage_mod  # noqa: E402  (ENG-307 one model as two stage processes)
-from tandemapp import library_api  # noqa: E402
 from server import cache_peek, model_card, tokenize_api  # noqa: E402
 from tandemapp import chat_forward  # noqa: E402
-from server import memory_api  # noqa: E402
 from server import mode as mode_mod  # noqa: E402  (OPS-260 engine or chat, and what runs beside the engine)
+from server import ext as ext_mod  # noqa: E402  (ENG-413 WP3a the engine-ext-v1 host)
 from tandemapp import memblock  # noqa: E402
 from server.api import compaction as compaction_mod  # noqa: E402
 from tandemapp import session_tokens as session_tokens_mod  # noqa: E402
@@ -236,6 +235,10 @@ class EngineLock:
 
 
 STATE: dict = SlotState()
+# ENG-413 WP3a: the extension this engine runs (server/ext.py): NULL is headless; main() finds the
+# module before the weights load (QSE_EXT), _serve starts it once the served model is loaded
+EXT = ext_mod.NULL
+_EXT_MODULE = None
 # SRV-747: the conductor's engine-only screens, which TandemApp's routes hand to the engine, and
 # the speed-guard report this release tree ships (VIS-68), which its Compare screen lists
 STATE[conductor_routes.ENGINE_ROUTES] = conductor_inproc.ROUTES
@@ -626,7 +629,7 @@ def _health_body(part) -> dict:
     roles = part("roles", _safe, roles_report)
     return {
         "status_port": _status_port(),
-        # SRV-747: the engine API's version (app/contracts/engine-api-v1); TandemNode reads it
+        # SRV-747: the engine API's version (contracts/engine-api-v1); TandemNode reads it
         "engine_api": engine_api.VERSION,
         "model": served_name(), "base_model": STATE.get("model"),
         "version": STATE.get("version", ""), "weights": part("weights", weights_profile),
@@ -647,6 +650,8 @@ def _health_body(part) -> dict:
         "roles": roles,
         # OPS-260: engine or chat, and what runs beside the engine (server/mode.py)
         **part("mode", _mode_report, roles),
+        # ENG-413 WP3a (engine API 1.4): the extension this engine runs, [] when headless
+        "extensions": EXT.listing(),
         **({"price_table": STATE["price_table"]} if STATE.get("price_table") else {}),
         # `--parallel N`: the slots, the GPU turn, the joint rounds and the admission
         **_par_status(part),
@@ -658,7 +663,10 @@ def _mode_report(roles: dict | None = None) -> dict:
     never raises: a report that fails says so in `loaded` and /health stays up."""
     try:
         roles = _safe(roles_report) if roles is None else roles
-        return mode_mod.report(STATE, roles if "error" not in roles else None)
+        out = mode_mod.report(STATE, roles if "error" not in roles else None)
+        # ENG-413 WP3a: the extension's part of `loaded` (its health hook; nothing when it fails)
+        out["loaded"].update(EXT.health())
+        return out
     except Exception as exc:                                       # noqa: BLE001
         return {"mode": "chat" if STATE.get("conductor") is not None else "engine",
                 "loaded": {"error": f"{type(exc).__name__}: {exc}"[:200]}}
@@ -9559,8 +9567,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         raw = self.path.split("?")[0]
         if raw == "/dashboard" or raw.startswith("/dashboard/"):
-            # the dashboard's static shell: public, no data in it
-            return static.serve(self, self.path, STATE.get("dashboard_dir"))
+            # the dashboard's static shell: public, no data in it; the extension serves it until it
+            # leaves the engine (ENG-413 WP14), a headless engine answers 404 no_ui
+            return self._ext_route("GET", raw, None)
         path = raw.rstrip("/") or "/"
         if path.startswith("/v1/dashboard/"):
             return self._dashboard_get(path)
@@ -9572,16 +9581,14 @@ class Handler(BaseHTTPRequestHandler):
             return setup_api.handle(self, sys.modules[__name__], "GET", path, None)
         if path == "/v1/config" or path.startswith("/v1/config/"):
             return self._config("GET", path, None)
-        if (path == "/v1/library" or path.startswith("/v1/library/")) and \
-                STATE.get("conductor") is not None:
+        if path == "/v1/library" or path.startswith("/v1/library/"):
             # R1: the package library for the model's own scripts, open like the chat API
-            # (app/tandemapp/library_api.py)
-            return library_api.handle_get(self, STATE["conductor"])
-        if (path == "/v1/memory" or path.startswith("/v1/memory/")) and \
-                STATE.get("conductor") is not None:
+            # (app/tandemapp/library_api.py), the extension's route (ENG-413 WP3a)
+            return self._ext_route("GET", path, None)
+        if path == "/v1/memory" or path.startswith("/v1/memory/"):
             # 2026-10-05: the model's own memory, under its session's address only
-            # (server/memory_api.py)
-            return memory_api.handle(self, STATE["conductor"], "GET", None)
+            # (server/memory_api.py), the extension's route (ENG-413 WP3a)
+            return self._ext_route("GET", path, None)
         if path in ("/health", "/healthz", "/v1/health"):
             # What a watchdog needs to decide whether to restart, and what a person needs to
             # decide whether it is wedged or merely busy. `draining` is the difference between
@@ -9649,10 +9656,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             return self._json(*identity_mod.answer(STATE, served_name, weights_profile))
         if path == "/v1/models":
-            # with the conductor on, `TandemLLM` alone: the raw engine's name is a hidden alias
-            cond = STATE.get("conductor")
+            # with an extension that lists models (the conductor's `TandemLLM`), those alone: the raw
+            # engine's name is a hidden alias (ENG-413 WP3a: the extension's `models`)
+            ext_models = EXT.models()
             out = {"object": "list", "data": (
-                cond.models(STATE["model"], STATE["started"]) if cond is not None else
+                ext_models if ext_models else
                 [{"id": STATE["model"], "object": "model", "created": STATE["started"],
                   "owned_by": "local"}])}
             if STATE.get("proxy") is not None:
@@ -9675,6 +9683,8 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/v1/laya/kit/") and STATE.get("deciders") is not None:
             # X1: the playtest kit the model copies into a project
             return laya_api.handle_kit(self, STATE, path[len("/v1/laya/kit/"):])
+        if (path == "/v1/laya" or path.startswith("/v1/laya/")) and STATE.get("deciders") is None:
+            return self._ext_route("GET", path, None)      # ENG-413 WP3a: no decision models here
         if path == "/readyz" and STATE.get("deciders") is not None:
             # for Jev clients: ready once a decision model is loaded and warm (SRV-131)
             code, out = decider_api.readyz(STATE["deciders"], STATE)
@@ -9686,9 +9696,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             from urllib.parse import unquote
             name = unquote(path[len("/v1/models/"):])
-            cond = STATE.get("conductor")
-            if cond is not None:
-                card = cond.model_card(name, STATE["model"], STATE["started"])
+            if EXT.models():
+                # the extension's entry of that name, or its first for the raw name (ENG-413 WP3a)
+                card = EXT.card(name, STATE["model"])
             else:
                 card = ({"id": STATE["model"], "object": "model", "created": STATE["started"],
                          "owned_by": "local"} if name == STATE["model"] else None)
@@ -9703,6 +9713,8 @@ class Handler(BaseHTTPRequestHandler):
                                                   "type": "invalid_request_error",
                                                   "param": "model", "code": "model_not_found"}})
             return self._json(200, card)
+        if EXT.route("GET", path) is not None:          # ENG-413 WP3a: the extension's own path
+            return self._ext_route("GET", path, None)
         return self._json(404, {"error": {"message": f"no route {path}", "type": "not_found"}})
 
     def do_OPTIONS(self):
@@ -9727,6 +9739,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._conductor_write("DELETE")
         if path == "/v1/config" or path.startswith("/v1/config/"):
             return self._config("DELETE", path, None)
+        if EXT.route("DELETE", path) is not None:          # ENG-413 WP3a: the extension's own path
+            return self._ext_route("DELETE", path, None)
         return self._json(404, {"error": {"message": f"no route {path}", "type": "not_found"}})
 
     def do_PUT(self):
@@ -9743,10 +9757,8 @@ class Handler(BaseHTTPRequestHandler):
         """`/v1/config/*`: the Backends and Setup screens (app/proxy/config_api.py); 404 without
         `--backends`."""
         px = STATE.get("proxy")
-        if px is None:
-            return self._json(404, {"error": {"type": "not_found",
-                                              "message": "the proxy is off on this server "
-                                                         "(--backends off)"}})
+        if px is None:                               # ENG-413 WP3a: 404 not_on_engine
+            return self._not_here(path, "this engine runs no proxy (--backends off)")
         from proxy import config_api
         return config_api.handle(self, px, method, path, body)
 
@@ -9761,7 +9773,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(400, {"error": {"message": f"bad json: {exc}",
                                                   "type": "invalid_request_error"}})
             return self._config(method, path, body)
-        if not path.startswith("/v1/conductor/"):
+        own = not path.startswith("/v1/conductor/") and EXT.route(method, path) is not None
+        if not path.startswith("/v1/conductor/") and not own:
             return self._json(404, {"error": {"message": f"no route {path}",
                                               "type": "not_found"}})
         try:
@@ -9771,16 +9784,60 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:                                  # noqa: BLE001
             return self._json(400, {"error": {"message": f"bad json: {exc}",
                                               "type": "invalid_request_error"}})
+        if own:                                     # ENG-413 WP3a: the extension's own path
+            return self._ext_route(method, path, body)
         return self._conductor(method, body)
 
     def _conductor(self, method: str, body: dict | None = None) -> None:
-        """`/v1/conductor/*` (app/tandemapp/conductor/routes.py); 404 when the server runs without it."""
-        cond = STATE.get("conductor")
-        if cond is None:
-            return self._json(404, {"error": {"type": "not_found",
-                                              "message": "the conductor is off on this server "
-                                                         "(--conductor-config off)"}})
-        return conductor_routes.handle(self, cond, method, body, _auth())
+        """`/v1/conductor/*` (app/tandemapp/conductor/routes.py): the extension's route (ENG-413
+        WP3a); 404 not_on_engine on a headless engine."""
+        return self._ext_route(method, self.path.split("?")[0].rstrip("/"), body)
+
+    def _ext_route(self, method: str, path: str, body) -> None:
+        """ENG-413 WP3a: a path the loaded extension serves (server/ext.py), its handler's answer; a
+        handler that raised: 500 extension_error. A path nothing here serves: `_not_here`."""
+        h = EXT.route(method, path)
+        if h is None:
+            return self._not_here(path)
+        try:
+            out = EXT.serve(h, ext_mod.RouteRequest(self, method, path, body, _auth()))
+        except ext_mod.ExtRouteError as exc:
+            return self._json(500, {"error": {"type": "extension_error", "code": "extension_error",
+                                              "message": f"the extension {EXT.name} failed on {path}: "
+                                                         f"{exc}"}})
+        if out is None:
+            return None                     # the interim adapter answered on this handler
+        status, headers, raw = out
+        if not isinstance(raw, (bytes, bytearray)):
+            raw = (raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)).encode()
+        headers = {str(k): str(v) for k, v in (headers or {}).items()}
+        try:
+            self.send_response(int(status))
+            if not any(k.lower() == "content-type" for k in headers):
+                self.send_header("Content-Type", "application/json")
+            for k, v in headers.items():
+                if k.lower() != "content-length":
+                    self.send_header(k, v)
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(bytes(raw))
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+        return None
+
+    def _not_here(self, path: str, why: str = "this engine runs without an extension that serves "
+                                                  "it") -> None:
+        """engine API 1.4: what a path TandemApp serves answers on an engine where nothing serves
+        it: 404 no_ui for the page, 404 not_on_engine for the rest."""
+        if path == "/dashboard" or path.startswith("/dashboard/"):
+            return self._json(404, {"error": {
+                "type": "no_ui", "code": "no_ui",
+                "message": "this engine has no web page: TandemApp is the UI (its controller serves "
+                           "the dashboard, pointed at this engine)"}})
+        return self._json(404, {"error": {
+            "type": "not_on_engine", "code": "not_on_engine",
+            "message": f"{path} is not served by this engine: TandemApp serves it (the conductor, its "
+                       f"library, memory and Laya, the backends); {why}"}})
 
     def do_POST(self):
         self._tandem = None
@@ -9825,10 +9882,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._config("POST", path, body)
         if path.startswith("/v1/collect/"):          # P6: a vLLM or SGLang plugin's batch
             px = STATE.get("proxy")
-            if px is None:
-                return self._json(404, {"error": {"type": "not_found",
-                                                  "message": "the proxy is off on this server "
-                                                             "(--backends off)"}})
+            if px is None:                           # ENG-413 WP3a: 404 not_on_engine
+                return self._not_here(path, "this engine runs no proxy (--backends off)")
             from proxy import collect_api
             return collect_api.handle(self, px, path, body)
         if path == "/v1/cache/release":
@@ -9873,16 +9928,18 @@ class Handler(BaseHTTPRequestHandler):
                     with LOCK:
                         STATE["spill"].clear()
             return self._json(200, cache_stats())
-        if (path == "/v1/memory" or path.startswith("/v1/memory/")) and \
-                STATE.get("conductor") is not None:
-            # 2026-10-05: a note from the model's own script (server/memory_api.py)
-            return memory_api.handle(self, STATE["conductor"], "POST", body)
+        if path == "/v1/memory" or path.startswith("/v1/memory/"):
+            # 2026-10-05: a note from the model's own script (server/memory_api.py), the
+            # extension's route (ENG-413 WP3a)
+            return self._ext_route("POST", path, body)
         if path == "/v1/laya/ask" and STATE.get("deciders") is not None:
             # L1: Laya for the model's scripts, open like the chat API (app/tandemapp/laya_api.py)
             return laya_api.handle_post(self, STATE["deciders"], STATE, body)
         if path == "/v1/laya/drive/end" and STATE.get("deciders") is not None:
             # X1: a driver session's end: its journal row (app/tandemapp/laya_api.py DRIVER SESSIONS)
             return laya_api.handle_drive_end(self, STATE, body)
+        if (path == "/v1/laya" or path.startswith("/v1/laya/")) and STATE.get("deciders") is None:
+            return self._ext_route("POST", path, body)     # ENG-413 WP3a: no decision models here
         if path in ("/v1/systemone", "/v1/predict") and STATE.get("deciders") is not None:
             # typed decisions (SRV-131): the Jev contract, answered in the idle window
             return decider_api.handle(self, STATE["deciders"], body)
@@ -9893,6 +9950,8 @@ class Handler(BaseHTTPRequestHandler):
             if self._proxied(px, path, body):
                 return
         if path not in ("/v1/chat/completions", "/v1/completions"):
+            if EXT.route("POST", path) is not None:         # ENG-413 WP3a: the extension's own path
+                return self._ext_route("POST", path, body)
             return self._json(404, {"error": {"message": f"no route {path}",
                                               "type": "not_found"}})
         if not isinstance(body, dict):                      # SRV-167: `[]`, `"hi"`, `null`
@@ -13559,10 +13618,10 @@ def open_ledger(a, *, test: bool | None = None) -> "ledger_mod.Ledger | None":
 def conductor_root(a) -> str | None:
     """The conductor's config directory, or None for off. A fake engine is a test run: it may never
     use the production one."""
-    from tandemapp.conductor.store import DEFAULT_ROOT
     val = getattr(a, "conductor_config", "off")
     if val in (None, "", "off"):
         return None
+    from tandemapp.conductor.store import DEFAULT_ROOT
     if a.fake_engine and os.path.realpath(os.path.expanduser(val)) == \
             os.path.realpath(os.path.expanduser(DEFAULT_ROOT)):
         raise SystemExit("[conductor] REFUSING: a fake engine may not use the production conductor "
@@ -13611,6 +13670,7 @@ def main() -> None:
     _window_at_start(a)
     if stage_mod.front(STATE):
         return stage_mod.serve_front(a, STATE)      # ENG-307: the front stage serves no model route
+    _ext_at_start(a)
     if a.fake_engine:
         from server import fake_engine
         fake_engine.load(sys.modules[__name__], a)
@@ -13636,6 +13696,48 @@ def _serve_setup(a) -> None:
     w = setup_api.wren_of(sys.modules[__name__])
     threading.Thread(target=w.load, name="wren-autoload", daemon=True).start()
     serve_until_drained(EngineServer((a.host, a.port), SetupHandler))
+
+
+def _ext_at_start(a) -> None:
+    """ENG-413 WP3a: the extension's module (QSE_EXT, server/ext.py), before the weights load. Chat
+    mode (a conductor directory) needs one; a module that does not import, speaks another
+    engine-ext-v1 or lacks a module attribute, and a QSE_EXT_ARGS that is not a JSON object, stop the
+    start here with one line `[ext] REFUSING: ...`. None is a headless engine."""
+    global _EXT_MODULE
+    _EXT_MODULE = ext_mod.discover(os.environ.get("QSE_EXT", ""),
+                                   "chat" if conductor_root(a) is not None else "engine")
+    if _EXT_MODULE is not None:
+        ext_mod.ext_args({})
+        print(f"[ext] QSE_EXT={_EXT_MODULE.__name__}: {_EXT_MODULE.NAME} {_EXT_MODULE.VERSION} "
+              f"(engine-ext-v1 {_EXT_MODULE.EXT_API}), started once the model is loaded", flush=True)
+    else:
+        print("[ext] none: a headless engine (QSE_EXT empty)", flush=True)
+
+
+def _ext_start(a, root, led) -> None:
+    """ENG-413 WP3a: the extension's start (server/ext.py `start`), the engine's objects handed over.
+    A start that raises, a missing hook or a claimed engine path: `[ext] REFUSING: ...`, before the
+    engine takes its first request."""
+    global EXT
+    if _EXT_MODULE is None:
+        EXT = ext_mod.NULL
+        return
+    from types import SimpleNamespace
+    host = ext_mod.Host(
+        mode="chat" if root is not None else "engine", engine_api=engine_api.VERSION, state=STATE,
+        lock=LOCK, tokenizer=STATE.get("tok"), registry=metrics.REGISTRY,
+        ledger_path=STATE["ledger"].path if led is not None else None,
+        args=ext_mod.ext_args(vars(a)), engine=dict(conductor_inproc.ROUTES),
+        log=lambda s: print(s, flush=True),
+        # what the interim adapter (server/ext_app.py) still reads of the engine, until WP4
+        interim=SimpleNamespace(root=root, defaults=getattr(a, "conductor_defaults", "builtin"),
+                                identity_name=_identity_name,
+                                own_eta=_own_eta_ms if OWN_ETA == "on" else None,
+                                own_idle=_own_idle_s))
+    EXT = ext_mod.start(_EXT_MODULE, host)
+    print(f"[ext] on: {EXT.name} {EXT.version} (engine-ext-v1 {EXT.ext_api}); "
+          f"{len(EXT.obj.routes)} routes: "
+          + ", ".join(f"{r.get('method', '*')} {r['prefix']}" for r in EXT.obj.routes), flush=True)
 
 
 def _limits_at_start(a) -> None:
@@ -14664,63 +14766,32 @@ def _serve(a, led) -> None:
     a.port = httpd.server_address[1]
     STATE["port"] = a.port
     root = conductor_root(a)
-    if root is not None and getattr(a, "conductor_defaults", "builtin") == "shipped":
-        # The shipped documents a box has no version of yet, as version 1
-        from tandemapp.conductor import shipped
-        for line in shipped.install_at(root):
-            print(f"[conductor] shipped default stored: {line}", flush=True)
     # One location per skill in opencode's skills list (server/skillcanon.py)
     STATE["skill_canon"] = (skillcanon_mod.SkillCanon(os.path.join(root, "skill-locations.json"))
                             if root is not None else None)
     # A token per session on the addresses the runtime notes give the model
     STATE["session_tokens"] = session_tokens_mod.SessionTokens(
         os.path.join(root, "session-tokens.json") if root is not None else None)
-    # One journal for the router and the monitor (SRV-115): the table `conductor_events` in the
-    # usage ledger's file (schema version 2), written from its own queue thread; with the ledger
-    # off it lives in memory only. Opened when either half of the conductor runs.
-    journal = None
-    if root is not None or STATE["monitor"] is not None:
+    # ENG-413 WP3a: the extension (server/ext.py). In chat mode the interim adapter
+    # (server/ext_app.py, QSE_EXT=server.ext_app) does what this start did for the conductor: its
+    # shipped documents, its journal (the table `conductor_events` in the usage ledger's file), the
+    # Conductor and its migrations; it puts the journal and the conductor into STATE
+    _ext_start(a, root, led)
+    journal = STATE.get("journal")
+    if journal is None and STATE["monitor"] is not None:
+        # the session monitor without the conductor (engine mode, --conductor shadow|on): its
+        # journal here as before (SRV-115), until the monitor moves behind the hooks (ENG-413 WP3b);
+        # with the ledger off it lives in memory only
         from tandemapp.conductor.decisions import Journal as CondJournal
         from tandemapp.conductor.store import Store
         days = (Store(root, readonly=True).get("settings")[1]["journal"]["retention_days"]
                 if root is not None else 30)
         journal = STATE["journal"] = CondJournal(STATE["ledger"].path if led is not None
                                                  else None, retention_days=days)
-        if STATE["monitor"] is not None:
-            STATE["monitor"].journal.sinks.append(journal.monitor_sink)
+        STATE["monitor"].journal.sinks.append(journal.monitor_sink)
         print(f"[conductor] journal: {journal.path or 'in memory (no ledger)'}, "
               f"{days} days", flush=True)
-    if root is not None:
-        from tandemapp.conductor.hook import Conductor
-        from tandemapp.conductor import schema as cond_schema
-        cond_schema.SERVED_NAME = _identity_name()
-        from tandemapp.conductor import modelfit as cond_fit
-        _caps = getattr(STATE.get("engine"), "caps", None)
-        print(cond_fit.install(getattr(_caps, "conductor", None)), flush=True)
-        cond = STATE["conductor"] = Conductor(
-            root, state=STATE, journal=journal,
-            monitor_seed=STATE["monitor"].policy.data if STATE["monitor"] is not None else None)
-        legacy = os.path.join(cond.root, "decisions.sqlite3")
-        if journal.path and os.path.exists(legacy) and not os.path.exists(legacy + ".imported"):
-            # the router's rows from before the journal moved into the ledger, copied once
-            n = journal.import_legacy(legacy)
-            with open(legacy + ".imported", "w") as f:
-                f.write(f"{n} rows copied into {journal.path} on {time.ctime()}\n")
-            print(f"[conductor] journal: {n} rows imported from {legacy}", flush=True)
-        cond.router.session_tokens = STATE["session_tokens"]
-        # SPD-249: no Qwen question whose answer cannot come in time
-        cond.router.own_eta = _own_eta_ms if OWN_ETA == "on" else None
-        # VIS-119: the shadow questions after their turn wait for an idle server
-        cond.router.own_idle = _own_idle_s
-        # stored documents a fix must reach (a shipped default reaches only a box without one)
-        from tandemapp.conductor import migrations as cond_migrations
-        cond_migrations.run(cond.store, cond.journal)
-        st = cond.store.status()["documents"]
-        print(f"[conductor] on: {cond.root} (router v{st['router']['version']}, "
-              f"{len(cond.store.names())} profiles); model TandemLLM, {STATE['model']} a hidden "
-              f"alias, raw by X-Tandem: raw",
-              flush=True)
-    else:
+    if STATE.get("conductor") is None:
         print("[conductor] off: /v1/models lists only the raw engine", flush=True)
     start_proxy(a)
     # The decision models this engine serves itself (ENG-179, SRV-131): None, and nothing of
@@ -14758,7 +14829,8 @@ def _serve(a, led) -> None:
     # ENG-181: the probe snapshots (None, nothing allocated, with QWEN38_PROBE_SNAPSHOTS off;
     # TandemLLM requests only, so the conductor's server alone) and the router's probe stage
     try:
-        STATE["probe"] = probe_mod.start(STATE, journal) if root is not None else None
+        STATE["probe"] = (probe_mod.start(STATE, journal) if STATE.get("conductor") is not None
+                          else None)
     except ValueError as exc:
         raise SystemExit(f"[probe] {exc}")
     # C1: the disk tier under the caches in RAM (None, nothing opened, with --disk-cache off)
@@ -14789,7 +14861,7 @@ def _serve(a, led) -> None:
         threading.Thread(target=_prepare_loop, name="compaction-prepare", daemon=True).start()
     print(f"[compaction] {a.compaction}; prepare {a.compaction_prepare} (idle "
           f"{a.compaction_idle_s:g} s, from {a.compaction_min_tokens} tokens)", flush=True)
-    if root is not None:
+    if STATE.get("conductor") is not None:
         STATE["probe_stage"] = probe_mod.ProbeStage(
             weights=STATE.get("weights_key") or "none",
             hidden=int(getattr(getattr(STATE.get("engine"), "cfg", None), "hidden_size", 0) or 0))
@@ -15006,6 +15078,7 @@ def serve_until_drained(httpd) -> None:
         # The live conversations to the NVMe, read back by the next start
         spill_drain()
         shadow_drain()
+        EXT.stop()                                 # ENG-413 WP3a: the extension's stop hook
         led = STATE.get("ledger")
         if led is not None:
             led.close()
