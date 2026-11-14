@@ -10,30 +10,12 @@
    "proxy.route",
    "proxy.service:Service",
    "tandemapp.chat_forward",
-   "tandemapp.conductor.classify:USER_AGENT",
-   "tandemapp.conductor.decisions:Journal",
-   "tandemapp.conductor.incontext",
    "tandemapp.conductor.loopescape",
-   "tandemapp.conductor.memory",
-   "tandemapp.conductor.memwriter",
    "tandemapp.conductor.monitor",
-   "tandemapp.conductor.monitor.policy:CONTINUE_HIDDEN",
-   "tandemapp.conductor.monitor.policy:GIVE_UP",
-   "tandemapp.conductor.monitor.policy:REGENERATE_CALL",
-   "tandemapp.conductor.narrator",
-   "tandemapp.conductor.outcomes",
-   "tandemapp.conductor.redact",
-   "tandemapp.conductor.router:COMPOSITE",
    "tandemapp.conductor.routes",
-   "tandemapp.conductor.schema",
-   "tandemapp.conductor.schema:SIDE_FIRST_MAX_TOKENS",
-   "tandemapp.conductor.states",
-   "tandemapp.conductor.store:ConfigError",
    "tandemapp.conductor.store:DEFAULT_ROOT",
    "tandemapp.conductor.store:Store",
-   "tandemapp.conductor.voice",
    "tandemapp.laya_api",
-   "tandemapp.memblock",
    "tandemapp.session_tokens",
    "tandemapp.static"
   ],
@@ -59,13 +41,26 @@
   "server/ext_app.py": [
    "tandemapp.conductor.decisions:Journal",
    "tandemapp.conductor.hook:Conductor",
+   "tandemapp.conductor.loopescape",
+   "tandemapp.conductor.memory",
+   "tandemapp.conductor.memwriter",
    "tandemapp.conductor.migrations",
    "tandemapp.conductor.modelfit",
+   "tandemapp.conductor.monitor",
+   "tandemapp.conductor.narrator",
+   "tandemapp.conductor.outcomes",
+   "tandemapp.conductor.redact",
+   "tandemapp.conductor.router:COMPOSITE",
    "tandemapp.conductor.routes",
    "tandemapp.conductor.schema",
+   "tandemapp.conductor.schema:SIDE_FIRST_MAX_TOKENS",
    "tandemapp.conductor.shipped",
+   "tandemapp.conductor.states",
+   "tandemapp.conductor.store:ConfigError",
    "tandemapp.conductor.store:Store",
+   "tandemapp.conductor.voice",
    "tandemapp.library_api",
+   "tandemapp.memblock",
    "tandemapp.static"
   ],
   "server/memory_api.py": [
@@ -382,6 +377,7 @@
   "tests/test_claim_check.py": {
    "imports": [
     "tandemapp.conductor.incontext",
+    "tandemapp.conductor.monitor",
     "tandemapp.conductor.monitor.claimcheck",
     "tandemapp.conductor.monitor.policy",
     "tandemapp.conductor.monitor.policy:CONTINUE_HIDDEN",
@@ -678,6 +674,14 @@
    "reads": [
     "app/"
    ]
+  },
+  "tests/test_ext_request_path.py": {
+   "imports": [
+    "tandemapp.conductor.classify:USER_AGENT",
+    "tandemapp.conductor.monitor.executor",
+    "tandemapp.conductor.monitor.policy"
+   ],
+   "reads": []
   },
   "tests/test_fail_open_busy.py": {
    "imports": [
