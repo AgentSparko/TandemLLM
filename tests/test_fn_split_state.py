@@ -750,6 +750,12 @@ def test_both_stages_start_with_the_caches_as_the_server_starts_them(monkeypatch
     key = str(tmp_path / "link.key")
     with open(os.open(key, os.O_WRONLY | os.O_CREAT, 0o600), "w") as f:
         f.write(secrets.token_hex(32) + "\n")
+    # the front's memory check reads MemAvailable; on a shared box that is whatever the live engine
+    # leaves (16.82 GiB once, below the 18.01 this front asks). The figure is the fixture's: a box
+    # with 64 GiB free, so the check runs and passes on any machine (ENG-413 WP9)
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(f"MemTotal:       127535744 kB\nMemAvailable:   {64 << 20} kB\n")
+    monkeypatch.setattr(stage, "MEMINFO", str(meminfo))
     lines, marks = [], []
     link_port, port = free_port(), free_port()
     common = ("--model", d, "--link-key-file", key, "--stage-caches", "on", "--parallel", "3", "--drafter", "mtp",
@@ -758,6 +764,7 @@ def test_both_stages_start_with_the_caches_as_the_server_starts_them(monkeypatch
     fstate: dict = {}
     stage.prepare(fa, fstate, log=lines.append)
     assert fstate["stage"].options["slots"] == 3 and fstate["stage"].options["caches"] == "on"
+    assert any("front check" in x and "MemAvailable 64.00 GiB" in x for x in lines), lines[-4:]
     threading.Thread(target=stage.serve_front, args=(fa, fstate, lines.append), daemon=True).start()
 
     def front_health():

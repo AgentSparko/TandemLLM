@@ -62,10 +62,24 @@ def _refused(fn, *needles) -> str:
     raise AssertionError(f"not refused (wanted {needles})")
 
 
+def _meminfo(gib: float) -> str:
+    """A /proc/meminfo with `gib` GiB available: a front's memory check reads this file, not the
+    machine's, so a CPU run on a shared box does not depend on what its live engine leaves free
+    (ENG-413 WP9)."""
+    p = os.path.join(tempfile.mkdtemp(prefix="stage-caches-"), "meminfo")
+    with open(p, "w") as f:
+        f.write(f"MemTotal:       127535744 kB\nMemAvailable:   {int(gib * (1 << 20))} kB\n")
+    return p
+
+
 def _prepared(*argv, lines=None):
     state: dict = {}
     a = _args(*argv)
-    stage.prepare(a, state, log=(lines.append if lines is not None else (lambda line: None)))
+    saved, stage.MEMINFO = stage.MEMINFO, _meminfo(64)
+    try:
+        stage.prepare(a, state, log=(lines.append if lines is not None else (lambda line: None)))
+    finally:
+        stage.MEMINFO = saved
     return state["stage"], a
 
 
