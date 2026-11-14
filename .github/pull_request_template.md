@@ -10,8 +10,7 @@ Ticket: <!-- ENG-123, or #123 -->
 
 <!-- The commands you ran and what they printed. -->
 
-- [ ] `python tests/script_suite.py --all` and `python app/tests/script_suite.py --all`, or the test files this change touches
-- [ ] `npm ci && npm test` in `app/dashboard/` (only for a change there)
+- [ ] `python tests/script_suite.py --all`, or the test files this change touches (TandemApp's suite and its page run in TandemApp's repository)
 - [ ] The engine writes the same text as before this change ([docs/exactness.md](https://github.com/0xBakeer/TandemLLM/blob/main/docs/exactness.md)), or the change says why it may not
 - [ ] The gate report for this head is below, or `python -m tools.gate map` says level `none` ([docs/quality-gate.md](https://github.com/0xBakeer/TandemLLM/blob/main/docs/quality-gate.md))
 - [ ] I have read the Contributor License Agreement in CONTRIBUTING.md and I agree to it.
