@@ -1,6 +1,6 @@
 # Engine extension interface v1
 
-How code that is not the engine's runs inside a TandemLLM engine process: TandemApp's conductor in chat mode (the router's plan, the session monitor in the decode loop, the state and narrated lines, the journal). The engine owns this interface; its version is `1.1`, independent of the engine API (`../engine-api-v1`) and of either release. It is a Python interface, not HTTP: the conductor acts on tokens inside the decode loop, which a second HTTP request cannot reproduce token for token.
+How code that is not the engine's runs inside a TandemLLM engine process: TandemApp's conductor in chat mode (the router's plan, the session monitor in the decode loop, the state and narrated lines, the journal). The engine owns this interface; its version is `1.2`, independent of the engine API (`../engine-api-v1`) and of either release. It is a Python interface, not HTTP: the conductor acts on tokens inside the decode loop, which a second HTTP request cannot reproduce token for token.
 
 | file | what |
 |-|-|
@@ -36,9 +36,9 @@ Hooks:
 |-|-|-|
 | `health()` | each full `/health` answer | a dict merged under `loaded` |
 | `plan(request)` | before the request queues, without the engine lock; `request` has `body`, `headers`, `client_kind`, `request_id`, `chat`, `user`, `count_tokens` | a plan, or None to serve the request as a headless engine would |
-| `prompt(plan, ids)` | the prompt's token ids before prefill | the ids to prefill (the router's notes replayed) |
+| `prompt(plan, ids, info)` | the prompt's token ids before prefill; since 1.2 `info` is `{in_think, conv}` (the prompt ends inside `<think>`; the conversation's id) (a host asks an extension before 1.2 with `plan` and `ids` only) | the ids to prefill (the router's notes replayed); since 1.2 also `{ids, in_think, client_ids}`: whether the prompt still ends inside `<think>`, and the prompt as the client sent it (None when nothing was put in) |
 | `supervisor(plan, event)` | once the prompt is built | the object the decode loop asks, or None |
-| `extras(plan, point, info)` | `start`, each `block`, `finish` | `[{kind, data}]` the engine puts into the stream (state lines, narrated lines) |
+| `extras(plan, point, info)` | `start` (it may come before `prompt`: the lines a request shows while it waits), each `block`, `finish` | `[{kind, data}]` the engine puts into the stream (state lines, narrated lines) |
 | `follow_ups(plan, outcome)` | the turn's end | own-work requests `{kind, what, body}` the engine schedules after the client's |
 | `finish(plan, row)` | the request's ledger row is written | None; the extension writes its journal rows |
 | `stop()` | the engine stops | None |
@@ -52,10 +52,11 @@ The supervisor, at the safe points, with the event types and the acts the engine
 | `at_request(event)` | SP4, the request | a list of `PROMPT_TAIL_NOTE`, `SET_THINK_BUDGET` |
 | `at_block(event, room)` | SP1, after each block | `CLOSE_REASONING`, `GIVE_UP` |
 | `at_tool_call(event)` | SP3, a tool call | `REPAIR_CALL`, `REGENERATE_CALL`, `GIVE_UP` |
-| `at_finish(event, room)` | SP2, the end of the generation | `CONTINUE_HIDDEN`, `GIVE_UP` |
+| `check_answer(items, final)` (1.2) | SP3, an answer's held calls at once (`final`: it ended without its end token); a supervisor without it is not asked | `REGENERATE_CALL`, `GIVE_UP` |
+| `at_finish(event, room)` | SP2, the end of the generation | `CONTINUE_HIDDEN`, `GIVE_UP`; since 1.2 `REGENERATE_CALL` (an answer with calls ending on its end token is checked there, where the calls can still be written again) |
 | `done(outcome, detail)` | the request is over | None |
 
-An act is `{kind, task, text, ids, visible, budget, detail}`: `ids` are forwarded through the engine, `visible` (a suffix of `ids`) is what the client receives. The events' fields are `ext.json` `supervisor.events`.
+An act is `{kind, task, text, ids, visible, budget, detail}`, or since 1.2 an object with those fields as attributes: `ids` are forwarded through the engine, `visible` (a suffix of `ids`) is what the client receives. The events' fields are `ext.json` `supervisor.events`; events are mappings whose fields read as attributes too. Since 1.2 the request event adds `prompt_ids`, `conv`, `chat`, `tool_names`, `thinking_off` and `loop_escape`.
 
 ## The order
 
@@ -84,5 +85,6 @@ MAJOR.MINOR. A minor step adds a hook, an argument with a default, a host attrib
 
 ## Changes
 
+- v1.2 (ENG-429, ENG-413 WP3b, the request path through the hooks): `prompt` gets `info` (`{in_think, conv}`) and may answer `{ids, in_think, client_ids}`; the supervisor's `check_answer(items, final)` for an answer's held calls at once (SP3); `at_finish` may answer `REGENERATE_CALL`; an act may be an object with the act's fields as attributes; the request event's `prompt_ids`, `conv`, `chat`, `tool_names`, `thinking_off`, `loop_escape`; `extras start` may come before `prompt`. A 1.0 or 1.1 extension starts as before: its `prompt` is asked with two arguments, a supervisor without `check_answer` is not asked it. Outside the interface, `ext.json` `since_1_2.interim` names what the engine's request path still asks the interim adapter until ENG-413 WP4.
 - v1.1 (ENG-429, ENG-413 WP3a, the engine's host): says what the first host does where 1.0 was silent. `QSE_EXT_ARGS` is a JSON object over the command line; `models` is read at every `/v1/models` answer and its first entry answers for the engine's own model name; a route's prefix match and its `request`; the refusals of `start(host)` come after the weights load (the host hands over the tokenizer), the module's own before it; `qse_ext_errors_total`'s `hook` values. No hook, attribute or meaning a 1.0 extension relies on changes: a 1.0 extension starts on a 1.1 host.
 - v1.0, first version (ENG-429): discovery, host, hooks, supervisor, order, the failure rule, the knobs.

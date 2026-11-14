@@ -1,6 +1,6 @@
 {
   "name": "engine-ext-v1",
-  "version": "1.1",
+  "version": "1.2",
   "about": "The in-process extension interface of a TandemLLM engine (ENG-429). Python, not HTTP. The engine owns it; TandemApp's conductor is its first extension. README.md says it in prose; fake_host.py is the reference host and fake_ext.py the smallest extension. A minor step adds a hook, an argument with a default, a host attribute, an event field or an act kind; a major step removes or renames one or changes a meaning.",
   "discovery": {
     "env": "QSE_EXT",
@@ -26,7 +26,7 @@
     "args": "the parsed command line as a mapping, and QSE_EXT_ARGS (a JSON object, since 1.1) over it: its keys win",
     "engine": "the engine-only screens in process: residency_plan, disk, disk_clear, deciders, narrator, shadow (the /v1/engine/* handlers)",
     "log": "log(line): one line into the engine's log",
-    "Refusal": "the exception plan raises to answer the client with an error: Refusal(status, type, message)"
+    "Refusal": "the exception plan raises to answer the client with an error: Refusal(status, type, message), since 1.2 with a fourth argument param (the request field it names, in the error's param)"
   },
   "extension": {
     "attributes": {
@@ -37,9 +37,9 @@
     "hooks": [
       {"name": "health", "args": [], "returns": "dict", "phase": "serve", "when": "each full /health answer: merged under loaded"},
       {"name": "plan", "args": ["request"], "returns": "plan or None", "phase": "request", "when": "before the request queues, without the engine lock; None serves the request as a headless engine would"},
-      {"name": "prompt", "args": ["plan", "ids"], "returns": "list[int]", "phase": "request", "when": "the prompt's token ids before prefill (the router's notes replayed)"},
+      {"name": "prompt", "args": ["plan", "ids", "info"], "returns": "list[int], or {ids, in_think, client_ids} (since 1.2)", "phase": "request", "when": "the prompt's token ids before prefill (the router's notes replayed); since 1.2 info {in_think, conv} says whether the prompt ends inside <think> and names the conversation, and an extension on 1.2 may answer the ids with in_think (it closed the block) and client_ids (the prompt as the client sent it, None when it put nothing in); a host asks an extension before 1.2 with plan and ids only"},
       {"name": "supervisor", "args": ["plan", "event"], "returns": "supervisor or None", "phase": "request", "when": "once the prompt is built: the object the decode loop asks at the safe points"},
-      {"name": "extras", "args": ["plan", "point", "info"], "returns": "list[dict]", "phase": "request", "when": "point start, block or finish: items {kind, data} the engine puts into the stream (state lines, narrated lines)"},
+      {"name": "extras", "args": ["plan", "point", "info"], "returns": "list[dict]", "phase": "request", "when": "point start, block or finish: items {kind, data} the engine puts into the stream (state lines, narrated lines); start may come before prompt and supervisor (the lines a request shows while it waits)"},
       {"name": "follow_ups", "args": ["plan", "outcome"], "returns": "list[dict]", "phase": "request", "when": "the turn's end: own-work requests {kind, what, body} the engine schedules after the client's"},
       {"name": "finish", "args": ["plan", "row"], "returns": "None", "phase": "request", "when": "the request's ledger row is written: the extension writes its journal rows"},
       {"name": "stop", "args": [], "returns": "None", "phase": "shutdown", "when": "the engine stops"}
@@ -57,30 +57,38 @@
       {"name": "at_request", "args": ["event"], "returns": "list[act]", "point": "SP4"},
       {"name": "at_block", "args": ["event", "room"], "returns": "act or None", "point": "SP1"},
       {"name": "at_tool_call", "args": ["event"], "returns": "act or None", "point": "SP3"},
+      {"name": "check_answer", "args": ["items", "final"], "returns": "act or None", "point": "SP3", "since": "1.2", "about": "SP3 for an answer's held calls at once (items: the calls, and the blocks that do not parse, as the answer has them); final: the answer ended without its end token. A supervisor without it (an extension before 1.2) is not asked"},
       {"name": "at_finish", "args": ["event", "room"], "returns": "act or None", "point": "SP2"},
       {"name": "done", "args": ["outcome", "detail"], "returns": "None", "point": "end"}
     ],
     "events": {
-      "request": ["request_id", "messages", "tools", "tool_choice", "n", "stream", "prompt_tokens", "in_think", "max_tokens", "client_budget", "client", "model", "constrained", "profile", "cls", "tool_format"],
+      "request": ["request_id", "messages", "tools", "tool_choice", "n", "stream", "prompt_tokens", "in_think", "max_tokens", "client_budget", "client", "model", "constrained", "profile", "cls", "tool_format", "prompt_ids", "conv", "chat", "tool_names", "thinking_off", "loop_escape"],
       "block": ["reasoning_tokens", "inside", "stall", "share", "output_tokens", "pos"],
       "tool_call": ["name", "arguments", "index", "block", "error", "cut", "stopped", "schema", "final"],
       "finish": ["kind", "inside", "answer", "reasoning_tokens", "output_tokens", "pos", "calls", "notes", "note_calls"]
     },
     "safe_points": {
       "SP1": {"at": "block", "acts": ["CLOSE_REASONING", "GIVE_UP"]},
-      "SP2": {"at": "finish", "acts": ["CONTINUE_HIDDEN", "GIVE_UP"]},
+      "SP2": {"at": "finish", "acts": ["CONTINUE_HIDDEN", "GIVE_UP", "REGENERATE_CALL"]},
       "SP3": {"at": "tool_call", "acts": ["REPAIR_CALL", "REGENERATE_CALL", "GIVE_UP"]},
       "SP4": {"at": "request", "acts": ["PROMPT_TAIL_NOTE", "SET_THINK_BUDGET"]}
     },
     "act": {
       "fields": ["kind", "task", "text", "ids", "visible", "budget", "detail"],
       "kinds": ["CLOSE_REASONING", "CONTINUE_HIDDEN", "REPAIR_CALL", "REGENERATE_CALL", "PROMPT_TAIL_NOTE", "SET_THINK_BUDGET", "GIVE_UP"],
-      "executed_by": "the engine, in the decode loop; ids are forwarded, visible (a suffix of ids) reaches the client"
+      "executed_by": "the engine, in the decode loop; ids are forwarded, visible (a suffix of ids) reaches the client",
+      "shape": "a mapping with those keys, or (since 1.2) an object with them as attributes"
     }
+  },
+  "since_1_2": {
+    "events": "request adds prompt_ids (the prompt as it will be prefilled so far), conv (the conversation's id, or null), chat (a chat request), tool_names (the offered tools the answer is read for), thinking_off (the client turned thinking off) and loop_escape (the loop escape's step for SP4's note, or null); events are mappings whose fields read as attributes too",
+    "SP2": "at_finish may answer REGENERATE_CALL: an answer that ends on its end token with calls is checked there (SP3 asked at SP2), where the calls can still be written again",
+    "pass_through": "an exception of the engine's own that an engine callback raises inside a hook (the client left: ConnectionError) is no failure of the extension: it goes on to the engine",
+    "interim": "ENG-413 WP3b: what the engine's request path still asks the interim adapter outside this interface (server/ext.py INTERIM and SUPERVISION_INTERIM, each with a headless value, open like a hook, counted as interim.<name> or under the supervisor method's name). Not part of engine-ext-v1; WP4 turns each into a hook or moves it out"
   },
   "order": {
     "start": ["import", "check EXT_API", "start", "routes", "models", "knobs"],
-    "request": ["plan", "prompt", "supervisor", "at_request", "extras start", "(at_block, extras block)*", "at_tool_call*", "at_finish", "extras finish", "follow_ups", "finish", "done"],
+    "request": ["plan", "prompt", "supervisor", "at_request", "extras start", "(at_block, extras block)*", "at_tool_call*", "check_answer", "at_finish", "extras finish", "follow_ups", "finish", "done"],
     "act_loops": {
       "CONTINUE_HIDDEN": "at_finish -> the engine forwards ids and decodes on -> at_block* -> at_finish again",
       "REGENERATE_CALL": "at_tool_call -> the engine cuts the call and decodes again from its start -> at_tool_call again",

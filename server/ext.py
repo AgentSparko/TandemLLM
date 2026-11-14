@@ -10,7 +10,15 @@ it. Standard library only, plus the engine's metrics registry for one counter.
     ext.models()             its /v1/models entries; ext.card(name, raw) one of them, or None
     ext.route(method, path)  the handler of a path it serves, or None
     ext.request(request)     one request's hooks (Request), open on any failure
+    ext.interim(name, ...)   one of the interim calls (INTERIM), open; the fallback when headless
     ext.stop()               the engine stops
+
+ENG-413 WP3b: the request path asks these hooks and nothing of the conductor. `Request` asks them in
+ext.json's order; `Supervision` is the supervisor as the decode loop asks it at SP1-SP4, each act
+checked against its method and every failure detaching it for the rest of the request. The acts
+are the engine's (the kinds below), carried out by the engine. INTERIM names what the request path
+still asks the interim adapter (server/ext_app.py) outside the contract: each with the value a
+headless engine uses; ENG-413 WP4 turns them into hooks or moves them out.
 
 The failure rule (ext.json `failure`): closed at start, open per request. `discover` and `start`
 raise Refused, a SystemExit whose text is the one line `[ext] REFUSING: <why>`: a module that does
@@ -31,21 +39,21 @@ import re
 import threading
 
 #: the engine-ext-v1 version this host speaks (contracts/engine-ext-v1/ext.json `version`)
-EXT_API = "1.1"
+EXT_API = "1.2"
 #: the module attributes discovery reads (ext.json discovery.module)
 MODULE_ATTRS = ("EXT_API", "NAME", "VERSION", "start")
 #: the extension's hooks and their arguments (ext.json extension.hooks)
-HOOKS = {"health": [], "plan": ["request"], "prompt": ["plan", "ids"],
+HOOKS = {"health": [], "plan": ["request"], "prompt": ["plan", "ids", "info"],
          "supervisor": ["plan", "event"], "extras": ["plan", "point", "info"],
          "follow_ups": ["plan", "outcome"], "finish": ["plan", "row"], "stop": []}
 #: the extension's attributes, lists (ext.json extension.attributes)
 ATTRS = ("routes", "models", "knobs")
 #: the supervisor's methods, their arguments and safe points (ext.json supervisor.methods)
 SUPERVISOR = {"at_request": (["event"], "SP4"), "at_block": (["event", "room"], "SP1"),
-              "at_tool_call": (["event"], "SP3"), "at_finish": (["event", "room"], "SP2"),
-              "done": (["outcome", "detail"], "end")}
+              "at_tool_call": (["event"], "SP3"), "check_answer": (["items", "final"], "SP3"),
+              "at_finish": (["event", "room"], "SP2"), "done": (["outcome", "detail"], "end")}
 #: the acts each safe point allows (ext.json supervisor.safe_points)
-SAFE_POINTS = {"SP1": ("CLOSE_REASONING", "GIVE_UP"), "SP2": ("CONTINUE_HIDDEN", "GIVE_UP"),
+SAFE_POINTS = {"SP1": ("CLOSE_REASONING", "GIVE_UP"), "SP2": ("CONTINUE_HIDDEN", "GIVE_UP", "REGENERATE_CALL"),
                "SP3": ("REPAIR_CALL", "REGENERATE_CALL", "GIVE_UP"),
                "SP4": ("PROMPT_TAIL_NOTE", "SET_THINK_BUDGET")}
 #: the request fields `plan` gets (ext.json request.fields)
@@ -59,6 +67,11 @@ ENGINE_PREFIXES = ("/v1/chat/completions", "/v1/completions", "/v1/embeddings", 
 ENGINE_DASHBOARD = ("live", "system", "logs", "parallel", "metrics", "summary", "usage", "requests")
 
 
+#: the engine's own exceptions that pass through an extension's code (the engine's callbacks raise
+#: them inside a hook): the client left. Not a failure of the extension: they go on to the engine
+PASS_THROUGH = (ConnectionError,)
+
+
 class Refused(SystemExit):
     """The engine does not start: one line, `[ext] REFUSING: <why>` (SystemExit prints it, exit 1)."""
 
@@ -67,15 +80,27 @@ class Refused(SystemExit):
         self.why = why
 
 
+class NoRoom(ValueError):
+    """A question asked in place has no room left in the window (the in-context stage's `no_room`)."""
+
+    def __init__(self, why: str = "no_room"):
+        super().__init__(why)
+        self.why = why
+
+
 class Refusal(Exception):
     """What `plan` raises to answer the client with an error (ext.json failure.refusal)."""
 
-    def __init__(self, status: int, type_: str, message: str):
+    def __init__(self, status: int, type_: str, message: str, param: str | None = None):
         super().__init__(message)
         self.status, self.type, self.message = int(status), str(type_), str(message)
+        self.param = param                       # since 1.2: the request field it names, or None
 
     def body(self) -> dict:
-        return {"error": {"message": self.message, "type": self.type}}
+        err = {"message": self.message, "type": self.type}
+        if self.param is not None:
+            err["param"] = self.param
+        return {"error": err}
 
 
 def _version(text) -> tuple[int, int] | None:
@@ -233,6 +258,10 @@ class Null:
     def request(self, request: dict) -> "Request":
         return Request(None, request)
 
+    def interim(self, name: str, *args, **kw):
+        """INTERIM's headless value: nothing is asked."""
+        return INTERIM[name](*args, **kw)
+
     def stop(self) -> None:
         return None
 
@@ -282,6 +311,8 @@ class Loaded(Null):
                 raise
             self.failed(hook, TypeError(f"{hook} raised a Refusal"))
             return fallback
+        except PASS_THROUGH:
+            raise
         except Exception as exc:                                   # noqa: BLE001
             self.failed(hook, exc)
             return fallback
@@ -335,6 +366,25 @@ class Loaded(Null):
     def request(self, request: dict) -> "Request":
         return Request(self, request)
 
+    def speaks(self, major: int, minor: int) -> bool:
+        """Whether the extension was written against engine-ext-v1 major.minor or later."""
+        v = _version(self.ext_api)
+        return v is not None and v[0] == major and v[1] >= minor
+
+    def interim(self, name: str, *args, **kw):
+        """One of INTERIM, asked of the extension object's `interim` (the interim adapter's): open,
+        a raise is logged, counted as `interim.<name>` and the headless value comes back."""
+        fn = getattr(getattr(self.obj, "interim", None), name, None)
+        if fn is None:
+            return INTERIM[name](*args, **kw)
+        try:
+            return fn(*args, **kw)
+        except PASS_THROUGH:
+            raise
+        except Exception as exc:                                   # noqa: BLE001
+            self.failed(f"interim.{name}", exc)
+            return INTERIM[name](*args, **kw)
+
     def stop(self) -> None:
         self.call("stop")
 
@@ -373,10 +423,16 @@ class Request:
         self.ext = ext
         self.request = request
         self.plan = None
-        self.sup = None
-        self.detached = False
+        self.sup: Supervision | None = None
         self.raw = ext is None
-        self.acts: list[tuple[str, str]] = []
+
+    @property
+    def detached(self) -> bool:
+        return bool(self.sup is not None and self.sup.detached)
+
+    @property
+    def acts(self) -> list:
+        return list(self.sup.taken) if self.sup is not None else []
 
     def begin(self):
         """`plan(request)`: the plan, or None (served raw). A Refusal passes to the caller."""
@@ -386,46 +442,40 @@ class Request:
         self.raw = self.plan is None
         return self.plan
 
-    def prompt(self, ids: list) -> list:
+    def prompt(self, ids: list, in_think: bool | None = None, conv: str | None = None):
+        """`prompt(plan, ids)`: the ids to prefill (a failure: the ids as built). With `in_think`
+        (since 1.2, the prompt ends inside `<think>`): `(ids, in_think, client_ids)`, where an
+        extension on 1.2 gets `info` {in_think, conv} and may answer `{ids, in_think, client_ids}`
+        (client_ids: the prompt as the client sent it, without what the extension put in; None
+        when it put nothing in)."""
+        ids = list(ids)
         if self.raw:
-            return ids
-        return self.ext.call("prompt", self.plan, list(ids), fallback=ids,
-                             check=lambda v: isinstance(v, list) and all(isinstance(i, int) for i in v))
+            return ids if in_think is None else (ids, in_think, None)
+        if in_think is None or not self.ext.speaks(1, 2):
+            out = self.ext.call("prompt", self.plan, ids, fallback=ids, check=_ids_ok)
+            return out if in_think is None else (out, in_think, None)
+        out = self.ext.call("prompt", self.plan, ids, {"in_think": bool(in_think), "conv": conv},
+                            fallback=ids,
+                            check=lambda v: _ids_ok(v) or (isinstance(v, dict) and _ids_ok(v.get("ids"))
+                                                          and (v.get("client_ids") is None
+                                                               or _ids_ok(v["client_ids"]))))
+        if isinstance(out, dict):
+            return list(out["ids"]), bool(out.get("in_think", in_think)), out.get("client_ids")
+        return out, in_think, None
 
     def supervise(self, event: dict):
+        """`supervisor(plan, event)`: the request's Supervision (the decode loop asks it), or None."""
         if self.raw:
             return None
-        self.sup = self.ext.call("supervisor", self.plan, event)
+        obj = self.ext.call("supervisor", self.plan, event)
+        self.sup = Supervision(obj, self) if obj is not None else None
         return self.sup
 
     def ask(self, method: str, *args):
-        """A supervisor method at its safe point: a list of acts for at_request, else an act or
-        None. A raise, a wrong shape or an act the safe point does not allow detaches the
-        supervisor for the rest of the request (counted under the method's name)."""
-        empty = [] if method == "at_request" else None
-        if self.raw or self.sup is None or self.detached:
-            return empty
-        try:
-            out = getattr(self.sup, method)(*args)
-        except Exception as exc:                                   # noqa: BLE001
-            return self._detach(method, exc)
-        if method == "done":
-            return None
-        if method == "at_request" and not isinstance(out, list):
-            return self._detach(method, TypeError(f"at_request returned {type(out).__name__}"))
-        acts = out if method == "at_request" else ([out] if out is not None else [])
-        point = SUPERVISOR[method][1]
-        for a in acts:
-            kind = a.get("kind") if isinstance(a, dict) else None
-            if kind not in SAFE_POINTS.get(point, ()):
-                return self._detach(method, ValueError(f"act {kind} at {point}"))
-        self.acts += [(point, a["kind"]) for a in acts]
-        return out
-
-    def _detach(self, method: str, exc: BaseException):
-        self.detached = True
-        self.ext.failed(method, exc, "the supervisor is detached for the rest of the request")
-        return [] if method == "at_request" else None
+        """A supervisor method at its safe point (Supervision); [] or None without one."""
+        if self.sup is None:
+            return [] if method == "at_request" else None
+        return getattr(self.sup, method)(*args)
 
     def extras(self, point: str, info: dict) -> list:
         if self.raw:
@@ -434,14 +484,220 @@ class Request:
                              check=lambda v: isinstance(v, list))
 
     def follow_ups(self, outcome) -> list:
-        if self.raw:
+        if self.raw or self.plan is None:
             return []
         return self.ext.call("follow_ups", self.plan, outcome, fallback=[],
                              check=lambda v: isinstance(v, list))
 
     def finish(self, row) -> None:
-        if not self.raw:
+        if not self.raw and self.plan is not None:
             self.ext.call("finish", self.plan, row)
 
     def done(self, outcome, detail) -> None:
-        self.ask("done", outcome, detail)
+        if self.sup is not None:
+            self.sup.done(outcome, detail)
+
+
+def _ids_ok(v) -> bool:
+    return isinstance(v, list) and all(isinstance(i, int) for i in v)
+
+
+# ------------------------------------------------------------------------------- the acts
+
+#: the act kinds (ext.json supervisor.act.kinds): defined by the engine, carried out by the engine
+CLOSE_REASONING = "CLOSE_REASONING"
+CONTINUE_HIDDEN = "CONTINUE_HIDDEN"
+REPAIR_CALL = "REPAIR_CALL"
+REGENERATE_CALL = "REGENERATE_CALL"
+PROMPT_TAIL_NOTE = "PROMPT_TAIL_NOTE"
+SET_THINK_BUDGET = "SET_THINK_BUDGET"
+GIVE_UP = "GIVE_UP"
+ACT_KINDS = (CLOSE_REASONING, CONTINUE_HIDDEN, REPAIR_CALL, REGENERATE_CALL, PROMPT_TAIL_NOTE,
+             SET_THINK_BUDGET, GIVE_UP)
+
+
+def act_kind(act):
+    """An act's kind: a mapping's `kind`, or (since 1.2) an object's `kind` attribute."""
+    if isinstance(act, dict):
+        return act.get("kind")
+    return getattr(act, "kind", None)
+
+
+class Event(dict):
+    """An event (ext.json supervisor.events): a mapping whose fields read as attributes too."""
+
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+
+class Supervision:
+    """One request's supervisor as the decode loop asks it (ENG-413 WP3b). The safe points' methods
+    are asked open: a raise, a wrong shape or an act the method does not allow detaches the
+    supervisor for the rest of the request, counted under the method's name, and the loop goes on
+    as on a headless engine (no act). Acts already carried out stay.
+
+    Beyond the contract's methods the decode loop still asks the interim adapter's supervisor what
+    SUPERVISION_INTERIM names (each open, with the value a headless engine has) and reads its state
+    (`gave_up`, `holds_calls`, `cuts`, ...) as attributes; ENG-413 WP4 turns them into fields."""
+
+    _OWN = ("_obj", "_req", "_detached", "_taken")
+
+    def __init__(self, obj, request: Request | None = None):
+        object.__setattr__(self, "_obj", obj)
+        object.__setattr__(self, "_req", request)
+        object.__setattr__(self, "_detached", False)
+        object.__setattr__(self, "_taken", [])
+
+    @property
+    def detached(self) -> bool:
+        """A safe point failed: nothing more is asked of this request's supervisor."""
+        return self._detached
+
+    @property
+    def taken(self) -> list:
+        """(safe point, kind) of every act the methods handed back, in order (the supervisor's
+        own `acts`, a count, is its state the engine reads)."""
+        return list(self._taken)
+
+    def _failed(self, method: str, exc: BaseException):
+        object.__setattr__(self, "_detached", True)
+        ext = self._req.ext if self._req is not None else None
+        if ext is not None:
+            ext.failed(method, exc, "the supervisor is detached for the rest of the request")
+        else:
+            _count(method)
+            print(f"[ext] {method} failed, the supervisor is detached for the rest of the request: "
+                  f"{exc!r}", flush=True)
+
+    def _ask(self, method: str, fallback, *args):
+        if self.detached:
+            return fallback
+        fn = getattr(self._obj, method, None)
+        if fn is None and method in OPTIONAL_METHODS:
+            return fallback                    # an extension before the method's minor has none
+        try:
+            out = fn(*args)
+        except PASS_THROUGH:
+            raise
+        except Exception as exc:                                   # noqa: BLE001
+            self._failed(method, exc)
+            return fallback
+        if method == "done":
+            return None
+        if method == "at_request" and not isinstance(out, list):
+            self._failed(method, TypeError(f"at_request returned {type(out).__name__}"))
+            return fallback
+        acts = out if method == "at_request" else ([out] if out is not None else [])
+        point = SUPERVISOR[method][1]
+        for a in acts:
+            if act_kind(a) not in SAFE_POINTS.get(point, ()):
+                self._failed(method, ValueError(f"act {act_kind(a)} at {point}"))
+                return fallback
+        self._taken.extend((point, act_kind(a)) for a in acts)
+        return out
+
+    # ------------------------------------------------------------------ the contract's methods
+    def at_request(self, event):
+        return self._ask("at_request", [], event)
+
+    def at_block(self, event, room):
+        return self._ask("at_block", None, event, room)
+
+    def at_tool_call(self, event):
+        return self._ask("at_tool_call", None, event)
+
+    def check_answer(self, items, final=False):
+        return self._ask("check_answer", None, items, final)
+
+    def at_finish(self, event, room):
+        return self._ask("at_finish", None, event, room)
+
+    def done(self, outcome, detail):
+        return self._ask("done", None, outcome, detail)
+
+    # ------------------------------------------------------------------ interim (outside the contract)
+    def interim(self, name: str, *args, **kw):
+        """One of SUPERVISION_INTERIM, open: a raise detaches the supervisor (counted under its
+        name) and the headless value comes back; detached, nothing is asked."""
+        fallback = SUPERVISION_INTERIM[name](*args, **kw)
+        if self.detached:
+            return fallback
+        try:
+            return getattr(self._obj, name)(*args, **kw)
+        except PASS_THROUGH:
+            raise
+        except Exception as exc:                                   # noqa: BLE001
+            self._failed(name, exc)
+            return fallback
+
+    def __getattr__(self, name):
+        if name in SUPERVISION_INTERIM:
+            return lambda *a, **kw: self.interim(name, *a, **kw)
+        return getattr(self._obj, name)
+
+    def __setattr__(self, name, value):
+        if name in self._OWN:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._obj, name, value)
+
+
+#: supervisor methods a minor added: an extension written before it has none, which is no failure
+OPTIONAL_METHODS = ("check_answer",)
+
+
+def _released(call, *a, **kw):
+    return {k: v for k, v in call.items() if not k.startswith("_")}
+
+
+#: what the decode loop asks the interim adapter's supervisor beyond the contract (ENG-413 WP3b),
+#: each with the value a headless engine has: SP4's splice and the request's reasoning cap, SP2's
+#: claim check asked in place and the memory notes taken out of an answer, SP3's release of held
+#: calls and the argument loop's stop
+SUPERVISION_INTERIM = {
+    "apply_request": lambda prompt, in_think, acts: (prompt, in_think),
+    "route_budget": lambda budget, task="route": False,
+    "settle_claim": lambda asker: None,
+    "without_notes": lambda answer: (answer, 0, 0),
+    "as_sent": lambda items, events=None: items,
+    "release_call": _released,
+    "release_block": lambda inner: None,
+    "note_repairs": lambda renamed: None,
+    "argloop_stopped": lambda verdict, name: None,
+}
+
+
+def supervising(sup):
+    """The decode loop's supervisor: a Supervision as it is, any other object (a test's) wrapped."""
+    if sup is None or isinstance(sup, Supervision):
+        return sup
+    return Supervision(sup)
+
+
+#: what the request path asks the interim adapter (server/ext_app.py) beyond the contract (ENG-413
+#: WP3b), each with the value a headless engine has; `Loaded.interim(name, ...)` asks it open
+INTERIM = {
+    "server_mode": lambda header, n: "raw",
+    "served_name": lambda: None,
+    "side_first_max": lambda: 0,
+    "strip_states": lambda messages: (messages, 0),
+    "loop_escape": lambda plan, info: None,
+    "code_class": lambda plan: False,
+    "served": lambda plan, prompt, in_think: None,
+    "in_context": lambda plan, prompt_ids, choice, rows: None,
+    "settle_context": lambda plan, why: None,
+    "ask_in_place": lambda plan, prompt_ids, choice: None,
+    "route_lines": lambda plan, ui: None,
+    "memory_filter": lambda plan, chat, n_choices, ui, tool_names: None,
+    "memory_spans": lambda ids, decode, taken: ([], 0),
+    "answer_mask": lambda plan, chat, body: None,
+    "replayed": lambda session, ids: ids,
+    "turn_ended": lambda sup: None,
+    "writer": lambda: (None, None),
+    "writer_ban_ids": lambda tok: {},
+    "writer_foreign_call": lambda text: None,
+    "probe_stage": lambda plan: None,
+}
