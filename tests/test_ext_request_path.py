@@ -9,7 +9,7 @@ this file holds the seam itself.
      (startup reads and WP5's hand-over, none on the request path), by statement or by name;
      server/ext.py, server/round_runner.py and server/fake_engine.py import none of TandemApp
                                                               test_the_request_path_imports_no_conductor
-  2  the optional calls (engine-ext-v1 1.3): every name of CALLS, INTERIM and SUP_OPTIONAL is the
+  2  the optional calls (engine-ext-v1 2.0): every name of CALLS, INTERIM and SUP_OPTIONAL is the
      extension's; a headless engine (NULL) answers each with its headless value and asks nothing;
      the act kinds are the monitor's; the own questions' User-Agent is TandemApp's
                                                               test_the_optional_calls_are_named

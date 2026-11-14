@@ -15,10 +15,9 @@ The test matrix, the Gherkin of ENG-429:
      module attributes discovery names                            test_the_fake_extension_fits
   3  a plain request asks the hooks in ext.json's order; CONTINUE_HIDDEN at SP2 loops back to the
      blocks and asks at_finish again; REGENERATE_CALL asks at_tool_call again; a plan of None asks
-     nothing more; prompt gets info and may answer a mapping from an extension on 1.2 or later,
-     two arguments before                                         test_the_order
+     nothing more; prompt gets info and may answer a mapping       test_the_order
   4  start is closed: no module in chat mode, a module that does not import, a missing EXT_API,
-     another major, a newer minor, start raising and a claimed engine path each refuse with one
+     another major (a 1.x extension on this 2.0 host), a newer minor, start raising and a claimed engine path each refuse with one
      '[ext] REFUSING:' line; an engine without QSE_EXT runs headless; an older minor is taken
                                                                   test_start_is_closed
   5  a request is open: each hook that raises, one that returns the wrong shape, and an act the
@@ -145,11 +144,11 @@ def test_the_order():
     host = H.FakeHost(args={"raw": True})
     rec = host.serve(H.load(X, host), H.Scenario())
     assert rec["trace"] == ["plan"] and rec["raw"] and not rec["errors"], rec
-    # an extension on 1.2 or later: prompt gets info and may answer a mapping; on 1.0 two arguments
+    # prompt gets info and may answer a mapping (2.0: every extension)
     seen = []
 
     class Later:
-        EXT_API, NAME, VERSION, __name__ = "1.3", "later", "0", "later"
+        EXT_API, NAME, VERSION, __name__ = "2.0", "later", "0", "later"
 
         @staticmethod
         def start(host):
@@ -160,12 +159,7 @@ def test_the_order():
     host = H.FakeHost()
     rec = host.serve(H.load(Later, host), H.Scenario())
     assert rec["prompt"] == [1, 2, 3, 9] and not rec["errors"] and seen == [{"in_think": False, "conv": None}], rec
-    host = H.FakeHost()
-    X10 = H.load(X, host)
-    X10.prompt = lambda plan, ids, info="none given": seen.append(info) or list(ids)
-    rec = host.serve(X10, H.Scenario())
-    assert seen[-1] == "none given" and not rec["errors"], (seen, rec)
-    return f"plain {len(PLAIN)} steps; CONTINUE_HIDDEN, REGENERATE_CALL, GIVE_UP, SP4, raw; prompt per minor"
+    return f"plain {len(PLAIN)} steps; CONTINUE_HIDDEN, REGENERATE_CALL, GIVE_UP, SP4, raw; prompt with info"
 
 
 def test_start_is_closed():
@@ -193,15 +187,19 @@ def test_start_is_closed():
     lines = [refused(""),                                              # chat mode, no QSE_EXT
              refused("no_such_extension_module_x"),
              refused(variant(EXT_API=None)),
-             refused(variant(EXT_API="2.0")),
-             refused(variant(EXT_API="1.9")),
+             refused(variant(EXT_API="1.3")),
+             refused(variant(EXT_API="2.9")),
              refused(variant(EXT_API="one")),
              refused(X, args={"fail": "start"}),
              refused(X, args={"route": "/v1/chat/completions"}),
              refused(X, args={"route": "/v1/dashboard/live"}),
              refused(X, args={"route": "/v1/engine/disk"})]
-    assert "QSE_EXT is empty" in lines[0] and "speaks engine-ext-v1 2.0" in lines[3] and \
-        "needs engine-ext-v1 1.9" in lines[4], lines
+    assert "QSE_EXT is empty" in lines[0] and "needs engine-ext-v1 2.9" in lines[4], lines
+    # 2.0 (ENG-413 WP4): a 1.x extension is refused at start, one line, whatever its minor
+    assert lines[3] == "[ext] REFUSING: the extension speaks engine-ext-v1 1.3; this engine speaks 2.0", lines[3]
+    for old in ("1.0", "1.2", "1.9"):
+        assert refused(variant(EXT_API=old)) == f"[ext] REFUSING: the extension speaks engine-ext-v1 {old}; " \
+            f"this engine speaks 2.0", old
 
     class NoHook:
         routes, models, knobs = [], [], []
@@ -209,7 +207,7 @@ def test_start_is_closed():
     # headless: no extension asked for, outside chat mode
     assert H.load("", H.FakeHost(mode="engine")) is None
     # an older minor starts on this host; the extension's own routes are fine
-    assert H.accepts("1.0", "1.4") is None
+    assert H.accepts("2.0", "2.4") is None and H.accepts("1.3", "2.0") is not None
     assert H.load(X, H.FakeHost(args={"route": "/v1/conductor/"})) is not None
     assert H.load(X, H.FakeHost(args={"route": "/v1/dashboard/session"})) is not None
     return f"{len(lines) + 1} start failures refused with one line; headless and older minors start"

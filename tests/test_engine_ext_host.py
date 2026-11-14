@@ -12,7 +12,7 @@ The test matrix (the Gherkin of ENG-429's host part):
      in the same order as the reference host, for a plain request, a tool call, CONTINUE_HIDDEN,
      REGENERATE_CALL, GIVE_UP, an SP4 note and a plan of None   test_the_order_is_the_reference_hosts
   3  start is closed: chat mode without QSE_EXT, a module that does not import, no EXT_API,
-     another major, a newer minor, start raising, a missing hook, a route on an engine path each
+     another major (1.x), a newer minor, start raising, a missing hook, a route on an engine path each
      refuse with the reference host's one line; engine mode without QSE_EXT is headless
                                                                   test_start_is_closed
   4  a request is open: each hook and supervisor method that raises, a wrong shape and an act out
@@ -20,7 +20,7 @@ The test matrix (the Gherkin of ENG-429's host part):
      qse_ext_errors_total; the next request asks again; a Refusal from plan is the answer
                                                                   test_a_request_is_open
   5  the engine refuses to start with one '[ext] REFUSING:' line, never serving: chat mode without
-     QSE_EXT, a module that does not import, another major, a missing hook, a QSE_EXT_ARGS that is
+     QSE_EXT, a module that does not import, another major (1.3), a missing hook, a QSE_EXT_ARGS that is
      not an object (each before the weights load); start raising, a claimed engine path,
      TandemApp's extension without a conductor directory (after the load, before the first request)
                                                                   test_the_engine_refuses_to_start
@@ -34,7 +34,7 @@ The test matrix (the Gherkin of ENG-429's host part):
      that raises is 500 extension_error, counted; stop is asked at the drain, open
                                                                   test_an_extension_on_a_fake_engine
   8  chat mode through TandemApp's extension: /health mode chat and the extension listed (its
-     release, engine-ext-v1 1.3), TandemLLM, the conductor's routes and the page served by it as
+     release, engine-ext-v1 2.0), TandemLLM, the conductor's routes and the page served by it as
      (status, headers, body)                                   test_chat_mode_through_the_adapter
 
 1-4 need no torch; 5-8 start server/app.py --fake-engine (CPU torch). Run: python tests/test_engine_ext_host.py
@@ -112,7 +112,7 @@ def test_the_host_is_the_interface():
         assert E.claims_engine_path(prefix) == H._claims_engine_path(prefix), prefix
     for a, b in (("1.0", "1.1"), ("1.1", "1.1"), ("1.2", "1.1"), ("2.0", "1.1"), ("x", "1.1")):
         assert E.accepts(a, b) == H.accepts(a, b), (a, b)
-    _the_1_3_surface(s, H)
+    _the_2_0_surface(s, H)
     with open(os.path.join(ROOT, "server", "ext.py")) as f:
         tree = ast.parse(f.read())
     std = {"__future__", "importlib", "json", "os", "re", "threading"}
@@ -139,8 +139,8 @@ _ARGS = {"header": "on", "n": 2, "messages": [{"role": "user"}], "routing": None
          "inner": "y", "renamed": {}, "verdict": "v", "name": "f"}
 
 
-def _the_1_3_surface(s: dict, H) -> None:
-    """engine-ext-v1 1.3: the optional calls, the supervisor's optional methods and fields and the
+def _the_2_0_surface(s: dict, H) -> None:
+    """engine-ext-v1 2.0: the optional calls, the supervisor's optional methods and fields and the
     kept interim are server/ext.py's and the reference host's, name for name, argument for
     argument and headless value for headless value."""
     calls = {c["name"]: c for c in s["extension"]["calls"]}
@@ -173,7 +173,7 @@ def _the_1_3_surface(s: dict, H) -> None:
     assert {"ext_dir", "identity_name", "own_eta", "own_idle", "NoRoom"} <= set(s["host"])
     assert "routing" in s["request"]["plan_fields"] and s["request"]["routing_fields"]
     assert set(s["extras"]["lines_fields"]) >= {"ui", "doc", "channel", "inline", "share"}
-    assert "interim" not in json.dumps({k: v for k, v in s.items() if k not in ("since_1_2", "kept_interim")})
+    assert "interim" not in json.dumps({k: v for k, v in s.items() if k not in ("since_1_2", "kept_interim", "changed_from_1")})
 
 
 # ---------------------------------------------------------------------------- 2
@@ -290,7 +290,7 @@ def test_start_is_closed():
     class NoHook:
         routes, models, knobs = [], [], []
     cases = [("", None), ("no_such_extension_module_x", None), (variant(EXT_API=None), None),
-             (variant(EXT_API="2.0"), None), (variant(EXT_API="1.9"), None),
+             (variant(EXT_API="1.3"), None), (variant(EXT_API="2.9"), None),
              (variant(EXT_API="one"), None), (mod, {"fail": "start"}),
              (mod, {"route": "/v1/chat/completions"}), (mod, {"route": "/v1/dashboard/live"}),
              (mod, {"route": "/v1/engine/disk"}), (variant(start=lambda host: NoHook()), None)]
@@ -302,11 +302,11 @@ def test_start_is_closed():
         assert a.replace("fake_ext", "M").replace("variant_ext", "M") == \
             b.replace("engine_ext_ref_fake_ext", "M").replace("variant_ext", "M"), (a, b)
         lines.append(a)
-    assert "QSE_EXT is empty" in lines[0] and "speaks engine-ext-v1 2.0" in lines[3], lines
+    assert "QSE_EXT is empty" in lines[0] and lines[3] == "[ext] REFUSING: the extension speaks engine-ext-v1 1.3; this engine speaks 2.0", lines
     assert E.discover("", "engine") is None and E.NULL.listing() == [] and E.NULL.route("GET", "/x") is None
     # an older minor starts; the extension's own paths are fine
     assert E.start(mod, _host({"route": "/v1/conductor/"})).listing() == \
-        [{"name": "fake-ext", "version": "0", "ext_api": "1.0"}]
+        [{"name": "fake-ext", "version": "0", "ext_api": "2.0"}]
     # QSE_EXT_ARGS: a JSON object over the command line
     assert E.ext_args({"a": 1, "fail": None}, {"QSE_EXT_ARGS": '{"fail": "plan"}'}) == {"a": 1, "fail": "plan"}
     for bad in ("[1]", "{nope"):
@@ -378,11 +378,11 @@ def test_a_request_is_open():
 
 #: test extensions written into a folder on PYTHONPATH (fake_ext.py's folder is there too)
 MODULES = {
-    "ext_major2.py": "from fake_ext import *  # noqa\nfrom fake_ext import start  # noqa\nEXT_API = '2.0'\n",
-    "ext_nohook.py": ("EXT_API = '1.0'\nNAME = 'nohook'\nVERSION = '0'\n\n\nclass _X:\n"
+    "ext_major1.py": "from fake_ext import *  # noqa\nfrom fake_ext import start  # noqa\nEXT_API = '1.3'\n",
+    "ext_nohook.py": ("EXT_API = '2.0'\nNAME = 'nohook'\nVERSION = '0'\n\n\nclass _X:\n"
                       "    routes, models, knobs = [], [], []\n\n    def health(self):\n        return {}\n\n\n"
                       "def start(host):\n    return _X()\n"),
-    "ext_boom.py": ("import fake_ext\n\nEXT_API = '1.0'\nNAME = 'boom'\nVERSION = '1'\n\n\n"
+    "ext_boom.py": ("import fake_ext\n\nEXT_API = '2.0'\nNAME = 'boom'\nVERSION = '1'\n\n\n"
                     "class Boom(fake_ext.FakeExt):\n    def __init__(self, host):\n        super().__init__(host)\n"
                     "        self.routes = [{'method': 'GET', 'prefix': '/v1/boom', 'handler': self.boom},\n"
                     "                       {'method': 'GET', 'prefix': '/v1/fine', 'handler': lambda r: (201, "
@@ -438,7 +438,7 @@ def test_the_engine_refuses_to_start():
     cdir = tempfile.mkdtemp(prefix="ext-cond-")
     before = [({}, cdir, "chat mode needs an extension (QSE_EXT is empty)"),
               ({"QSE_EXT": "no_such_extension_module_x"}, None, "QSE_EXT=no_such_extension_module_x does not import"),
-              ({"QSE_EXT": "ext_major2"}, None, "the extension speaks engine-ext-v1 2.0"),
+              ({"QSE_EXT": "ext_major1"}, None, "the extension speaks engine-ext-v1 1.3; this engine speaks 2.0"),
               ({"QSE_EXT": "fake_ext", "QSE_EXT_ARGS": "[1]"}, None, "QSE_EXT_ARGS is not a JSON object")]
     after = [({"QSE_EXT": "ext_nohook"}, None, "ext_nohook lacks the hooks"),
              ({"QSE_EXT": "fake_ext", "QSE_EXT_ARGS": '{"fail": "start"}'}, None, "fake_ext.start failed"),
@@ -548,7 +548,7 @@ def test_an_extension_on_a_fake_engine():
     try:
         port, seen = _up(p)
         st, _, h = _get(port, "/health")
-        assert st == 200 and h["extensions"] == [{"name": "fake-ext", "version": "0", "ext_api": "1.0"}], h
+        assert st == 200 and h["extensions"] == [{"name": "fake-ext", "version": "0", "ext_api": "2.0"}], h
         assert "fake" not in h["loaded"], h["loaded"]
         assert _metric(port, "qse_ext_errors_total").get("health", 0) >= 1
         st, _, m = _get(port, "/v1/models")
