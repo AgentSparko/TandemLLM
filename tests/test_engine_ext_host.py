@@ -182,7 +182,8 @@ def _the_2_0_surface(s: dict, H) -> None:
     assert "routing" in s["request"]["plan_fields"] and s["request"]["routing_fields"]
     assert set(s["extras"]["lines_fields"]) >= {"ui", "doc", "channel", "inline", "share"}
     assert "interim" not in json.dumps({k: v for k, v in s.items()
-                                        if k not in ("since_1_2", "kept_interim", "changed_from_1", "since_3_0")})
+                                        if k not in ("since_1_2", "kept_interim", "changed_from_1", "changed_from_2",
+                                                     "since_3_0")})
 
 
 # ---------------------------------------------------------------------------- 2
