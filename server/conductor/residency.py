@@ -36,7 +36,7 @@ it. (The decision-model design keeps an unload order for later; it is not built 
 `check` exits 0 when allowed and 3 when refused, printing the decision as one JSON line; the ops
 scripts (ops/roles.sh) pass the hold and the running load they see, and the MemAvailable `free`
 reports. `--root` (default ~/.qwen38-spark-engine/conductor) is the conductor's directory; its
-documents come from the extension's module (QSE_EXT, its `read_document`, engine-ext-v1 2.1), the
+documents come from the extension's module (QSE_EXT, its `read_document`, engine-ext-v1 3.0), the
 built-in ones (server/api/seeds.py, version 0) without one (ENG-413 WP5).
 """
 
@@ -220,7 +220,7 @@ def docs(root: str, module: str | None = None) -> tuple[dict, dict]:
 
 
 def documents(state) -> dict:
-    """The running server's residency and roles documents: the extension's (engine-ext-v1 2.1
+    """The running server's residency and roles documents: the extension's (engine-ext-v1 3.0
     `document`), else the built-in ones; `version` is the residency document's (0: built-in)."""
     got = ext_mod.document(state, "residency")
     roles = ext_mod.document(state, "roles")

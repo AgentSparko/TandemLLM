@@ -150,7 +150,7 @@ def refresh(state: dict) -> list[str]:
     """A request starts: when the residency document has a new version, its live overrides
     apply now (and a key the document no longer sets goes back to its flag)."""
     from server import ext as ext_mod
-    got = ext_mod.document(state, "residency")     # the extension's (engine-ext-v1 2.1)
+    got = ext_mod.document(state, "residency")     # the extension's (engine-ext-v1 3.0)
     if got is None:
         return []
     v, doc = got
@@ -308,7 +308,7 @@ def view(state: dict) -> dict:
     applied = state.get("limits_applied") or {}
     from server import ext as ext_mod
     over, version = {}, None
-    got = ext_mod.document(state, "residency")     # the extension's (engine-ext-v1 2.1)
+    got = ext_mod.document(state, "residency")     # the extension's (engine-ext-v1 3.0)
     if got is not None:
         try:
             version, doc = got

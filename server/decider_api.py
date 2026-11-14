@@ -27,7 +27,7 @@ The rest of the file is the wiring `server/app.py` calls: `start()` builds the r
 empty), the residency planner's check for every load, and the conductor's in-process client
 (`endpoint: self` or `engine:<family>`, server/conductor/classify.py). `status()` and friends feed
 `/v1/engine/deciders/*` (server/engine_routes.py) for the dashboard's Deciders screen. ENG-413 WP5:
-the documents are the extension's (`document`, engine-ext-v1 2.1) or the engine's seeds, the role
+the documents are the extension's (`document`, engine-ext-v1 3.0) or the engine's seeds, the role
 contract is the extension's `role_errors`, and the extension gets the registry through `deciders`
 (its in-process client) and answers the screen's `api` part through `deciders_api`.
 """
@@ -87,7 +87,7 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
                    policy=lambda: load_policy(state), routers=routers(models),
                    log=lambda s: log(s, flush=True), contract=_contract(state))
     # the extension's in-process client of these models (its classify backends `self` and each
-    # family): engine-ext-v1 2.1 `deciders(registry)`, asked once the registry is built
+    # family): engine-ext-v1 3.0 `deciders(registry)`, asked once the registry is built
     from server import ext as ext_mod
     ext_mod.of(state).ask("deciders", reg)
     log(f"[deciders] serving {', '.join(reg.order)} on {device or 'no device (fake)'}; idle window "
@@ -98,7 +98,7 @@ def start(state: dict, gate, *, fake: bool = False, log=print):
 
 def _contract(state: dict):
     """The role contract the registry checks each model against: the extension's (SRV-133;
-    engine-ext-v1 2.1 `role_errors`, asked at each check), with the engine's tokenizer hash for a
+    engine-ext-v1 3.0 `role_errors`, asked at each check), with the engine's tokenizer hash for a
     model that would share token ids; none when headless."""
     from server import ext as ext_mod
 
@@ -376,5 +376,5 @@ def status(reg, state: dict) -> dict:
             "window": "idle", "ready": reg.ready(),
             "unserved": [m["name"] for m in doc["models"] if m["name"] not in reg.models],
             # L1: Laya for the model's scripts (`/v1/laya/ask`), its settings and counts: the
-            # extension's (engine-ext-v1 2.1 `deciders_api`), None when headless
+            # extension's (engine-ext-v1 3.0 `deciders_api`), None when headless
             "api": ext_mod.of(state).ask("deciders_api", doc)}

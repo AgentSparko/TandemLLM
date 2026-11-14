@@ -902,7 +902,7 @@ def planner(state: dict, *, fake: bool = False):
 
     def check(name, *, loading, service_start, hold_restart):
         from server import ext as ext_mod
-        got = ext_mod.document(state, "residency")     # the extension's (engine-ext-v1 2.1)
+        got = ext_mod.document(state, "residency")     # the extension's (engine-ext-v1 3.0)
         if got is not None:
             doc = got[1]
             if "shadow" not in (doc.get("claims") or {}):

@@ -7,9 +7,9 @@ speed-guard report a release tree ships.
 ENG-413 WP5: the engine-only screens these handlers served through the conductor's
 `/v1/conductor/*` are the engine's `/v1/engine/*` routes (server/engine_routes.py), handed to an
 extension in process as `host.engine`, and the speed-guard report is `host.shipped_guard`
-(engine-ext-v1 2.1); nothing goes through the server's state any more. The engine builds the
+(engine-ext-v1 3.0); nothing goes through the server's state any more. The engine builds the
 narrator's slot (its model, device, the residency planner, the journal) and the extension the
-narrator over it (`narrator(slot)`, engine-ext-v1 2.1): the lines it writes are the extension's.
+narrator over it (`narrator(slot)`, engine-ext-v1 3.0): the lines it writes are the extension's.
 Nothing here imports TandemApp.
 """
 

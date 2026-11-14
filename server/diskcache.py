@@ -72,7 +72,7 @@ def writes_of(settings: dict | None, a) -> dict:
 
 
 def _settings_doc(state) -> tuple:
-    """The extension's settings document (engine-ext-v1 2.1 `document`), or (None, {})."""
+    """The extension's settings document (engine-ext-v1 3.0 `document`), or (None, {})."""
     from server import ext as ext_mod
     got = ext_mod.document(state, "settings")
     return got if got is not None else (None, {})

@@ -1322,7 +1322,7 @@ def install(app) -> None:
         prep = state.get("prepared")
         if prep is not None:
             out["prepare"] = dict(getattr(prep, "stats", {}) or {})
-        # the memory writer's numbers: the extension's (engine-ext-v1 2.1 `memory_writer`)
+        # the memory writer's numbers: the extension's (engine-ext-v1 3.0 `memory_writer`)
         ext = state.get("ext")
         writer = ext.ask("memory_writer")[0] if ext is not None else None
         if writer is not None:

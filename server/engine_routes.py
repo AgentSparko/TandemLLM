@@ -3,7 +3,7 @@
 The conductor's screens that read or load the engine's own models and memory were TandemApp's
 `/v1/conductor/*` routes over handlers the engine put into its state (server/conductor/inproc.py
 ROUTES until WP5). The engine serves them now, under `/v1/engine/*`, and hands the same handlers to
-an extension in process (`host.engine`, engine-ext-v1 2.1), so the conductor's old paths answer the
+an extension in process (`host.engine`, engine-ext-v1 3.0), so the conductor's old paths answer the
 same bodies while they last (they leave with ENG-413 WP14):
 
     GET  /v1/engine/residency/plan             the residency planner's view (OPS-41, OPS-47)
@@ -23,7 +23,7 @@ is the body as the screen showed it (no `contract_version`: that is the conducto
 which its own paths keep adding); an error is `{"error": {"type", "message"}}`. Reads follow the
 dashboard's rule and writes, and the disk tier's numbers, `conductor_write` (server/api/auth.py), as
 the conductor's paths did. Nothing here imports TandemApp: the documents come from the extension
-(`document`, engine-ext-v1 2.1) or the engine's seeds, the narrator is the object the extension built
+(`document`, engine-ext-v1 3.0) or the engine's seeds, the narrator is the object the extension built
 over the engine's slot.
 
     ROUTES[name](state, ...)        a handler: (status, body), or raises ext.Refusal
@@ -242,7 +242,7 @@ ROUTES = {"residency_plan": residency_plan, "disk": disk, "disk_clear": disk_cle
 
 
 def in_process(state) -> dict:
-    """`host.engine` (engine-ext-v1 2.1): each handler bound to the server's state. Called as
+    """`host.engine` (engine-ext-v1 3.0): each handler bound to the server's state. Called as
     residency_plan(), disk(), disk_clear(), deciders(method, rest, body[, base]),
     narrator(method, what, body[, base]), shadow(method, what, body[, base]); each answers
     (status, body) or raises the host's Refusal(status, type, message)."""

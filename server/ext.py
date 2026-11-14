@@ -15,7 +15,7 @@ it. Standard library only, plus the engine's metrics registry for one counter.
     ext.stop()               the engine stops
     of(state)                the extension the engine loaded (state["ext"]), NULL when headless
     document(state, name)    an extension document by name ((version, doc)), None: the engine's seed
-    early_document(...)      before the start: the module's read_document (since 2.1), or None
+    early_document(...)      before the start: the module's read_document (since 3.0), or None
     attach(state)            tests: an extension's object around objects a test built itself
 
 ENG-413 WP3b: the request path asks these hooks and nothing of the conductor. `Request` asks them in
@@ -25,8 +25,8 @@ are the engine's (the kinds below), carried out by the engine. ENG-413 WP4 (engi
 what the request path asked an interim adapter outside the contract is the contract now: the
 optional calls (CALLS), the supervisor's optional methods (SUP_OPTIONAL) and fields (SUP_FIELDS),
 each with the value a headless engine uses, the plan's `routing` and the host's fields. ENG-413 WP5
-(engine-ext-v1 2.1): what the engine read of the extension's objects outside a request, and the
-memory writer's object, are optional calls too (the 2.1 rows of CALLS); the engine-only screens are
+(engine-ext-v1 3.0): what the engine read of the extension's objects outside a request, and the
+memory writer's object, are optional calls too (the 3.0 rows of CALLS); the engine-only screens are
 the engine's `/v1/engine/*` routes, handed to the extension in process as `host.engine`.
 
 The failure rule (ext.json `failure`): closed at start, open per request. `discover` and `start`
@@ -48,10 +48,10 @@ import re
 import threading
 
 #: the engine-ext-v1 version this host speaks (contracts/engine-ext-v1/ext.json `version`)
-EXT_API = "2.1"
+EXT_API = "3.0"
 #: the module attributes discovery reads (ext.json discovery.module)
 MODULE_ATTRS = ("EXT_API", "NAME", "VERSION", "start")
-#: since 2.1, optional module functions asked before the start (ext.json discovery.module_optional):
+#: since 3.0, optional module functions asked before the start (ext.json discovery.module_optional):
 #: read_document(ext_dir, name) and before_load(args)
 MODULE_OPTIONAL = ("read_document", "before_load")
 #: what the fake-engine guard compares a test's directory with: the conductor's default directory
@@ -188,7 +188,7 @@ def check_module(module):
 
 class Host:
     """What the engine hands an extension (ext.json `host`); since 2.0 also `ext_dir`,
-    `identity_name`, `own_eta`, `own_idle`, `NoRoom` and `metrics.event`; since 2.1 `engine` holds
+    `identity_name`, `own_eta`, `own_idle`, `NoRoom` and `metrics.event`; since 3.0 `engine` holds
     the /v1/engine/* handlers in process (server/engine_routes.py) and `shipped_guard` the
     speed-guard report the release tree ships."""
 
@@ -250,14 +250,6 @@ def start(module, host: Host) -> "Loaded":
         obj = module.start(host)
     except BaseException as exc:                                   # noqa: BLE001
         raise Refused(f"{name}.start failed: {exc!r}") from None
-    # closed (2.1, ENG-413 WP5): an extension below 2.1 that routes requests relied on what the engine
-    # read of its objects until 2.0 (its documents, its memory writer); a 2.1 host asks for them
-    # through the 2.1 calls only, so such an extension would lose them without an error
-    want = _version(getattr(module, "EXT_API", ""))
-    if want is not None and want < (2, 1) and (host.state or {}).get("conductor") is not None:
-        raise Refused(f"{name} speaks engine-ext-v1 {module.EXT_API} and routes requests: this engine "
-                      f"reads a routing extension's documents and memory writer through the 2.1 "
-                      f"calls only (it needs 2.1)")
     missing = [h for h in HOOKS if not callable(getattr(obj, h, None))]
     if missing:
         raise Refused(f"{name} lacks the hooks {missing}")
@@ -410,7 +402,7 @@ class Loaded(Null):
         return Request(self, request)
 
     def ask(self, name: str, *args, **kw):
-        """One of the optional calls (CALLS, since 2.0; the 2.1 rows since 2.1), a method of the
+        """One of the optional calls (CALLS, since 2.0; the 3.0 rows since 3.0), a method of the
         extension object: open. An extension without the method is not asked; a raise is logged
         and counted under the call's name and the headless value comes back."""
         fn = getattr(self.obj, name, None)
@@ -797,7 +789,7 @@ CALLS = {
     "writer_ban_ids": lambda tokenizer: {},
     "writer_foreign_call": lambda text: None,
     "probe_stage": lambda routing: None,
-    # since 2.1 (ENG-413 WP5): what the engine read of the extension's objects outside a request
+    # since 3.0 (ENG-413 WP5): what the engine read of the extension's objects outside a request
     # (the documents, the library, the shadow switch, the monitor's mode), the small models it
     # builds around the engine's (the narrator over its slot, the role contract, the decision
     # models' registry) and the memory writer whose hidden turn the engine decodes
@@ -812,8 +804,8 @@ CALLS = {
     "memory_writer": lambda: (None, None),
 }
 
-#: the calls 2.1 added (ext.json since_2_1.calls)
-CALLS_2_1 = ("document", "library_text", "shadow_wanted", "monitor_mode", "narrator",
+#: the calls 3.0 added (ext.json since_3_0.calls)
+CALLS_3_0 = ("document", "library_text", "shadow_wanted", "monitor_mode", "narrator",
              "role_errors", "deciders", "deciders_api", "memory_writer")
 #: the documents `document(name)` answers (ext.json extension.documents)
 DOCUMENTS = ("residency", "roles", "deciders", "settings", "router", "packages")
@@ -842,7 +834,7 @@ def document(state, name: str):
 def early_document(module_name: str | None, ext_dir: str | None, name: str):
     """Before the extension starts (the residency limits before the weights load, the planner's
     command line): its module's `read_document(ext_dir, name)` as (version, doc), or None when no
-    module is named, it has none, or it fails. Since 2.1."""
+    module is named, it has none, or it fails. Since 3.0."""
     if not (module_name or "").strip() or ext_dir is None:
         return None
     try:
@@ -856,16 +848,16 @@ def early_document(module_name: str | None, ext_dir: str | None, name: str):
 
 
 def before_load(module, args: dict) -> str | None:
-    """Since 2.1: the module's `before_load(args)`, asked once it is discovered and before the
+    """Since 3.0: the module's `before_load(args)`, asked once it is discovered and before the
     weights load (the session monitor's policy is checked there). A raise refuses the start with one
     line; a SystemExit of the module's own passes as it is. Its answer is a line for the log.
     Closed: the session monitor asked (`--conductor shadow|on`) of a module without before_load is
     refused here, since nothing else would check and hand over its policy (2.0 read it from the
-    engine's state, which 2.1 no longer writes)."""
+    engine's state, which 3.0 no longer writes)."""
     fn = getattr(module, "before_load", None)
     if not callable(fn):
         if (args or {}).get("conductor") in ("shadow", "on"):
-            raise Refused(f"the session monitor (--conductor shadow|on) needs engine-ext-v1 2.1's "
+            raise Refused(f"the session monitor (--conductor shadow|on) needs engine-ext-v1 3.0's "
                           f"before_load; {module.__name__} (engine-ext-v1 {module.EXT_API}) has none")
         return None
     try:
@@ -885,5 +877,5 @@ def attach(state: dict, *, name: str = "tandemapp.engine_ext", log=print, **host
     h = Host(mode="chat", engine_api="", state=state, lock=None, tokenizer=state.get("tok"),
              registry=None, ledger_path=None, args={}, log=log, **host)
     loaded = Loaded(module, module.attach(h), h)
-    state["ext"] = loaded                       # since 2.1: what of(state) answers
+    state["ext"] = loaded                       # since 3.0: what of(state) answers
     return loaded

@@ -5747,7 +5747,7 @@ RANK_MEMORY = 3
 
 def _writer_ctx():
     """(the memory writer, its settings), or (None, None) without one: the extension's
-    (engine-ext-v1 2.1 `memory_writer`; ENG-413 WP5). The engine decodes the writer's hidden turn
+    (engine-ext-v1 3.0 `memory_writer`; ENG-413 WP5). The engine decodes the writer's hidden turn
     and asks the writer the rest: state, due, mark, gate, instructions, apply, skipped and its
     stats."""
     got = EXT.ask("memory_writer")
@@ -6123,7 +6123,7 @@ SHADOW_RETRY_S = 300.0
 
 
 def _shadow_profiles_on() -> bool:
-    """Does some profile have `shadow.mode: on`? The extension's answer (engine-ext-v1 2.1
+    """Does some profile have `shadow.mode: on`? The extension's answer (engine-ext-v1 3.0
     `shadow_wanted`), False when headless."""
     return bool(EXT.ask("shadow_wanted"))
 
@@ -8042,7 +8042,7 @@ def _package_tokens(name: str, text: str | None, sha: str | None) -> int | None:
 
 
 def _library_text(name: str) -> str | None:
-    """A package's text from the extension's library (engine-ext-v1 2.1 `library_text`), None
+    """A package's text from the extension's library (engine-ext-v1 3.0 `library_text`), None
     without one."""
     got = EXT.ask("library_text", name)
     return got if isinstance(got, str) else None
@@ -8258,7 +8258,7 @@ def _card_facts() -> dict:
 def _effort_caps() -> dict:
     """The effort levels' reasoning caps a client's effort word maps to: the router document's
     levels when the conductor is loaded (the Routing screen edits them), else their seed."""
-    got = ext_mod.document(STATE, "router")        # the extension's (engine-ext-v1 2.1)
+    got = ext_mod.document(STATE, "router")        # the extension's (engine-ext-v1 3.0)
     try:
         levels = got[1]["effort"]["levels"] if got is not None else None
     except Exception:                                              # noqa: BLE001
@@ -8287,7 +8287,7 @@ def _monitor_mode() -> dict:
     """`{"conductor": {"mode": off|shadow|on}}` for the live stream's engine block and the summary's
     status (VIS-44: the header's indicator); empty on a server with no monitor policy, so an
     older dashboard and a server without the monitor show nothing."""
-    mode = EXT.ask("monitor_mode")                 # the extension's (engine-ext-v1 2.1)
+    mode = EXT.ask("monitor_mode")                 # the extension's (engine-ext-v1 3.0)
     if not isinstance(mode, str):
         return {}
     return {"conductor": {"mode": "off" if mode == "raw" else mode}}
@@ -13621,7 +13621,7 @@ def _ext_at_start(a) -> None:
     _EXT_MODULE = ext_mod.discover(name, mode)
     if _EXT_MODULE is not None:
         ext_mod.ext_args({})
-        # ENG-413 WP5 (engine-ext-v1 2.1): the module's checks before the weights load (the session
+        # ENG-413 WP5 (engine-ext-v1 3.0): the module's checks before the weights load (the session
         # monitor's policy: a file that does not validate stops the start here)
         _EXT_EARLY = ext_mod.before_load(_EXT_MODULE, ext_mod.ext_args(vars(a)))
         print(f"[ext] QSE_EXT={_EXT_MODULE.__name__}: {_EXT_MODULE.NAME} {_EXT_MODULE.VERSION} "
@@ -13646,7 +13646,7 @@ def _ext_start(a, root, led) -> None:
         args=ext_mod.ext_args(vars(a)), engine=engine_routes.in_process(STATE),
         log=lambda s: print(s, flush=True),
         # engine-ext-v1 1.3: the extension's directory, the identity, the own questions' clock,
-        # and the monitor's decisions in Prometheus (SRV-115); 2.1: the release tree's speed-guard
+        # and the monitor's decisions in Prometheus (SRV-115); 3.0: the release tree's speed-guard
         # report (VIS-68)
         ext_dir=root, identity_name=_identity_name,
         own_eta=_own_eta_ms if OWN_ETA == "on" else None, own_idle=_own_idle_s,
@@ -13673,7 +13673,7 @@ def _limits_at_start(a) -> None:
     if root is not None:
         try:
             # ENG-413 WP5: the document through the extension's module before it starts
-            # (engine-ext-v1 2.1 `read_document`); nothing to read without one
+            # (engine-ext-v1 3.0 `read_document`); nothing to read without one
             got = ext_mod.early_document(os.environ.get("QSE_EXT", ""), root, "residency")
             if got is None:
                 raise ValueError("no extension module reads it (QSE_EXT)")
@@ -13718,7 +13718,7 @@ def card_sampling(path):
 
 def _monitor_asked(a) -> bool:
     """`--conductor shadow|on`: the session monitor is asked for. Its policy is the extension's,
-    checked by its module before the weights load (engine-ext-v1 2.1 `before_load`, ENG-413 WP5)."""
+    checked by its module before the weights load (engine-ext-v1 3.0 `before_load`, ENG-413 WP5)."""
     return getattr(a, "conductor", "raw") in ("shadow", "on")
 
 
@@ -14672,7 +14672,7 @@ def _serve(a, led) -> None:
     STATE.pop("live", None)                      # built with the settings above
     # The session monitor (`--conductor shadow|on`, its policy validated before the load) starts with
     # the extension (ENG-413 WP3b; tandemapp.engine_ext since WP4), which puts it into STATE["monitor"];
-    # its policy line is the one the module's before_load gave (engine-ext-v1 2.1)
+    # its policy line is the one the module's before_load gave (engine-ext-v1 3.0)
     mode = "raw" if getattr(a, "conductor", "raw") in ("raw", "off") else a.conductor
     STATE["monitor"] = None
     print(f"[conductor] {mode}" + (f", {_EXT_EARLY}" if _monitor_asked(a) and _EXT_EARLY else ""),
