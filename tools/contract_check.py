@@ -1,12 +1,14 @@
-"""Validate a dashboard API response against contract v1's JSON Schemas.
+"""Validate an engine API response against the engine's contract (engine-api-v1) JSON Schemas.
 
     curl -s -H "Authorization: Bearer $QSE_ADMIN_TOKEN" localhost:8000/v1/dashboard/summary \\
         | python tools/contract_check.py summary
     python tools/contract_check.py usage response.json
+    python tools/contract_check.py engine/disk response.json
 
-The schemas are `contracts/dashboard-v1/<name>.schema.json` in TandemApp's tree
-(`app/contracts/dashboard-v1/` for a copy of this file in the repository root's tools/), the
-single source of truth the dashboard's mocks and this server are both held to. The validator is
+A name is `<name>.schema.json` in the engine's `contracts/engine-api-v1/dashboard/` (the
+dashboard answers), or a path under `contracts/engine-api-v1/` when it holds a slash (`engine/disk`,
+`health`: `./health`). ENG-413 WP10: the engine's own contract, which this server is held to;
+TandemApp keeps its own copy of this file for its contracts/dashboard-v1. The validator is
 the subset of JSON Schema those files use -- `type` (one or a list, `integer` excluding booleans),
 `properties`, `required`, `additionalProperties: false`, `items`, `enum`, `const`, and `$ref`
 within a file or to a sibling file -- in the standard library, because the box has no pip. Exit 1
@@ -20,11 +22,10 @@ import os
 import sys
 
 _TOP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-#: <tree>/contracts/dashboard-v1 (TandemApp's own tree), else <tree>/app/contracts/dashboard-v1 (a
-#: copy of this file in the repository root's tools/)
-ROOT = next((p for p in (os.path.join(_TOP, "contracts", "dashboard-v1"),
-                         os.path.join(_TOP, "app", "contracts", "dashboard-v1")) if os.path.isdir(p)),
-            os.path.join(_TOP, "contracts", "dashboard-v1"))
+#: the engine's contract
+CONTRACT = os.path.join(_TOP, "contracts", "engine-api-v1")
+#: the default folder: the engine's dashboard answers
+ROOT = os.path.join(CONTRACT, "dashboard")
 
 _TYPES = {
     "object": lambda v: isinstance(v, dict),
@@ -93,7 +94,11 @@ def main() -> int:
         return 2
     name = sys.argv[1]
     raw = open(sys.argv[2]).read() if len(sys.argv) > 2 else sys.stdin.read()
-    errs = check(json.loads(raw), name)
+    root = ROOT
+    if "/" in name:
+        sub, _, name = name.rpartition("/")
+        root = os.path.normpath(os.path.join(CONTRACT, sub))
+    errs = check(json.loads(raw), name, root)
     for e in errs:
         print(e)
     print(f"{name}: {'valid' if not errs else f'{len(errs)} violations'}")

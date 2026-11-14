@@ -38,7 +38,7 @@ from http.server import ThreadingHTTPServer  # noqa: E402
 
 from server import app  # noqa: E402
 from server.api import auth, dashboard_api, logbuf, metrics  # noqa: E402
-from tools import contract_check  # noqa: E402
+import dash_contract  # noqa: E402  (the engine's schemas; the page's are TandemApp's, ENG-413 WP10)
 
 ADMIN = "adm-" + "a1b2c3d4" * 6
 METRICS = "met-" + "9f8e7d6c" * 6
@@ -81,7 +81,7 @@ def test_admin_routes_need_a_token_through_the_proxy():
         code, head, body = call(method, path, PROXY)
         assert code == 401, (method, path, code)
         assert "WWW-Authenticate: Bearer" in head, head
-        assert not contract_check.check(body, "error"), body
+        assert not dash_contract.check(body, "error"), body
 
 
 def test_the_public_api_is_unchanged():
@@ -159,7 +159,7 @@ def test_the_session_cookie():
     code, _, body = call("GET", "/v1/dashboard/session", dict(PROXY, Cookie=cookie))
     assert code == 200 and body["authenticated"] is True and body["expires_at"].endswith("Z")
     assert body["login"] is True
-    assert not contract_check.check(body, "session")
+    assert not dash_contract.check(body, "session")
     # the browser's EventSource: the log stream with the cookie only, over a real socket
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -294,7 +294,7 @@ def test_no_password_opens_every_admin_route():
         assert code == 200 and body == {"contract_version": "1.1", "authenticated": True,
                                         "login": False, "password_set": False,
                                         "expires_at": None}, body
-        assert not contract_check.check(body, "session")
+        assert not dash_contract.check(body, "session")
         assert "Set-Cookie" not in head
         for method, b in (("POST", {"token": ADMIN}), ("DELETE", None)):
             code, head, body = call(method, "/v1/dashboard/session", PROXY, b)
@@ -338,7 +338,7 @@ def test_a_password_brings_the_rule_back():
     assert body == {"status": "ok"}
     code, _, body = call("GET", "/v1/dashboard/session", dict(PROXY, **bearer(ADMIN)))
     assert code == 200 and body["login"] is True and body["password_set"] is True, body
-    assert not contract_check.check(body, "session")
+    assert not dash_contract.check(body, "session")
     assert "admin password: set" in auth.Auth(ADMIN).describe()
 
 
@@ -422,7 +422,7 @@ def test_login_off_opens_the_read_api_without_a_token():
                                         "login": False, "password_set": admin is not None,
                                         "expires_at": None}, body
         assert "Set-Cookie" not in head
-        assert not contract_check.check(body, "session")
+        assert not dash_contract.check(body, "session")
         # nothing to sign in to or out of
         for method, b in (("POST", {"token": ADMIN}), ("DELETE", None)):
             code, head, body = call(method, "/v1/dashboard/session", PROXY, b)
@@ -486,7 +486,7 @@ def test_export_follows_the_rule_of_the_log_route():
             code, head, body = call("GET", path, headers)
             codes.append(code)
             assert "WWW-Authenticate: Bearer" in head, (path, head)
-            assert not contract_check.check(body, "error"), body
+            assert not dash_contract.check(body, "error"), body
             assert "Content-Disposition" not in head, "a refusal is not a file"
         assert codes == [401, 401], (headers, codes)
     code, head, text = call("GET", EXPORT, dict(PROXY, **bearer(ADMIN)))

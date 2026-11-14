@@ -37,6 +37,7 @@ from http.server import ThreadingHTTPServer  # noqa: E402
 from server import app  # noqa: E402
 from server.api import auth, logbuf  # noqa: E402
 from tools import contract_check  # noqa: E402
+import dash_contract  # noqa: E402  (the engine's schemas; the page's are TandemApp's, ENG-413 WP10)
 
 SENTINEL = "qqz-SENTINEL-4d2e88-content"
 ADMIN = "adm-" + "5" * 40
@@ -131,7 +132,7 @@ def test_the_log_file_is_unchanged():
     assert [e["source"] for e in got] == ["req", "server", "cache", "stdout"], got
     assert got[0]["level"] == "info" and got[0]["request_id"] == "chatcmpl-0123456789abcdef01234567"
     assert got[2]["level"] == "warning" and got[3]["msg"] == "partial line"
-    assert all(not contract_check.check(e, "logs-line") for e in got)
+    assert all(not dash_contract.check(e, "logs-line") for e in got)
 
 
 def test_a_line_is_never_split_by_the_other_stream():
@@ -201,7 +202,7 @@ def test_live_follow_level_filter_and_resume():
             assert got and time.time() - t0 < 1.0, events
             assert got[0]["request_id"] and json.loads(body)["id"] == got[0]["request_id"]
             for e in _logs(events):
-                assert not contract_check.check(e, "logs-line"), e
+                assert not dash_contract.check(e, "logs-line"), e
             s.close()
 
             # the level filter
@@ -242,7 +243,7 @@ def test_the_heartbeat_and_follow_zero():
             s.close()
             head, body = _get("/v1/dashboard/logs?follow=0&backlog=10")
             assert head.startswith("HTTP/1.1 200"), head
-            assert not contract_check.check(body, "logs-json"), contract_check.check(body, "logs-json")
+            assert not dash_contract.check(body, "logs-json"), dash_contract.check(body, "logs-json")
             assert body["lines"][-1]["msg"] == "[server] something" and body["last_seq"] >= 1
             for q in ("?level=loud", "?backlog=9999", "?grep=" + "x" * 129, "?since=yesterday"):
                 head, body = _get("/v1/dashboard/logs" + q)
@@ -288,7 +289,7 @@ def test_a_slow_subscriber_is_bounded_and_told_about_the_gap():
                                      timeout=20.0)
             gaps = [e["data"]["dropped"] for e in events if e.get("event") == "gap"]
             assert gaps and gaps[0] > 0, events[-3:]
-            assert not contract_check.check({"dropped": gaps[0]}, "gap")
+            assert not dash_contract.check({"dropped": gaps[0]}, "gap")
             s.close()
     finally:
         httpd.shutdown()
@@ -858,7 +859,7 @@ def test_export_the_dashboard_gives_up_at_the_handler_timeout():
 
 
 def test_export_the_contract_example():
-    """`docs/contract/dashboard-v1/logs-export.example.txt` is a file this server could write: the
+    """The engine contract's `dashboard/logs-export.example.txt` is a file this server could write: the
     same header fields in the same order, every entry in the line format, the count its own."""
     with open(os.path.join(contract_check.ROOT, "logs-export.example.txt"), encoding="utf-8") as f:
         example = f.read()
@@ -877,10 +878,12 @@ def test_export_the_contract_example():
     assert entries[-1].startswith(head["last line"].split(" ")[0])
     assert [l.split(" ")[0] for l in entries] == sorted(l.split(" ")[0] for l in entries)
     assert any(not ENTRY.match(l) for l in body.split("\n")), "the example shows a traceback"
-    # the README names the route and the example
-    with open(os.path.join(contract_check.ROOT, "README.md"), encoding="utf-8") as f:
-        readme = f.read()
-    assert "GET /v1/dashboard/logs/export" in readme and "logs-export.example.txt" in readme
+    # the engine's contract names the route and holds the example (ENG-413 WP10: the engine's own,
+    # contracts/engine-api-v1, not the page's dashboard-v1)
+    with open(os.path.join(contract_check.CONTRACT, "routes.json"), encoding="utf-8") as f:
+        routes = json.load(f)["routes"]
+    assert any(r["path"] == "/v1/dashboard/logs/export" and r["method"] == "GET" for r in routes)
+    assert os.path.dirname(contract_check.ROOT) == contract_check.CONTRACT
 
 
 if __name__ == "__main__":
