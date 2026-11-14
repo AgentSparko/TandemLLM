@@ -33,6 +33,7 @@ COPY pyproject.toml VERSION MANIFEST.in LICENSE COMMERCIAL-LICENSE.md NOTICE ./
 COPY docs/proxy.md docs/proxy.md
 COPY proxy proxy
 COPY chatd chatd
+COPY ops/chatd.sh ops/chatd.sh
 COPY tandemapp tandemapp
 COPY packages packages
 COPY packaging/tandemapp_build.py packaging/tandemapp_build.py

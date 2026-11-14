@@ -55,6 +55,10 @@ tests/test_engine_api_contract.py.
      the health example says SPEAKS; node/control.json `chat` is what proxy/nodechat.py does:
      QSE_CHATD=node from 1.6, the tandem-node chat verbs, 3 starts an hour
                                                                   test_additive_1_6
+ 12  1.7 (ENG-413 WP7) is additive: the 1.6 examples (compat/1.6/) validate, the routes are 1.6's,
+     the health example says SPEAKS; node/control.json `chat` says the engine runs no chatd (node
+     or off, on read as node, default off), TandemNode hands over within one major only, and the
+     install names --with-chat --app-wheel and the venv's tandem-node   test_additive_1_7
 
 Standard library only; the fake engines are threads on loopback ports.
 
@@ -767,12 +771,12 @@ def test_additive_1_6():
     for name in ("health.example.json", "health.stage-front.example.json",
                  "health.stage-tail.example.json"):
         assert ok(_ex("compat/1.5/" + name), health), name
-    old, doc = _ex("compat/1.5/routes.json"), _routes()
-    assert (old["version"], doc["version"]) == ("1.5", "1.6") == ("1.5", engineapi.SPEAKS)
+    old, doc = _ex("compat/1.5/routes.json"), _ex("compat/1.6/routes.json")    # 1.6 as it was
+    assert (old["version"], doc["version"]) == ("1.5", "1.6")
     assert {k: v for k, v in doc.items() if k != "version"} == \
         {k: v for k, v in old.items() if k != "version"}, "1.6 changes no route"
-    ex = _ex("health.example.json")
-    assert ok(ex, health) and ex["engine_api"] == engineapi.SPEAKS
+    ex = _ex("compat/1.6/health.example.json")
+    assert ok(ex, health) and ex["engine_api"] == "1.6"
     for said in ("1.0", "1.5", "1.6"):
         assert engineapi.read(dict(ex, engine_api=said))["ok"], said
     with open(os.path.join(CONTRACT, "node", "control.json")) as f:
@@ -783,6 +787,39 @@ def test_additive_1_6():
     assert chat["node_cli"] == "tandem-node chat" and chat["node_verbs"] == list(nodechat.VERBS)
     assert chat["watch"]["starts_per_hour"] == nodechat.MAX_STARTS
     return f"1.5 answers valid, {len(doc['routes'])} routes as 1.5's, chat: {'/'.join(chat['node_verbs'])}"
+
+
+def test_additive_1_7():
+    def ok(doc, schema):
+        return not contract_check.validate(doc, schema, root=CONTRACT)
+    health = contract_check.load("health", CONTRACT)
+    for name in ("health.example.json", "health.stage-front.example.json",
+                 "health.stage-tail.example.json"):
+        assert ok(_ex("compat/1.6/" + name), health), name
+        a, b = _ex(name), _ex("compat/1.6/" + name)
+        assert {k: v for k, v in a.items() if k != "engine_api"} == \
+            {k: v for k, v in b.items() if k != "engine_api"}, name
+    old, doc = _ex("compat/1.6/routes.json"), _routes()
+    assert (old["version"], doc["version"]) == ("1.6", "1.7") == ("1.6", engineapi.SPEAKS)
+    assert {k: v for k, v in doc.items() if k != "version"} == \
+        {k: v for k, v in old.items() if k != "version"}, "1.7 changes no route"
+    ex = _ex("health.example.json")
+    assert ok(ex, health) and ex["engine_api"] == engineapi.SPEAKS
+    for said in ("1.0", "1.6", "1.7"):
+        assert engineapi.read(dict(ex, engine_api=said))["ok"], said
+    with open(os.path.join(CONTRACT, "node", "control.json")) as f:
+        chat = json.load(f)["chat"]
+    assert chat["values"] == ["on", "off", "node"] and chat["default"] == "off"
+    assert chat["aliases"] == {"on": nodechat.NODE_VALUE} and "none since 1.7" in chat["engine_launcher"]
+    # the hand-over stays within the contract's major (SRV-823): 1.6 and later, never 2.x
+    assert nodechat.api_hands_over("1.6") and nodechat.api_hands_over("1.7")
+    assert not nodechat.api_hands_over("1.5") and not nodechat.api_hands_over("2.0")
+    assert "same major" in chat["about"]
+    assert chat["install"]["flags"] == ["--with-chat", "--app-wheel"]
+    assert "venv/bin/tandem-node" in chat["install"]["node_bin"]
+    assert "--with-chat --app-wheel" in chat["update"] and "--runtime-only never" in chat["update"]
+    return f"1.6 answers valid, {len(doc['routes'])} routes as 1.6's, chat: node or off, install " \
+           f"{' '.join(chat['install']['flags'])}"
 
 
 if __name__ == "__main__":

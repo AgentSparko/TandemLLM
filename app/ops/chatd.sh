@@ -7,21 +7,24 @@
 #   bash app/ops/chatd.sh restart                       stop, then start
 #   bash app/ops/chatd.sh status                        pid, interpreter, data, URL and GET /health
 #
-# From TandemApp's own root the path is ops/chatd.sh. The engine's ops/start.sh starts it once the
-# engine answers /health, `tandem stop` stops it first and `tandem chat start|stop|restart|status|logs`
-# calls this script (OPS-155), until ENG-413; with QSE_CHATD=node TandemNode does all of that instead
-# (`tandem-node chat ...`, SRV-823). Its own process, never the engine's: ops/stop.sh, an
-# engine restart and a hold leave it alone, and it does not touch the engine (ops/engines.sh does
-# not count it). It stays in the checkout (DIR/src/app/ops in an install): the `chatd` package is
-# found from here.
+# From TandemApp's own root the path is ops/chatd.sh; a wheel carries it as chatd/ops/chatd.sh
+# (OPS-250). TandemNode runs it when it owns chatd (`tandem-node chat ...`, SRV-823); an engine from
+# before engine API 1.7 ran it from its own launchers (ops/start.sh once the engine answered
+# /health, `tandem stop`, `tandem chat ...`, OPS-155), and since 1.7 the engine runs none. Its own
+# process, never the engine's: ops/stop.sh, an engine restart and a hold leave it alone, and it
+# does not touch the engine (ops/engines.sh does not count it). The `chatd` package is found from
+# here.
 #
-# Paths: HERE is TandemApp's root, this file's ../ (the chatd package, dashboard/dist). TOP holds
-# run/, logs/ and venv/: the repository's root when HERE is its app/ (../server/app.py, the engine,
-# is there: a checkout, or DIR/src in an install), else HERE. UP is TOP's parent: an install's DIR.
+# Paths: HERE is TandemApp's root, this file's ../ (the chatd package, dashboard/dist), or in a
+# wheel install the folder that holds the chatd package (site-packages: this file is
+# <site-packages>/chatd/ops/chatd.sh). TOP holds run/, logs/ and venv/: the repository's root when
+# HERE is its app/ (../server/app.py, the engine, is there: a checkout, or DIR/src in an install),
+# ~/.tandemllm for a wheel, else HERE. UP is TOP's parent: an install's DIR.
 #
 # The interpreter, first match: CHATD_PY; PY (serve.env's, exported by start.sh and bin/tandem);
-# the install's venv beside the checkout ($UP/venv/bin/python); $TOP/venv/bin/python;
-# $HERE/venv/bin/python; $VIRTUAL_ENV/bin/python; python3, said so with its version. chatd needs
+# a wheel's own venv (site-packages/../../../bin/python); the install's venv beside the checkout
+# ($UP/venv/bin/python); $TOP/venv/bin/python; $HERE/venv/bin/python; $VIRTUAL_ENV/bin/python;
+# python3, said so with its version. chatd needs
 # only the standard library; the MCP servers' stored secrets need the venv's `cryptography`, and
 # pyproject.toml asks for 3.11.
 #
@@ -39,9 +42,15 @@
 # whose server has no /v1/chat-app forward yet (chatd/front.py).
 set -eu
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
+WHEEL_PY=""
+if [ "$(basename "$HERE")" = chatd ] && [ -f "$HERE/__init__.py" ] && [ -f "$HERE/__main__.py" ]; then
+    HERE="$(cd "$HERE/.." && pwd)"          # a wheel install: HERE holds the chatd package
+    WHEEL_PY="$(cd "$HERE/../../.." 2>/dev/null && pwd)/bin/python"
+fi
 TOP="$HERE"
 if [ -f "$HERE/../server/app.py" ]; then TOP="$(cd "$HERE/.." && pwd)"; fi
 UP="$(cd "$TOP/.." && pwd)"                  # an install's DIR when TOP is DIR/src
+if [ -n "$WHEEL_PY" ]; then TOP="$HOME/.tandemllm"; UP="$HOME"; fi
 if [ -z "${REPO:-}" ] && [ -f "$UP/.tandemllm-install" ] && [ -f "$UP/run/ops/serve.env" ]; then
     set +u; set -a; . "$UP/run/ops/serve.env"; set +a; set -u
 fi
@@ -84,7 +93,7 @@ pick_python() {
         PYBIN="$CHATD_PY"; PYVER="$v"; return 0
     fi
     [ "$HERE" = "$TOP" ] || here_venv="$HERE/venv/bin/python"     # the same venv when HERE is TOP
-    for c in "${PY:-}" "$UP/venv/bin/python" "$TOP/venv/bin/python" "$here_venv" \
+    for c in "${PY:-}" "$WHEEL_PY" "$UP/venv/bin/python" "$TOP/venv/bin/python" "$here_venv" \
              "${VIRTUAL_ENV:+$VIRTUAL_ENV/bin/python}"; do
         [ -n "$c" ] && [ -e "$c" ] || continue
         if [ -f "$c" ] && [ -x "$c" ] && v="$(version_of "$c")"; then
@@ -138,7 +147,8 @@ start() {
     forward_key
     export QSE_CHAT_ENGINE="${QSE_CHAT_ENGINE:-http://127.0.0.1:${PORT:-8000}}"
     FRONT=()
-    if [ "${1:-}" = "--front" ]; then FRONT=(--front "$2" --dashboard "$HERE/dashboard/dist"); fi
+    DASH="$HERE/dashboard/dist"; [ -z "$WHEEL_PY" ] || DASH="$HERE/proxy/dashboard"
+    if [ "${1:-}" = "--front" ]; then FRONT=(--front "$2" --dashboard "$DASH"); fi
     cd "$HERE"
     # as start.sh launches the engine: its own session, nothing inherited above stdio (a hold's
     # box lock came down to the engine that way once)

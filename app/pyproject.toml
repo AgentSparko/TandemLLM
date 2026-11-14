@@ -10,8 +10,9 @@
 #                                  the background); the same as `brew install tandemapp`
 #
 # The wheel never pulls torch or numpy. It carries proxy/, chatd/ and tandemapp/, the built page
-# (dashboard/dist, as proxy/dashboard) and the shipped texts the conductor starts with (packages/,
-# as proxy/packages). The version is VERSION beside this file (proxy/_version.py reads it; an sdist
+# (dashboard/dist, as proxy/dashboard), the shipped texts the conductor starts with (packages/,
+# as proxy/packages) and chatd's launcher (ops/chatd.sh, as chatd/ops/chatd.sh: TandemNode runs it,
+# OPS-250). The version is VERSION beside this file (proxy/_version.py reads it; an sdist
 # carries it through MANIFEST.in).
 #
 # The built page is not in git (OPS-246): build it first (`python3 tools/dashboard_bundle.py build`,
@@ -59,6 +60,7 @@ tandem-node = "proxy.nodeagent:main"
 include-package-data = false
 packages = [
   "chatd",
+  "chatd.ops",
   "proxy",
   "proxy.adapters",
   "proxy.dashboard",
@@ -72,11 +74,13 @@ packages = [
 ]
 
 [tool.setuptools.package-dir]
+"chatd.ops" = "ops"
 "proxy.dashboard" = "dashboard/dist"
 "proxy.dashboard.assets" = "dashboard/dist/assets"
 "proxy.packages" = "packages"
 
 [tool.setuptools.package-data]
+"chatd.ops" = ["chatd.sh"]
 proxy = ["*.json"]
 "proxy.dashboard" = ["*.html", "*.js", "*.json", "*.ico", "*.svg", "*.png", "*.webmanifest"]
 "proxy.dashboard.assets" = ["*"]

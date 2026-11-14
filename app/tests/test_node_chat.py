@@ -21,9 +21,9 @@ The test matrix, the Gherkin of SRV-823 (the rewrite of the engine's tests/test_
      older than 2,400 s is stale                                  test_setup_mode_and_the_pause_file
   4  engine mode starts none; the engine seen coming up in engine mode stops a running chatd
      once; the first look after the agent starts stops nothing   test_engine_mode
-  5  one owner: the engine's QSE_CHATD on (or unset) and node on an engine before 1.6 start
-     nothing and say why once an hour; node on 1.6, off, and a box without an engine env start
-     it                                                           test_one_owner
+  5  one owner: the engine's QSE_CHATD on (or unset) and node on an engine before 1.6 or of
+     another major (2.x, ENG-413 WP7) start nothing and say why once an hour; node on 1.6 and
+     1.7, off, and a box without an engine env start it          test_one_owner
   6  an engine start this agent ran wakes the watcher: chatd starts at once, outside the count
                                                                   test_the_engine_start_kicks
   7  not this node's (an engine box without TandemNode's chat): every verb 409 not_owned, the
@@ -384,6 +384,7 @@ def test_one_owner():
     try:
         for chatd, api, want in (("on", "1.6", "two_owners"), (None, "1.6", "two_owners"),
                                  ("node", "1.5", "two_owners"), ("node", None, "two_owners"),
+                                 ("node", "2.0", "two_owners"), ("node", "2.3", "two_owners"),
                                  ("node", "1.6", "started"), ("node", "1.7", "started"),
                                  ("off", "1.0", "started")):
             eng.doc["engine_api"] = api
@@ -395,7 +396,9 @@ def test_one_owner():
                 assert got == [want, want] and starts(d) == 0, (chatd, api, got, marks(d))
                 said = [m for m in buf if "not started here" in m]
                 assert len(said) == 1, (chatd, api, buf)                  # once an hour
-                if chatd == "node":
+                if chatd == "node" and (api or "").startswith("2."):
+                    assert f"engine API {api}, another major" in said[0], said
+                elif chatd == "node":
                     assert "does not know QSE_CHATD=node" in said[0] and "1.6" in said[0], said
                 else:
                     assert "QSE_CHATD=on" in said[0] and "QSE_CHATD=node" in said[0], said
@@ -553,6 +556,10 @@ def test_the_launcher_call():
         assert nodechat.api_at_least("1.6") and nodechat.api_at_least("1.10") and \
             nodechat.api_at_least("2.0") and not nodechat.api_at_least("1.5") and \
             not nodechat.api_at_least(None) and not nodechat.api_at_least("x")
+        # the hand-over itself: 1.6 or later within the major only (ENG-413 WP7)
+        assert nodechat.api_hands_over("1.6") and nodechat.api_hands_over("1.10") and \
+            not nodechat.api_hands_over("2.0") and not nodechat.api_hands_over("1.5") and \
+            not nodechat.api_hands_over(None) and not nodechat.api_hands_over("1.x")
         shutil.rmtree(td, ignore_errors=True)
     finally:
         eng.close()

@@ -148,6 +148,8 @@ if grep -Eq "tests/|node_modules|\.safetensors|\.pt$|/src/.*\.ts$" "$OUT/wheel-f
 fi
 grep -q "proxy/dashboard/index.html" "$OUT/wheel-files.txt" || fail "no built page in the wheel"
 grep -q "proxy/dashboard/bundle.json" "$OUT/wheel-files.txt" || fail "no bundle manifest in the wheel"
+# chatd's launcher, which TandemNode runs from a wheel install (OPS-250)
+grep -q "chatd/ops/chatd.sh" "$OUT/wheel-files.txt" || fail "no chatd launcher (chatd/ops/chatd.sh) in the wheel"
 # every file of the built page, as proxy/dashboard/<path> (sw.js was missing until SRV-747)
 "$PY" -I - "$WHL" "$T/src/dashboard/dist" >"$OUT/dist.log" 2>&1 <<'EOF' \
   || fail "dashboard/dist files missing from the wheel (dist.log)"

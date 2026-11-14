@@ -6,17 +6,20 @@ engine box.
     chat.act(action, who)        start | stop | restart: a job (POST /node/chat/{action})
     chat.tick()                  the watcher, once a minute; chat.kick() after an engine start here
 
-WHO OWNS CHATD. One owner at a time. The engine's launchers own it while the engine's QSE_CHATD is
-on, its default: ops/start.sh starts it once the engine answers, ops/watchdog.sh starts it again,
-bin/tandem start and stop. This agent owns it with `tandem-node serve --chat on`
-(TANDEM_NODE_CHAT=on) or `"own": true` in chat.json; the engine gives it up with QSE_CHATD=node
-(engine API 1.6, contracts/engine-api-v1/node/control.json `chat`) or QSE_CHATD=off (any engine).
-While the engine still says on, or says node without knowing it (an engine API before 1.6), the
-watcher starts nothing and says why once an hour: two owners would race. A hand verb still acts.
+WHO OWNS CHATD. One owner at a time. Up to engine API 1.6 the engine's launchers own it while the
+engine's QSE_CHATD is on, their default: ops/start.sh starts it once the engine answers,
+ops/watchdog.sh starts it again, bin/tandem start and stop. This agent owns it with `tandem-node
+serve --chat on` (TANDEM_NODE_CHAT=on) or `"own": true` in chat.json; the engine gives it up with
+QSE_CHATD=node (engine API 1.6 or later within one major, contracts/engine-api-v1/node/control.json
+`chat`) or QSE_CHATD=off (any engine). A 1.7 engine has no chatd launcher: its serve.env reads on
+as node and unset as off, so this agent reads node or off from it. While the engine still says on,
+or says node without knowing it (an engine API before 1.6, or of another major), the watcher
+starts nothing and says why once an hour: two owners would race. A hand verb still acts.
 Without ownership every verb is refused (409 `not_owned`) and the watcher does nothing: an engine
 box without TandemNode's chat keeps the engine's launchers, and an engine-only box has no chatd.
 
-THE LAUNCHER is TandemApp's ops/chatd.sh, the script the engine's launchers run: its pid file
+THE LAUNCHER is TandemApp's ops/chatd.sh (chatd/ops/chatd.sh in a wheel install, OPS-250), the
+script the engine's launchers ran before engine API 1.7: its pid file
 (<data>/chatd.pid, so either side sees the other's chatd), its interpreter order, the forward key
 from the engine's secrets.env. It runs in the engine's environment as ops/start.sh exports it
 (`serve_env`, which reads its local.env, then the secrets.env it names; chatd.sh holds the admin and
@@ -119,6 +122,25 @@ def api_at_least(v, need=NEEDS_API) -> bool:
     return bool(m) and (int(m[1]), int(m[2])) >= need
 
 
+def api_hands_over(v, need=NEEDS_API) -> bool:
+    """An engine API that knows QSE_CHATD=node: `need` or a later minor of the same major. Another
+    major is a contract this TandemApp does not read (proxy/engineapi.py calls it not ok), so it
+    gets no hand-over either."""
+    m = re.fullmatch(r"(\d+)\.(\d+)", str(v or ""))
+    return bool(m) and int(m[1]) == need[0] and int(m[2]) >= need[1]
+
+
+def default_launcher(root: str = ROOT) -> str:
+    """TandemApp's ops/chatd.sh in a checkout; in a wheel install, where `root` is site-packages,
+    the chatd package's copy, chatd/ops/chatd.sh (OPS-250). The checkout's path when neither is
+    there, so the refusal names where it was looked for."""
+    own = os.path.join(root, "ops", "chatd.sh")
+    if os.path.isfile(own):
+        return own
+    packaged = os.path.join(root, "chatd", "ops", "chatd.sh")
+    return packaged if os.path.isfile(packaged) else own
+
+
 def _parse_status(lines: list[str]) -> dict:
     """chatd.sh status's lines: pid, url, data and tree of a running chatd, or url and data of
     none."""
@@ -146,7 +168,7 @@ class Chat:
         self.log, self.clock, self.every_s = log, clock, every_s
         self.env = dict(os.environ if env is None else env)
         self.which = which
-        self.launcher = _path(cfg.get("launcher")) or os.path.join(ROOT, "ops", "chatd.sh")
+        self.launcher = _path(cfg.get("launcher")) or default_launcher()
         self.log_path = _path(cfg.get("log")) or os.path.join(self.state_dir, "logs", "chatd.log")
         self.watch_path = os.path.join(self.state_dir, "chat.watch")
         self.serve_env = _path(cfg.get("serve_env"))
@@ -230,8 +252,12 @@ class Chat:
             if h is None:
                 return None, "the engine does not answer: its engine API is not known yet", v
             api = h.get("engine_api")
-            if api_at_least(api):
+            if api_hands_over(api):
                 return True, None, v
+            if api_at_least(api):
+                return False, (f"the engine speaks engine API {api}, another major than this "
+                               f"TandemNode's 1.x: it does not hand chatd over on QSE_CHATD=node "
+                               f"(QSE_CHATD=off does)"), v
             return False, (f"the engine (engine API {api or 'unknown'}) does not know "
                            f"QSE_CHATD=node: its launchers would start chatd too; it needs 1.6, "
                            f"or QSE_CHATD=off"), v

@@ -41,7 +41,7 @@
     ]
   },
   "chat": {
-    "about": "Since engine API 1.6: who runs chatd, the Chat tab's service, on an engine box. The engine's QSE_CHATD (run/local.env): on, the default, its launchers run it (ops/start.sh starts it once /health answers, ops/watchdog.sh starts a dead one at most 3 times an hour, bin/tandem start starts it and bin/tandem stop stops it first); off, nothing here starts it; node, TandemNode owns it: the launchers neither start nor stop it and say so, the watchdog leaves it alone, and bin/tandem chat runs tandem-node chat. serve.env's engine mode keeps node and turns every other value off. An engine before 1.6 reads node as on, so TandemNode hands chatd over only to an engine whose /health says 1.6 or later, or that says off.",
+    "about": "Since engine API 1.6: who runs chatd, the Chat tab's service, on an engine box. The engine's QSE_CHATD (run/local.env, or install.sh's line in run/ops/serve.env): node, TandemNode owns it: the launchers neither start nor stop it and say so, the watchdog leaves it alone, and bin/tandem chat runs tandem-node chat; off, nothing runs it. Up to 1.6, on (the default) meant the engine's launchers run it. Since 1.7 the engine has no chatd launcher at all: serve.env's mode block reads on as node (ops/start.sh says so in one line) and an unset or unknown value as off, so TandemNode sees node or off from a 1.7 engine. serve.env's engine mode keeps node and turns every other value off. An engine before 1.6 reads node as on, so TandemNode hands chatd over only to an engine whose /health says 1.6 or later within the same major, or that says off.",
     "key": "QSE_CHATD",
     "values": [
       "on",
@@ -49,6 +49,11 @@
       "node"
     ],
     "node": "node",
+    "default": "off",
+    "aliases": {
+      "on": "node"
+    },
+    "engine_launcher": "none since 1.7: ops/start.sh, ops/watchdog.sh, bin/tandem and install.sh never run a chatd launcher",
     "node_cli": "tandem-node chat",
     "node_verbs": [
       "start",
@@ -63,6 +68,15 @@
     "watch": {
       "starts_per_hour": 3,
       "only_when": "/health 200, no fresh .watchdog.off, not setup mode, not engine mode"
-    }
+    },
+    "install": {
+      "flags": [
+        "--with-chat",
+        "--app-wheel"
+      ],
+      "about": "Since 1.7: install.sh --with-chat --app-wheel FILE [--app-wheel-sha256 HEX] installs TandemApp's wheel (a local file) into the engine's venv with the engine's pins held, writes QSE_CHATD=node and QSE_MODE=chat, and writes TandemNode's systemd user unit (tandem-node unit --chat on --tandem-dir DIR); its sha256 is kept in DIR/state/tandemapp-wheel.json. --with-chat with no wheel keeps a TandemApp this install already has, else stops and says where to get one.",
+      "node_bin": "DIR/venv/bin/tandem-node; bin/tandem node and bin/tandem chat run it (TANDEM_NODE_BIN first, then the venv's, then PATH)"
+    },
+    "update": "Since 1.7: an install from before 1.7 runs its own copies (run/ops/*.sh, run/ops/serve.env, bin/tandem) until install.sh writes them again. A re-run of install.sh on such an install in chat mode whose chatd the engine ran (QSE_CHATD on or unset) stops before it changes anything, unless it is told --with-chat --app-wheel FILE (TandemNode takes chatd over: the same data folder, pid file and port) or --engine-only; --runtime-only never writes them."
   }
 }

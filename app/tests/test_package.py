@@ -29,7 +29,7 @@ from proxy import _version  # noqa: E402
 
 KEY = "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s="
 # packages of the wheel that hold data alone (no .py): the built page and the shipped texts
-DATA_ONLY = ("proxy.dashboard", "proxy.packages")
+DATA_ONLY = ("proxy.dashboard", "proxy.packages", "chatd.ops")
 # the built page's packages: their folder (dashboard/dist) is a build output, not in git (OPS-246)
 BUILT = ("proxy.dashboard", "proxy.dashboard.assets")
 
@@ -148,6 +148,10 @@ def test_the_dash_image_copies_every_package():
     st = _toml()["tool"]["setuptools"]
     dirs = st.get("package-dir", {})
     srcs = {dirs[p] if p in dirs else p.split(".")[0] for p in st["packages"]}
+    # a folder only some of whose files are package data is COPYed by those files (OPS-250: ops/
+    # gives the wheel chatd.sh alone)
+    files = {dirs[p]: [f"{dirs[p]}/{g}" for g in st["package-data"].get(p, [])] for p in dirs
+             if dirs[p] == "ops"}
 
     def under(d, roots):
         return any(d == r or d.startswith(r + "/") for r in roots)
@@ -164,8 +168,9 @@ def test_the_dash_image_copies_every_package():
         if under(d, staged):
             assert under("dashboard", allowed), "the Node stage needs dashboard/ in the context"
             continue
-        assert under(d, copied), f"{d} is not COPYed in packaging/Dockerfile.app"
-        assert under(d, allowed), f"{d} is not allowed in packaging/Dockerfile.app.dockerignore"
+        for each in files.get(d, [d]):
+            assert under(each, copied), f"{each} is not COPYed in packaging/Dockerfile.app"
+            assert under(each, allowed), f"{each} is not allowed in packaging/Dockerfile.app.dockerignore"
     assert "dashboard/dist" in staged
 
 

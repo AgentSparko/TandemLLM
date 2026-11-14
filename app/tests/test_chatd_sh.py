@@ -30,9 +30,14 @@ The test matrix, the Gherkin of OPS-153:
      TandemApp in app/ beside the engine) or TandemApp's own root; chatd runs in TandemApp's tree
                                                                      test_run_logs_and_the_venv_follow_the_tree
 
+  11 stop --this-tree leaves another tree's chatd running and stops this tree's (from the engine's
+     tests/test_engine_only.py, which the engine dropped with its launcher at ENG-413 WP7; Linux)
+                                                                     test_stop_this_tree_only
+  12 the script parses (from the engine's tests/test_ops_scripts.py, ENG-413 WP7)
+                                                                     test_the_script_parses
+
 Edge cases: a port another program holds fails visibly and names the port, status and restart
-(test_a_taken_port_status_and_restart); the syntax check of chatd.sh is in
-tests/test_ops_scripts.py::test_the_scripts_parse.
+(test_a_taken_port_status_and_restart).
 
 CPU only, standard library only. Run: python tests/test_chatd_sh.py
 """
@@ -499,6 +504,43 @@ def test_run_logs_and_the_venv_follow_the_tree():
             assert stop.returncode == 0 and t.pid() is None, (layout, _out(stop))
         finally:
             t.close()
+
+
+
+def test_stop_this_tree_only():
+    if not os.path.isdir("/proc/self"):
+        print("    (skipped: the tree check reads /proc -- run it on the box)")
+        return "skipped off Linux"
+    d = tempfile.mkdtemp(prefix="chatd-this-tree-")
+    data, other = os.path.join(d, "data"), os.path.join(d, "other")
+    os.makedirs(data)
+    os.makedirs(other)
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": d, "REPO": d, "QSE_CHAT_DATA": data,
+           "QSE_CHATD_ENV": os.path.join(d, "none.env"), "QSE_CHAT_URL": "http://127.0.0.1:9"}
+    procs = []
+    try:
+        for cwd, kept in ((other, True), (ROOT, False)):
+            p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", "-m", "chatd"], cwd=cwd)
+            procs.append(p)
+            with open(os.path.join(data, "chatd.pid"), "w") as fh:
+                fh.write(f"{p.pid}\n")
+            r = subprocess.run(["bash", os.path.join(ROOT, "ops", "chatd.sh"), "stop", "--this-tree"], env=env,
+                               capture_output=True, text=True, timeout=60)
+            assert r.returncode == 0, r.stdout + r.stderr
+            if kept:
+                assert p.poll() is None and "another tree's chatd" in r.stdout, r.stdout
+            else:
+                assert p.wait(timeout=30) is not None and "[chatd] stopped" in r.stdout, r.stdout
+    finally:
+        for p in procs:
+            p.kill()
+        shutil.rmtree(d, ignore_errors=True)
+    return "another tree's chatd stays; this tree's stops"
+
+
+def test_the_script_parses():
+    r = subprocess.run(["bash", "-n", os.path.join(ROOT, "ops", "chatd.sh")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
 
 
 if __name__ == "__main__":
