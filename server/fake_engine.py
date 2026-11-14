@@ -555,7 +555,7 @@ def load(app, a) -> None:
             if sup is not None:
                 act = app._sp1(sup, think, n, 1 << 30)
                 if act is not None:
-                    if act.kind == app.GIVE_UP:
+                    if act.kind == app.ext_mod.GIVE_UP:
                         return
                     # SP1: a hidden close; what is left of the reasoning is not written
                     hidden = act.ids[:len(act.ids) - len(act.visible)]
@@ -637,7 +637,7 @@ def load(app, a) -> None:
         usage_default=(a.usage_default == "on"),
         usage_context=a.usage_context,
         # SRV-475: a test's checkpoint sampling (a directory with a generation_config.json)
-        card_sampling=app.loopescape_mod.card_sampling(os.environ.get("QSE_FAKE_CARD_DIR")))
+        card_sampling=app.card_sampling(os.environ.get("QSE_FAKE_CARD_DIR")))
     app.generate_stream = generate_stream
     app.context_choice = context_choice
     if int(getattr(a, "parallel", 1) or 1) > 1:

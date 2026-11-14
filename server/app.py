@@ -103,31 +103,20 @@ from server import cache_peek, model_card, tokenize_api  # noqa: E402
 from tandemapp import chat_forward  # noqa: E402
 from server import mode as mode_mod  # noqa: E402  (OPS-260 engine or chat, and what runs beside the engine)
 from server import ext as ext_mod  # noqa: E402  (ENG-413 WP3a the engine-ext-v1 host)
-from tandemapp import memblock  # noqa: E402
 from server.api import compaction as compaction_mod  # noqa: E402
 from tandemapp import session_tokens as session_tokens_mod  # noqa: E402
 from server import preempt  # noqa: E402
 from server import queue_wait as qwait  # noqa: E402
-from tandemapp.conductor import monitor as conductor  # noqa: E402
-from tandemapp.conductor.monitor.policy import (  # noqa: E402
-    CONTINUE_HIDDEN, GIVE_UP, REGENERATE_CALL,
-)
+# ENG-413 WP3b: the request path asks the conductor and its session monitor only through the
+# extension (server/ext.py, the interim adapter server/ext_app.py). Left here: the hand-over of the
+# engine-only screens (WP5)
 from tandemapp.conductor import routes as conductor_routes  # noqa: E402
-from tandemapp.conductor import memory as conductor_memory  # noqa: E402
-from tandemapp.conductor import narrator as narrator_mod  # noqa: E402
-from tandemapp.conductor import voice as voice_mod  # noqa: E402
-from tandemapp.conductor import schema as conductor_schema  # noqa: E402
 from server.conductor import shadow as shadow_mod  # noqa: E402
 from server.conductor import inproc as conductor_inproc  # noqa: E402
-from tandemapp.conductor import incontext as incontext_mod  # noqa: E402
-from tandemapp.conductor import outcomes as conductor_outcomes  # noqa: E402
-from tandemapp.conductor import states as states_mod  # noqa: E402
-from tandemapp.conductor import loopescape as loopescape_mod  # noqa: E402
-from tandemapp.conductor import redact as redact_mod  # noqa: E402
-from tandemapp.conductor.classify import USER_AGENT as CLASSIFY_UA  # noqa: E402
-from tandemapp.conductor.store import ConfigError as ConductorConfigError  # noqa: E402
-from tandemapp.conductor.router import COMPOSITE as COMPOSITE_NAME  # noqa: E402
-from tandemapp.conductor.schema import SIDE_FIRST_MAX_TOKENS  # noqa: E402
+#: the User-Agent of the conductor's own questions to this engine (TandemApp's
+#: tandemapp/conductor/classify.py USER_AGENT, held equal by tests/test_ext_request_path.py): their
+#: turns wait behind the questions they asked, never the other way round
+OWN_QUESTION_UA = "tandem-conductor/1"
 
 from server import slots as slots_mod  # noqa: E402
 
@@ -5759,12 +5748,11 @@ RANK_MEMORY = 3
 
 
 def _writer_ctx():
-    """(the conductor's memory, the writer's settings), or (None, None) without a conductor."""
-    cond = STATE.get("conductor")
-    if cond is None or getattr(cond, "memory", None) is None:
+    """(the conductor's memory, the writer's settings), or (None, None) without a conductor: the
+    extension's (ENG-413 WP3b, interim)."""
+    if STATE.get("conductor") is None:
         return None, None
-    from tandemapp.conductor import memwriter
-    return cond.memory, memwriter.settings_of(cond.memory.cfg())
+    return EXT.interim("writer")
 
 
 def memory_once() -> str:
@@ -5895,7 +5883,6 @@ def _writer_turn(mem, cfg, conv, r, trigger, gate, stop=lambda: False, yielded=N
     the record plus the writer's user turn, thinking off, at most `max_tokens`, in scratch rows;
     the conversation's bookkeeping is put back after it as the preparer does. `stop()` ends it
     at the next chunk or block."""
-    from tandemapp.conductor import memwriter
     tok = STATE["tok"]
     said = ""
     text, existing = mem.writer.instructions(conv, cfg)
@@ -5905,7 +5892,7 @@ def _writer_turn(mem, cfg, conv, r, trigger, gate, stop=lambda: False, yielded=N
     # banned for the turn (a logit bias of -100: after a compaction Qwen answered a `bash` call)
     prefill = str(cfg.get("prefill") or "")
     pre_ids = list(tok(prefill, add_special_tokens=False).input_ids) if prefill else []
-    ban = memwriter.ban_ids(tok) if cfg.get("ban_tool_call") else {}
+    ban = EXT.interim("writer_ban_ids", tok) if cfg.get("ban_tool_call") else {}
     tail = tail + pre_ids
     cap = int(cfg["max_tokens"])
     info = {"gate": gate, "tail": len(tail), "record": r.at, "existing": len(existing),
@@ -5945,7 +5932,8 @@ def _writer_turn(mem, cfg, conv, r, trigger, gate, stop=lambda: False, yielded=N
                 break
             # a tool call that is not a memory block ends the turn at its function's name (after
             # a compaction Qwen answered an empty or a `bash` call, 2026-10-05): it writes nothing
-            cut = memwriter.foreign_call(prefill + tok.decode(ids, skip_special_tokens=False))
+            cut = EXT.interim("writer_foreign_call",
+                              prefill + tok.decode(ids, skip_special_tokens=False))
             if cut is not None:
                 break
             if stop():
@@ -7304,8 +7292,7 @@ def _probe_done(rec) -> None:
         row = plan.row if plan is not None and plan.row is not None else {}
         stage = STATE.get("probe_stage")
         if stage is not None and plan is not None and plan.router_cfg is not None:
-            from tandemapp.conductor import schema as cond_schema
-            ps = cond_schema.probe_stage(plan.router_cfg)
+            ps = EXT.interim("probe_stage", plan) or {"mode": "off"}
             if ps["mode"] != "off" and row.get("source") != "probe":
                 row.setdefault("extra", {})["probe"] = stage.stage(
                     ps, cap.vector("prompt"), cap.names, reason="shadow")
@@ -8266,7 +8253,9 @@ def served_name() -> str:
     model, the owner 2026-10-01), else `--served-model`. `STATE["model"]` stays the base engine's name
     (`base_model` where a surface shows both): the cache label, the metrics and the classifier's own
     call keep using it."""
-    return COMPOSITE_NAME if STATE.get("conductor") is not None else str(STATE.get("model") or "")
+    if STATE.get("conductor") is not None:
+        return EXT.interim("served_name") or str(STATE.get("model") or "")   # ENG-413 WP3b
+    return str(STATE.get("model") or "")
 
 
 def _card_facts() -> dict:
@@ -9965,7 +9954,7 @@ class Handler(BaseHTTPRequestHandler):
             # SRV-769: the conductor's question names its turn; the turn waits for the answer, so it is
             # not on its way while the question is
             par = (self.headers.get(ledger_mod.PARENT_HEADER)
-                   if (self.headers.get("User-Agent") or "").startswith(CLASSIFY_UA) else None)
+                   if (self.headers.get("User-Agent") or "").startswith(OWN_QUESTION_UA) else None)
             par = par[:80] if isinstance(par, str) and par else None
             if par is not None and PREFILL_BURST_ASKING != "in":
                 self._burst_tok, asked = burst.question(par)
@@ -9988,25 +9977,16 @@ class Handler(BaseHTTPRequestHandler):
         sampling parameter keeps its own. Journaled in the decision row (`loop_escape`, from which
         turn, back at which turn; `sampling`) and in the usage frame (`tandem.sampling`).
         Returns the sampler the request decodes with."""
-        prof = loopescape_mod.profile_sampling(plan.res.doc)
-        msgs = body.get("messages") or []
-        st = None
-        if prof["loop_escape"] == "on":
-            mon = STATE.get("monitor")
-            pol = STATE["conductor"].monitor_policy(plan, mon.policy if mon else None) \
-                if mon is not None else None
-            c3 = pol.tasks.get("C3") if pol is not None else None
-            repeats = int(c3["repeats"]) if c3 is not None else loopescape_mod.REPEATS
-            wait_s = float(c3.get("wait_s", 0.0) or 0.0) if c3 is not None \
-                else loopescape_mod.WAIT_S
-            key = (plan.session.key if plan.session is not None
-                   else regenerate_mod.session_of(body, self.headers))
-            sess = mon.sessions.get(key) if mon is not None else None
-            sig = loopescape_mod.signal(msgs, loopescape_mod.waits_now(sess, msgs, time.time()),
-                                        repeats=repeats, wait_s=wait_s)
-            st = STATE["escapes"].step(key, sig, loopescape_mod.turn_of(msgs))
+        # the profile's section and the escape's step for the session: the extension's (ENG-413
+        # WP3b, server/ext_app.py); the sampler is the engine's
+        got = EXT.interim("loop_escape", plan, {
+            "body": body, "session": (None if plan.session is not None
+                                      else regenerate_mod.session_of(body, self.headers))})
+        if got is None:
+            return sampler
+        st = got["state"]
         mode = ("loop_escape" if st is not None and st["state"] == "on"
-                else "card" if prof["agentic_default"] == "card" else None)
+                else "card" if got["agentic_default"] == "card" else None)
         if st is None and mode is None:
             return sampler
         info = dict(st or {})
@@ -10018,7 +9998,7 @@ class Handler(BaseHTTPRequestHandler):
                 regen = STATE.get("regenerate")
                 fallback = ({"temperature": regen.temperature, "top_p": regen.top_p,
                              "top_k": regen.top_k} if regen is not None else None)
-                sp = loopescape_mod.sampling_of(STATE.get("card_sampling"), fallback)
+                sp = got["sampling"](fallback)
                 if sp is None:
                     info["no_sampling"] = True         # no card and no regenerate settings
                 else:
@@ -10227,7 +10207,7 @@ class Handler(BaseHTTPRequestHandler):
         # and the prompt is the one the request would have without them
         stripped = 0
         if chat and STATE.get("conductor") is not None and isinstance(body.get("messages"), list):
-            body["messages"], stripped = states_mod.strip_messages(body["messages"])
+            body["messages"], stripped = EXT.interim("strip_states", body["messages"])
         # A call the loop guard (or the token limit) stopped, sent back in the history
         # (Open WebUI's tool loop replays its arguments: 2026-10-06, five byte-identical retries,
         # the prompt 17k -> 46k), is cut down to its head and one marker before anything reads the
@@ -10518,8 +10498,7 @@ class Handler(BaseHTTPRequestHandler):
                 if (plan.active and plan.row is not None and body.get("no_repeat_ngram_size")
                         and not getattr(plan, "prompt_client", False)
                         and pen_spec.no_repeat != base.no_repeat
-                        and (plan.row.get("class_id") in conductor_schema.CODE_CLASSES
-                             or bool(body.get("tools")))):
+                        and (EXT.interim("code_class", plan) or bool(body.get("tools")))):
                     # The client's no-repeat n-gram mask is not for code: every
                     # repeated n-gram pays 4 nats, and in code (and in a tool call's arguments)
                     # repeated n-grams are the text itself. Dropped on the code classes' turns and
@@ -10527,8 +10506,7 @@ class Handler(BaseHTTPRequestHandler):
                     # logged; the raw path honours it as before.
                     plan.row["extra"]["penalty_dropped"] = {
                         "no_repeat_ngram_size": int(pen_spec.no_repeat),
-                        "why": "code" if plan.row.get("class_id") in conductor_schema.CODE_CLASSES
-                        else "tools"}
+                        "why": "code" if EXT.interim("code_class", plan) else "tools"}
                     print(f"[penalty] {cid} no_repeat_ngram_size={pen_spec.no_repeat} dropped "
                           f"(class {plan.row.get('class_id')}, tools "
                           f"{'yes' if body.get('tools') else 'no'})", flush=True)
@@ -10596,7 +10574,7 @@ class Handler(BaseHTTPRequestHandler):
         if plan is not None and plan.side is not None:
             try:
                 short = (int(build_prompt(body, client, count=True, left_out=left_out))
-                         <= SIDE_FIRST_MAX_TOKENS)
+                         <= EXT.interim("side_first_max"))
             except Exception:                                      # noqa: BLE001
                 short = True                   # the render fails again under the lock, as a 400
             rank = RANK_SIDE if short else RANK_SIDE_LONG
@@ -10744,7 +10722,7 @@ class Handler(BaseHTTPRequestHandler):
         # busy, from its length and whether it continues slot 0's resident conversation
         par = dict.get(STATE, "pool")
         par_why: dict = {}
-        own_q = (self.headers.get("User-Agent") or "").startswith(CLASSIFY_UA)
+        own_q = (self.headers.get("User-Agent") or "").startswith(OWN_QUESTION_UA)
         side_need = (_par_side_need(body, client, left_out, max_new, plan, images, lane_kind,
                                     par_why, stay=stay, parent=parent, session=conv_id, own=own_q)
                      if par is not None else None)
@@ -11060,13 +11038,13 @@ class Handler(BaseHTTPRequestHandler):
                 prompt_n = int(prompt.numel())
                 if prompt_n + 1 < int(STATE["max_len"]):
                     gone = self._prefill_watch(False)
-                    STATE["conductor"].decide_in_context(
-                        plan, prompt.tolist(),
+                    EXT.interim(
+                        "in_context", plan, prompt.tolist(),
                         lambda ids, letters, at: context_choice(ids, letters, at, conv_id,
                                                                 gone, images),
                         lambda ids: context_rows(ids, conv_id, gone, images))
                 else:
-                    STATE["conductor"].router.settle_context(plan, "prompt_too_long")
+                    EXT.interim("settle_context", plan, "prompt_too_long")
                 # the turn's class is known now, and with it the budget
                 budget = routed(client.budget if client.asked else server_budget)
             if plan is not None and plan.ask is not None and not micro:
@@ -11074,8 +11052,8 @@ class Handler(BaseHTTPRequestHandler):
                 # in-context stage's forward; journaled, nothing of the turn changes
                 if int(prompt.numel()) + 1 < int(STATE["max_len"]):
                     gone = self._prefill_watch(False)
-                    STATE["conductor"].router.ask_in_place(
-                        plan, prompt.tolist(), STATE["tok"],
+                    EXT.interim(
+                        "ask_in_place", plan, prompt.tolist(),
                         lambda ids, letters, at: context_choice(ids, letters, at, conv_id,
                                                                 gone, images))
                 else:
@@ -13728,8 +13706,21 @@ def _window_at_start(a) -> None:
         raise SystemExit(f"[server] REFUSING to load: {why}")
 
 
+def card_sampling(path):
+    """SRV-475: the checkpoint's own sampling (its generation_config.json), which the extension's loop
+    escape and `agentic_default: card` decode with; read at the load (TandemApp's loopescape reads
+    it until ENG-413 WP4 hands the extension the path instead)."""
+    from tandemapp.conductor import loopescape
+    return loopescape.card_sampling(path)
+
+
 def _conductor_policy(a) -> "conductor.Policy | None":
-    """The monitor's policy for `--conductor shadow|on`, validated; None when raw."""
+    """The monitor's policy for `--conductor shadow|on`, validated before the weights load; None when
+    raw. The monitor itself starts with the extension (ENG-413 WP3b), which reads it from STATE."""
+    mode = a.conductor if getattr(a, "conductor", "raw") in ("shadow", "on") else "raw"
+    if mode == "raw":
+        return None
+    from tandemapp.conductor import monitor as conductor
     mode = conductor.parse_mode(getattr(a, "conductor", "raw"))
     if mode in (None, "raw"):
         return None
@@ -13846,7 +13837,7 @@ def _load(a) -> None:
         cfg_eos = json.load(open(gen_cfg)).get("eos_token_id")
     # SRV-475: the checkpoint's own sampling, what the loop escape and `agentic_default: card`
     # decode with (none: the regenerate's settings)
-    STATE["card_sampling"] = loopescape_mod.card_sampling(m["path"])
+    STATE["card_sampling"] = card_sampling(m["path"])
     print(f"[sampling] the card's: {STATE['card_sampling'] or 'none (generation_config.json)'}",
           flush=True)
     rcache = (cache.ResponseCache(int(a.response_cache_mb * (1 << 20)), a.response_cache_ttl)
