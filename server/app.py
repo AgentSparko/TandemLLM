@@ -10200,16 +10200,10 @@ class Handler(BaseHTTPRequestHandler):
                 EXT.interim("turn_ended", rec.sup)     # the watch's idle time starts here
             if rec.probe is not None:
                 _probe_done(rec)                   # before the row is written: extra.probe
-            if STATE.get("conductor") is not None:
-                STATE["conductor"].finish(rec.plan, rec)   # its journal row and ledger fields
-                cids = getattr(rec.plan, "compaction_ids", None)
-                if cids and rec.plan.session is not None:
-                    try:
-                        STATE["conductor"].router.compacted_into(
-                            rec.plan.session.key, STATE["tok"].decode(cids,
-                                                                      skip_special_tokens=True))
-                    except Exception:                      # noqa: BLE001
-                        logbuf.print_exc()
+            if rec.ext is not None:
+                # the extension's finish (engine-ext-v1 `finish`, ENG-413 WP3b): the conductor's
+                # journal row and ledger fields, a compaction's summary for its session
+                rec.ext.finish(rec)
             _conductor_fields(rec)
             _account(rec)
 
@@ -12404,17 +12398,18 @@ class Handler(BaseHTTPRequestHandler):
                 # SRV-307: the pages past what this slot keeps go back to the pool, before the
                 # slot is given to the next request
                 kv_trim_current()
-                if (plan is not None and getattr(plan, "compaction", False)
-                        and STATE.get("conductor") is not None):
-                    # P-M2: a compaction marks its session for the memory writer, and with
-                    # `after_compaction: turn` the writer runs now, before the next request
-                    try:
-                        _writer_after_compaction(plan, conv_id)
-                    except Exception:                              # noqa: BLE001
-                        logbuf.print_exc()
-                elif getattr(getattr(rec, "sup", None), "gave_up", None) and \
-                        getattr(STATE.get("conductor"), "memory", None) is not None:
-                    STATE["conductor"].memory.writer.mark(conv_id, "give_up")
+                # the turn's follow-ups (engine-ext-v1 `follow_ups`, ENG-413 WP3b): P-M2, a
+                # compaction marks its session for the memory writer, and with `after_compaction:
+                # turn` the writer runs now, before the next request; a turn that gave up marks it
+                for job in req_x.follow_ups({
+                        "conv": conv_id, "compaction": bool(plan is not None
+                                                            and getattr(plan, "compaction", False)),
+                        "gave_up": bool(getattr(getattr(rec, "sup", None), "gave_up", None))}):
+                    if job.get("kind") == "memory_writer" and job.get("what") == "after_compaction":
+                        try:
+                            _writer_after_compaction(plan, conv_id)
+                        except Exception:                          # noqa: BLE001
+                            logbuf.print_exc()
                 if par is not None:
                     if side is None:
                         # SRV-197: the conversation slot 0 now holds, as its client renders it
