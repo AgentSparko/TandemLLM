@@ -108,8 +108,8 @@ from tandemapp import session_tokens as session_tokens_mod  # noqa: E402
 from server import preempt  # noqa: E402
 from server import queue_wait as qwait  # noqa: E402
 # ENG-413 WP3b: the request path asks the conductor and its session monitor only through the
-# extension (server/ext.py, the interim adapter server/ext_app.py). Left here: the hand-over of the
-# engine-only screens (WP5)
+# extension (server/ext.py; TandemApp's tandemapp.engine_ext since WP4). Left here: the hand-over of
+# the engine-only screens (WP5)
 from tandemapp.conductor import routes as conductor_routes  # noqa: E402
 from server.conductor import shadow as shadow_mod  # noqa: E402
 from server.conductor import inproc as conductor_inproc  # noqa: E402
@@ -9567,7 +9567,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._ext_route("GET", path, None)
         if path == "/v1/memory" or path.startswith("/v1/memory/"):
             # 2026-10-05: the model's own memory, under its session's address only
-            # (server/memory_api.py), the extension's route (ENG-413 WP3a)
+            # (TandemApp's tandemapp/memory_api.py), the extension's route (ENG-413 WP3a, WP4)
             return self._ext_route("GET", path, None)
         if path in ("/health", "/healthz", "/v1/health"):
             # What a watchdog needs to decide whether to restart, and what a person needs to
@@ -9785,8 +9785,6 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(500, {"error": {"type": "extension_error", "code": "extension_error",
                                               "message": f"the extension {EXT.name} failed on {path}: "
                                                          f"{exc}"}})
-        if out is None:
-            return None                     # the interim adapter answered on this handler
         status, headers, raw = out
         if not isinstance(raw, (bytes, bytearray)):
             raw = (raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)).encode()
@@ -9909,8 +9907,8 @@ class Handler(BaseHTTPRequestHandler):
                         STATE["spill"].clear()
             return self._json(200, cache_stats())
         if path == "/v1/memory" or path.startswith("/v1/memory/"):
-            # 2026-10-05: a note from the model's own script (server/memory_api.py), the
-            # extension's route (ENG-413 WP3a)
+            # 2026-10-05: a note from the model's own script (TandemApp's tandemapp/memory_api.py),
+            # the extension's route (ENG-413 WP3a, WP4)
             return self._ext_route("POST", path, body)
         if path == "/v1/laya/ask" and STATE.get("deciders") is not None:
             # L1: Laya for the model's scripts, open like the chat API (app/tandemapp/laya_api.py)
@@ -9977,8 +9975,8 @@ class Handler(BaseHTTPRequestHandler):
         sampling parameter keeps its own. Journaled in the decision row (`loop_escape`, from which
         turn, back at which turn; `sampling`) and in the usage frame (`tandem.sampling`).
         Returns the sampler the request decodes with."""
-        # the profile's section and the escape's step for the session: the extension's (ENG-413
-        # WP3b, server/ext_app.py); the sampler is the engine's
+        # the profile's section and the escape's step for the session: the extension's call
+        # (engine-ext-v1 1.3 `loop_escape`); the sampler is the engine's
         got = EXT.ask("loop_escape", plan, {
             "body": body, "session": (None if plan.session is not None
                                       else regenerate_mod.session_of(body, self.headers))})
@@ -10390,8 +10388,8 @@ class Handler(BaseHTTPRequestHandler):
         # SRV-349: the prompt's system and tool tokens for `usage.tandem`, rendered here on the
         # host (before the queue), once per head
         head_parts = _head_parts(body, client) if chat else None
-        # The extension's plan (engine-ext-v1 `plan`, ENG-413 WP3b): the conductor's (TandemApp's,
-        # through the interim adapter server/ext_app.py) for the request's profile, and for
+        # The extension's plan (engine-ext-v1 `plan`, ENG-413 WP3b): the conductor's (TandemApp's
+        # extension tandemapp.engine_ext since WP4) for the request's profile, and for
         # `TandemLLM` the turn's class and what that class gets. Here, before the queue: it may ask
         # arbiter or this server's own raw model, and must never do that holding the engine lock. A
         # raw request gets an inactive plan whose every step hands its input back unchanged; a
@@ -14684,7 +14682,7 @@ def _serve(a, led) -> None:
     STATE["live_windows"] = w = live_mod.windows_from_env(os.environ)
     STATE.pop("live", None)                      # built with the settings above
     # The session monitor (`--conductor shadow|on`, its policy validated before the load) starts with
-    # the extension (ENG-413 WP3b, server/ext_app.py), which puts it into STATE["monitor"]
+    # the extension (ENG-413 WP3b; tandemapp.engine_ext since WP4), which puts it into STATE["monitor"]
     pol = STATE.get("conductor_policy")
     mode = "raw" if getattr(a, "conductor", "raw") in ("raw", "off") else a.conductor
     STATE["monitor"] = None
@@ -14711,8 +14709,8 @@ def _serve(a, led) -> None:
     # A token per session on the addresses the runtime notes give the model
     STATE["session_tokens"] = session_tokens_mod.SessionTokens(
         os.path.join(root, "session-tokens.json") if root is not None else None)
-    # ENG-413 WP3a: the extension (server/ext.py). In chat mode the interim adapter
-    # (server/ext_app.py, QSE_EXT=server.ext_app) does what this start did for the conductor: its
+    # ENG-413 WP3a: the extension (server/ext.py). In chat mode TandemApp's extension
+    # (QSE_EXT=tandemapp.engine_ext, ENG-413 WP4) does what this start did for the conductor: its
     # shipped documents, its journal (the table `conductor_events` in the usage ledger's file), the
     # Conductor and its migrations; it puts the journal and the conductor into STATE
     # The session monitor alone (no conductor directory) starts there too, with its journal

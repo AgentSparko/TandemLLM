@@ -371,9 +371,13 @@ class Loaded(Null):
 
     def serve(self, handler, request):
         """A handler of the extension's own route: its (status, headers, body), or ExtRouteError
-        when it raised (500 extension_error: no headless answer exists for a path only it serves)."""
+        when it raised or answered another shape (500 extension_error: no headless answer exists
+        for a path only it serves)."""
         try:
-            return handler(request)
+            out = handler(request)
+            if not (isinstance(out, tuple) and len(out) == 3):
+                raise TypeError(f"the route answered {type(out).__name__}, not (status, headers, body)")
+            return out
         except Exception as exc:                                   # noqa: BLE001
             self.failed("route", exc, "answered 500 extension_error")
             raise ExtRouteError(f"{type(exc).__name__}: {exc}"[:300]) from None
@@ -677,8 +681,8 @@ class Supervision:
         except AttributeError:
             if name not in SUP_FIELDS:
                 raise
-        # a supervisor that is not the interim adapter's (an extension on the interface alone) has
-        # none of the state the decode loop reads: the headless value, kept for this request
+        # a supervisor that keeps a field (1.3 supervisor.fields) not: the field's headless value,
+        # kept for this request
         state = self.__dict__.setdefault("_state", {})
         if name not in state:
             state[name] = SUP_FIELDS[name]()

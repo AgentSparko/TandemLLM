@@ -38,36 +38,6 @@
    "tandemapp.conductor.schema",
    "tandemapp.laya_api"
   ],
-  "server/ext_app.py": [
-   "tandemapp.conductor.decisions:Journal",
-   "tandemapp.conductor.hook:Conductor",
-   "tandemapp.conductor.loopescape",
-   "tandemapp.conductor.memory",
-   "tandemapp.conductor.memwriter",
-   "tandemapp.conductor.migrations",
-   "tandemapp.conductor.modelfit",
-   "tandemapp.conductor.monitor",
-   "tandemapp.conductor.narrator",
-   "tandemapp.conductor.outcomes",
-   "tandemapp.conductor.redact",
-   "tandemapp.conductor.router:COMPOSITE",
-   "tandemapp.conductor.routes",
-   "tandemapp.conductor.schema",
-   "tandemapp.conductor.schema:SIDE_FIRST_MAX_TOKENS",
-   "tandemapp.conductor.shipped",
-   "tandemapp.conductor.states",
-   "tandemapp.conductor.store:ConfigError",
-   "tandemapp.conductor.store:Store",
-   "tandemapp.conductor.voice",
-   "tandemapp.library_api",
-   "tandemapp.memblock",
-   "tandemapp.static"
-  ],
-  "server/memory_api.py": [
-   "tandemapp.conductor.notes",
-   "tandemapp.library_api:Rate",
-   "tandemapp.library_api:Refused"
-  ],
   "tools/class_core_eval.py": [
    "tandemapp.conductor.classify:Qwen",
    "tandemapp.conductor.router:NONE_OPTION",
@@ -659,6 +629,12 @@
     "app/"
    ]
   },
+  "tests/test_engine_ext_host.py": {
+   "imports": [],
+   "reads": [
+    "app/VERSION"
+   ]
+  },
   "tests/test_engine_only.py": {
    "imports": [],
    "reads": [
@@ -681,7 +657,15 @@
     "tandemapp.conductor.monitor.executor",
     "tandemapp.conductor.monitor.policy"
    ],
-   "reads": []
+   "reads": [
+    "app/tandemapp"
+   ]
+  },
+  "tests/test_ext_trace.py": {
+   "imports": [],
+   "reads": [
+    "app/tandemapp"
+   ]
   },
   "tests/test_fail_open_busy.py": {
    "imports": [
@@ -932,7 +916,8 @@
     "tandemapp.conductor.notes:NoteStore",
     "tandemapp.conductor.notes:Refused",
     "tandemapp.conductor.routes",
-    "tandemapp.memblock"
+    "tandemapp.memblock",
+    "tandemapp.memory_api"
    ],
    "reads": [
     "app/"
@@ -1053,6 +1038,7 @@
    "imports": [
     "tandemapp.conductor.memory",
     "tandemapp.conductor.router",
+    "tandemapp.memory_api",
     "tandemapp.session_tokens"
    ],
    "reads": []
