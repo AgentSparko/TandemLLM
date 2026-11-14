@@ -23,8 +23,9 @@ this file holds the seam itself.
      journal, the counter on /metrics for each request (the next request asks again)
                                                               test_a_failing_hook_serves_the_request_on
   5  `--conductor on` without a conductor directory needs the extension: QSE_EXT empty is refused
-     before the weights load; with the adapter the monitor alone runs, engine mode, the adapter
-     listed                                                   test_the_monitor_needs_the_extension
+     before the weights load; a headless engine's /health still reports the loop escape's
+     sessions; with the adapter the monitor alone runs, engine mode, the adapter listed
+                                                              test_the_monitor_needs_the_extension
 
 Run: python tests/test_ext_request_path.py   (3-5 need CPU torch)
 """
@@ -64,6 +65,8 @@ ALLOWED = {
     ("tandemapp.conductor.monitor", "_conductor_policy"): "startup: the monitor's policy refused "
                                                           "before the weights load",
     ("tandemapp.conductor.loopescape", "card_sampling"): "the load: the checkpoint's sampling",
+    ("tandemapp.conductor.loopescape", "loop_escapes"): "startup: the loop escape's sessions, which "
+                                                        "/health reports on every engine",
     ("tandemapp.static", None): "WP14: setup mode's page",
     ("tandemapp.laya_api", None): "WP5: Laya's routes with the engine's decision models",
     ("tandemapp.chat_forward", None): "WP14: /v1/chat-app leaves the engine",
@@ -489,6 +492,15 @@ def test_the_monitor_needs_the_extension():
         assert p.returncode != 0 and len(lines) == 1, out[-3000:]
         assert "the session monitor (--conductor shadow|on) needs an extension" in lines[0], lines
         assert "[server] FAKE ENGINE" not in out and "[server] listening" not in out, out[-3000:]
+        # a headless engine still reports the loop escape's sessions in /health, as before WP3b
+        p = _engine(tmp, {"QSE_EXT": ""}, None, extra=("--conductor", "raw"))
+        port = _port(p)
+        _, h = _get(port, "/health")
+        _stop(p)
+        h = json.loads(h)
+        le = (h.get("sampling") or {}).get("loop_escape")
+        assert h["extensions"] == [] and isinstance(le, dict) and {"back", "sampled", "sessions"} <= set(le), h
+        os.remove(os.path.join(tmp, "ledger.sqlite3"))
         p = _engine(tmp, {"QSE_EXT": "server.ext_app"}, None)
         port = _port(p)
         _, h = _get(port, "/health")
