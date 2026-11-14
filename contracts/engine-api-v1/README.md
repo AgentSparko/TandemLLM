@@ -146,7 +146,7 @@ The same paths on the status responder's port, answered while the engine is away
 
 ### 9. Engine-only screens (since 1.5, ENG-413 WP5)
 
-What the conductor's screens read or load of the engine's own models and memory, served by the engine itself (`server/engine_routes.py`), on a headless engine too. They replace the conductor's paths of the same screens (`replaces`); while those last (they leave with WP14) the extension hands the same handlers in process (`host.engine`, `../engine-ext-v1` 2.1) and the old paths answer the same body plus the conductor contract's `contract_version`. Every answer carries `Cache-Control: no-store`; an error is `{"error": {"type", "message"}}` (`engine/error.schema.json`).
+What the conductor's screens read or load of the engine's own models and memory, served by the engine itself (`server/engine_routes.py`), on a headless engine too. They replace the conductor's paths of the same screens (`replaces`); while those last (they leave with WP14) the extension hands the same handlers in process (`host.engine`, `../engine-ext-v1` 3.0) and the old paths answer the same body plus the conductor contract's `contract_version`. Every answer carries `Cache-Control: no-store`; an error is `{"error": {"type", "message"}}` (`engine/error.schema.json`).
 
 | route | access | answer | shape |
 |-|-|-|-|
@@ -220,7 +220,7 @@ The controller's own families, never the engine's:
 
 ## The engine-only screens' old paths (until ENG-413 WP14)
 
-These `/v1/conductor/*` screens read or load the engine's own models and memory. Since 1.5 the engine serves them as group 9 (`/v1/engine/*`, `after_eng413`); the conductor's paths stay while they last (they leave with WP14, `leaves`): in chat mode the extension answers them over the engine's handlers in process (`host.engine`, engine-ext-v1 2.1), the same body plus `contract_version`, an error the same bytes. The engine no longer puts handlers or the speed-guard report into the server's state, and TandemApp keeps no copy of the engine's off texts: its controller (tandem-app) runs no engine and answers as the third column says (`../conductor-v1/README.md`).
+These `/v1/conductor/*` screens read or load the engine's own models and memory. Since 1.5 the engine serves them as group 9 (`/v1/engine/*`, `after_eng413`); the conductor's paths stay while they last (they leave with WP14, `leaves`): in chat mode the extension answers them over the engine's handlers in process (`host.engine`, engine-ext-v1 3.0), the same body plus `contract_version`, an error the same bytes. The engine no longer puts handlers or the speed-guard report into the server's state, and TandemApp keeps no copy of the engine's off texts: its controller (tandem-app) runs no engine and answers as the third column says (`../conductor-v1/README.md`).
 
 | route | the engine's handler | tandem-app | after ENG-413 |
 |-|-|-|-|
@@ -276,7 +276,7 @@ Until the headless engine, a finder in `server/__init__.py` serves only `tandema
 | `tools/thought_narrator_measure.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.schema`, `tandemapp.conductor.states`, `tandemapp.conductor.store` |
 | `tools/voice_replay.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.states`, `tandemapp.conductor.voice` |
 
-Since ENG-413 WP5 `server/conductor/inproc.py`, `server/conductor/residency.py` and `server/decider_api.py` import nothing of TandemApp, and `server/app.py` neither the conductor's routes, store nor monitor: the screens are the engine's (group 9), the documents and the rest come through engine-ext-v1 2.1.
+Since ENG-413 WP5 `server/conductor/inproc.py`, `server/conductor/residency.py` and `server/decider_api.py` import nothing of TandemApp, and `server/app.py` neither the conductor's routes, store nor monitor: the screens are the engine's (group 9), the documents and the rest come through engine-ext-v1 3.0.
 
 Since ENG-413 WP2a the wire format is the engine's own: `server/api/` holds its copies of `toolcall`, `toolformats`, `callrepair`, `refusal`, `thinking` and `argloop`, and no engine file imports TandemApp's (`tests/test_api_import_guard.py`). TandemApp keeps its copies for its extension and its controller; both pass `toolcalls/`.
 

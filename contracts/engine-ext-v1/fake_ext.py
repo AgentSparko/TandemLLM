@@ -1,6 +1,6 @@
 """The smallest engine-ext-v1 extension (ENG-429, QA ENG-430): every hook, no behaviour of its own.
 
-Written against 2.0 (first 1.0); its prompt takes `info` (a default) and its supervisor has
+Written against 3.0 (first 1.0); its prompt takes `info` (a default) and its supervisor has
 `check_answer`, so it fits the interface's signatures.
 
 A host's tests load it (QSE_EXT=fake_ext with this folder on the path, or the module object) and
@@ -18,7 +18,7 @@ Standard library only; imports neither tree.
 
 from __future__ import annotations
 
-EXT_API = "2.0"
+EXT_API = "3.0"
 NAME = "fake-ext"
 VERSION = "0"
 
