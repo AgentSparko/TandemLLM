@@ -10175,15 +10175,14 @@ class Handler(BaseHTTPRequestHandler):
         # session as `x-session-id`) and the socket the sampler checks for a client that left
         rec.conv = conversation_id(body, self.headers) or _session_header(self.headers)
         rec.sock = getattr(self, "connection", None)
+        rec.ext = None                     # ENG-413 WP3b: the extension's hooks for this request
         # the conductor's mode for this request: the server's, lowered by `X-Tandem`, and never
         # more than shadow for `n > 1`
         try:
             n_req = int(body.get("n") or 1)
         except (TypeError, ValueError):
             n_req = 1
-        mon = STATE.get("monitor")
-        self._tandem = (mon.mode_for(self.headers.get("X-Tandem"), n_req) if mon is not None
-                        else "raw")
+        self._tandem = EXT.interim("server_mode", self.headers.get("X-Tandem"), n_req)
         rec.learn_suffix = suffix_learns(self.headers)         # SPD-151
         self._images_left_out = 0                      # a keep-alive socket's handler is reused
         live_registry().register(rec)                  # visible from now until 30 s after
@@ -10426,30 +10425,32 @@ class Handler(BaseHTTPRequestHandler):
         # SRV-349: the prompt's system and tool tokens for `usage.tandem`, rendered here on the
         # host (before the queue), once per head
         head_parts = _head_parts(body, client) if chat else None
-        # The conductor (server/conductor/): the request's profile, and for `TandemLLM` the
-        # turn's class and what that class gets. Here, before the queue: it may ask arbiter or
-        # this server's own raw model, and must never do that holding the engine lock. A raw
-        # request gets an inactive plan whose every step hands its input back unchanged.
+        # The extension's plan (engine-ext-v1 `plan`, ENG-413 WP3b): the conductor's (TandemApp's,
+        # through the interim adapter server/ext_app.py) for the request's profile, and for
+        # `TandemLLM` the turn's class and what that class gets. Here, before the queue: it may ask
+        # arbiter or this server's own raw model, and must never do that holding the engine lock. A
+        # raw request gets an inactive plan whose every step hands its input back unchanged; a
+        # failing plan serves the request raw (counted). `plan` is the conductor's own plan, which
+        # the request path still reads until ENG-413 WP4 (`cond`, interim); with the session
+        # monitor alone there is none, and the monitor still watches the request.
+        req_x = rec.ext = EXT.request({
+            "body": body, "headers": self.headers, "client_kind": rec.client_kind,
+            "request_id": cid, "chat": chat, "user": self._memory_user(rec),
+            "count_tokens": lambda: build_prompt(body, client, count=True, left_out=left_out)})
         plan = None
-        if STATE.get("conductor") is not None:
-            # 0.8.2: the Lanes view's queued line while the router's questions run (the wait
-            # loop sets its own reason after them)
-            rec.queue_why = OWN_WAIT["question"]
+        if EXT.active:
+            planning = STATE.get("conductor") is not None
+            if planning:
+                # 0.8.2: the Lanes view's queued line while the router's questions run (the wait
+                # loop sets its own reason after them)
+                rec.queue_why = OWN_WAIT["question"]
             try:
                 # the prompt's length is rendered only if the in-context stage asks for it
-                with _planning():
-                    plan = rec.plan = STATE["conductor"].plan(
-                        body, self.headers, client_kind=rec.client_kind, request_id=cid,
-                        chat=chat, count_tokens=lambda: build_prompt(body, client, count=True,
-                                                                     left_out=left_out),
-                        user=self._memory_user(rec))
-            except ConductorConfigError as exc:
-                return self._json(400, {"error": {"message": str(exc),
-                                                  "type": "invalid_request_error",
-                                                  "param": "X-Tandem-Profile"}})
-            except Exception:                                      # noqa: BLE001
-                logbuf.print_exc()             # a conductor bug serves the request as raw
-                plan = rec.plan = None
+                with (_planning() if planning else contextlib.nullcontext()):
+                    xplan = req_x.begin()
+            except ext_mod.Refusal as exc:
+                return self._json(exc.status, exc.body())
+            plan = rec.plan = getattr(xplan, "cond", None)
         # the name the prefix capture and the session snapshot (the disk tier) file this request
         # under; conv_id itself, which compaction, the preparer and the memory writer key on, stays
         disk_id = _disk_session_id(rec.client_kind, plan, conv_id)
