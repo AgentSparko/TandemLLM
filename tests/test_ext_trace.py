@@ -9,7 +9,8 @@ logprobs entry and the ids of the output and the prompt, as tools/eng413_baselin
 and the journal (the route and monitor rows with the token index of each act, and the request
 rows). tests/fixtures/ext_trace.json holds that record; every later tree must give it again.
 
-  1  chat mode (TandemLLM, the conductor's directory, QSE_EXT=server.ext_app): every fixture's
+  1  chat mode (TandemLLM, the conductor's directory, QSE_EXT the tree's extension: TandemApp's
+     tandemapp.engine_ext since ENG-413 WP4, the interim server.ext_app before): every fixture's
      answer and the journal equal the record                                  test_chat_mode_replays
   2  the monitor alone (the raw name, no directory): the same                 test_monitor_alone_replays
   3  the record holds each act the fixtures drive, at its safe point: SP1 CLOSE_REASONING (D1, and
@@ -67,16 +68,24 @@ ACTS = {"chat": {"D1:CLOSE_REASONING", "client:CLOSE_REASONING", "E1:CONTINUE_HI
 
 
 def _monitor_ext() -> str:
-    """The monitor alone runs behind the extension from ENG-413 WP3b on (the adapter says it takes
-    no conductor directory then); on a tree before it, headless with `--conductor on`."""
-    with open(os.path.join(ROOT, "server", "ext_app.py")) as f:
-        return "server.ext_app" if "MONITOR_ALONE = True" in f.read() else ""
+    """The monitor alone runs behind the extension from ENG-413 WP3b on (the extension says it
+    takes no conductor directory then: TandemApp's since WP4, WP3b's interim adapter before it); on
+    a tree before WP3b, headless with `--conductor on`."""
+    for name, rel in (("tandemapp.engine_ext", ("app", "tandemapp", "engine_ext.py")),
+                      ("server.ext_app", ("server", "ext_app.py"))):
+        try:
+            with open(os.path.join(ROOT, *rel)) as f:
+                if "MONITOR_ALONE = True" in f.read():
+                    return name
+        except OSError:
+            pass
+    return ""
 
 
 def _fake(port: int, ledger: str, config: str):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.path.dirname(ledger),
            "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin",
-           "QSE_EXT": "server.ext_app" if config != "off" else _monitor_ext()}
+           "QSE_EXT": (_monitor_ext() or "server.ext_app") if config != "off" else _monitor_ext()}
     p = subprocess.Popen([sys.executable, "-c", LAUNCH, "--fake-engine", "--host", "127.0.0.1",
                           "--port", str(port), "--served-model", RAW_NAME, "--usage-ledger", ledger,
                           "--fake-tps", "4000", "--conductor", "on", "--conductor-config", config,

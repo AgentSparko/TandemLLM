@@ -52,7 +52,7 @@ sys.path.insert(0, HERE)
 from server import ext as E  # noqa: E402
 
 #: the extension chat mode loads (ops/serve.env)
-EXT_NAME = "server.ext_app"
+EXT_NAME = "tandemapp.engine_ext"
 
 LAUNCH = ("import sys, runpy; sys.modules['triton'] = None; sys.modules['triton.language'] = None;"
           "sys.argv = ['server/app.py'] + sys.argv[1:]; runpy.run_path('server/app.py', run_name='__main__')")
@@ -135,11 +135,23 @@ def test_the_request_path_imports_no_conductor():
         assert alias not in text, alias
     for path in ("server/ext.py", "server/round_runner.py", "server/fake_engine.py"):
         assert not _imports(path), (path, _imports(path))
-    # the adapter is the one engine file that imports the conductor's request-path modules
-    adapter = {m for m, _ in _imports("server/ext_app.py")}
+    # ENG-413 WP4: no engine file outside app/ is the adapter any more; TandemApp's extension (app/,
+    # vendored) imports the conductor's request-path modules and nothing of the engine
+    assert not os.path.exists(os.path.join(ROOT, "server", "ext_app.py"))
+    ext = {m for m, _ in _imports("app/tandemapp/engine_ext.py")}
     for m in ("tandemapp.conductor.monitor", "tandemapp.conductor.states", "tandemapp.memblock.TOOL",
               "tandemapp.conductor.loopescape", "tandemapp.conductor.redact"):
-        assert any(x == m or x.startswith(m + ".") or m.startswith(x) for x in adapter), (m, sorted(adapter))
+        assert any(x == m or x.startswith(m + ".") or m.startswith(x) for x in ext), (m, sorted(ext))
+    with open(os.path.join(ROOT, "app", "tandemapp", "engine_ext.py")) as f:
+        tree = ast.parse(f.read())
+    mods = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            mods += [a.name for a in n.names]
+        elif isinstance(n, ast.ImportFrom):
+            mods.append(n.module or "")
+    engine = sorted(m for m in mods if m.split(".")[0] in ("server", "engine", "models"))
+    assert not engine, engine
     return f"server/app.py: {len(got)} TandemApp imports, each ALLOWED; the request path asks the extension"
 
 
@@ -148,7 +160,7 @@ def test_the_optional_calls_are_named():
     A = importlib.import_module(EXT_NAME)
     host = E.Host(mode="chat", engine_api="", state={}, lock=None, tokenizer=None, registry=None,
                   ledger_path=None, args={})
-    obj = A.Interim(host) if hasattr(A, "Interim") else A.attach(host)
+    obj = A.attach(host)
     names = set(E.CALLS) | set(E.INTERIM)
     have = {n for n in names if callable(getattr(obj, n, None))}
     assert names == have and A.EXT_API == E.EXT_API, (sorted(names - have), A.EXT_API)
@@ -299,8 +311,8 @@ def test_a_failing_safe_point_detaches():
 
 # ---------------------------------------------------------------------------- 4, 5: the fake engine
 
-FAILING = '''"""A test extension: the interim adapter with one method failing (QSE_EXT_ARGS {"fail": name})."""
-from server import ext_app as A
+FAILING = '''"""A test extension: TandemApp's extension with one method failing (QSE_EXT_ARGS {"fail": name})."""
+from tandemapp import engine_ext as A
 
 EXT_API, NAME, VERSION = A.EXT_API, "failing", "0"
 HOOKS = ("plan", "prompt", "extras", "follow_ups", "finish")
@@ -457,7 +469,7 @@ def test_a_failing_hook_serves_the_request_on():
             os.makedirs(cdir)
             body, hdr = _fixture(fixture, "TandemLLM")
             # the control: the adapter as it is makes the act or row
-            p = _engine(tmp, {"QSE_EXT": "server.ext_app"}, cdir)
+            p = _engine(tmp, {"QSE_EXT": "tandemapp.engine_ext"}, cdir)
             port = _port(p)
             assert _post(port, body, hdr) == 200
             _stop(p)
@@ -510,7 +522,7 @@ def test_the_monitor_needs_the_extension():
         le = (h.get("sampling") or {}).get("loop_escape")
         assert h["extensions"] == [] and isinstance(le, dict) and {"back", "sampled", "sessions"} <= set(le), h
         os.remove(os.path.join(tmp, "ledger.sqlite3"))
-        p = _engine(tmp, {"QSE_EXT": "server.ext_app"}, None)
+        p = _engine(tmp, {"QSE_EXT": "tandemapp.engine_ext"}, None)
         port = _port(p)
         _, h = _get(port, "/health")
         h = json.loads(h)

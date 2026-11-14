@@ -130,7 +130,7 @@ def test_the_harness_inside_the_engine():
            "TANDEM_BACKEND_F1_URL": f"http://127.0.0.1:{fport}",
            "TANDEM_BACKEND_F1_HARNESS": "on",
            "TANDEM_SECRETS_KEY": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
-           "QSE_EXT": "server.ext_app"}           # ENG-413 WP3a: chat mode's extension
+           "QSE_EXT": "tandemapp.engine_ext"}           # ENG-413 WP3a: chat mode's extension
     proc = _start(port, ledger, home=d, extra=(
         "--backends", os.path.join(d, "config.sqlite3"), "--conductor", "on",
         "--conductor-config", os.path.join(d, "conductor"), "--conductor-defaults", "shipped"),

@@ -59,8 +59,7 @@ from test_memory_router import CHAT_APP, _chat_app, _index_store, _cfg  # noqa: 
 from test_ui_states import TOOLS, _go  # noqa: E402
 
 from server import app  # noqa: E402
-from server import ext_app  # noqa: E402
-app.EXT = ext_app.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
+app.EXT = app.ext_mod.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
 #                                       monitor this file builds through the extension
 from tandemapp import session_tokens as st  # noqa: E402
 from tandemapp.conductor import memory as M  # noqa: E402
@@ -157,7 +156,7 @@ class _Route:
 
 
 def test_the_address_is_a_tail_note_of_the_session():
-    from server import memory_api
+    from tandemapp import memory_api
     with box() as (cond, seen, marks, reg):
         out = chat(Q, "chat-r1")
         p1 = _text(seen[-1])

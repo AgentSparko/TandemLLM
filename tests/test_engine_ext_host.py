@@ -1,5 +1,6 @@
-"""The engine's engine-ext-v1 host (ENG-413 WP3a; ENG-429, QA ENG-430): server/ext.py, the interim
-adapter server/ext_app.py and what server/app.py serves through them.
+"""The engine's engine-ext-v1 host (ENG-413 WP3a; ENG-429, QA ENG-430): server/ext.py, the extension
+chat mode loads (TandemApp's tandemapp.engine_ext since WP4, vendored in app/) and what server/app.py
+serves through them.
 
 The test matrix (the Gherkin of ENG-429's host part):
 
@@ -20,8 +21,8 @@ The test matrix (the Gherkin of ENG-429's host part):
                                                                   test_a_request_is_open
   5  the engine refuses to start with one '[ext] REFUSING:' line, never serving: chat mode without
      QSE_EXT, a module that does not import, another major, a missing hook, a QSE_EXT_ARGS that is
-     not an object (each before the weights load); start raising, a claimed engine path, the
-     interim adapter without a conductor directory (after the load, before the first request)
+     not an object (each before the weights load); start raising, a claimed engine path,
+     TandemApp's extension without a conductor directory (after the load, before the first request)
                                                                   test_the_engine_refuses_to_start
   6  a headless engine: /health extensions [], 404 no_ui on the page, 404 not_on_engine on the
      conductor's, library, memory, Laya (no decision models), session, config and collect paths,
@@ -32,8 +33,9 @@ The test matrix (the Gherkin of ENG-429's host part):
      one (the raw name a hidden alias); its route's (status, headers, body) is the answer; a route
      that raises is 500 extension_error, counted; stop is asked at the drain, open
                                                                   test_an_extension_on_a_fake_engine
-  8  chat mode through the interim adapter: /health mode chat and the adapter listed, TandemLLM,
-     the conductor's routes and the page served by it          test_chat_mode_through_the_adapter
+  8  chat mode through TandemApp's extension: /health mode chat and the extension listed (its
+     release, engine-ext-v1 1.3), TandemLLM, the conductor's routes and the page served by it as
+     (status, headers, body)                                   test_chat_mode_through_the_adapter
 
 1-4 need no torch; 5-8 start server/app.py --fake-engine (CPU torch). Run: python tests/test_engine_ext_host.py
 """
@@ -442,7 +444,7 @@ def test_the_engine_refuses_to_start():
              ({"QSE_EXT": "fake_ext", "QSE_EXT_ARGS": '{"fail": "start"}'}, None, "fake_ext.start failed"),
              ({"QSE_EXT": "fake_ext", "QSE_EXT_ARGS": '{"route": "/v1/models"}'}, None,
               "fake_ext claims the engine's path /v1/models"),
-             ({"QSE_EXT": "server.ext_app"}, None, "the interim adapter runs the engine's conductor")]
+             ({"QSE_EXT": "tandemapp.engine_ext"}, None, "tandemapp.engine_ext runs the conductor")]
     for env, conductor, want in before + after:
         line, out = _refused(env, conductor)
         assert want in line, (want, line)
@@ -587,14 +589,16 @@ def test_chat_mode_through_the_adapter():
     if not _torch():
         return "skipped: no torch"
     cdir = tempfile.mkdtemp(prefix="ext-cond-")
-    p = _engine({"QSE_EXT": "server.ext_app"}, cdir, extra=("--conductor", "on"))
+    p = _engine({"QSE_EXT": "tandemapp.engine_ext"}, cdir, extra=("--conductor", "on"))
     seen: list = []
     try:
         port, seen = _up(p)
         st, _, h = _get(port, "/health")
         assert st == 200 and h["mode"] == "chat" and h["loaded"]["conductor"] is True, h
         (x,) = h["extensions"]
-        assert x["name"] == "tandemapp" and x["ext_api"] == E.EXT_API and x["version"].startswith("interim"), x
+        with open(os.path.join(ROOT, "app", "VERSION")) as f:
+            release = f.read().strip()
+        assert x == {"name": "tandemapp", "version": release, "ext_api": E.EXT_API}, x
         st, _, m = _get(port, "/v1/models")
         assert [y["id"] for y in m["data"]] == ["TandemLLM"], m
         assert _get(port, f"/v1/models/{RAW}")[2]["id"] == "TandemLLM"
@@ -607,7 +611,8 @@ def test_chat_mode_through_the_adapter():
         assert _metric(port, "qse_ext_errors_total") == {}
     finally:
         out = _stop(p, seen)
-    for want in ("[ext] QSE_EXT=server.ext_app", "[ext] on: tandemapp", "[conductor] journal:", "[conductor] on:"):
+    for want in ("[ext] QSE_EXT=tandemapp.engine_ext", "[ext] on: tandemapp", "[conductor] journal:",
+                 "[conductor] on:"):
         assert want in out, (want, out[-3000:])
     assert out.index("[conductor] journal:") < out.index("[conductor] on:") < out.index("[server] listening")
     return "mode chat, the adapter listed, TandemLLM, the conductor's routes and the page through it"

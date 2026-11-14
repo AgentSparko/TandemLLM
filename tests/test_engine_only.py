@@ -312,7 +312,7 @@ def test_health_reports_the_mode():
             env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home, "PYTHONPATH": ROOT,
                    "CUDA_VISIBLE_DEVICES": "", "QSE_CHAT_URL": f"http://127.0.0.1:{chat}"}
             if mode == "chat":
-                env["QSE_EXT"] = "server.ext_app"       # ENG-413 WP3a: chat mode's extension
+                env["QSE_EXT"] = "tandemapp.engine_ext"       # ENG-413 WP3a: chat mode's extension
             proc = subprocess.Popen(args, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             try:
                 _wait(port, proc)

@@ -48,8 +48,7 @@ import torch  # noqa: E402
 from engine import cache  # noqa: E402
 from engine.models.adapter import CostModel  # noqa: E402
 from server import app, cache_peek  # noqa: E402
-from server import ext_app  # noqa: E402
-app.EXT = ext_app.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
+app.EXT = app.ext_mod.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
 #                                       monitor this file builds through the extension
 from server.api.usage import RequestRecord  # noqa: E402
 from test_cache import tokens  # noqa: E402

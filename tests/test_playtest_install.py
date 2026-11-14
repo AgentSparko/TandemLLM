@@ -58,8 +58,7 @@ def test_dry_run_apply_again():
     _setup()
     cond = Conductor(tempfile.mkdtemp(prefix="cond-"), state=app.STATE, journal=False)
     app.STATE["conductor"] = cond
-    from server import ext_app
-    app.EXT = ext_app.attach(app.STATE)          # ENG-413 WP3a: /v1/library is the extension's
+    app.EXT = app.ext_mod.attach(app.STATE)          # ENG-413 WP3a: /v1/library is the extension's
     # what the served engine has: L1's packages and laya-testing on two classes
     _, pk = cond.store.get("packages")
     for n, body in (("laya-testing", "# Laya\n\nAsk it."), ("test-web", "# Web")):

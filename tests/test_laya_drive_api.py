@@ -59,7 +59,7 @@ def _env(models: str):
             "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN,
             "QWEN38_DECIDER_MODELS": models, "FAKE_MEM_AVAILABLE_GIB": "64",
             "BOX_LOCK": os.path.join(LOCK_DIR, "no-box.flock"),
-            "QSE_EXT": "server.ext_app"}                # ENG-413 WP3a: chat mode's extension
+            "QSE_EXT": "tandemapp.engine_ext"}                # ENG-413 WP3a: chat mode's extension
 
 
 PORT = _port()

@@ -69,7 +69,7 @@ def _server(port, models: str, cdir: str, ledger: str):
     args = [sys.executable, "-c", LAUNCH, "--fake-engine", "--port", str(port),
             "--served-model", "qwen38-spark-engine", "--usage-ledger", ledger,
             "--fake-tps", "60", "--conductor-config", cdir]
-    return subprocess.Popen(args, cwd=ROOT, env=dict(_env(models), QSE_EXT="server.ext_app"),
+    return subprocess.Popen(args, cwd=ROOT, env=dict(_env(models), QSE_EXT="tandemapp.engine_ext"),
                             stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
 

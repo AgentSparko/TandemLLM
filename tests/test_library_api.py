@@ -65,8 +65,7 @@ def with_library(install=True):
     rows = []
     cond.journal.note = lambda kind, task, **kw: rows.append(dict(kw, kind=kind, task=task))
     app.STATE["conductor"] = cond
-    from server import ext_app
-    app.EXT = ext_app.attach(app.STATE)          # ENG-413 WP3a: the route is the extension's
+    app.EXT = app.ext_mod.attach(app.STATE)          # ENG-413 WP3a: the route is the extension's
     return cond, d, rows
 
 

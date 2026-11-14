@@ -49,8 +49,7 @@ def get(path, dist, headers=None, headless=False):
     app.STATE.update(dashboard_dir=dist, auth=auth.Auth("adm-" + "1" * 40))
     # ENG-413 WP3a: the page is the extension's route (the interim adapter in chat mode); a headless
     # engine answers 404 no_ui
-    from server import ext_app
-    app.EXT = app.ext_mod.NULL if headless else ext_app.attach(app.STATE)
+    app.EXT = app.ext_mod.NULL if headless else app.ext_mod.attach(app.STATE)
     req = Req(path, {})
     req.command, req.path = "GET", path
     req.headers.update(dict(PROXY, **(headers or {})))

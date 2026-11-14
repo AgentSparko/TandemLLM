@@ -600,7 +600,7 @@ class Handler:
 
 
 def test_model_routes():
-    from server import memory_api
+    from tandemapp import memory_api
     cond = conductor(mode="on")
     p = plan_of(cond, msgs("How do I check the summer scene?"))
     key = p.session.key

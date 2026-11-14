@@ -41,8 +41,7 @@ sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, 
 sys.path.insert(0, HERE)
 
 from server import app  # noqa: E402
-from server import ext_app  # noqa: E402
-app.EXT = ext_app.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
+app.EXT = app.ext_mod.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
 #                                       monitor this file builds through the extension
 from server import probe as probe_mod  # noqa: E402
 from tandemapp.conductor import inject, schema  # noqa: E402

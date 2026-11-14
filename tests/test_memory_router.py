@@ -64,8 +64,7 @@ sys.path.insert(0, HERE)
 from test_ui_states import M, OPENCODE_UA, TOOLS, _go, lines, serve  # noqa: E402
 
 from server import app  # noqa: E402
-from server import ext_app  # noqa: E402
-app.EXT = ext_app.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
+app.EXT = app.ext_mod.attach(app.STATE)   # ENG-413 WP3b: the request path asks the conductor and the
 #                                       monitor this file builds through the extension
 
 SYSTEM = "You are opencode.\nWorking directory: /home/user/pagoda\nPlatform: linux"
