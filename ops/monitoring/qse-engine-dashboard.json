@@ -1,7 +1,7 @@
 {
   "uid": "qse-engine",
   "title": "Qwen3.8 Spark engine",
-  "description": "The qwen38-spark-engine on DGX :8000 (/metrics contract 0.2.0, app/tandemapp/METRICS.md): speed, load, caches, the board. A year of usage is the engine's own dashboard at /dashboard/; Prometheus keeps 15 days.",
+  "description": "The qwen38-spark-engine on DGX :8000 (/metrics contract 0.2.0, contracts/engine-api-v1/metrics.md): speed, load, caches, the board. A year of usage is the engine's own dashboard at /dashboard/; Prometheus keeps 15 days.",
   "tags": [
     "qwen38-spark-engine",
     "dgx",

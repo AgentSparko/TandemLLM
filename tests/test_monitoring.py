@@ -8,7 +8,9 @@
   * the ServiceMonitor scrapes the two proxied metrics paths, with the token on the metrics one only
     (the reverse-proxy config that maps them to the engine's routes is site-specific and not in this
     repository);
-  * the dashboard JSON is what tools/grafana_dashboard.py generates; the Secret carries no value.
+  * the dashboard JSON is what tools/grafana_dashboard.py generates; the Secret carries no value;
+  * ENG-413 WP10: the dashboard and its tool name the engine's own /metrics document,
+    contracts/engine-api-v1/metrics.md, and no TandemApp file.
 
 Run: python tests/test_monitoring.py
 """
@@ -110,6 +112,18 @@ def test_the_dashboard_json_is_generated():
     assert cm.startswith("# GENERATED") and '"grafana_dashboard": "1"' in cm
     ids = [p["id"] for p in grafana_dashboard.dashboard()["panels"]]
     assert len(ids) == len(set(ids))
+
+
+def test_the_dashboard_names_the_engines_metrics_document():
+    doc = "contracts/engine-api-v1/metrics.md"
+    assert os.path.isfile(os.path.join(ROOT, doc))
+    texts = {"tools/grafana_dashboard.py": open(grafana_dashboard.__file__).read(),
+             "qse-engine-dashboard.json": _read("qse-engine-dashboard.json"),
+             "qse-engine-dashboard-configmap.yaml": _read("qse-engine-dashboard-configmap.yaml")}
+    for name, text in texts.items():
+        assert doc in text, name
+        assert "METRICS.md" not in text and not re.search(r"\bapp/", text), name
+    assert doc in grafana_dashboard.dashboard()["description"]
 
 
 def test_the_secret_carries_no_value():

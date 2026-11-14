@@ -3,13 +3,14 @@
     python tools/grafana_dashboard.py        # writes ops/monitoring/qse-engine-dashboard.json
                                              #    and ops/monitoring/qse-engine-dashboard-configmap.yaml
 
-The panels are app/tandemapp/METRICS.md's fifteen, in its order (tokens a second served, tokens
-per block, draft acceptance, the block split, TTFT, queue, refusals, finish reasons, errors, prompt
-tokens reused, cache bytes against the budget, memory, decode tok/s per request, reasoning share,
-cached share), plus HTTP codes by route, prefill tok/s, suffix-store hits, the usage ledger, and the
-GB10 row from dgx-exporter. A restart is an annotation (qse_engine_start_time_seconds changes).
-Every query names only series this server or dgx-exporter publishes -- tests/test_monitoring.py
-checks each name against the metric registry. Edit this script, not the JSON.
+The panels are contracts/engine-api-v1/metrics.md's fifteen, in its order (tokens a second served,
+tokens per block, draft acceptance, the block split, TTFT, queue, refusals, finish reasons, errors,
+prompt tokens reused, cache bytes against the budget, memory, decode tok/s per request, reasoning
+share, cached share), plus HTTP codes by route, prefill tok/s, suffix-store hits, the usage ledger,
+and the GB10 row from dgx-exporter. A restart is an annotation (qse_engine_start_time_seconds
+changes). Every query names only series this server or dgx-exporter publishes --
+tests/test_monitoring.py checks each name against the metric registry. Edit this script, not the
+JSON.
 """
 
 from __future__ import annotations
@@ -173,8 +174,9 @@ def dashboard() -> dict:
     return {
         "uid": UID, "title": TITLE,
         "description": "The qwen38-spark-engine on DGX :8000 (/metrics contract 0.2.0, "
-                       "app/tandemapp/METRICS.md): speed, load, caches, the board. A year of usage "
-                       "is the engine's own dashboard at /dashboard/; Prometheus keeps 15 days.",
+                       "contracts/engine-api-v1/metrics.md): speed, load, caches, the board. "
+                       "A year of usage is the engine's own dashboard at /dashboard/; "
+                       "Prometheus keeps 15 days.",
         "tags": ["qwen38-spark-engine", "dgx", "ai"], "timezone": "browser",
         "schemaVersion": 39, "version": 1, "editable": True, "graphTooltip": 1,
         "refresh": "30s", "time": {"from": "now-6h", "to": "now"}, "timepicker": {},
