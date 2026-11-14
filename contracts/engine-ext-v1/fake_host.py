@@ -66,6 +66,16 @@ CALLS = {
     "writer_ban_ids": lambda tokenizer: {},
     "writer_foreign_call": lambda text: None,
     "probe_stage": lambda routing: None,
+    # since 2.1: what the engine reads of the extension outside a request
+    "document": lambda name: None,
+    "library_text": lambda name: None,
+    "shadow_wanted": lambda: False,
+    "monitor_mode": lambda: None,
+    "narrator": lambda slot: None,
+    "role_errors": lambda fields, name, tokenizer_sha: [],
+    "deciders": lambda registry: None,
+    "deciders_api": lambda doc: None,
+    "memory_writer": lambda: (None, None),
 }
 #: since 2.0: the supervisor's optional methods (ext.json supervisor.optional_methods), headless
 SUP_OPTIONAL = {
@@ -150,7 +160,7 @@ class FakeHost:
     def __init__(self, mode: str = "chat", args: dict | None = None, ext_dir: str | None = None,
                  state: dict | None = None):
         self.ext_api = EXT_API
-        self.engine_api = "1.4"
+        self.engine_api = "1.5"
         self.mode = mode
         self.state: dict = state if state is not None else {}
         self.lock = None
@@ -161,7 +171,8 @@ class FakeHost:
                                              event=lambda row: self.metrics.events.append(row))
         self.ledger_path = ":memory:"
         self.args = dict(args or {})
-        self.engine = {k: (lambda *a, **kw: {}) for k in
+        # since 2.1: the /v1/engine/* handlers, each answering (status, body)
+        self.engine = {k: (lambda *a, **kw: (200, {})) for k in
                        ("residency_plan", "disk", "disk_clear", "deciders", "narrator", "shadow")}
         self.Refusal = Refusal
         # since 2.0
@@ -170,6 +181,7 @@ class FakeHost:
         self.own_eta = None
         self.own_idle = lambda: None
         self.NoRoom = NoRoom
+        self.shipped_guard = None                     # since 2.1
         self.lines: list[str] = []
         self.errors: dict[str, int] = {}
 
@@ -342,10 +354,30 @@ def load(module, host: FakeHost):
     why = accepts(module.EXT_API, host.ext_api)
     if why:
         raise Refused(why)
+    # since 2.1: the module's own checks before the load; the session monitor needs them
+    early = getattr(module, "before_load", None)
+    if callable(early):
+        try:
+            line = early(dict(host.args))
+        except SystemExit:
+            raise
+        except Exception as exc:                                   # noqa: BLE001
+            raise Refused(f"{module.__name__}.before_load failed: {exc!r}") from None
+        if isinstance(line, str):
+            host.log(line)
+    elif host.args.get("conductor") in ("shadow", "on"):
+        raise Refused(f"the session monitor (--conductor shadow|on) needs engine-ext-v1 2.1's "
+                      f"before_load; {module.__name__} (engine-ext-v1 {module.EXT_API}) has none")
     try:
         ext = module.start(host)
     except Exception as exc:                                       # noqa: BLE001
         raise Refused(f"{module.__name__}.start failed: {exc!r}") from None
+    # since 2.1: an extension below 2.1 that routes requests relied on the engine's reads of its
+    # objects, which a 2.1 host makes through the 2.1 calls only
+    if _version(module.EXT_API) < (2, 1) and host.state.get("conductor") is not None:
+        raise Refused(f"{module.__name__} speaks engine-ext-v1 {module.EXT_API} and routes requests: "
+                      f"this engine reads a routing extension's documents and memory writer through "
+                      f"the 2.1 calls only (it needs 2.1)")
     missing = [h for h in HOOKS if not callable(getattr(ext, h, None))]
     if missing:
         raise Refused(f"{module.__name__} lacks the hooks {missing}")
