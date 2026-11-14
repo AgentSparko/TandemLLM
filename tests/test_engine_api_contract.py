@@ -51,8 +51,13 @@ tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_to
  12  1.5 is additive (ENG-413 WP5): every 1.4 route is here with its aliases; group 9 is the
      engine's screens, each GET live, each with a schema in engine/ or a doc, each replacing a
      screen whose old path is marked to leave with WP14; nothing of group 9 is planned any more;
-     the 1.4 examples validate and the 1.5 ones equal them but for engine_api and ext_api
-                                                                  test_additive_1_5
+     the 1.4 examples validate and the 1.5 ones (compat/1.5/) equal them but for engine_api and
+     ext_api                                                      test_additive_1_5
+ 13  1.6 is additive (ENG-413 WP6): every 1.5 route is here unchanged; the 1.5 examples validate
+     and the 1.6 ones equal them but for engine_api; node/control.json `chat` names QSE_CHATD's
+     values, and ops/start.sh, ops/watchdog.sh, serve.env's mode block and the bin/tandem
+     install.sh writes each handle node (the behaviour: tests/test_chatd_lifecycle.py 14)
+                                                                  test_additive_1_6
 
 CPU only, no torch, standard library only. Run: python tests/test_engine_api_contract.py
 """
@@ -682,7 +687,7 @@ def test_additive_1_5():
     """ENG-413 WP5: 1.5 adds group 9, the engine-only screens as /v1/engine/*; every 1.4 route stays."""
     from tools import contract_check
     old = _json("compat", "1.4", "routes.json")
-    doc = _routes()
+    doc = _json("compat", "1.5", "routes.json")               # 1.5 as it was (1.6 is test_additive_1_6)
     assert (old["version"], doc["version"]) == ("1.4", "1.5")
     now = {(r["method"], r["path"], r.get("port")): r for r in doc["routes"]}
     gone = [f"{r['method']} {r['path']}" for r in old["routes"]
@@ -704,14 +709,49 @@ def test_additive_1_5():
     def ok(d):
         return not contract_check.validate(d, health, root=CONTRACT)
     for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
-        a, b = _json(name), _json("compat", "1.4", name)
+        a, b = _json("compat", "1.5", name), _json("compat", "1.4", name)
         assert ok(b), name                                     # a 1.4 engine's answer
         strip = lambda d: {k: v for k, v in d.items() if k not in ("engine_api", "extensions")}  # noqa: E731
         assert strip(a) == strip(b), name
         assert a.get("engine_api") in (None, "1.5"), name
-    ex = _json("health.example.json")
+    ex = _json("compat", "1.5", "health.example.json")
     assert [x["ext_api"] for x in ex["extensions"]] == ["3.1"], ex["extensions"]
     return f"{len(old['routes'])} 1.4 routes kept, {len(g9)} group 9 routes replacing {len(screens)} screens"
+
+
+def test_additive_1_6():
+    """ENG-413 WP6: 1.6 adds node/control.json's `chat` (QSE_CHATD=node: TandemNode owns chatd);
+    no route or answer changes."""
+    from tools import contract_check
+    old, doc = _json("compat", "1.5", "routes.json"), _routes()
+    assert (old["version"], doc["version"]) == ("1.5", "1.6")
+    assert {k: v for k, v in doc.items() if k != "version"} == \
+        {k: v for k, v in old.items() if k != "version"}, "1.6 changes no route"
+    health = contract_check.load("health", CONTRACT)
+    for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
+        a, b = _json(name), _json("compat", "1.5", name)
+        assert not contract_check.validate(b, health, root=CONTRACT), name    # a 1.5 engine's answer
+        assert {k: v for k, v in a.items() if k != "engine_api"} == \
+            {k: v for k, v in b.items() if k != "engine_api"}, name
+        assert a.get("engine_api") in (None, "1.6"), name
+    chat = _json("node", "control.json")["chat"]
+    assert (chat["key"], chat["values"], chat["node"]) == ("QSE_CHATD", ["on", "off", "node"], "node")
+    assert chat["node_verbs"] == ["start", "stop", "restart", "status", "logs"]
+    assert chat["node_cli"] == "tandem-node chat" and chat["watch"]["starts_per_hour"] == 3
+    with open(os.path.join(ROOT, "ops", "start.sh")) as f:
+        start = f.read()
+    with open(os.path.join(ROOT, "ops", "watchdog.sh")) as f:
+        wd = f.read()
+    with open(os.path.join(ROOT, "ops", "serve.env")) as f:
+        env = f.read()
+    with open(os.path.join(ROOT, "install.sh")) as f:
+        inst = f.read()
+    ctl = inst[inst.index("write_control() {"):inst.index("\nCTL\n}\n")]
+    assert chat["start_line"] in start and '"${QSE_CHATD:-on}" = node' in start
+    assert '[ "${QSE_CHATD:-on}" = node ] && return 0' in wd
+    assert '[ "${QSE_CHATD:-}" = node ] || QSE_CHATD=off' in env
+    assert "TANDEM_NODE_BIN" in ctl and '"$NODE" chat' in ctl and "QSE_CHATD:-on}\" = node" in ctl
+    return "routes unchanged, 1.5 examples valid, control.json chat and the four launchers"
 
 
 if __name__ == "__main__":

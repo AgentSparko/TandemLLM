@@ -386,7 +386,7 @@ def test_a_headless_engine_serves_them():
         assert e.call("GET", "/v1/engine/disk", headers=proxied)[0] == 401
         assert e.call("GET", "/v1/engine/disk", headers=proxied, token=ADMIN)[0] == 200
         st, raw, _ = e.call("GET", "/health")
-        assert json.loads(raw)["engine_api"] == "1.5" and json.loads(raw)["extensions"] == []
+        assert json.loads(raw)["engine_api"] == "1.6" and json.loads(raw)["extensions"] == []
     finally:
         e.close()
     return f"{n} reads valid and no-store, clear 409, 404s, 401 without the token behind a proxy"
