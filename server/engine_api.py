@@ -14,7 +14,10 @@ the 404 answers `no_ui` and `not_on_engine` of a path nothing in the engine serv
 the extension host). 1.5 adds group 9, the engine-only screens as the engine's own /v1/engine/*
 routes (ENG-413 WP5, ENG-433). 1.6 adds node/control.json's `chat` block: QSE_CHATD=node leaves
 chatd to TandemNode, so the engine's launchers neither start nor stop it (ENG-413 WP6, SRV-823); no
-route or answer changes. Standard library only, nothing imported.
+route or answer changes. 1.7: the engine runs no chatd at all, QSE_CHATD is node or off (on is
+read as node, unset as off), and install.sh --with-chat --app-wheel installs TandemApp's wheel and
+TandemNode with chatd (ENG-413 WP7, OPS-272); no route or answer changes. Standard library only,
+nothing imported.
 """
 
-VERSION = "1.6"
+VERSION = "1.7"
