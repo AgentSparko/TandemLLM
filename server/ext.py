@@ -27,7 +27,10 @@ optional calls (CALLS), the supervisor's optional methods (SUP_OPTIONAL) and fie
 each with the value a headless engine uses, the plan's `routing` and the host's fields. ENG-413 WP5
 (engine-ext-v1 3.0): what the engine read of the extension's objects outside a request, and the
 memory writer's object, are optional calls too (the 3.0 rows of CALLS); the engine-only screens are
-the engine's `/v1/engine/*` routes, handed to the extension in process as `host.engine`.
+the engine's `/v1/engine/*` routes, handed to the extension in process as `host.engine`. ENG-413
+WP5b (engine-ext-v1 3.1): the router's question for the shadow reader is a call (`shadow_question`),
+Laya's routes are the extension's (a route may name OPTIONS for the preflight), and the session
+addresses' registry and the loop escape's counts are the engine's objects in the state.
 
 The failure rule (ext.json `failure`): closed at start, open per request. `discover` and `start`
 raise Refused, a SystemExit whose text is the one line `[ext] REFUSING: <why>`: a module that does
@@ -48,7 +51,7 @@ import re
 import threading
 
 #: the engine-ext-v1 version this host speaks (contracts/engine-ext-v1/ext.json `version`)
-EXT_API = "3.0"
+EXT_API = "3.1"
 #: the module attributes discovery reads (ext.json discovery.module)
 MODULE_ATTRS = ("EXT_API", "NAME", "VERSION", "start")
 #: since 3.0, optional module functions asked before the start (ext.json discovery.module_optional):
@@ -379,9 +382,12 @@ class Loaded(Null):
         return None
 
     def route(self, method: str, path: str):
+        """The handler of the extension's route for `method` and `path`, or None. Since 3.1 a
+        preflight (OPTIONS) goes only to a route that names OPTIONS, never to a `*` one."""
+        want = method.upper()
         for r in self.obj.routes:
             m = str(r.get("method") or "*").upper()
-            if (m == "*" or m == method.upper()) and _matches(r["prefix"], path):
+            if (m == want or (m == "*" and want != "OPTIONS")) and _matches(r["prefix"], path):
                 return r["handler"]
         return None
 
@@ -802,11 +808,15 @@ CALLS = {
     "deciders": lambda registry: None,
     "deciders_api": lambda doc: None,
     "memory_writer": lambda: (None, None),
+    # since 3.1 (ENG-413 WP5b): the router's question for the shadow reader at this turn
+    "shadow_question": lambda routing, prompt_ids: None,
 }
 
 #: the calls 3.0 added (ext.json since_3_0.calls)
 CALLS_3_0 = ("document", "library_text", "shadow_wanted", "monitor_mode", "narrator",
              "role_errors", "deciders", "deciders_api", "memory_writer")
+#: the calls 3.1 added (ext.json since_3_1.calls)
+CALLS_3_1 = ("shadow_question",)
 #: the documents `document(name)` answers (ext.json extension.documents)
 DOCUMENTS = ("residency", "roles", "deciders", "settings", "router", "packages")
 #: the memory writer's methods the engine calls, and `stats` (ext.json memory_writer)

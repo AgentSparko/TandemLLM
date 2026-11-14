@@ -25,7 +25,8 @@ WHO ASKS.
     and the conductor's own calls.
   * The router's class question in shadow mode (`shadow.router: shadow`): for a turn whose prompt
     has at least `router_min_tokens` tokens, the question the router's in-context stage asks Qwen
-    is put to the shadow at the turn's insertion point (the prompt's last `<|im_end|>`), answered
+    (the extension's, engine-ext-v1 3.1 `shadow_question`: the question, the classes, the router's
+    own answer) is put to the shadow at the turn's insertion point (the prompt's last `<|im_end|>`), answered
     in the idle window after the turn, and journaled beside the router's own class in
     `<conductor root>/shadow.jsonl`: the agreement, and how far behind the shadow was when the
     turn began (the freshness a live use would have had). Nothing of the turn changes.
@@ -539,12 +540,14 @@ class ShadowService:
             return {"why": "error", "error": f"{type(exc).__name__}: {exc}"[:200]}
 
     # ------------------------------------------------------------------ the router's question
-    def router_ask(self, plan, prompt_ids: list[int], tok, settings: dict) -> dict | None:
+    def router_ask(self, plan, prompt_ids: list[int], settings: dict, question=None) -> dict | None:
         """The router's class question for this turn (`shadow.router: shadow`), or None when the
-        turn does not get one: the prompt shorter than `router_min_tokens`, a structural class
-        (the compaction), a side request, no class decided, no insertion point. Each skip is
-        counted by its reason (`router_skip`)."""
-        from tandemapp.conductor import inject, schema
+        turn does not get one: the prompt shorter than `router_min_tokens`, or what the extension's
+        `question(plan, prompt_ids)` says (engine-ext-v1 3.1 `shadow_question`: a structural class
+        such as the compaction, a side request, no class decided, fewer than two classes, no
+        insertion point; None: not asked). Each skip is counted by its reason (`router_skip`).
+        The question, the classes and the router's own answer are the extension's; where it goes
+        and how it is read are the reader's."""
 
         def skip(why):
             self.router["skip_" + why] += 1
@@ -554,31 +557,14 @@ class ShadowService:
         least = settings.get("router_min_tokens")
         if len(prompt_ids) < int(ROUTER_MIN_TOKENS if least is None else least):
             return skip("short")
-        row = plan.row or {}
-        if row.get("source") == "structural":
-            return skip("structural")
-        if getattr(plan, "side", None):
-            return skip("side")
-        # the router's own class: in classify shadow mode its `shadow` field holds it
-        mine = row.get("shadow") if isinstance(row.get("shadow"), dict) and \
-            row["shadow"].get("class_id") else {}
-        cls = mine.get("class_id") or row.get("class_id")
-        if not cls:
-            return skip("no_class")
-        router = plan.router_cfg or {}
-        classes = {c["id"]: c.get("description") or c.get("label") or c["id"]
-                   for c in router.get("classes") or []}
-        if len(classes) < 2:
-            return skip("classes")
-        at = inject.insertion_point(prompt_ids, inject.special_id(tok, inject.IM_END))
-        if at is None:
-            return skip("no_insertion_point")
-        cs = schema.context_stage(router)
-        return {"raw_at": at + 1, "question": cs["question"], "choices": classes,
-                "router": {"class_id": cls, "source": mine.get("source") or row.get("source"),
-                           "confidence": mine.get("confidence") if mine else
-                           row.get("confidence")},
-                "request_id": row.get("request_id"), "row_id": row.get("id"),
+        got = question(plan, prompt_ids) if question is not None else None
+        if not isinstance(got, dict):
+            return None
+        if got.get("skip"):
+            return skip(str(got["skip"]))
+        return {"raw_at": int(got["at"]) + 1, "question": got["question"],
+                "choices": dict(got["choices"]), "router": got.get("router"),
+                "request_id": got.get("request_id"), "row_id": got.get("row_id"),
                 "prompt_tokens": len(prompt_ids)}
 
     def _answer(self, key, s, a) -> None:

@@ -94,7 +94,6 @@ from server import memsplit  # noqa: E402
 from server import rolemem  # noqa: E402
 from server import refwatch as refwatch_mod  # noqa: E402
 from server import decider_api  # noqa: E402
-from tandemapp import laya_api  # noqa: E402
 from server import probe as probe_mod  # noqa: E402
 from server import diskcache as diskcache_mod  # noqa: E402
 from server import identity as identity_mod  # noqa: E402  (SRV-741 the replica identity)
@@ -6046,7 +6045,9 @@ def _shadow_begin(plan, prompt_ids: list[int], n_choices: int):
         return None, svc, cfg
     key = plan.session.key
     try:
-        ask = svc.router_ask(plan, prompt_ids, STATE["tok"], cfg)
+        # the router's question is the extension's (engine-ext-v1 3.1 `shadow_question`, ENG-413 WP5b)
+        ask = svc.router_ask(plan, prompt_ids, cfg,
+                             question=lambda p, ids: EXT.ask("shadow_question", p, ids))
         info = svc.begin_turn(key, prompt_ids, ask=ask)
         if plan.row is not None:
             plan.row.setdefault("extra", {})["shadow"] = {"behind": info["behind"],
@@ -9648,14 +9649,16 @@ class Handler(BaseHTTPRequestHandler):
             # OPS-260: engine or chat and what runs beside the engine, beside `data` too
             out.update(_models_mode())
             return self._json(200, out)
-        if path == "/v1/laya" and STATE.get("deciders") is not None:
-            # L1: Laya for the model's scripts, what the route takes (app/tandemapp/laya_api.py)
-            return laya_api.handle_get(self, STATE["deciders"], STATE)
-        if path.startswith("/v1/laya/kit/") and STATE.get("deciders") is not None:
-            # X1: the playtest kit the model copies into a project
-            return laya_api.handle_kit(self, STATE, path[len("/v1/laya/kit/"):])
+        if (path == "/v1/laya" or path.startswith("/v1/laya/")) and STATE.get("deciders") is not None:
+            # L1: Laya for the model's scripts, what the route takes; X1: the playtest kit. The
+            # extension's route over the engine's decision models (ENG-413 WP5b; TandemApp's
+            # tandemapp/laya_api.py), 404 not_on_engine where no extension serves it; any other
+            # path under it is no route, as before
+            if path == "/v1/laya" or path.startswith("/v1/laya/kit/"):
+                return self._ext_route("GET", path, None)
+            return self._json(404, {"error": {"message": f"no route {path}", "type": "not_found"}})
         if (path == "/v1/laya" or path.startswith("/v1/laya/")) and STATE.get("deciders") is None:
-            return self._ext_route("GET", path, None)      # ENG-413 WP3a: no decision models here
+            return self._not_here(path)                    # ENG-413 WP3a: no decision models here
         if path == "/readyz" and STATE.get("deciders") is not None:
             # for Jev clients: ready once a decision model is loaded and warm (SRV-131)
             code, out = decider_api.readyz(STATE["deciders"], STATE)
@@ -9695,8 +9698,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = self.path.split("?")[0].rstrip("/")
         if (path in ("/v1/laya", "/v1/laya/ask", "/v1/laya/drive/end")
-                or path.startswith("/v1/laya/kit/")) and STATE.get("deciders") is not None:
-            return laya_api.handle_options(self)
+                or path.startswith("/v1/laya/kit/")) and STATE.get("deciders") is not None \
+                and EXT.route("OPTIONS", path) is not None:
+            # the extension's preflight (engine-ext-v1 3.1: a route that names OPTIONS, ENG-413 WP5b)
+            return self._ext_route("OPTIONS", path, None)
         self.send_error(501, f"Unsupported method ('{self.command}')")
 
     def do_DELETE(self):
@@ -9782,7 +9787,8 @@ class Handler(BaseHTTPRequestHandler):
         headers = {str(k): str(v) for k, v in (headers or {}).items()}
         try:
             self.send_response(int(status))
-            if not any(k.lower() == "content-type" for k in headers):
+            # a 204 (a preflight, engine-ext-v1 3.1) has no body and gets no content type
+            if not any(k.lower() == "content-type" for k in headers) and int(status) != 204:
                 self.send_header("Content-Type", "application/json")
             for k, v in headers.items():
                 if k.lower() != "content-length":
@@ -9904,14 +9910,16 @@ class Handler(BaseHTTPRequestHandler):
             # 2026-10-05: a note from the model's own script (TandemApp's tandemapp/memory_api.py),
             # the extension's route (ENG-413 WP3a, WP4)
             return self._ext_route("POST", path, body)
-        if path == "/v1/laya/ask" and STATE.get("deciders") is not None:
-            # L1: Laya for the model's scripts, open like the chat API (app/tandemapp/laya_api.py)
-            return laya_api.handle_post(self, STATE["deciders"], STATE, body)
-        if path == "/v1/laya/drive/end" and STATE.get("deciders") is not None:
-            # X1: a driver session's end: its journal row (app/tandemapp/laya_api.py DRIVER SESSIONS)
-            return laya_api.handle_drive_end(self, STATE, body)
+        if (path == "/v1/laya" or path.startswith("/v1/laya/")) and STATE.get("deciders") is not None:
+            # L1: Laya for the model's scripts, open like the chat API; X1: a driver session's end.
+            # The extension's route over the engine's decision models (ENG-413 WP5b; TandemApp's
+            # tandemapp/laya_api.py), 404 not_on_engine where no extension serves it; any other
+            # path under it is no route, as before
+            if path in ("/v1/laya/ask", "/v1/laya/drive/end"):
+                return self._ext_route("POST", path, body)
+            return self._json(404, {"error": {"message": f"no route {path}", "type": "not_found"}})
         if (path == "/v1/laya" or path.startswith("/v1/laya/")) and STATE.get("deciders") is None:
-            return self._ext_route("POST", path, body)     # ENG-413 WP3a: no decision models here
+            return self._not_here(path)                    # ENG-413 WP3a: no decision models here
         if path in ("/v1/systemone", "/v1/predict") and STATE.get("deciders") is not None:
             # typed decisions (SRV-131): the Jev contract, answered in the idle window
             return decider_api.handle(self, STATE["deciders"], body)
