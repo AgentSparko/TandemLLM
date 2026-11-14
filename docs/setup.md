@@ -25,6 +25,19 @@ The installer writes the marker `run/setup-pending` (with the host to bind). Whi
 
 Until an admin password is set, anyone who reaches the port can run the setup, apply it and reset the box. The review step says so. `ops/make-secrets.sh --admin` sets one; the setup page's "generate" option does the same on a box that has no `secrets.env` yet.
 
+## In the terminal: `bin/tandem setup`
+
+An install with no page (engine only) runs the same guide in the terminal, over SSH too. It asks this engine's Setup API on `127.0.0.1:$PORT`, so every number, check and refusal is the one the page gets: the models, the box, the memory estimate, the review, the install job and its log, and Wren's answers (in words only).
+
+```bash
+~/TandemLLM/bin/tandem setup                                  # the guide, step by step
+~/TandemLLM/bin/tandem setup models                           # the models; show MODEL for one of them
+~/TandemLLM/bin/tandem setup plan MODEL --profile ID --on kv_fp8 --window 131072
+~/TandemLLM/bin/tandem setup apply MODEL --profile ID --yes   # install it and follow the job
+```
+
+Each choice has a flag (`--profile`, `--on`/`--off TOOL`, `--slots`, `--window`, `--kv-pool`, `--floor-gb`, `--set FIELD=VALUE`, `--selection FILE`); it starts from what the box runs now, as the page does. `--json` prints one JSON object for scripts, `--yes` answers the confirmations. An install restarts the engine, so on an engine that serves a model `apply` also needs `--restart`. With nothing on the port, `--start-setup` starts setup mode for the session and stops it again unless a job started. Exit codes: 0 done, 1 refused or failed, 2 a wrong command, 3 no engine answers, 4 not confirmed. `bin/tandem setup --help` lists the rest.
+
 ## Advanced: from the command line
 
 Since 0.8.1 a new DGX Spark needs no files from anyone and no Hugging Face token. Every file a profile reads is public on Hugging Face. The Setup Guide runs `ops/use-profile.sh` for you; to pick the weights from a shell instead, install with the two commands above, then:

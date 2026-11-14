@@ -373,7 +373,7 @@ def test_the_units_and_the_uninstall():
 def test_the_install_says_what_it_did():
     text = open(os.path.join(ROOT, "install.sh")).read()
     done = text[text.index("${B}Done.${N}"):]
-    assert "Control:   $DIR/bin/tandem start | stop | restart | status | smoke | logs | doctor | chat | node" in done
+    assert "Control:   $DIR/bin/tandem start | stop | restart | status | smoke | logs | doctor | setup | chat | node" in done
     assert "/dashboard" not in done and "Health:    http://$API_HOST:$PORT/health" in done
     chat = text[text.index('if [ "$MODE_NOW" = chat ] && [ "$CHATD_NOW" = node ]; then'):text.index("${B}Done.${N}")]
     assert "Chat:      TandemNode runs chatd ($DIR/bin/tandem chat status; its unit $NODE_UNIT)." in chat

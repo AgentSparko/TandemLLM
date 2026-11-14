@@ -1061,7 +1061,7 @@ else
     fi
 fi
 
-# DIR/bin/tandem: start | stop | restart | status | smoke | logs | env | doctor | node | chat
+# DIR/bin/tandem: start | stop | restart | status | smoke | logs | env | doctor | setup | node | chat
 write_control() {
     printf '#!/usr/bin/env bash\n# TandemLLM control script, written by install.sh.\nTANDEM_DIR=%q\n' "$DIR"
     cat <<'CTL'
@@ -1247,12 +1247,19 @@ case "${1:-}" in
     smoke) smoke ;;
     logs) tail -n "${2:-100}" -f "$REPO/logs/engine.log" ;;
     env) cat "$ENV_FILE" ;;
-    *) echo "usage: $0 start | stop [grace-s] | restart | status | smoke | logs [n] | env | doctor [--check] | node [serve|check|unit] | chat start|stop|restart|status|logs" >&2; exit 2 ;;
+    # ENG-435: the Setup Guide in the terminal, over this engine's Setup API (/v1/setup/*) on
+    # 127.0.0.1:$PORT; it writes no file itself (python -m server.setup.cli --help)
+    setup)
+        shift
+        SETUP_PY="${PY:-}"; [ -x "$SETUP_PY" ] || SETUP_PY="$TANDEM_DIR/venv/bin/python"
+        [ -x "$SETUP_PY" ] || SETUP_PY=python3
+        PYTHONPATH="$REPO" exec "$SETUP_PY" -m server.setup.cli --tandem-dir "$TANDEM_DIR" "$@" ;;
+    *) echo "usage: $0 start | stop [grace-s] | restart | status | smoke | logs [n] | env | doctor [--check] | setup [command] | node [serve|check|unit] | chat start|stop|restart|status|logs" >&2; exit 2 ;;
 esac
 CTL
 }
 if [ "$DRY" = 1 ]; then
-    note "would write $DIR/bin/tandem (start | stop | restart | status | smoke | logs | env | chat | node)"
+    note "would write $DIR/bin/tandem (start | stop | restart | status | smoke | logs | env | setup | chat | node)"
 else
     write_control > "$DIR/bin/tandem.tmp" && chmod 755 "$DIR/bin/tandem.tmp" && mv "$DIR/bin/tandem.tmp" "$DIR/bin/tandem"
     ok "wrote $DIR/bin/tandem"
@@ -1336,6 +1343,7 @@ if [ "$SETUP" = 1 ]; then
     # no model is loaded yet: the user picks one in the Setup Guide (OPS-149)
     printf '\n%sSetup mode%s: no model is loaded yet. Point the Setup Guide at this engine and pick a model there:\n' "$B" "$N"
     printf 'TandemApp'"'"'s Setup page, with this engine'"'"'s address; this engine serves no page, only the Setup API (/v1/setup/*).\n'
+    printf 'Or in this terminal: %s/bin/tandem setup   (the same guide, step by step; --help for scripts)\n' "$DIR"
     if [ "$NODE_WANT" = 1 ]; then
         printf 'TandemNode starts chatd once the setup is done (%s/bin/tandem chat status).\n\n' "$DIR"
     else
@@ -1409,7 +1417,7 @@ cat <<EOF
 
 ${B}Done.${N}  TandemLLM $TANDEM_REF in $DIR
 
-  Control:   $DIR/bin/tandem start | stop | restart | status | smoke | logs | doctor | chat | node
+  Control:   $DIR/bin/tandem start | stop | restart | status | smoke | logs | doctor | setup | chat | node
   Config:    $RUN/ops/serve.env   (your overrides: $RUN/local.env)
   Watchdog:  bash $RUN/ops/watchdog.sh   (optional, from cron every minute: docs/operations.md)
   Update:    re-run the installer (same --dir); downloads resume, finished steps are skipped
