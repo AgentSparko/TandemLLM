@@ -15,6 +15,10 @@ The test matrix:
      moved still fails                                                    test_an_info_row_shifts_no_gated_ordinal
   3c B2 repeats on one tree: its requests go one after another, and the one that samples (the
      title) names its seed                                              test_b2_samples_only_with_a_seed
+  3d --seeded-title: W0 drew the title's seed (TITLE_SEED), B2 now sends it, so the title's route
+     row has no `extra.seed_drawn`: accepted by name on that row only, with the seed sent and
+     the baseline's drawn seed TITLE_SEED; anything else there, or a moved token, still fails
+                                                                    test_a_sent_title_seed_draws_none
   4  a capture refuses port 8000 (the box's engine) before it opens a socket          test_the_live_port_is_refused
   5  over a socket, the fake engine: B1 and B3 from two fresh engines compare equal;
      the monitor fixtures (B2f) make D1, E1, GIVE_UP, C3 and C4 act, and two fresh
@@ -210,6 +214,75 @@ def test_b2_samples_only_with_a_seed():
     assert sampled and all(isinstance(s, int) for _, s in sampled), sampled
     assert dict(sampled)["opencode_title"] == B.TITLE_SEED
     return f"{len(sent)} requests, {len(sampled)} sampled, each with its seed"
+
+
+def _title_pair(seed_sent, drawn, token="t", rid="chatcmpl-ti7le001"):
+    """B2's title request and its journal: a turn's route row, then the title's (found by its answer id)."""
+    lp = [{"t": token, "b": list(token.encode()), "lp": -0.25}]
+    req = {"model": "TandemLLM", "temperature": 0.5}
+    if seed_sent is not None:
+        req["seed"] = seed_sent
+    title = {"name": "opencode_title", "status": 200, "request": req,
+             "sse": ['data: {"id": "%s", "choices": [{"delta": {"content": "%s"}}]}' % (rid, token),
+                     "data: [DONE]"],
+             "gate": {"status": 200, "wire": {"content": token}, "usage": {}, "logprobs": {"content": lp}}}
+    extra = {"session": "id"}
+    if drawn is not None:
+        extra["seed_drawn"] = drawn
+    ev = [{"id": "e1", "kind": "route", "class_id": "code_edit", "request_id": "chatcmpl-turn0001",
+           "extra": {"session": "id"}},
+          {"id": "e2", "kind": "route", "class_id": "code_edit", "request_id": rid, "extra": extra}]
+    return {"b2.json": {"eng413_baseline": 1, "set": "b2", "requests": [title]},
+            "journal-chat.json": {"eng413_baseline": 1, "set": "journal",
+                                  "rows": {"conductor_events": ev, "conductor_texts": [], "requests": []}}}
+
+
+def test_a_sent_title_seed_draws_none():
+    """W2c: W0's title named no seed, its engine drew TITLE_SEED and the title's route row wrote it;
+    B2 sends TITLE_SEED since 019e3c1f, so nothing is drawn and the key is absent. --seeded-title
+    accepts that absence by name, on that row, under those conditions only."""
+    tmp = tempfile.mkdtemp(prefix="eng413-seed-")
+    path = "journal-chat.route_monitor[1].extra.seed_drawn"
+    try:
+        _write(os.path.join(tmp, "base"), _title_pair(None, B.TITLE_SEED))
+
+        def cmp(label, files, seeded=True):
+            _write(os.path.join(tmp, label), files)
+            return B.compare_dirs(os.path.join(tmp, "base"), os.path.join(tmp, label),
+                                  seeded_title=seeded)
+        sent = _title_pair(B.TITLE_SEED, None, rid="chatcmpl-ti7le002")
+        rep = cmp("sent", sent, seeded=False)
+        e = rep["files"]["journal-chat.json"]
+        assert e["verdict"] == "DIFF" and e["gate"] == [f"{path} removed: {B.TITLE_SEED} -> null"], e
+        rep = cmp("sent", sent)
+        e = rep["files"]["journal-chat.json"]
+        assert rep["gate_fail"] == 0 and e["verdict"] == "SAME", rep
+        assert e["allowed"] == [f"{path} removed (seeded title: TITLE_SEED sent, the baseline drew it)"], e
+        assert B.main(["compare", os.path.join(tmp, "base"), os.path.join(tmp, "sent"), "--seeded-title"]) == 0
+        assert B.main(["compare", os.path.join(tmp, "base"), os.path.join(tmp, "sent")]) == 1
+        # the rule holds nothing else: each of these still fails
+        bad = {
+            "drew another": _title_pair(B.TITLE_SEED, 4493622033207065211),
+            "sent no seed": _title_pair(None, None),
+            "sent another seed": _title_pair(B.TITLE_SEED + 1, None),
+            "a moved token": _title_pair(B.TITLE_SEED, None, token="u"),
+        }
+        other = copy.deepcopy(sent)
+        other["journal-chat.json"]["rows"]["conductor_events"][0]["extra"]["seed_drawn"] = 7
+        bad["another row drew"] = other
+        changed = copy.deepcopy(sent)
+        changed["journal-chat.json"]["rows"]["conductor_events"][1]["extra"]["session"] = "new"
+        bad["the row moved too"] = changed
+        for i, (why, files) in enumerate(bad.items()):
+            rep = cmp(f"bad{i}", files)
+            assert rep["gate_fail"] >= 1, (why, rep)
+        # a baseline that drew another seed than the one sent: not the pinned seed, no acceptance
+        _write(os.path.join(tmp, "base2"), _title_pair(None, 4493622033207065211))
+        rep = B.compare_dirs(os.path.join(tmp, "base2"), os.path.join(tmp, "sent"), seeded_title=True)
+        assert rep["files"]["journal-chat.json"]["verdict"] == "DIFF", rep
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return f"accepted {path} only with TITLE_SEED sent and drawn; {len(bad) + 1} other cases fail"
 
 
 def test_the_live_port_is_refused():

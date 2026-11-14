@@ -3,7 +3,8 @@
 
     eng413_baseline.py capture --port P --set b1|b2|b2f|b3 --out DIR [--name NAME] [--model M]
     eng413_baseline.py journal --ledger FILE --out DIR --name NAME     (after the engine stopped)
-    eng413_baseline.py compare BASE_DIR CAND_DIR [--allow PATH ...] [--additive] [--json OUT]
+    eng413_baseline.py compare BASE_DIR CAND_DIR [--allow PATH ...] [--additive] [--seeded-title]
+                               [--json OUT]
     eng413_baseline.py normalize FILE                                   (what compare compares)
 
 The plan's gates compare a refactored engine with these records: G2 engine mode with B1, G3 chat mode
@@ -66,8 +67,10 @@ The normaliser (compare runs it on the raw records, so it can be changed after a
       with no request in flight and it moved; inside N2's subtrees N1's keys are "<v>" as well
 compare holds the normalised records equal, path by path. `--allow GLOB` (`*` and `?`, the rest
 literal) accepts a difference at a path that matches (`b3-engine-post./health.body.engine_api`);
-`--additive` accepts paths only the candidate has (an additive contract version). Exit 0 when every
-gated part is equal.
+`--additive` accepts paths only the candidate has (an additive contract version). `--seeded-title`
+accepts one key by name: the title's route row without `extra.seed_drawn`, where the candidate's B2
+sent TITLE_SEED and the baseline's sent no seed and drew TITLE_SEED (seeded_title_allow). Exit 0 when
+every gated part is equal.
 """
 
 from __future__ import annotations
@@ -688,8 +691,58 @@ def first_token_diff(a: dict, b: dict) -> str:
     return "; ".join(words)
 
 
-def compare_dirs(base: str, cand: str, allow=(), additive: bool = False) -> dict:
+#: the key the title's route row loses when the battery names the seed: W0's battery sent none, so
+#: W0's engine drew one (TITLE_SEED) and wrote it there; since TITLE_SEED is sent nothing is drawn
+SEEDED_TITLE_KEY = ("extra", "seed_drawn")
+
+
+def _title_route(b2: dict, journal: dict):
+    """(the title request as sent, the index of its route row among the gated rows, that row) or None.
+    The row is found by the title's answer id (the stream's `id` is the row's `request_id`)."""
+    title = next((r for r in b2.get("requests") or [] if r.get("name") == "opencode_title"), None)
+    if title is None:
+        return None
+    ids = {c.get("id") for c in _sse_chunks(title.get("sse")) if isinstance(c, dict) and c.get("id")}
+    gated = [r for r in (journal.get("rows") or {}).get("conductor_events", []) if r.get("kind") in JOURNAL_GATED]
+    hits = [(i, r) for i, r in enumerate(gated) if r.get("kind") == "route" and r.get("request_id") in ids]
+    return (title.get("request") or {}, hits[0][0], hits[0][1]) if len(hits) == 1 else None
+
+
+def seeded_title_allow(base: str, cand: str) -> dict:
+    """--seeded-title: {journal file: [(path, "removed")]} for the title's route row's `extra.seed_drawn`,
+    only where the baseline's B2 sent the title no seed and its engine drew TITLE_SEED, the candidate's
+    B2 sent TITLE_SEED, nothing was drawn, and the row is the same gated row on both sides."""
+    out = {}
+
+    def load(d, f):
+        try:
+            with open(os.path.join(d, f)) as fh:
+                return json.load(fh)
+        except (OSError, ValueError):
+            return None
+    b2a, b2b = load(base, "b2.json"), load(cand, "b2.json")
+    if not (isinstance(b2a, dict) and isinstance(b2b, dict)):
+        return out
+    for f in sorted(os.listdir(base)):
+        if not (f.startswith("journal") and f.endswith(".json")):
+            continue
+        ja, jb = load(base, f), load(cand, f)
+        if not (isinstance(ja, dict) and isinstance(jb, dict) and ja.get("set") == jb.get("set") == "journal"):
+            continue
+        ta, tb = _title_route(b2a, ja), _title_route(b2b, jb)
+        if ta is None or tb is None or ta[1] != tb[1]:
+            continue
+        k, key = SEEDED_TITLE_KEY
+        xa, xb = ta[2].get(k) or {}, tb[2].get(k) or {}
+        if ("seed" not in ta[0] and tb[0].get("seed") == TITLE_SEED and xa.get(key) == TITLE_SEED
+                and isinstance(xb, dict) and key not in xb):
+            out[f] = [(f"{f[:-5]}.route_monitor[{ta[1]}].{k}.{key}", "removed")]
+    return out
+
+
+def compare_dirs(base: str, cand: str, allow=(), additive: bool = False, seeded_title: bool = False) -> dict:
     files = sorted(f for f in os.listdir(base) if f.endswith(".json") and _is_record(os.path.join(base, f)))
+    named = seeded_title_allow(base, cand) if seeded_title else {}
     report = {"base": base, "cand": cand, "files": {}, "gate_fail": 0, "info_diff": 0}
     for f in files:
         p = os.path.join(cand, f)
@@ -715,7 +768,7 @@ def compare_dirs(base: str, cand: str, allow=(), additive: bool = False) -> dict
                 if di:
                     entry["info"].append(f"{name}: the stream's chunks differ ({len(di)} paths, first {di[0][0]})")
         else:
-            d = _filter(diffs(a["gate"], b["gate"], stem), allow, additive, entry)
+            d = _filter(diffs(a["gate"], b["gate"], stem), allow, additive, entry, named.get(f, ()))
             entry["gate"] += [f"{p} {k}: {json.dumps(x)[:120]} -> {json.dumps(y)[:120]}" for p, k, x, y in d]
             di = diffs(a["info"], b["info"], stem + ".info")
             entry["info"] += [f"{p} {k}: {json.dumps(x)[:80]} -> {json.dumps(y)[:80]}" for p, k, x, y in di]
@@ -730,10 +783,12 @@ def compare_dirs(base: str, cand: str, allow=(), additive: bool = False) -> dict
     return report
 
 
-def _filter(ds: list, allow, additive: bool, entry: dict) -> list:
+def _filter(ds: list, allow, additive: bool, entry: dict, exact=()) -> list:
     keep = []
     for d in ds:
-        if any(_glob(g, d[0]) for g in allow) or (additive and d[1] == "added"):
+        if (d[0], d[1]) in exact:
+            entry["allowed"].append(f"{d[0]} {d[1]} (seeded title: TITLE_SEED sent, the baseline drew it)")
+        elif any(_glob(g, d[0]) for g in allow) or (additive and d[1] == "added"):
             entry["allowed"].append(f"{d[0]} {d[1]}")
         else:
             keep.append(d)
@@ -803,7 +858,7 @@ def cmd_journal(a) -> int:
 
 
 def cmd_compare(a) -> int:
-    rep = compare_dirs(a.base, a.cand, allow=a.allow or (), additive=a.additive)
+    rep = compare_dirs(a.base, a.cand, allow=a.allow or (), additive=a.additive, seeded_title=a.seeded_title)
     for f, e in rep["files"].items():
         print(f"[compare] {e['verdict']:<12} {f}")
         for line in e.get("gate", [])[:20]:
@@ -849,6 +904,9 @@ def main(argv=None) -> int:
     m.add_argument("cand")
     m.add_argument("--allow", action="append", help="a path glob whose difference is accepted")
     m.add_argument("--additive", action="store_true", help="accept paths only the candidate has")
+    m.add_argument("--seeded-title", action="store_true",
+                   help="accept the title's route row without extra.seed_drawn where B2 sent TITLE_SEED "
+                        "and the baseline drew it")
     m.add_argument("--json", default="")
     n = sub.add_parser("normalize")
     n.add_argument("file")
