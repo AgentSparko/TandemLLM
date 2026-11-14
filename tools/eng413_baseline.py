@@ -461,11 +461,16 @@ def battery_b2f(port: int, model: str) -> list:
     return out
 
 
-def battery_b2a(port: int, model: str) -> list:
+#: B2a's client reasoning budget by default (WP3b's window); ENG-413 WP4's window asks 16 (--b2a-budget):
+#: the model closed its reasoning by itself after 40 tokens there, so 64 never reached SP1's close
+B2A_BUDGET = 64
+
+
+def battery_b2a(port: int, model: str, budget: int = B2A_BUDGET) -> list:
     """ENG-413 WP3b's act replay on the real model, the monitor alone under the raw name: requests whose
     acts the request itself decides, greedy, so two trees give the same tokens and journal rows. A
-    client's reasoning budget (SP1's hidden close at its 64th reasoning token), a call repeated three
-    times with the same failing result (C3 at SP4 and SP3), a plain call (SP3's checks)."""
+    client's reasoning budget (SP1's hidden close at its `budget`th reasoning token), a call repeated
+    three times with the same failing result (C3 at SP4 and SP3), a plain call (SP3's checks)."""
     tools = _opencode_tools()
     hdr = {"User-Agent": OPENCODE_UA}
     base = {"model": model, "stream": True, "temperature": 0, "logprobs": True, "reasoning_format": "tags"}
@@ -478,7 +483,7 @@ def battery_b2a(port: int, model: str) -> list:
                  {"role": "tool", "tool_call_id": f"call_{i}", "content": "RESULT: FAIL"}]
     return [
         run_one(port, "budget_close", "/v1/chat/completions", dict(
-            base, max_tokens=600, max_reasoning_tokens=64,
+            base, max_tokens=600, max_reasoning_tokens=int(budget),
             messages=[{"role": "user", "content": "Explain in two sentences why the sky is blue."}]),
             headers=dict(hdr, **{"x-session-id": "ses_b2a_budget"})),
         run_one(port, "repeated_call", "/v1/chat/completions", dict(
@@ -868,7 +873,7 @@ def cmd_capture(a) -> int:
     elif a.set == "b2f":
         doc["requests"] = battery_b2f(a.port, model)
     elif a.set == "b2a":
-        doc["requests"] = battery_b2a(a.port, model)
+        doc["requests"] = battery_b2a(a.port, model, a.b2a_budget)
     else:
         doc["routes"] = battery_b3(a.port)
     doc["seconds"] = round(time.monotonic() - t0, 1)
@@ -927,6 +932,8 @@ def main(argv=None) -> int:
     c.add_argument("--model", default="", help="b1/b2f: the raw model name (default: /v1/models' first)")
     c.add_argument("--max-tokens", type=int, default=64, help="b1: a raw completion's tokens")
     c.add_argument("--max-tokens-chat", type=int, default=1024, help="b2: a chat turn's tokens")
+    c.add_argument("--b2a-budget", type=int, default=B2A_BUDGET,
+                   help="b2a: the client's reasoning budget SP1 closes (default %(default)s)")
     c.add_argument("--strip", action="append", help="a folder of this run, \"<root>\" when compared (N8)")
     j = sub.add_parser("journal")
     j.add_argument("--ledger", required=True)

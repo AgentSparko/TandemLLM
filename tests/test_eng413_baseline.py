@@ -238,7 +238,31 @@ def test_b2a_replays_greedy_acts():
     calls = [m for m in sent[1][1]["messages"] if m.get("tool_calls")]
     assert len(calls) == 3 and len({json.dumps(m["tool_calls"][0]["function"]) for m in calls}) == 1
     assert B.normalize_record({"set": "b2a", "requests": []})["set"] == "b2a"
-    return "3 greedy requests: a budget's close, a repeated call, a plain call"
+    # ENG-413 WP4: the budget from the command line (16 in W4's window), the other requests as before
+    sent.clear()
+    seen, orig_b = [], B.battery_b2a
+
+    def whole(port, name, endpoint, body, headers=None):
+        fake(port, name, endpoint, body, headers)
+        return {"name": name, "status": 200, "wire": {"content": "", "reasoning": "", "calls": {}},
+                "gate": {"logprobs": {}}}
+
+    def battery(port, model, budget=B.B2A_BUDGET):
+        seen.append(budget)
+        B.run_one = whole
+        try:
+            return orig_b(port, model, budget)
+        finally:
+            B.run_one = orig
+    B.battery_b2a = battery
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            assert B.main(["capture", "--port", "1", "--set", "b2a", "--out", d, "--model", "m",
+                           "--b2a-budget", "16"]) == 0
+    finally:
+        B.battery_b2a = orig_b
+    assert seen == [16] and sent[0][1]["max_reasoning_tokens"] == 16 and len(sent) == 3, (seen, sent[:1])
+    return "3 greedy requests: a budget's close (64, or --b2a-budget), a repeated call, a plain call"
 
 
 def _title_pair(seed_sent, drawn, token="t", rid="chatcmpl-ti7le001"):
@@ -339,7 +363,7 @@ def _fake(port: int, ledger: str, config: str):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.path.dirname(ledger),
            "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin"}
     if config != "-":
-        env["QSE_EXT"] = "server.ext_app"               # ENG-413 WP3a/WP3b: the conductor, the monitor
+        env["QSE_EXT"] = "tandemapp.engine_ext"               # ENG-413 WP3a/WP3b: the conductor, the monitor
     p = subprocess.Popen([sys.executable, "-c", LAUNCH, "--fake-engine", "--host", "127.0.0.1", "--port", str(port),
                           "--served-model", "qwen38-spark-engine", "--usage-ledger", ledger, "--fake-tps", "4000",
                           "--conductor", "on" if config != "-" else "raw",
