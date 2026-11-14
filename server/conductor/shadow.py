@@ -20,9 +20,9 @@ WHEN IT READS (the bandwidth rule: during Qwen's decode only Qwen and the drafte
 
 WHO ASKS.
   * `ask(key, question, choices)`: a typed decision of the small model over the whole session --
-    each choice a letter, one forward, the letters' softmax (the in-context stage's form,
-    app/tandemapp/conductor/incontext.py). The route `POST /v1/shadow/ask` and the conductor's own
-    calls.
+    each choice a letter, one forward, the letters' softmax (the in-context stage's form, the
+    engine's copy server/api/incontext.py, ENG-413 WP5b). The route `POST /v1/engine/shadow/ask`
+    and the conductor's own calls.
   * The router's class question in shadow mode (`shadow.router: shadow`): for a turn whose prompt
     has at least `router_min_tokens` tokens, the question the router's in-context stage asks Qwen
     is put to the shadow at the turn's insertion point (the prompt's last `<|im_end|>`), answered
@@ -52,6 +52,8 @@ except ModuleNotFoundError as exc:      # #108: the standalone proxy has no engi
     if exc.name not in ("engine", "engine.shadow", "torch"):
         raise
     eng_shadow = None
+
+from server.api import incontext  # noqa: E402  (ENG-413 WP5b the question's form, the engine's copy)
 
 #: the reader's anchor grid (engine/shadow.py GRID; 512 where the engine is not installed)
 GRID = eng_shadow.GRID if eng_shadow is not None else 512
@@ -487,13 +489,11 @@ class ShadowService:
 
     # ------------------------------------------------------------------ questions
     def _letters(self, choices: list[str]):
-        from tandemapp.conductor import incontext
         tok = self.model.tok
         letters = [incontext.LETTERS[i] for i in range(len(choices))]
         return letters, incontext.letter_ids(tok, letters)
 
     def _tail(self, question: str, choices: dict[str, str]) -> tuple[list[int], list[int]]:
-        from tandemapp.conductor import incontext
         text, letters = incontext.listing(choices)
         q = question.replace("{classes}", text) if "{classes}" in question else \
             question + "\n\n" + text + "\n\nAnswer with the letter only."
@@ -502,7 +502,6 @@ class ShadowService:
         return list(tail), incontext.letter_ids(self.model.tok, letters)
 
     def _decide(self, s, upto: int, question: str, choices: dict[str, str]) -> dict:
-        from tandemapp.conductor import incontext
         t0 = self.clock()
         tail, lids = self._tail(question, choices)
         lp = self.reader.fork_logits(s, upto, tail, rows=lids)

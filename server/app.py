@@ -104,7 +104,8 @@ from tandemapp import chat_forward  # noqa: E402
 from server import mode as mode_mod  # noqa: E402  (OPS-260 engine or chat, and what runs beside the engine)
 from server import ext as ext_mod  # noqa: E402  (ENG-413 WP3a the engine-ext-v1 host)
 from server.api import compaction as compaction_mod  # noqa: E402
-from tandemapp import session_tokens as session_tokens_mod  # noqa: E402
+from server.api import session_tokens as session_tokens_mod  # noqa: E402  (ENG-413 WP5b the session addresses)
+from server.api import loopescape  # noqa: E402  (ENG-413 WP5b the card's sampling, the escapes' counts)
 from server import preempt  # noqa: E402
 from server import queue_wait as qwait  # noqa: E402
 # ENG-413 WP3b: the request path asks the conductor and its session monitor only through the
@@ -9508,7 +9509,7 @@ class Handler(BaseHTTPRequestHandler):
     # -------------------------------------------------------------- routes
     def _strip_session(self) -> bool:
         """`/s/<token>/v1/library...` and `/s/<token>/v1/laya...`, the addresses the
-        runtime notes give the model (app/tandemapp/session_tokens.py): the prefix off, the session the
+        runtime notes give the model (server/api/session_tokens.py): the prefix off, the session the
         token names on the handler (`_sess`, None for an unknown token). True when the request is
         answered here (a session address of any other route is a 404)."""
         self._sess = self._stok = None
@@ -13702,17 +13703,16 @@ def _window_at_start(a) -> None:
 
 def loop_escapes():
     """SRV-475: the loop escape's sessions, which /health's `sampling.loop_escape` reports on every
-    engine and the extension's loop escape steps (TandemApp's loopescape.Escapes until ENG-413 WP4
-    hands /health's part to the extension)."""
-    from tandemapp.conductor import loopescape
+    engine and the extension's `loop_escape` call steps (engine-ext-v1 3.1 `state_keys`). The
+    engine's own (server/api/loopescape.py, ENG-413 WP5b): made at every start, extension or not."""
     return loopescape.Escapes()
 
 
 def card_sampling(path):
-    """SRV-475: the checkpoint's own sampling (its generation_config.json), which the extension's loop
-    escape and `agentic_default: card` decode with; read at the load (TandemApp's loopescape reads
-    it until ENG-413 WP4 hands the extension the path instead)."""
-    from tandemapp.conductor import loopescape
+    """SRV-475: the checkpoint's own sampling (its generation_config.json), read at the load: the
+    filters of every sampled request that names none (server/sampling_defaults.py), and what the
+    extension's loop escape and `agentic_default: card` decode with. The engine's own
+    (server/api/loopescape.py, ENG-413 WP5b)."""
     return loopescape.card_sampling(path)
 
 
