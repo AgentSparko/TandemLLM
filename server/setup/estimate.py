@@ -108,7 +108,9 @@ def check(m: dict, body) -> dict:
         raise SelectionError(422, "invalid_selection", "components: an object of id -> true/false")
     for cid, on in given.items():
         if cid not in comps:
-            raise SelectionError(400, "unknown_component", f"no tool {cid!r} for {m['id']}")
+            gone = registry.RETIRED_TOOLS.get(cid)
+            raise SelectionError(400, "unknown_component", f"no tool {cid!r} for {m['id']}"
+                                 + (f": {gone}" if gone else ""))
         if not isinstance(on, bool):
             raise SelectionError(422, "invalid_selection", f"components.{cid}: true or false")
         comps[cid] = on

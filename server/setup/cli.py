@@ -67,6 +67,9 @@ COMMANDS = ("guide", "models", "show", "device", "status", "current", "community
 WITH_MODEL = ("show", "current", "estimate", "plan", "apply")
 CHOICES = ("estimate", "plan", "apply", "ask")
 JOB_FINAL = ("done", "failed", "rolled_back")
+#: the Tools step's last line, where the "Other backends" tool was until ENG-413 WP14b
+BACKENDS_LINE = ("Other backends (vLLM, SGLang, cloud APIs) are TandemApp's: add them on its "
+                 "Backends page.")
 
 
 class Unreachable(Exception):
@@ -253,8 +256,11 @@ def toggle(m: dict, sel: dict, cid: str, on: bool) -> tuple[dict, str | None]:
     """deps.ts toggleComponent: (the new components, a note); Usage when the page refuses."""
     c = _comp(m, cid)
     if c is None:
-        raise Usage(f"{m['id']} has no tool called {cid}; its tools: "
-                    f"{', '.join(x['id'] for x in m['components'])}")
+        from server.setup.registry import RETIRED_TOOLS
+        gone = RETIRED_TOOLS.get(cid)
+        tools = ", ".join(x["id"] for x in m["components"])
+        raise Usage(f"{m['id']} has no tool called {cid}"
+                    + (f". {gone}. Its tools: {tools}" if gone else f"; its tools: {tools}"))
     if c["required"]:
         if on:
             return dict(sel, **{cid: True}), None
@@ -1151,6 +1157,7 @@ def cmd_guide(s: Session):
             why = av[c["id"]]["reason"]
             t.say(f"  {c['id']}: {c['label']}, {'on' if is_on(c, sel['components']) else 'off'}"
                   + (f" ({why})" if why else ""))
+        t.say(f"  {BACKENDS_LINE}")
         cid = ask("Switch: ", "", m, sel)
         if not cid:
             break

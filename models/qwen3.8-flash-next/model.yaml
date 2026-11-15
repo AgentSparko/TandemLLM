@@ -531,25 +531,6 @@ components:
   assets: []
   docs: docs/caches.md
   note: Compressed, up to SESSION_SPILL_GB (64 GB), inside the disk cache's folder.
-- id: proxy
-  label: Other backends
-  group: features
-  what: Lets the dashboard send some model names to other servers or cloud APIs, beside this engine.
-  default: false
-  required: false
-  memory_gib: 0.0
-  memory_max_gib: null
-  elastic: false
-  disk_gb: 0.0
-  depends_on: []
-  conflicts: []
-  knobs:
-    QSE_BACKENDS:
-      'on': ${HOME}/.qwen38-spark-engine/backends/config.sqlite3
-      'off': ''
-  assets: []
-  docs: README.md#tandemapp
-  note: You add the backends later, on the Backends screen.
 - id: kv_fp8
   label: Long-context cache (FP8)
   group: features

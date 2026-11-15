@@ -47,7 +47,7 @@ The test matrix:
      it stays one word                                   test_timeouts_liveness_and_quoting
  12  the wizard's seed is the box as it runs (GET .../current): the active profile, the overlay's
      slots, window, tools, port and served name; a HOST neither option names is listed as unmatched;
-     the plan warns when HOST, PORT, SERVED_MODEL or QSE_BACKENDS change
+     the plan warns when HOST, PORT or SERVED_MODEL change (WP14b: QSE_BACKENDS is no tool's knob)
                                                          test_the_current_selection
  13  an install.sh box (serve.env and the scripts in run/ops, the profiles and active-profile under
      serve.env's REPO): the active profile and the profile files are found there, and a job runs
@@ -704,7 +704,7 @@ def test_the_current_selection_of_unset_keys():
         comps = b["selection"]["components"]
         assert comps["lookup"] is True and comps["vision"] is True, b
         assert comps["response_cache"] is False and comps["nvme_spill"] is True, b
-        assert comps["proxy"] is False, comps         # start.sh's ${QSE_BACKENDS:-off}
+        assert "proxy" not in comps, comps            # ENG-413 WP14b: the tool is gone
         assert b["unmatched"] == [], b["unmatched"]
         # Review from there does not list them: the overlay writes what the engine runs with anyway
         p = _plan(estimate.check(M, b["selection"]))

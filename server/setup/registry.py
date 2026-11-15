@@ -60,6 +60,12 @@ STEPS = (("models", "Models"), ("overview", "Model"), ("weights", "Weights"),
 MODES = ("greedy_512", "greedy_128", "sampled_512", "sampled_128", "long_greedy", "long_sampled")
 TASKS = ("prose", "chat", "code", "long32k", "long64k")
 GROUPS = ("speed", "roles", "caches", "disk", "features")
+#: tools a model had and has no more, with where the feature went (ENG-413 WP14b): a selection that
+#: names one is refused as any unknown tool is, with this sentence in the message
+RETIRED_TOOLS = {
+    "proxy": "Other backends (vLLM, SGLang, cloud APIs) left the engine with engine API 1.8: "
+             "TandemApp's controller serves them, on its Backends page",
+}
 FIELD_TYPES = ("enum", "int", "number", "bool", "string")
 ENV_KEY = r"^[A-Z][A-Z0-9_]*$"
 HF_REPO_ID = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$"

@@ -16,7 +16,7 @@ The test matrix:
   4  exactly at the budget fits; a cent more does not    test_exactly_at_the_budget
   5  the context that fits is floor(room / bytes a token) over all slots, and a note gives a slot's
      share capped by the window                          test_the_context_that_fits
-  6  the selection check: unknown ids are 400s, a tool whose dependency is off, a required tool off,
+  6  the selection check: unknown ids are 400s (WP14b: the retired `proxy` tool's says where it went), a tool whose dependency is off, a required tool off,
      slots (past the setup's 64) or windows out of range, an unknown key, a field value that is not the field's are 422s
      with a code and the field; what the body leaves out is the registry's default (8 lanes); an
      older page's side window is read as nothing (SRV-707)  test_the_selection_check
@@ -203,6 +203,13 @@ def test_the_selection_check():
     _refused({"model": "nope"}, 400, "unknown_model")
     _refused(dict(base, profile="exl3-9.9"), 400, "unknown_profile")
     _refused(dict(base, components={"turbo": True}), 400, "unknown_component")
+    # ENG-413 WP14b: the "Other backends" tool is gone from every model; a selection that still
+    # names it (on or off) is an unknown tool, and the message says where the feature went
+    for on in (True, False):
+        _refused(dict(base, components={"proxy": on}), 400, "unknown_component", "TandemApp's controller")
+    for x in registry.load_all()[0].values():
+        assert "proxy" not in {c["id"] for c in x["components"]}, x["id"]
+        assert not any("QSE_BACKENDS" in c["knobs"] for c in x["components"]), x["id"]
     _refused(dict(base, device="mac"), 400, "unknown_device")
     _refused(dict(base, components={"laya": True}), 422, "invalid_combination", "laya")   # OPS-260: the conductor is off
     _refused(dict(base, components={"drafters": False}), 422, "invalid_combination", "drafters")
@@ -273,7 +280,7 @@ def _cases() -> list[dict]:
     case("floor 10", floor_gb=10)
     case("floor 40", floor_gb=40)
     case("everything on, exl3-6.0, pool off: the most it can take", profile="exl3-6.0",
-         kv_pool=False, components={"response_cache": True, "proxy": True})
+         kv_pool=False, components={"response_cache": True})
     case("the smallest: exl3-2.5, one slot of 8,192, no tools", profile="exl3-2.5", slots=1,
          window=8192, components={c["id"]: c["required"] for c in m["components"]})
     sel, floor = _at_budget()

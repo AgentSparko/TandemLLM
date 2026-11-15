@@ -34,7 +34,8 @@ tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_to
  10  1.3 is additive (G4): every route of compat/1.2/routes.json is here with its method and
      aliases; the 1.2 examples of compat/1.2/ (a 1.0, a 1.1 and a 1.2 engine's /health, both
      stages, the split request and block) validate against the 1.3 schemas, and the 1.3
-     examples equal them but for engine_api                     test_additive_1_3
+     examples equal them but for engine_api (setup/'s split request: but for the retired
+     `proxy` tool, ENG-413 WP14b)                                test_additive_1_3
  11  1.4 is additive (ENG-413 WP3a): every 1.3 route is here; what 1.3 planned and the extension
      host serves left `planned` (`answers`: 404 no_ui and not_on_engine; /health extensions in
      the schema, optional); the 1.3 examples still validate and the 1.4 ones (compat/1.4/) equal
@@ -416,7 +417,12 @@ def test_additive_1_3():
             {k: v for k, v in b.items() if k != "engine_api"}, name
         assert a.get("engine_api") in (None, "1.3"), name
     for name in ("split.example.json", "split-request.example.json"):
-        assert _json("setup", name) == _json("compat", "1.2", name), name
+        was = _json("compat", "1.2", name)
+        # ENG-413 WP14b: the models' "Other backends" tool (`proxy`) is gone, and a selection that
+        # names it is a 400; the request example is 1.2's without it
+        if "selection" in was:
+            was["selection"]["components"].pop("proxy")
+        assert _json("setup", name) == was, name
     return f"{len(old['routes'])} 1.2 routes kept, 1.0/1.1/1.2 health and both stages valid, split valid"
 
 

@@ -13,7 +13,6 @@
       "response_cache": false,
       "disk_tier": true,
       "nvme_spill": true,
-      "proxy": false,
       "kv_fp8": false
     },
     "slots": 8,

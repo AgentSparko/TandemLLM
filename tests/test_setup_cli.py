@@ -43,7 +43,8 @@ The test matrix (the Gherkin of ENG-435):
      prints its answer; a Wren that cannot load is the engine's refusal       test_ask_wren
   8  bin/tandem setup (install.sh's control script) runs the module with this install's engine
      address, and its usage names it; --json and the exit codes for a wrong command, an unknown
-     tool, and the guide without a terminal                  test_bin_tandem_setup_and_usage
+     tool (WP14b: `proxy` says where other backends went), and the guide without a terminal
+                                                            test_bin_tandem_setup_and_usage
   9  an admin password set: the terminal on the box is trusted-local and gets the same bodies as
      the page signed in; the page from the network without a token is 401
                                                             test_with_an_admin_password
@@ -708,6 +709,10 @@ def test_bin_tandem_setup_and_usage():
         assert rc == 2
         rc, out, _ = run_cli(srv.url, "plan", SA.M["id"], "--on", "no_such_tool")
         assert rc == 2 and out["error"]["code"] == "usage" and "no tool called no_such_tool" in out["error"]["message"]
+        # ENG-413 WP14b: the "Other backends" tool is gone; the message says where it went
+        rc, out, _ = run_cli(srv.url, "plan", SA.M["id"], "--on", "proxy")
+        assert rc == 2 and "no tool called proxy. Other backends" in out["error"]["message"] and \
+            "TandemApp's controller" in out["error"]["message"], out
         rc, out, _ = run_cli(srv.url, "plan")
         assert rc == 2 and "needs a MODEL" in out["error"]["message"]
         rc, out, _ = run_cli(srv.url, "models", "--profile", "x")
@@ -754,6 +759,8 @@ def test_the_guide_at_a_terminal():
                 text = out.getvalue()
                 assert rc == 0, (text, err.getvalue())
                 assert "6. Review" in text and f"bin/tandem setup apply {mid}" in text
+                # WP14b: one line under the tools, where the "Other backends" tool was
+                assert f"  {cli.BACKENDS_LINE}\n" in text and "proxy:" not in text, text
                 assert "Nothing changed" in text and not spawned
             with Server(setup_mode=True) as srv:
                 out, err = io.StringIO(), io.StringIO()

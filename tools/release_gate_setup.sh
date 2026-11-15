@@ -249,7 +249,7 @@ wait_job() {   # wait_job ID -> the final state on stdout
 # the fixture's selection: the scratch's own port and address (the plan refuses 8000, held by the live
 # engine), no tool with a model of its own, no conductor (a fake engine may not use one under HOME)
 selection() {
-    printf '{"model": "qwen3.8-27b", "profile": "exl3-2.5", "components": {"conductor": false, "narrator": false, "laya": false, "shadow": false, "proxy": false}, "advanced": {"port": %s, "host": "127.0.0.1"}}' "$PORT"
+    printf '{"model": "qwen3.8-27b", "profile": "exl3-2.5", "components": {"conductor": false, "narrator": false, "laya": false, "shadow": false}, "advanced": {"port": %s, "host": "127.0.0.1"}}' "$PORT"
 }
 
 start_setup_mode() {
