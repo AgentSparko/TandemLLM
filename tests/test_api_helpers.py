@@ -17,13 +17,11 @@ The test matrix:
                                                                     test_in_repository_answers_alike
   5  chatd's address from QSE_CHAT_URL: the same host and port, the same error for a port that is
      no port                                                       test_chat_url_answers_alike
-  6  Wren's index: the app texts given as extra knowledge make the same document list as before;
-     without them the list is the engine's own documents in the same order; the scores and the
-     search are TandemApp's index's                       test_wren_index_with_the_app_texts_as_extra
+  6  (dropped at ENG-413 WP14: Wren's index takes no extra knowledge of TandemApp's)
   7  a fresh process importing the switched modules loads no TandemApp module, and /health's
      chatd check reads the engine's address                          test_a_process_loads_no_app_module
 
-CPU, standard library (6 needs PyYAML, as the setup registry does). Run: python tests/test_api_helpers.py
+CPU, standard library. Run: python tests/test_api_helpers.py
 """
 
 from __future__ import annotations
@@ -153,35 +151,6 @@ def test_chat_url_answers_alike():
                 errs.append(type(e))
         assert errs[0] == errs[1] == ValueError, (bad, errs)
     return f"{len(envs)} addresses and 2 bad ports alike"
-
-
-def test_wren_index_with_the_app_texts_as_extra():
-    try:
-        import yaml  # noqa: F401
-    except ImportError:
-        from scriptmode import Skip
-        raise Skip("the setup registry reads model.yaml with PyYAML")
-    from server.setup import knowledge as K
-    from tandemapp.conductor.libsearch import TextIndex
-    before = K.Knowledge()
-    before.ensure()
-    given = K.Knowledge(packages=K.PACKAGES, app_docs=K.APP_DOCS)
-    given.ensure()
-    assert given.docs == before.docs, "the app texts given as extra knowledge: the same list"
-    app = set(K.PACKAGES) | set(K.APP_DOCS)
-    assert app <= {d["path"] for d in before.docs}, "every app text is in the index"
-    alone = K.Knowledge(packages=(), app_docs=())
-    alone.ensure()
-    assert alone.docs == [d for d in before.docs if d["path"] not in app], "the engine's own, in order"
-    ref = TextIndex()
-    ref.build(before.docs, K.WEIGHTS)
-    qs = ("lookup store what does it do", "how many lanes fit in memory", "the proxy and its backends",
-          "flashnext 3.05 longest conversation", "what is the conductor", "")
-    for q in qs:
-        assert before.text.scores(q) == ref.scores(q), q
-    assert type(before.text).__module__ == "server.api.textindex"
-    return f"{len(before.docs)} sections ({len(before.docs) - len(alone.docs)} from the app texts); " \
-           f"{len(qs)} queries scored alike"
 
 
 CHILD = """

@@ -9,10 +9,10 @@
   "engine_ids": 4357,
   "engine_files": 510,
   "to": {
-   "engine": 2966,
-   "pair": 1343,
+   "engine": 2976,
+   "pair": 1330,
    "tandemapp": 37,
-   "dropped": 13
+   "dropped": 16
   },
   "to_note": "destinations: an id of a split file with two homes counts in both",
   "tandemapp_ids": 1133,
@@ -22,7 +22,6 @@
   "about": "the pair suite (ENG-413 WP13, WP14): test files that run the engine and TandemApp's extension, packages or test helpers together. They are not part of the engine's own suite (tools/engine_tests.py); tools/pair_suite.sh runs them with a TandemApp checkout at TANDEMAPP_SRC whose PIN names this engine's contract, and each finds TandemApp through tests/pairapp.py",
   "files": [
    "tests/gpu/setup_wren_gpu.py",
-   "tests/test_adapter_guards.py",
    "tests/test_api_clients.py",
    "tests/test_api_helpers.py",
    "tests/test_api_import_guard.py",
@@ -66,7 +65,6 @@
    "tests/test_end_anchor_memory.py",
    "tests/test_end_cut.py",
    "tests/test_eng413_baseline.py",
-   "tests/test_engine_api_live.py",
    "tests/test_engine_deps.py",
    "tests/test_engine_ext_host.py",
    "tests/test_engine_only.py",
@@ -80,7 +78,6 @@
    "tests/test_files_care.py",
    "tests/test_floor_wait.py",
    "tests/test_fp_equivalents.py",
-   "tests/test_gpu_adapters.py",
    "tests/test_gpu_health.py",
    "tests/test_install_headless.py",
    "tests/test_judge.py",
@@ -94,7 +91,6 @@
    "tests/test_library_install.py",
    "tests/test_library_router.py",
    "tests/test_live_rates.py",
-   "tests/test_load_shared.py",
    "tests/test_logbuf.py",
    "tests/test_loop_escape.py",
    "tests/test_loop_guard.py",
@@ -126,7 +122,6 @@
    "tests/test_reasoning_effort_off.py",
    "tests/test_regenerate.py",
    "tests/test_release_gate_setup.py",
-   "tests/test_release_script.py",
    "tests/test_residency.py",
    "tests/test_resident_guard.py",
    "tests/test_resident_park.py",
@@ -143,7 +138,6 @@
    "tests/test_session_identity.py",
    "tests/test_session_spill.py",
    "tests/test_session_tasks.py",
-   "tests/test_settings.py",
    "tests/test_setup_registry.py",
    "tests/test_shadow.py",
    "tests/test_side_carry.py",
@@ -253,6 +247,34 @@
    "why": "the card's key rule came from the --backends proxy's users",
    "gone": [
     "app/proxy/config.py"
+   ]
+  },
+  "tests/test_engine_api_live.py": {
+   "ids": [
+    "test_the_engine_runs_without_app_dashboard"
+   ],
+   "why": "it served the engine from a copy without the vendored app/dashboard; the tree has no app/ at all now, and case 1 runs it so",
+   "gone": [
+    "app/dashboard"
+   ]
+  },
+  "tests/test_api_helpers.py": {
+   "ids": [
+    "test_wren_index_with_the_app_texts_as_extra"
+   ],
+   "why": "Wren's index takes no extra knowledge of TandemApp's any more (ENG-413 WP14: the engine's own texts only, tests/test_setup_wren.py 8b)",
+   "gone": [
+    "app/packages",
+    "app/docs/proxy.md"
+   ]
+  },
+  "tests/test_release_script.py": {
+   "ids": [
+    "test_the_box_gate_suite_counts_the_app_tests"
+   ],
+   "why": "the box gate ran TandemApp's tests from the vendored app/tests; TandemApp's suite runs in its own repository",
+   "gone": [
+    "app/tests"
    ]
   }
  },
@@ -769,7 +791,7 @@
    "home": "split",
    "in_place": true,
    "loads_app_at_import": false,
-   "why": "reads app/proxy, app/tandemapp",
+   "why": "ENG-413 WP14: the lint reads the engine's shared modules only; TandemApp's code is TandemApp's to lint",
    "ids": {
     "test_goldens_hold": [
      "engine"
@@ -784,7 +806,7 @@
      "engine"
     ],
     "test_lint_shared_modules_name_no_model": [
-     "pair"
+     "engine"
     ],
     "test_the_lint_reads_code_not_comments": [
      "engine"
@@ -835,17 +857,31 @@
    ]
   },
   "tests/test_api_helpers.py": {
-   "home": "pair",
+   "home": "split",
    "why": "imports tandemapp.chat_forward, tandemapp.conductor.libsearch, tandemapp.conductor.redact, tandemapp.conductor.schema, tandemapp.conductor.transcripts",
-   "ids": [
-    "test_the_seeds_are_the_conductors",
-    "test_validate_answers_alike",
-    "test_redact_answers_alike",
-    "test_in_repository_answers_alike",
-    "test_chat_url_answers_alike",
-    "test_wren_index_with_the_app_texts_as_extra",
-    "test_a_process_loads_no_app_module"
-   ]
+   "ids": {
+    "test_the_seeds_are_the_conductors": [
+     "pair"
+    ],
+    "test_validate_answers_alike": [
+     "pair"
+    ],
+    "test_redact_answers_alike": [
+     "pair"
+    ],
+    "test_in_repository_answers_alike": [
+     "pair"
+    ],
+    "test_chat_url_answers_alike": [
+     "pair"
+    ],
+    "test_wren_index_with_the_app_texts_as_extra": [
+     "dropped"
+    ],
+    "test_a_process_loads_no_app_module": [
+     "pair"
+    ]
+   }
   },
   "tests/test_api_import_guard.py": {
    "home": "split",
@@ -3044,13 +3080,13 @@
    "home": "split",
    "in_place": true,
    "loads_app_at_import": false,
-   "why": "reads app/, app/dashboard",
+   "why": "the engine runs without any of TandemApp's tree since ENG-413 WP14, so the copy without app/dashboard is the plain tree",
    "ids": {
     "test_the_engine_answers_the_contract": [
      "engine"
     ],
     "test_the_engine_runs_without_app_dashboard": [
-     "pair"
+     "dropped"
     ]
    }
   },
@@ -4019,51 +4055,24 @@
    ]
   },
   "tests/test_gpu_adapters.py": {
-   "home": "split",
+   "home": "engine",
    "in_place": true,
-   "loads_app_at_import": false,
-   "why": "reads app/chatd, app/proxy",
-   "ids": {
-    "test_each_adapter_is_picked_by_its_capability": [
-     "engine"
-    ],
-    "test_gb10_gives_mains_answers": [
-     "engine"
-    ],
-    "test_gb10_moe_launch_reads_its_knobs_with_mains_defaults": [
-     "engine"
-    ],
-    "test_gb10_dense_split_is_mains": [
-     "engine"
-    ],
-    "test_an_unknown_gpu_and_the_cpu_get_the_base": [
-     "engine"
-    ],
-    "test_ada_answers_like_the_base_on_main": [
-     "engine"
-    ],
-    "test_ada_owns_the_triton_probe_verdicts": [
-     "engine"
-    ],
-    "test_profile_asks_the_driver_once_a_device": [
-     "engine"
-    ],
-    "test_gate_hw_matches_through_tools_gpu": [
-     "engine"
-    ],
-    "test_device_keys_and_presets": [
-     "engine"
-    ],
-    "test_the_fingerprints_read_the_adapters": [
-     "engine"
-    ],
-    "test_no_gpu_choice_outside_tools_gpu": [
-     "pair"
-    ],
-    "test_the_package_imports_without_torch": [
-     "engine"
-    ]
-   }
+   "why": "ENG-413 WP14: scans the engine's trees only; TandemApp's code is its own",
+   "ids": [
+    "test_each_adapter_is_picked_by_its_capability",
+    "test_gb10_gives_mains_answers",
+    "test_gb10_moe_launch_reads_its_knobs_with_mains_defaults",
+    "test_gb10_dense_split_is_mains",
+    "test_an_unknown_gpu_and_the_cpu_get_the_base",
+    "test_ada_answers_like_the_base_on_main",
+    "test_ada_owns_the_triton_probe_verdicts",
+    "test_profile_asks_the_driver_once_a_device",
+    "test_gate_hw_matches_through_tools_gpu",
+    "test_device_keys_and_presets",
+    "test_the_fingerprints_read_the_adapters",
+    "test_no_gpu_choice_outside_tools_gpu",
+    "test_the_package_imports_without_torch"
+   ]
   },
   "tests/test_gpu_health.py": {
    "home": "split",
@@ -5020,33 +5029,18 @@
    }
   },
   "tests/test_load_shared.py": {
-   "home": "split",
+   "home": "engine",
    "in_place": true,
-   "loads_app_at_import": false,
-   "why": "reads app/proxy, app/tandemapp",
-   "ids": {
-    "test_an_engine_without_caches_gets_them_off_and_one_slot": [
-     "engine"
-    ],
-    "test_an_engine_with_caches_gets_the_policy_the_store_and_its_old_keys": [
-     "engine"
-    ],
-    "test_engine_usage_mode_reaches_the_shared_serving_state": [
-     "engine"
-    ],
-    "test_the_policy_reads_the_allocators_pools_only_under_expandable_segments": [
-     "engine"
-    ],
-    "test_an_engine_that_cannot_be_lent_gets_the_side_lane_off": [
-     "engine"
-    ],
-    "test_a_third_architecture_starts_and_answers_with_no_server_edit": [
-     "engine"
-    ],
-    "test_no_model_branch_in_the_server": [
-     "pair"
-    ]
-   }
+   "why": "ENG-413 WP14: scans server/ only; no TandemApp code runs in the server but an extension",
+   "ids": [
+    "test_an_engine_without_caches_gets_them_off_and_one_slot",
+    "test_an_engine_with_caches_gets_the_policy_the_store_and_its_old_keys",
+    "test_engine_usage_mode_reaches_the_shared_serving_state",
+    "test_the_policy_reads_the_allocators_pools_only_under_expandable_segments",
+    "test_an_engine_that_cannot_be_lent_gets_the_side_lane_off",
+    "test_a_third_architecture_starts_and_answers_with_no_server_edit",
+    "test_no_model_branch_in_the_server"
+   ]
   },
   "tests/test_logbuf.py": {
    "home": "split",
@@ -6729,26 +6723,25 @@
   "tests/test_release_script.py": {
    "home": "split",
    "in_place": true,
-   "loads_app_at_import": false,
-   "why": "reads app/VERSION, app/tests",
+   "why": "ENG-413 WP14: the release has no app/VERSION and the box gate no app suite; the gate's suite step is test_the_box_gate_suite_runs_the_engines_list",
    "ids": {
     "test_bump_then_preflight_then_a_dry_run": [
-     "pair"
+     "engine"
     ],
     "test_a_trailer_stops_the_preflight": [
-     "pair"
+     "engine"
     ],
     "test_a_knob_name_in_a_body_is_no_session_line": [
-     "pair"
+     "engine"
     ],
     "test_the_milestone_section_closes_the_release_and_opens_the_next_patch": [
-     "pair"
+     "engine"
     ],
     "test_the_box_gate_runs_smoke_and_loose_on_the_candidate_with_the_key": [
      "engine"
     ],
     "test_the_box_gate_suite_counts_the_app_tests": [
-     "pair"
+     "dropped"
     ],
     "test_the_scripts_parse": [
      "engine"
@@ -7659,30 +7652,17 @@
    ]
   },
   "tests/test_settings.py": {
-   "home": "split",
+   "home": "engine",
    "in_place": true,
-   "loads_app_at_import": false,
-   "why": "reads app/proxy, app/tandemapp",
-   "ids": {
-    "test_no_stray_reads": [
-     "pair"
-    ],
-    "test_no_hidden_reads": [
-     "pair"
-    ],
-    "test_registry_matches_reads": [
-     "pair"
-    ],
-    "test_live_environment": [
-     "engine"
-    ],
-    "test_second_configuration_and_prefix": [
-     "engine"
-    ],
-    "test_scripts_start_without_the_repo_on_the_path": [
-     "engine"
-    ]
-   }
+   "why": "ENG-413 WP14: scans the engine's trees; the extension's knobs are contracts/engine-ext-v1/knobs.json's",
+   "ids": [
+    "test_no_stray_reads",
+    "test_no_hidden_reads",
+    "test_registry_matches_reads",
+    "test_live_environment",
+    "test_second_configuration_and_prefix",
+    "test_scripts_start_without_the_repo_on_the_path"
+   ]
   },
   "tests/test_setup_api.py": {
    "home": "engine",

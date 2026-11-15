@@ -72,10 +72,10 @@ def _monitor_ext() -> str:
     """The monitor alone runs behind the extension from ENG-413 WP3b on (the extension says it
     takes no conductor directory then: TandemApp's since WP4, WP3b's interim adapter before it); on
     a tree before WP3b, headless with `--conductor on`."""
-    for name, rel in (("tandemapp.engine_ext", ("app", "tandemapp", "engine_ext.py")),
-                      ("server.ext_app", ("server", "ext_app.py"))):
+    for name, path in (("tandemapp.engine_ext", os.path.join(pairapp.APP, "tandemapp", "engine_ext.py")),
+                       ("server.ext_app", os.path.join(ROOT, "server", "ext_app.py"))):
         try:
-            with open(os.path.join(ROOT, *rel)) as f:
+            with open(path) as f:
                 if "MONITOR_ALONE = True" in f.read():
                     return name
         except OSError:

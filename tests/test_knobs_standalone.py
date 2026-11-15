@@ -24,11 +24,11 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 
-DIRS = ("app/proxy", "app/tandemapp/conductor", "app/tandemapp/conductor/monitor")
+DIRS = ("proxy", "tandemapp/conductor", "tandemapp/conductor/monitor")      # TandemApp's tree
 
 
 def _files():
-    found = {d: glob.glob(os.path.join(ROOT, d, "*.py")) for d in DIRS}
+    found = {d: glob.glob(os.path.join(pairapp.APP, d, "*.py")) for d in DIRS}
     assert all(found.values()), f"no module under {[d for d, fs in found.items() if not fs]}"
     return sorted(p for fs in found.values() for p in fs)
 

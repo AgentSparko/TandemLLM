@@ -849,10 +849,9 @@ def test_export_the_file_name_has_a_length_limit():
 
 def test_export_the_dashboard_gives_up_at_the_handler_timeout():
     """The dashboard's fetch of the export gives up at the engine's own handler timeout: its
-    EXPORT_LIMIT_MS is HANDLER_TIMEOUT_S (the dashboard's half is app/dashboard/tests/log-export.test.ts,
-    which reads nothing outside app/ since SRV-747)."""
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    with open(os.path.join(root, "app", "dashboard", "src", "lib", "log-export.ts"), encoding="utf-8") as f:
+    EXPORT_LIMIT_MS is HANDLER_TIMEOUT_S (the dashboard's half is TandemApp's
+    dashboard/tests/log-export.test.ts)."""
+    with open(os.path.join(pairapp.APP, "dashboard", "src", "lib", "log-export.ts"), encoding="utf-8") as f:
         m = re.search(r"^export const EXPORT_LIMIT_MS = ([0-9_]+);$", f.read(), re.M)
     assert m, "no EXPORT_LIMIT_MS in log-export.ts"
     assert int(m.group(1).replace("_", "")) == int(app.HANDLER_TIMEOUT_S * 1000) == 60_000, \

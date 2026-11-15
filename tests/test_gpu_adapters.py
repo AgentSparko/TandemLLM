@@ -22,7 +22,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from tools import gpu  # noqa: E402
 from tools.gpu import INLINE, NoInlineBuild  # noqa: E402
 
@@ -244,18 +243,10 @@ ALLOWED = {
     "install.sh": "runs before the repository is on disk",
     # builds the third-party exllamav3 on a quantization box and logs its capability
     "tools/exl3/common.sh": "the third-party exllamav3 build, not this engine's kernels",
-    # the standalone proxy (TandemApp's, app/proxy since SRV-747) ships without tools/; it reports a
-    # GB10 backend's memory as unified
-    "app/proxy/hostcollect.py": "the standalone proxy has no tools/; a monitoring view, not an engine choice",
-    "app/proxy/scrape.py": "the standalone proxy has no tools/; a monitoring view, not an engine choice",
-    # TandemApp's node agent names a GB10 host a Spark in its mDNS record; discovery's table maps
-    # OpenSSH versions to Ubuntu releases (a tuple like (8, 9) is a version, not a capability)
-    "app/proxy/nodeagent.py": "a node's kind in its mDNS record, not an engine choice",
-    "app/proxy/discovery.py": "OpenSSH versions to Ubuntu releases, not a GPU capability",
     # a stub nvidia-smi that plays a GB10 for the release gate's install check
     "tools/release_gate_setup.sh": "a stub nvidia-smi, not a choice",
 }
-SCAN = ("engine", "tools", "server", "app/proxy", "app/chatd", "ops", "bench")
+SCAN = ("engine", "tools", "server", "ops", "bench")          # ENG-413 WP14: TandemApp's is its own
 
 
 def _scanned():

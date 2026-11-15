@@ -446,10 +446,10 @@ def _mods() -> str:
 def _engine(env_extra: dict, conductor: str | None = None, extra=()):
     from test_conductor_e2e import LAUNCH, _env
     tmp = tempfile.mkdtemp(prefix="ext-host-")
-    env = dict(_env(), HOME=tmp, PYTHONPATH=os.pathsep.join((ROOT, DIR, _mods())), **env_extra)
+    env = dict(_env(), HOME=tmp, PYTHONPATH=os.pathsep.join(
+        p for p in (ROOT, DIR, _mods(), os.environ.get("PYTHONPATH")) if p), **env_extra)
     args = [sys.executable, "-c", LAUNCH, "--fake-engine", "--port", "0", "--served-model", RAW,
-            "--usage-ledger", os.path.join(tmp, "ledger.sqlite3"), "--fake-tps", "2000",
-            "--dashboard-dir", os.path.join(tmp, "dist"), *extra]
+            "--usage-ledger", os.path.join(tmp, "ledger.sqlite3"), "--fake-tps", "2000", *extra]
     if conductor:
         args += ["--conductor-config", conductor, "--conductor-defaults", "shipped"]
     return subprocess.Popen(args, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

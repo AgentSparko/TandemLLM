@@ -65,7 +65,10 @@ def prof(frame, event, arg):
     code = frame.f_code
     rel = rels.get(code.co_filename)
     if rel is None:
-        rel = rels[code.co_filename] = os.path.relpath(code.co_filename, ROOT).replace(os.sep, '/')
+        fn, app = os.path.realpath(code.co_filename), os.path.realpath(os.environ.get('TRACE_APP') or '/-')
+        rel = ('app/' + os.path.relpath(fn, app) if fn.startswith(app + os.sep)
+               else os.path.relpath(code.co_filename, ROOT)).replace(os.sep, '/')
+        rels[code.co_filename] = rel
     name = getattr(code, 'co_qualname', code.co_name)
     if not (rel in FILES or (rel == 'server/app.py' and code.co_name in APP)
             or (rel == 'app/tandemapp/conductor/signals.py' and code.co_name in SIG)):
@@ -143,7 +146,7 @@ def trace(mode: str) -> tuple:
         port = free_port()
         assert port not in (8000, 8009), port
         env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": tmp, "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p),
-               "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin", "TRACE_OUT": out, "TMPDIR": tmp}
+               "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin", "TRACE_OUT": out, "TRACE_APP": pairapp.APP, "TMPDIR": tmp}
         if mode == "chat":
             env["QSE_EXT"] = "tandemapp.engine_ext"           # ENG-413 WP3a: chat mode's extension
         log = open(os.path.join(tmp, "engine.log"), "w")
@@ -261,7 +264,6 @@ def _cases() -> list[tuple[str, dict, str | None]]:
 
 def test_the_check_is_the_conductors():
     import ast
-    import server  # noqa: F401  (its finder serves the conductor's tandemapp from app/ until ENG-413)
     from server.api import compaction as C
     from tandemapp.conductor import signals
     bad = []
@@ -275,7 +277,8 @@ def test_the_check_is_the_conductors():
         (signals.COMPACTION_MIN_CHARS, signals.COMPACTION_SHAPES, signals.BARE_COMPACTION_CLIENTS)
 
     def src(path, fn):
-        text = open(os.path.join(ROOT, path)).read()
+        text = open(os.path.join(pairapp.APP, path[4:]) if path.startswith("app/") else
+                    os.path.join(ROOT, path)).read()
         node = next(n for n in ast.parse(text).body if isinstance(n, ast.FunctionDef) and n.name == fn)
         return ast.dump(node)
     for fn in ("compaction_shape", "_is_tool_response"):

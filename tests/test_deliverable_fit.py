@@ -128,8 +128,7 @@ WRITE_MESSAGE_LINE = "so it can be copied and sent as it is"
 # ------------------------------------------------------------------ 1 the field and the reading
 
 def test_1_the_deliverable_field_and_the_capabilities():
-    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                           "app", "packages", "seed.json")) as f:
+    with open(os.path.join(pairapp.APP, "packages", "seed.json")) as f:
         seed = json.load(f)["packages"]
     got = {n: p["deliverable"] for n, p in seed.items() if "deliverable" in p}
     assert got == {"write-message": "send", "formal-letter": "send", "event-plan": "schedule",

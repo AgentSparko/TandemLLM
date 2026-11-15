@@ -374,7 +374,8 @@ def start(host):
 
 def _engine(tmp: str, env_extra: dict, conductor: str | None, extra=()):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": tmp, "CUDA_VISIBLE_DEVICES": "",
-           "PYTHONPATH": os.pathsep.join((ROOT, tmp)), "TZ": "Europe/Berlin", **env_extra}
+           "PYTHONPATH": os.pathsep.join(p for p in (ROOT, tmp, os.environ.get("PYTHONPATH")) if p),
+           "TZ": "Europe/Berlin", **env_extra}
     args = [sys.executable, "-c", LAUNCH, "--fake-engine", "--host", "127.0.0.1", "--port", "0",
             "--served-model", RAW, "--usage-ledger", os.path.join(tmp, "ledger.sqlite3"),
             "--fake-tps", "4000", "--conductor", "on", "--disk-cache", "off",

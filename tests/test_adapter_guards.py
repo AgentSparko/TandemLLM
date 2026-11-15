@@ -33,7 +33,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from engine.methods import manifest as mf  # noqa: E402
 from engine.models import REGISTRY  # noqa: E402
 
@@ -347,26 +346,16 @@ WORDS = re.compile(r"flint|lfm|liquid|nemotron|flashnext|flash_next|ornith|qwen3
                    r"|argkey|pythonic|self_think", re.I)
 #: the product's own namespace, which is not a model: QWEN38_* settings, ~/.qwen38-spark-engine
 NAMESPACE = re.compile(r"qwen38", re.I)
-#: SRV-747: TandemApp's proxy and tandemapp, which the engine runs in its process until ENG-413
-SHARED_GLOBS = ("server/**/*.py", "app/proxy/**/*.py", "app/tandemapp/**/*.py", "engine/*.py",
-                "engine/methods/*.py", "engine/drafters/*.py")
+#: the engine's shared modules (ENG-413 WP14: TandemApp's code is TandemApp's to lint)
+SHARED_GLOBS = ("server/**/*.py", "engine/*.py", "engine/methods/*.py", "engine/drafters/*.py")
 #: the format modules and the model packages are where those names belong
-OWN_PLACES = ("app/tandemapp/toolformats/", "server/api/toolformats/")
+OWN_PLACES = ("server/api/toolformats/",)
 
 #: the ratchet: v0.14.0's counts a file may keep (ENG-E17 lowers them; a count may only go down, and a file
 #: at 0 leaves the table). Each line says why the rest stays.
 BASELINE = {
-    # the conductor's router stage that asks the served model ("qwen" kind) and its prompts: a stored
-    # document's key, not a model check
-    "app/tandemapp/conductor/classify.py": 6, "app/tandemapp/conductor/decisions.py": 2,
-    "app/tandemapp/conductor/fake_decider.py": 1, "app/tandemapp/conductor/hook.py": 3,
-    "app/tandemapp/conductor/libsearch.py": 1, "app/tandemapp/conductor/memory.py": 3,
-    "app/tandemapp/conductor/memwriter.py": 1, "app/tandemapp/conductor/narrator.py": 2,
-    "app/tandemapp/conductor/notes.py": 2, "app/tandemapp/conductor/proposals.py": 1,
-    "app/tandemapp/conductor/router.py": 15, "app/tandemapp/conductor/schema.py": 18,
-    "server/conductor/shadow.py": 5, "app/tandemapp/metrics.py": 2, "app/proxy/harness.py": 5,
-    "engine/shadow.py": 1, "server/setup/wren.py": 17,
-    # (ENG-413 WP5: app/tandemapp/conductor/routes.py's copy of shadow.py's off text is gone: 0)
+    # the shadow reader's and Wren's prompts and the served model's stage key: document values
+    "server/conductor/shadow.py": 5, "engine/shadow.py": 1, "server/setup/wren.py": 17,
     # ENG-413 WP2b: the engine's copy of tandemapp/metrics.py, the same two (a conductor family's help
     # text and the router's "qwen" stage source)
     "server/api/metrics.py": 2,

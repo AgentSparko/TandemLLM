@@ -1,6 +1,6 @@
 """The engine API contract v1 against a running engine (SRV-748; 1.3: ENG-427, QA ENG-428):
 `server/app.py --fake-engine` in a process of its own on a free port (tests/ports.py), with a
-dashboard directory that holds no built page, a temporary home, ledger and admin token.
+temporary home, ledger and admin token.
 
   1  /health carries engine_api (server/engine_api.py VERSION) for a loopback caller and
      validates against contracts/engine-api-v1/health.schema.json; a proxied caller without
@@ -8,11 +8,8 @@ dashboard directory that holds no built page, a temporary home, ledger and admin
      routes.json marks live answers 200, and one with a schema (1.3: dashboard/) validates
      against it; every family /metrics names is in metrics-families.json with its type;
      1.4 (ENG-413 WP3a): the engine runs headless (no QSE_EXT): /health `extensions` is [] and
-     /dashboard/ answers 404 no_ui, naming TandemApp (the page is the extension's until it leaves)
+     /dashboard/ answers 404 no_ui, naming TandemApp (1.8: no engine serves a page)
                                                                   test_the_engine_answers_the_contract
-  2  the same from a copy of the tree without app/dashboard (the engine runs without the
-     dashboard's sources), its dashboard directory left to the default
-                                                                  test_the_engine_runs_without_app_dashboard
 
 CPU torch (the fake engine's server imports it); without torch it prints `skipped: no torch`.
 Run: python tests/test_engine_api_live.py
@@ -35,7 +32,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
-import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 CONTRACT = os.path.join(ROOT, "contracts", "engine-api-v1")
 ADMIN = "live-" + "0" * 40
 MODEL = "tandem-live"
@@ -47,7 +43,7 @@ LAUNCH = ("import sys, runpy; sys.modules['triton'] = None; sys.modules['triton.
 class Engine:
     """server/app.py --fake-engine from `tree`, on a free port, stopped by close()."""
 
-    def __init__(self, tree: str, dashboard_dir: str | None):
+    def __init__(self, tree: str):
         from ports import free_port
         self.port = free_port()
         assert self.port not in (8000, 8009), self.port
@@ -57,12 +53,11 @@ class Engine:
         env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home,
                "PYTHONPATH": tree, "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN,
                "TMPDIR": self.tmp}
-        extra = ["--dashboard-dir", dashboard_dir] if dashboard_dir is not None else []
         self.log = open(os.path.join(self.tmp, "engine.log"), "w")
         self.proc = subprocess.Popen(
             [sys.executable, "-c", LAUNCH, "--fake-engine", "--port", str(self.port),
              "--served-model", MODEL, "--fake-tps", "400",
-             "--usage-ledger", os.path.join(self.tmp, "ledger.sqlite3"), *extra],
+             "--usage-ledger", os.path.join(self.tmp, "ledger.sqlite3")],
             cwd=tree, env=env, stdout=self.log, stderr=subprocess.STDOUT)
         end = time.time() + 120
         while time.time() < end:
@@ -173,37 +168,13 @@ def _check(e: Engine) -> str:
 
 
 def test_the_engine_answers_the_contract():
-    empty = tempfile.mkdtemp(prefix="engine-api-dash-")
-    e = Engine(ROOT, os.path.join(empty, "dist"))           # a dashboard directory with nothing
+    e = Engine(ROOT)
     try:
         return _check(e)
     except AssertionError as exc:
         raise AssertionError(f"{exc}\n{e.tail()}") from None
     finally:
         e.close()
-        shutil.rmtree(empty, ignore_errors=True)
-
-
-def test_the_engine_runs_without_app_dashboard():
-    tree = os.path.join(tempfile.mkdtemp(prefix="engine-api-tree-"), "src")
-    skip = shutil.ignore_patterns(".git", "node_modules", "__pycache__", ".pytest_cache")
-    dash = os.path.join(pairapp.APP, "dashboard")
-
-    def ignore(d, names):
-        out = set(skip(d, names))
-        if os.path.realpath(d) == os.path.realpath(pairapp.APP):
-            out.add("dashboard")
-        return out
-    shutil.copytree(ROOT, tree, ignore=ignore, symlinks=True)
-    assert os.path.isdir(dash) and not os.path.exists(os.path.join(tree, "app", "dashboard"))
-    e = Engine(tree, None)
-    try:
-        return "without app/dashboard: " + _check(e)
-    except AssertionError as exc:
-        raise AssertionError(f"{exc}\n{e.tail()}") from None
-    finally:
-        e.close()
-        shutil.rmtree(os.path.dirname(tree), ignore_errors=True)
 
 
 if __name__ == "__main__":

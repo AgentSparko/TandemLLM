@@ -305,8 +305,7 @@ class Engine:
         if admin:
             env["QSE_ADMIN_TOKEN"] = admin
         args = ["--fake-engine", "--port", str(self.port), "--served-model", "tandem-routes",
-                "--fake-tps", "400", "--usage-ledger", os.path.join(self.tmp, "ledger.sqlite3"),
-                "--dashboard-dir", os.path.join(self.tmp, "no-page")]
+                "--fake-tps", "400", "--usage-ledger", os.path.join(self.tmp, "ledger.sqlite3")]
         if chat:
             env["QSE_EXT"] = "tandemapp.engine_ext"
             args += ["--conductor-config", os.path.join(self.tmp, "conductor")]

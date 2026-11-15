@@ -163,7 +163,8 @@ def test_the_command_line_reads_the_store_and_journals():
     Store(root).put("residency", None, dict(DOC, margin_gib=10.0), note="m10", author="t")
     # ENG-413 WP5: the command line reads the store through the extension's module (QSE_EXT,
     # engine-ext-v1 3.0 read_document), as ops/roles.sh runs it with serve.env's QSE_EXT
-    env = dict(os.environ, PYTHONPATH=ROOT, QSE_EXT="tandemapp.engine_ext")
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(p for p in (ROOT, pairapp.APP) if p),
+               QSE_EXT="tandemapp.engine_ext")
     run = lambda *a: subprocess.run([sys.executable, "-m", "server.conductor.residency",  # noqa: E731
                                      "--root", root, *a], capture_output=True, text=True,
                                     env=env, cwd=ROOT)

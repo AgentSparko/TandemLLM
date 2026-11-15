@@ -9,7 +9,7 @@ nvcc and g++, a real venv (the python of this run behind install.sh's 3.11 and G
 installs a wheel into that venv offline and installs nothing else, and a systemctl that records its
 calls. No network, no GPU, nothing of the box: the engine is install_control's stub on a free port,
 TandemNode's port and chatd's URL are free ports, and the box's engine, chatd and agent are never
-addressed. TandemApp's wheel is built here from its source (app/ until ENG-413 WP14, else
+addressed. TandemApp's wheel is built here from its source (TANDEMAPP_SRC since ENG-413 WP14, else
 TANDEM_APP_SRC) with a stand-in page.
 
 The pre-WP7 install is made by that release's own install.sh (tests/fixtures/pre_wp7: install.sh,
@@ -151,6 +151,9 @@ def release(kind: str) -> tuple[str, str]:
     shutil.copytree(ROOT, rel, symlinks=True, ignore=lambda d, names: set(skip(d, names)) | (
         top & set(names) if os.path.samefile(d, ROOT) else set()))
     if kind == "pre":
+        # an install from before WP7 carried TandemApp under app/ (ENG-413 WP14: from TANDEMAPP_SRC)
+        shutil.copytree(pairapp.APP, os.path.join(rel, "app"), symlinks=True,
+                        ignore=shutil.ignore_patterns("node_modules", "__pycache__", ".git", "*.pdf"))
         for name, where in (("start.sh", "ops"), ("watchdog.sh", "ops"), ("serve.env", "ops")):
             shutil.copy(os.path.join(PRE, name), os.path.join(rel, where, name))
             if name.endswith(".sh"):                 # the release's modes (tandem doctor restores them)

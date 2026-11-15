@@ -1,9 +1,9 @@
 """/124: every QWEN38_* knob the engine reads goes through engine/settings.py.
 
 Pins the seam, not a behaviour: (1) no module of the engine's scope (engine/, server/, the kernel
-and linear modules of tools/, and until ENG-413 app/tandemapp/ and app/proxy/, which the engine runs
-in its process) reads a QWEN38_* variable any other way than `SETTINGS.get`; (2) every
-name read is in the registry and every registry entry is read somewhere; (3) `SETTINGS` views the
+and linear modules of tools/) reads a QWEN38_* variable any other way than `SETTINGS.get`; (2)
+every name read is in the registry and every registry entry is read somewhere, or is a knob the
+extension reads (contracts/engine-ext-v1/knobs.json, ENG-413 WP14); (3) `SETTINGS` views the
 live environment (so a value set before an import, or before a per-call read, is seen exactly as the
 old `os.environ.get` saw it); (4) a second EngineSettings over another mapping or another prefix is
 independent of the process's.
@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import glob
 import os
+import json
 import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from engine.settings import KNOBS, SETTINGS, EngineSettings  # noqa: E402
 
 KERNEL = re.compile(r"_kernels|fp8_linear|nvfp4_linear|exl3_linear|nvfp4_skinny|nvfp4_verify_tiles|head_gemv|"
@@ -27,8 +27,10 @@ KERNEL = re.compile(r"_kernels|fp8_linear|nvfp4_linear|exl3_linear|nvfp4_skinny|
 ALLOWED = {("tools/gdn_wy_kernels.py", "QWEN38_WY_GRID"), ("tools/gdn_wy_kernels.py", "QWEN38_WY_SIZES")}
 
 
-#: the engine's trees, and until ENG-413 TandemApp's, whose conductor and proxy run in its process
-TREES = (("engine",), ("server",), ("app", "tandemapp"), ("app", "proxy"))
+#: the engine's trees (ENG-413 WP14: the knobs the extension reads are contracts/engine-ext-v1/knobs.json's)
+TREES = (("engine",), ("server",))
+with open(os.path.join(ROOT, "contracts", "engine-ext-v1", "knobs.json")) as _f:
+    EXT_KNOBS = set(json.load(_f)["knobs"])
 
 
 def scope() -> list[str]:
@@ -122,12 +124,15 @@ def test_registry_matches_reads():
         used |= set(re.findall(r"_S\.get\(\s*\"([A-Z0-9_]+)\"", open(f).read()))
     computed = {"TREE_NODES", "TREE_NODES_NARROW", "SKINNY_TILES_B", "SKINNY_TILES_C", "SKINNY_TILES_WIDE_B"}
     missing = used - set(KNOBS)
-    unused = set(KNOBS) - used - computed
+    unused = set(KNOBS) - used - computed - EXT_KNOBS              # the extension reads those
     assert not missing, f"read but not registered: {sorted(missing)}"
     assert not unused, f"registered but never read: {sorted(unused)}"
     for k, (d, where) in KNOBS.items():
         assert d is None or isinstance(d, str), (k, d)
-        assert os.path.isfile(os.path.join(ROOT, where)), (k, where)
+        if where.startswith("app" + "/"):                # a frozen owner label: the extension's knob
+            assert k in EXT_KNOBS, (k, where)
+        else:
+            assert os.path.isfile(os.path.join(ROOT, where)), (k, where)
     return f"{len(KNOBS)} knobs, all read, all registered"
 
 

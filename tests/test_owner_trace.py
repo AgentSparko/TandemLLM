@@ -72,7 +72,10 @@ def prof(frame, event, arg):
     code = frame.f_code
     rel = rels.get(code.co_filename)
     if rel is None:
-        rel = rels[code.co_filename] = os.path.relpath(code.co_filename, ROOT).replace(os.sep, '/')
+        fn, app = os.path.realpath(code.co_filename), os.path.realpath(os.environ.get('TRACE_APP') or '/-')
+        rel = ('app/' + os.path.relpath(fn, app) if fn.startswith(app + os.sep)
+               else os.path.relpath(code.co_filename, ROOT)).replace(os.sep, '/')
+        rels[code.co_filename] = rel
     name = getattr(code, 'co_qualname', code.co_name)
     if not code.co_flags & 0x2 or code.co_name.startswith('<'):
         return                       # a module's or a class's body, a comprehension: not a call
@@ -169,7 +172,7 @@ def trace(mode: str) -> tuple:
         port = free_port()
         assert port not in (8000, 8009), port
         env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": tmp, "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p),
-               "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin", "TRACE_OUT": out, "TMPDIR": tmp,
+               "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin", "TRACE_OUT": out, "TRACE_APP": pairapp.APP, "TMPDIR": tmp,
                "QSE_ADMIN_TOKEN": ADMIN, "QSE_FAKE_CARD_DIR": card,
                "BOX_LOCK": os.path.join(tmp, "no-box.flock")}
         if mode in ("chat", "deciders"):

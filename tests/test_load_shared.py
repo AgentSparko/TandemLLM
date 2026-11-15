@@ -12,7 +12,7 @@ Everything after it is the shared loader, run for real on the server's argument 
   * a third architecture registered in a test, with no edit under server/, starts on CPU and answers
     /v1/chat/completions;
   * no model branch in the server: no `hasattr(eng` / `isinstance(eng`, no other model's name (under
-    server/, and until ENG-413 app/tandemapp/ and app/proxy/, which the engine runs in its process).
+    server/; ENG-413 WP14: no TandemApp code runs in the server but an extension).
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ import types
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 import test_forward_tree as T  # noqa: E402,F401  (the CPU environment before the engine imports)
 import torch  # noqa: E402
 
@@ -237,10 +236,10 @@ def test_a_third_architecture_starts_and_answers_with_no_server_edit():
     return "registered in the test, started through _load on CPU, 12 tokens through /v1/chat/completions"
 
 
-#: the code the server runs: its own, and until ENG-413 TandemApp's tandemapp and proxy
-SERVER_CODE = (("server",), ("app", "tandemapp"), ("app", "proxy"))
-#: a line that names a model and branches on none: a recipe's local version label in a docstring
-NAMED_ONLY = (("app/proxy/preflight.py", "`0.15.0+flashnext-3.05`"),)
+#: the code the server runs: its own (ENG-413 WP14: no TandemApp code runs in it but an extension)
+SERVER_CODE = (("server",),)
+#: a line that names a model and branches on none
+NAMED_ONLY: tuple = ()
 
 
 def test_no_model_branch_in_the_server():
@@ -255,7 +254,7 @@ def test_no_model_branch_in_the_server():
                 if bad.search(line) and not any(rel == f and s in line for f, s in NAMED_ONLY):
                     hits.append(f"{rel}:{n}: {line.strip()}")
     assert not hits, hits
-    return "no hasattr(eng / isinstance(eng, no other model's name under server/, app/tandemapp/, app/proxy/"
+    return "no hasattr(eng / isinstance(eng, no other model's name under server/"
 
 
 if __name__ == "__main__":

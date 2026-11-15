@@ -71,9 +71,9 @@ import types
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.append(os.path.join(pairapp.APP, "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
 
-import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from test_class_core import PAGODA, make  # noqa: E402
 from test_conductor_router import COMPOSITE, TOOLS, turn  # noqa: E402
 from test_libsearch import SKILLS  # noqa: E402
