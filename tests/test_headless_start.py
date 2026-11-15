@@ -45,7 +45,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
 #: what the copy carries: the engine's code and what its start reads
-KEEP = ("server", "engine", "models", "ops", "contracts", "tools", "VERSION")
+KEEP = ("server", "engine", "models", "ops", "contracts", "tools", "docs", "VERSION")
 #: TandemApp's packages, blocked in every child (None in sys.modules: an import of one fails)
 BLOCK = ("tandemapp", "proxy", "chatd")
 RAW = "qwen38-spark-engine"
