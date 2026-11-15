@@ -1,6 +1,6 @@
 # Remote control
 
-`tandem remote` is the engine's control CLI for a controller on another machine. The controller reaches the engine box over SSH with a key whose line in `authorized_keys` runs only `tandem remote`: the key can start, stop and restart the engine, switch its mode, change its settings, install extensions, upgrade the engine, set the HTTP token, read its logs and run its checks, and nothing else. No shell, no terminal, no port forward. No sudo is needed. The contract is [contracts/engine-ctl-v1](../contracts/engine-ctl-v1/README.md); the code is `server/remote/`.
+`tandem remote` is the engine's control CLI for a controller on another machine. The controller reaches the engine box over SSH with a key whose line in `authorized_keys` runs only `tandem remote`: the key can start, stop and restart the engine, switch its mode, change its settings, install extensions, upgrade the engine, set the HTTP token, read its logs and run its checks, and nothing else. No shell, no terminal, no port forward. No sudo is needed. The contract is [contracts/engine-ctl-v1](../contracts/engine-ctl-v1/README.md); the code is `server/remote/`. Pairing by code puts the key's line in place ([pairing.md](pairing.md)).
 
 ## The key's line
 
@@ -91,6 +91,8 @@ An extension is an engine-ext-v1 module the engine loads in chat mode (`QSE_EXT`
 ## The HTTP token
 
 `token rotate` makes a random token and answers it on this SSH channel, and nowhere else: it is in no log and no journal. The engine box keeps only its sha256, in the tree's `run/http-token` (mode 600). The engine reads the file again within a second, so a rotation needs no restart and the old token stops working.
+
+Each paired key has a token of its own: pairing writes its hash on a line that names the key id (`sha256:<hex> ID`), `token rotate` over a key's channel replaces only that key's line, and `unpair` removes it with the key's line. By hand on the box (no key id), `token rotate` replaces the whole file. A token of any line passes. The line `sha256:<hex> *` is an install's lock before pairing: a token nobody holds ([pairing.md](pairing.md)).
 
 While the file exists, a caller that is not on the engine's host needs `Authorization: Bearer <token>` on every route, inference included, or it gets 401. A caller on this host (loopback, without `X-Forwarded-For` or `X-Real-IP`) needs none, so the watchdog, the status checks and a controller on the same box keep working. `/health`, `/healthz`, `/v1/health`, `/readyz` and `/metrics/up` answer without it: a probe or a controller can tell a down engine from one that refuses it. Without the token, `/health` gives only its status; with it, the full body follows the admin rule (docs/server.md).
 

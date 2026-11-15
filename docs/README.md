@@ -23,6 +23,7 @@ TandemLLM is an inference engine, and we measure its speed on raw `/v1/completio
 | [flint.md](flint.md) | Recursive's Flint: the model, its EXL3 and BF16 profiles, reasoning and tools, the lookup at long context, how the engine runs it |
 | [nemotron-h.md](nemotron-h.md) | NVIDIA's NemotronH (Nemotron 3.5 Bolt, Super VL, Lightning): the models, the EXL3, GGUF and NVFP4 profiles, LiLiCorr, how the engine runs them |
 | [remote-control.md](remote-control.md) | `tandem remote`: the control verbs over an SSH key that runs nothing else, the settings overlay and its versions, the journal |
+| [pairing.md](pairing.md) | pairing TandemApp by a 6-digit code (`tandem pair`, the end of every install), and the engine host on the LAN (`_tandem._tcp`) |
 | [setup.md](setup.md) | a new box from the command line, setup mode and the Setup API behind the Setup Guide, the model registry, and Wren |
 | [community-weights.md](community-weights.md) | packs other people published: running one, adding yours with one JSON file, how a maintainer verifies it |
 | [shadow-reader.md](shadow-reader.md) | the small model that follows each session and answers questions about it |
