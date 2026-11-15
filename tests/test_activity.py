@@ -542,7 +542,7 @@ def test_stamps_grow_with_transitions_not_tokens():
 def test_the_token_loops_gained_no_statement():
     """The hot-path rule, read off the source: the decode generator, the reasoning splitter
     and the budget's per-token path carry nothing of the live view but the one stamp in the
-    `</think>` branch (the record's `track` is held by app/tests/test_live.py)."""
+    `</think>` branch (the record's `track` is held by TandemApp's tests/test_live.py)."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     app = open(os.path.join(root, "server", "app.py")).read()
     gen = app.split("def generate_stream(")[1].split("\ndef _force_close(")[0]

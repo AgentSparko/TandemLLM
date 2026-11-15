@@ -42,18 +42,17 @@ extension side) imports TandemApp's copies; the engine does not.
   8  each WP2c copy holds exactly the names it took, each statement TandemApp's (docstrings
      aside), plus what WP2C_OWN names (seeds.seed: the kinds of schema.seed; WP5: DECIDERS)
                                                                   test_the_helper_copies_are_the_fork
-  9  WP10: no engine tool imports TandemApp (an import statement, an importlib name, a code
+  9  WP10, WP14: no engine tool imports TandemApp (an import statement, an importlib name, a code
      string) or names a path into app/, except the pair tools PAIR_TOOLS names (each says why
-     it needs both trees) and the vendor-era tools VENDOR_ERA names (they go with app/ at
-     WP14); a pair tool in Python finds TandemApp only through tools/pair_app.py, the one tool
-     file that names app/; reverse-deps.json lists no other tool    test_no_tool_imports_tandemapp
- 10  WP10: no tool names a screen's old path (routes.json engine_screens_until_eng413): they
-     call /v1/engine/*                                            test_no_tool_calls_an_old_screen_path
+     it needs both trees; the no-app guard tests/test_app_hook.py holds the same list), and each
+     of those finds TandemApp only through tools/pair_app.py      test_no_tool_imports_tandemapp
+ 10  WP10: no tool names a screen's old path (compat/1.7/routes.json engine_screens_until_eng413):
+     they call /v1/engine/*                                       test_no_tool_calls_an_old_screen_path
  11  WP10: the tools rerouted to the engine's own code or contract load, in a fresh process
      with TandemApp's packages blocked, and load no TandemApp module; contract_check's default
      folder is the engine's contract                             test_the_rerouted_tools_load_no_app_module
- 12  WP10: tools/pair_app.py takes TANDEMAPP_SRC first, then the vendored app/, and stops with
-     what it needs when neither is there and no tandemapp is installed
+ 12  WP10, WP14: tools/pair_app.py takes TANDEMAPP_SRC, else an installed tandemapp, and stops
+     with what it needs when neither is there
                                                                   test_a_pair_tool_finds_tandemapp
 
 CPU, standard library only. Run: python tests/test_api_import_guard.py
@@ -75,6 +74,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 #: TandemApp's module -> the engine's copy (ENG-413 WP2a, then WP2b)
 WP2A = ("toolcall", "toolformats", "callrepair", "refusal", "thinking", "argloop")
 WP2B = ("metrics", "usage", "ledger", "live", "parallel", "activity", "logbuf", "dashboard_api",
@@ -87,12 +87,8 @@ TEXT_SUFFIXES = (".sh", ".yaml", ".yml", ".env", ".toml", ".cfg", ".txt")
 #: files that may name a moved module of TandemApp's in text, and why
 ALLOWED = {
     "tests/test_api_import_guard.py": "this guard names what it looks for",
-    "tools/gate/map.yaml": "a vendored change to TandemApp's copies still takes the server's gate: "
-                           "its conductor runs them in the engine's process in chat mode",
     "tests/test_ledger_owners.py": "holds the engine's ledger against TandemApp's: one file, the "
                                    "same schema, each table written by the same side",
-    "tools/app_split_check.sh": "follows the history of TandemApp's own tandemapp/ledger.py in the "
-                                "split; it reads no module",
 }
 #: ENG-413 WP10: the engine tools that need the engine and TandemApp together, and why. A tool that
 #: needs only TandemApp moved there; one that needs only the engine reads the engine's own code or
@@ -114,17 +110,6 @@ PAIR_TOOLS = {
                           "written through its store (TandemApp)",
     "tools/stream_identity.py": "runs server.app with the conductor's schema and the UI-states test "
                                 "harness in a child: the stream of an engine with the extension",
-    "tools/release_gate_setup.sh": "the engine's Setup Guide server under the dashboard's setup gate "
-                                   "(TandemApp's page and its playwright spec)",
-}
-#: the tools of the vendored app/ itself: its vendor tool, the split check, the release's version
-#: file and app suite, the gate's paths; WP14 changes or removes them with app/
-VENDOR_ERA = {
-    "tools/app_vendor.sh": "writes app/ from a TandemApp commit",
-    "tools/app_split_check.sh": "checks the split of app/ into TandemApp's repository",
-    "tools/release.sh": "bumps and checks app/VERSION beside VERSION",
-    "tools/release_box_gate.sh": "runs app/tests in the release's box gate",
-    "tools/gate/map.yaml": "maps app/ paths to the gate's suites",
 }
 #: the one tool file that names app/: where a pair tool finds TandemApp
 PAIR_FINDER = "tools/pair_app.py"
@@ -416,7 +401,7 @@ def _fork_view(path: str, mod: str, engine: bool) -> list[str]:
 def test_the_copies_are_the_fork():
     diffs = []
     for m in WP2B:
-        theirs = _fork_view(os.path.join(ROOT, "app", "tandemapp", m + ".py"), m, False)
+        theirs = _fork_view(os.path.join(pairapp.APP, "tandemapp", m + ".py"), m, False)
         ours = _fork_view(os.path.join(ROOT, "server", "api", m + ".py"), m, True)
         if theirs != ours:
             import difflib
@@ -514,7 +499,7 @@ def _named(tree: ast.Module) -> dict:
 def test_the_helper_copies_are_the_fork():
     bad = []
     for eng, (mod, names) in WP2C.items():
-        src = os.path.join(ROOT, "app", *mod.split(".")) + ".py"
+        src = os.path.join(pairapp.APP, *mod.split(".")) + ".py"
         with open(src) as f:
             theirs = _named(ast.parse(f.read()))
         with open(os.path.join(ROOT, "server", "api", eng + ".py")) as f:
@@ -547,62 +532,37 @@ def _app_path_parts(text: str) -> set:
     """The app/ paths a text names whose first part is in the vendored app/ (a made-up `app/main.py`
     of a fixture is no path into it)."""
     return {m.group(1) for m in _APP_PATH.finditer(text)
-            if os.path.exists(os.path.join(ROOT, "app", m.group(1)))}
+            if os.path.exists(os.path.join(pairapp.APP, m.group(1)))}
 
 
 def test_no_tool_imports_tandemapp():
     sys.path.insert(0, HERE)
-    import test_engine_api_contract as C
-    inv = C.inventory()
-    bad, pair_seen = [], set()
-    allowed = set(PAIR_TOOLS) | set(VENDOR_ERA)
+    import test_app_hook as G                    # the no-app guard: the same scan, the same list
+    assert set(G.PAIR_TOOLS) == set(PAIR_TOOLS), sorted(set(G.PAIR_TOOLS) ^ set(PAIR_TOOLS))
+    bad, seen = [], set()
     for rel in _tool_files():
-        with open(os.path.join(ROOT, rel), encoding="utf-8", errors="replace") as f:
-            src = f.read()
-        hits = []
-        if rel.endswith(".py"):
-            try:
-                tree = ast.parse(src)
-            except SyntaxError:
-                tree = None
-            if tree is not None:
-                hits += [f"{rel}:{line} imports {name}" for line, name in imports_of(tree)
-                         if name.split(".")[0] in APP_TOPS]
-            hits += [f"{rel} reads {r}" for r in inv["reads"].get(rel, ())]
-            if rel in PAIR_TOOLS and tree is not None and ".use()" not in src and "pair_app" not in src \
-                    and not any(isinstance(n, ast.Constant) and isinstance(n.value, str) and
-                                "from server import app" in n.value for n in ast.walk(tree)):
-                bad.append(f"{rel}: a pair tool that does not find TandemApp through {PAIR_FINDER}")
-        else:
-            hits += [f"{rel} names app/{p}" for p in sorted(_app_path_parts(src))]
-        if not hits:
+        if not rel.endswith(".py"):
             continue
-        if rel == PAIR_FINDER:
-            assert hits == [f"{rel} reads app/"], hits
-            continue
-        if rel in allowed:
-            pair_seen.add(rel)
-            if rel in PAIR_TOOLS and rel.endswith(".py") and rel in inv["reads"]:
-                bad.append(f"{rel}: a pair tool names app/ itself (use {PAIR_FINDER})")
-            continue
-        bad += hits
+        got = G._imports(rel)
+        if got:
+            if rel in PAIR_TOOLS:
+                seen.add(rel)
+            else:
+                bad.append(f"{rel}: {sorted(set(got))}")
+        if G._app_paths(rel) and rel not in G.NOT_PATHS:
+            bad.append(f"{rel} names app/: {G._app_paths(rel)[:3]}")
     assert not bad, bad
-    gone = [f for f in allowed | {PAIR_FINDER} if not os.path.exists(os.path.join(ROOT, f))]
-    assert not gone, f"PAIR_TOOLS/VENDOR_ERA name files that do not exist: {gone}"
-    idle = sorted(set(PAIR_TOOLS) - pair_seen)
+    for rel in PAIR_TOOLS:
+        with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
+            assert "pair_app" in f.read(), f"{rel}: a pair tool that does not find TandemApp through {PAIR_FINDER}"
+    idle = sorted(set(PAIR_TOOLS) - seen)
     assert not idle, f"pair tools that reach nothing of TandemApp's: {idle}"
-    with open(os.path.join(ROOT, "contracts", "engine-api-v1", "reverse-deps.json")) as f:
-        doc = json.load(f)
-    listed = {k for sec in ("imports", "reads") for k in doc[sec] if k.startswith("tools/")}
-    listed |= {x for e in doc["not_ast"] for x in e["files"] if x.startswith("tools/")}
-    assert listed <= set(PAIR_TOOLS) | {PAIR_FINDER}, sorted(listed - set(PAIR_TOOLS) - {PAIR_FINDER})
-    return f"{len(_tool_files())} tool files: {len(PAIR_TOOLS)} pair tools, {len(VENDOR_ERA)} vendor-era, " \
-           f"no other reaches TandemApp"
+    return f"{len(_tool_files())} tool files: {len(PAIR_TOOLS)} pair tools, no other reaches TandemApp"
 
 
 def test_no_tool_calls_an_old_screen_path():
-    with open(os.path.join(ROOT, "contracts", "engine-api-v1", "routes.json")) as f:
-        screens = json.load(f)["engine_screens_until_eng413"]
+    with open(os.path.join(ROOT, "contracts", "engine-api-v1", "compat", "1.7", "routes.json")) as f:
+        screens = json.load(f)["engine_screens_until_eng413"]          # gone from routes.json in 1.8
     old = sorted({r["path"].rstrip("*").rstrip("/") for r in screens})
     assert old and all(p.startswith("/v1/conductor/") for p in old), old
     rx = re.compile("(" + "|".join(re.escape(p) for p in old) + r")(?![\w-])")
@@ -681,20 +641,18 @@ def test_a_pair_tool_finds_tandemapp():
         other = os.path.join(d, "TandemApp")
         os.makedirs(os.path.join(other, "tandemapp"))
         open(os.path.join(other, "tandemapp", "__init__.py"), "w").close()
-        # no app/, no TANDEMAPP_SRC, no site-packages: it stops and says what it needs
+        # no TANDEMAPP_SRC, no site-packages: it stops and says what it needs
         got = _finder(tree, None)
         assert got["got"].startswith("exit: this pair tool needs TandemApp: set TANDEMAPP_SRC"), got
         # TANDEMAPP_SRC
         assert _finder(tree, other) == {"got": other, "first": other}
-        # the vendored app/, and TANDEMAPP_SRC before it
+        # a folder of the same name inside the engine's tree is nothing (WP14: no vendored app/)
         os.makedirs(os.path.join(tree, "app", "tandemapp"))
         open(os.path.join(tree, "app", "tandemapp", "__init__.py"), "w").close()
-        vend = os.path.join(tree, "app")
-        assert _finder(tree, None) == {"got": vend, "first": vend}
-        assert _finder(tree, other)["got"] == other
+        assert _finder(tree, None)["got"].startswith("exit: "), "the engine's tree is not searched"
         # a TANDEMAPP_SRC that is no TandemApp tree is passed over
-        assert _finder(tree, os.path.join(d, "nowhere"))["got"] == vend
-    return "TANDEMAPP_SRC, then app/, else a stop that says what it needs"
+        assert _finder(tree, os.path.join(d, "nowhere"))["got"].startswith("exit: ")
+    return "TANDEMAPP_SRC, else a stop that says what it needs"
 
 
 if __name__ == "__main__":

@@ -10,8 +10,8 @@ script-mode suite counted them as passed.
   3  tests/scriptmode.py runs a pytest-style module: fixtures, skips, a failure exits 1, no test
      exits 1
   4  SRV-748: a relative file argument is a path from the caller's directory, though each file's
-     process runs in the suite's root (`python app/tests/script_suite.py --all
-     app/tests/test_x.py` from the repository root)
+     process runs in the suite's root (`python ../TandemApp/tests/script_suite.py --all
+     ../TandemApp/tests/test_x.py` from another checkout's root)
 """
 
 from __future__ import annotations
