@@ -534,7 +534,8 @@ def test_end_to_end_on_the_fake_engine():
     try:
         port = _wait(None, srv)
         st, _, cfg = _call(port, "GET", "/v1/config")
-        assert st == 200 and cfg["engine"]["embedded"], "the proxy is on in the process"
+        # ENG-413 WP14: no proxy in the engine's process; /v1/config is the controller's
+        assert st == 404 and cfg["error"]["type"] == "not_on_engine", (st, cfg)
         lib = os.path.join(pairapp.APP, "packages", "library")
         names = [n for n in ("browser-game", "canvas-2d")
                  if os.path.exists(os.path.join(lib, n, "SKILL.md"))]
@@ -638,8 +639,8 @@ def test_the_defaults():
     root = os.path.dirname(HERE)
     tex = open(os.path.join(root, "manual", "generated", "engine-knobs.tex"), encoding="utf-8").read()
     # ENG-413 WP11: the extension's knobs (contracts/engine-ext-v1/knobs.json) are in TandemApp's
-    # manual, the vendored tree's ext-knobs.tex
-    ext_tex = open(os.path.join(root, "app", "manual", "generated", "ext-knobs.tex"),
+    # manual's ext-knobs.tex
+    ext_tex = open(os.path.join(pairapp.APP, "manual", "generated", "ext-knobs.tex"),
                    encoding="utf-8").read()
     with open(os.path.join(root, "contracts", "engine-ext-v1", "knobs.json"), encoding="utf-8") as f:
         ext_knobs = json.load(f)["knobs"]
