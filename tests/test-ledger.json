@@ -9,8 +9,8 @@
   "engine_ids": 4357,
   "engine_files": 510,
   "to": {
-   "engine": 2976,
-   "pair": 1330,
+   "engine": 2969,
+   "pair": 1337,
    "tandemapp": 37,
    "dropped": 16
   },
@@ -91,6 +91,7 @@
    "tests/test_library_install.py",
    "tests/test_library_router.py",
    "tests/test_live_rates.py",
+   "tests/test_load_shared.py",
    "tests/test_logbuf.py",
    "tests/test_loop_escape.py",
    "tests/test_loop_guard.py",
@@ -5029,9 +5030,9 @@
    }
   },
   "tests/test_load_shared.py": {
-   "home": "engine",
+   "home": "pair",
    "in_place": true,
-   "why": "ENG-413 WP14: scans server/ only; no TandemApp code runs in the server but an extension",
+   "why": "a case starts the engine through test_end_anchor's helpers, which load TandemApp; the server scan reads server/ only (ENG-413 WP14)",
    "ids": [
     "test_an_engine_without_caches_gets_them_off_and_one_slot",
     "test_an_engine_with_caches_gets_the_policy_the_store_and_its_old_keys",
