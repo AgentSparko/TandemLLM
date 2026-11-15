@@ -51,6 +51,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from server import ext as E  # noqa: E402
 
 #: the extension chat mode loads (ops/serve.env)
@@ -64,12 +65,9 @@ RAW = "qwen38-spark-engine"
 #: ENG-413 WP5 took out the conductor's routes (the screens are /v1/engine/*), its store (the
 #: fake-engine guard's directory is a value copy, the residency limits come through the module's
 #: read_document) and its monitor (the policy is checked by the module's before_load)
-#: ENG-413 WP13: the page and the chat forward are imported at their first use (`_app_part`), so a
-#: tree without TandemApp imports and serves headless
-ALLOWED = {
-    ("tandemapp.static", "_app_part"): "WP14: setup mode's page",
-    ("tandemapp.chat_forward", "_app_part"): "WP14: /v1/chat-app leaves the engine",
-}
+#: ENG-413 WP14: the page, the chat forward, the host collector and the proxy left the engine:
+#: server/app.py imports nothing of TandemApp's
+ALLOWED: dict = {}
 #: what WP5 took out of server/app.py: none of it may come back
 GONE_WP5 = ("tandemapp.conductor.routes", "tandemapp.conductor.store", "tandemapp.conductor.monitor")
 #: what WP5b took out of server/: Laya (the extension's route), the session addresses, the loop
@@ -77,13 +75,8 @@ GONE_WP5 = ("tandemapp.conductor.routes", "tandemapp.conductor.store", "tandemap
 #: question (the extension's shadow_question); none of it may come back
 GONE_WP5B = ("tandemapp.laya_api", "tandemapp.session_tokens", "tandemapp.conductor.loopescape",
              "tandemapp.conductor.incontext", "tandemapp.conductor.inject", "tandemapp.conductor.schema")
-#: ENG-413 WP5b, the G5 list: the only engine files under server/ that may import TandemApp, each
-#: with the modules WP14 removes with it
-WP14 = {"server/app.py": ("proxy", "tandemapp.static", "tandemapp.chat_forward")}
-#: --backends: the proxy in the engine's process, with the engine's conductor as its harness (it
-#: leaves the engine with the controller, WP7/WP14); none of these functions is the request path
-for _fn in ("start_proxy", "do_POST", "_proxied", "_config", "_app_part", "_cache_peek"):
-    ALLOWED[("proxy", _fn)] = "--backends: the proxy in the engine's process (WP7/WP14)"
+#: the G5 list: the engine files under server/ that may import TandemApp (ENG-413 WP14: none)
+WP14: dict = {}
 
 
 def _allowed(mod: str, fn) -> bool:
@@ -128,7 +121,7 @@ def test_the_request_path_imports_no_conductor():
     assert not back, f"WP5 took these out of server/app.py: {back}"
     back = sorted(m for m, _ in got if m.startswith(GONE_WP5B))
     assert not back, f"WP5b took these out of server/app.py: {back}"
-    # the G5 list: no other file under server/ imports TandemApp; server/app.py only what WP14 removes
+    # the G5 list: no file under server/ imports TandemApp (ENG-413 WP14)
     seen = {}
     for base, dirs, names in os.walk(os.path.join(ROOT, "server")):
         dirs[:] = sorted(d for d in dirs if d != "__pycache__")
@@ -161,14 +154,14 @@ def test_the_request_path_imports_no_conductor():
         assert alias not in text, alias
     for path in ("server/ext.py", "server/round_runner.py", "server/fake_engine.py"):
         assert not _imports(path), (path, _imports(path))
-    # ENG-413 WP4: no engine file outside app/ is the adapter any more; TandemApp's extension (app/,
-    # vendored) imports the conductor's request-path modules and nothing of the engine
+    # ENG-413 WP4: no engine file is the adapter any more; TandemApp's extension imports the
+    # conductor's request-path modules and nothing of the engine
     assert not os.path.exists(os.path.join(ROOT, "server", "ext_app.py"))
-    ext = {m for m, _ in _imports("app/tandemapp/engine_ext.py")}
+    ext = {m for m, _ in _imports(os.path.join(pairapp.APP, "tandemapp", "engine_ext.py"))}
     for m in ("tandemapp.conductor.monitor", "tandemapp.conductor.states", "tandemapp.memblock.TOOL",
               "tandemapp.conductor.loopescape", "tandemapp.conductor.redact"):
         assert any(x == m or x.startswith(m + ".") or m.startswith(x) for x in ext), (m, sorted(ext))
-    with open(os.path.join(ROOT, "app", "tandemapp", "engine_ext.py")) as f:
+    with open(os.path.join(pairapp.APP, "tandemapp", "engine_ext.py")) as f:
         tree = ast.parse(f.read())
     mods = []
     for n in ast.walk(tree):
@@ -178,7 +171,7 @@ def test_the_request_path_imports_no_conductor():
             mods.append(n.module or "")
     engine = sorted(m for m in mods if m.split(".")[0] in ("server", "engine", "models"))
     assert not engine, engine
-    return f"server/app.py: {len(got)} TandemApp imports, each ALLOWED; the request path asks the extension"
+    return f"server/app.py: {len(got)} TandemApp imports; the request path asks the extension"
 
 
 def test_the_optional_calls_are_named():

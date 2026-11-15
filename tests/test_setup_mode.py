@@ -2,9 +2,10 @@
 
 The test matrix:
 
-  1  the setup-mode server's routes: /health says mode setup and Wren's state; the dashboard's
-     files and session answer; /v1/setup/* answers; /v1/models is an empty list; a chat request or
-     any other route is 503 setup_mode with Retry-After          test_the_setup_routes
+  1  the setup-mode server's routes: /health says mode setup and Wren's state; the session answers
+     and the page is 404 no_ui (ENG-413 WP14: no engine serves it); /v1/setup/* answers; /v1/models
+     is an empty list; a chat request or any other route is 503 setup_mode with Retry-After, its
+     message naming `tandem setup` and the Setup Guide's API       test_the_setup_routes
   2  ops/start.sh --setup starts `server/app.py --setup` on 127.0.0.1 with QSE_SETUP_MODE and
      nothing of the engine's flags; --host names another address        test_start_setup
   3  while run/setup-pending exists a plain start is setup mode, on the host the marker names;
@@ -56,7 +57,7 @@ class Req(app.SetupHandler):
 def test_the_setup_routes():
     app.STATE.clear()
     app.STATE.update(auth=auth.Auth(None, None), started=time.time(), setup_mode=True,
-                     version="0.6.2", dashboard_dir=None)
+                     version="0.6.2")
     code, _, raw = Req("GET", "/health").go()
     h = json.loads(raw)
     assert code == 200 and h["mode"] == "setup" and h["status"] == "ok" and h["version"] == "0.6.2"
@@ -70,16 +71,16 @@ def test_the_setup_routes():
     assert code == 200 and json.loads(raw) == {"object": "list", "data": []}
     code, _, raw = Req("GET", "/v1/dashboard/session").go()
     assert code == 200 and json.loads(raw)["login"] is False
-    code, _, raw = Req("GET", "/dashboard/").go()
-    if app._app_part("static") is not None:
-        assert code == 200
-    else:                                       # ENG-413 WP13: a tree without TandemApp has no page
-        assert code == 404 and json.loads(raw)["error"]["type"] == "no_ui", raw
+    for path in ("/dashboard", "/dashboard/", "/dashboard/#/setup"):
+        code, _, raw = Req("GET", path).go()
+        assert code == 404 and json.loads(raw)["error"]["type"] == "no_ui", (path, raw)
     for method, path in (("POST", "/v1/chat/completions"), ("POST", "/v1/completions"),
                          ("GET", "/v1/dashboard/summary"), ("GET", "/metrics"),
                          ("PUT", "/v1/conductor/settings"), ("DELETE", "/v1/config/x")):
         code, head, raw = Req(method, path, {"model": "TandemLLM", "messages": []}).go()
-        assert code == 503 and json.loads(raw)["error"]["code"] == "setup_mode", (path, raw)
+        err = json.loads(raw)["error"]
+        assert code == 503 and err["code"] == "setup_mode", (path, raw)
+        assert "tandem setup" in err["message"] and "/dashboard" not in err["message"], err
         assert "Retry-After: 60" in head
     code, _, raw = Req("POST", "/v1/setup/estimate", {"model": "qwen3.8-27b"}).go()
     assert code == 200 and json.loads(raw)["fits"] is True

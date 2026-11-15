@@ -225,9 +225,8 @@ def test_the_route_takes_the_caller_rule_of_the_model_list():
         return [t for t in tests if "authorize" in t or "_allowed" in t]
 
     models, ident = guards("/v1/models"), guards("/v1/replica/identity")
-    assert ident == ['STATE.get("proxy") is not None and not STATE["proxy"].authorize(self)[0]']
-    assert [g.split("and", 1)[-1].strip() for g in models] == \
-        [g.split("and", 1)[-1].strip() for g in ident], (models, ident)
+    # ENG-413 WP14: the users' keys left with --backends; neither route has a guard of its own
+    assert ident == [] and models == ident, (models, ident)
 
 
 # --------------------------------------------------------------------------- fake engines
@@ -342,29 +341,6 @@ def _post(port, path, body):
                                           "Authorization": f"Bearer {ADMIN}"})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read())
-
-
-def test_fake_engine_route_is_gated_with_the_model_list_by_the_users_keys():
-    _need_torch()
-    tmp = tempfile.mkdtemp(prefix="replica-identity-")
-    port, p = _start(tmp, "keys", ("--backends", os.path.join(tmp, "config.sqlite3")),
-                     {"QSE_TEST": "1", "HOME": tmp,
-                      "TANDEM_SECRETS_KEY": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s="})
-    try:
-        _up(port, p)
-        far = {"X-Forwarded-For": "192.0.2.9", "Authorization": "Bearer nope"}
-        # no user key yet: both answer anyone
-        assert _get(port, "/v1/models", far)[0] == 200
-        assert _identity(port, far)["identity"] == 1
-        key = _post(port, "/v1/config/users", {"label": "t"})["key"]
-        assert _get(port, "/v1/models", far)[0] == 401
-        assert _get(port, "/v1/replica/identity", far)[0] == 401
-        with_key = dict(far, Authorization=f"Bearer {key}")
-        assert _get(port, "/v1/models", with_key)[0] == 200
-        assert _identity(port, with_key)["identity"] == 1
-    finally:
-        p.kill()
-        p.wait(10)
 
 
 if __name__ == "__main__":

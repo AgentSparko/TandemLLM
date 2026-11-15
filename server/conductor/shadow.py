@@ -16,7 +16,7 @@ WHEN IT READS (the bandwidth rule: during Qwen's decode only Qwen and the drafte
     every chunk, so a request that arrives waits at most one chunk (measured: tools/shadow_measure.py).
   * Inside a turn only for the narrator (`shadow.narrator: on`): its job reads what is missing of
     the session up to the thought, then asks for the summary, in the narrator's rationed slices
-    (at most 3 % of Qwen's time, app/tandemapp/conductor/narrator.py `Thoughts`).
+    (at most 3 % of Qwen's time, TandemApp's tandemapp/conductor/narrator.py `Thoughts`).
 
 WHO ASKS.
   * `ask(key, question, choices)`: a typed decision of the small model over the whole session --

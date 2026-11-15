@@ -69,6 +69,7 @@ from contextlib import redirect_stdout
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 import yaml  # noqa: E402
 
 # the community packs from the bundled index, never a box's fetched copy (tests/test_community_weights.py)
@@ -416,8 +417,8 @@ def test_more_models():
     with tempfile.TemporaryDirectory() as root:
         md = os.path.join(root, "models")
         shutil.copytree(os.path.join(ROOT, "docs"), os.path.join(root, "docs"))
-        # the proxy tool's docs link, TandemApp's document (app/ until ENG-413)
-        shutil.copytree(os.path.join(ROOT, "app", "docs"), os.path.join(root, "app", "docs"))
+        # the other backends' docs link, the README's TandemApp section (ENG-413 WP14)
+        shutil.copy(os.path.join(ROOT, "README.md"), os.path.join(root, "README.md"))
         os.makedirs(os.path.join(md, "qwen3.8-27b"))
         shutil.copy(SEED, os.path.join(md, "qwen3.8-27b", "model.yaml"))
         for sub in ("measurements", "community"):          # SPD-245: a speed row's raw file and its pack
@@ -593,7 +594,7 @@ MOCKED = ("qwen3.8-27b", "qwen3.8-flash-next", "lfm2.5-24b-a2b") + NEMOTRON_TABL
 
 
 def _mock_copy(mid: str) -> str:
-    return os.path.join(ROOT, "app", "dashboard", "mock", "setup", mid + ".json")
+    return os.path.join(pairapp.APP, "dashboard", "mock", "setup", mid + ".json")
 
 
 # VIS-175: Flash-Next's community list is the release's own (models/community-builtin.json), so the mock
@@ -602,7 +603,7 @@ BUILTIN_MOCKED = ("qwen3.8-flash-next",)
 
 
 def _builtin_copy(mid: str) -> str:
-    return os.path.join(ROOT, "app", "dashboard", "mock", "setup", f"community-{mid}.json")
+    return os.path.join(pairapp.APP, "dashboard", "mock", "setup", f"community-{mid}.json")
 
 
 def _builtin_served(mid: str) -> dict:

@@ -29,8 +29,8 @@ The test matrix:
                                                          test_the_tool_checks
   8  retrieval: a question about a tool brings the tool's registry sentence into the prompt, among
      the top four sections                               test_retrieval
-  8b every package text and TandemApp document the index reads (knowledge.PACKAGES, APP_DOCS:
-     app/ until ENG-413) is a file, and the index holds sections of each (SRV-747)
+  8b the index reads only the engine's own texts (ENG-413 WP14): docs/, the manual's chapters and
+     the model registry; every one of those files has sections in it, and no other file does
                                                          test_the_knowledge_sources_are_files
   9  the page state is data and has no secret: a field named like a key arrives as "<set>"; a
      page too long for the window is cut, never an error  test_page_state
@@ -488,16 +488,20 @@ def test_retrieval():
 
 
 def test_the_knowledge_sources_are_files():
-    """A package text or document that moves without its entry fails here; the index itself
-    skips a missing file without a word."""
+    """The engine's own texts only (ENG-413 WP14: TandemApp's package texts and documents are its
+    own): every docs/*.md and manual chapter has sections in the index, and nothing else does."""
+    import glob
     from server.setup import knowledge
-    want = knowledge.PACKAGES + knowledge.APP_DOCS
-    missing = [p for p in want if not os.path.isfile(os.path.join(knowledge.ROOT, p))]
-    assert not missing, f"not in the repository: {missing}"
+    assert not hasattr(knowledge, "PACKAGES") and not hasattr(knowledge, "APP_DOCS")
     k = knowledge.Knowledge()
     k.ensure()
-    unread = sorted(set(want) - {d["path"] for d in k.docs})
-    assert not unread, f"no section in the index: {unread}"
+    root = knowledge.ROOT
+    want = {os.path.relpath(f, root) for f in glob.glob(os.path.join(root, "docs", "*.md"))
+            + glob.glob(os.path.join(root, "manual", "chapters", "*.tex"))}
+    got = {d["path"] for d in k.docs if not d["path"].startswith("models/")}
+    assert want <= got, f"no section in the index: {sorted(want - got)}"
+    assert got <= want, f"not the engine's own texts: {sorted(got - want)}"
+    return f"{len(got)} engine texts, nothing else"
 
 
 def test_page_state():

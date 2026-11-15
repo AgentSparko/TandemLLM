@@ -18,9 +18,10 @@
 #
 # With --setup (docs/setup.md) it installs the code and the venv, downloads only Wren's model
 # (Qwen3.5-2B, the setup guide's assistant), writes the config with no weights and the marker
-# src/run/setup-pending, and starts SETUP MODE: the dashboard's #/setup page and Wren, no model of
-# Qwen's. The page picks the weights, the tools and the parallelism and installs them; until then a
-# start (and a reboot) comes back in setup mode. It binds 127.0.0.1 unless --host says otherwise.
+# src/run/setup-pending, and starts SETUP MODE: the Setup Guide's API (/v1/setup/*) and Wren, no
+# model of Qwen's. `bin/tandem setup` in a terminal, or TandemApp's Setup page pointed at the engine,
+# picks the weights, the tools and the parallelism and installs them; until then a start (and a
+# reboot) comes back in setup mode. It binds 127.0.0.1 unless --host says otherwise.
 #
 # With --runtime-only it stops after step 3: the engine's source and its Python environment, no
 # weights, no corpus, no config, nothing started. TandemApp's Add Spark wizard installs a new

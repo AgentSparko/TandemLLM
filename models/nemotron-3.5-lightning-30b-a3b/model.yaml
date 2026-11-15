@@ -245,7 +245,7 @@ components:
       'on': ${HOME}/.qwen38-spark-engine/backends/config.sqlite3
       'off': ''
   assets: []
-  docs: app/docs/proxy.md
+  docs: README.md#tandemapp
   note: You add the backends later, on the Backends screen.
 - id: prompt_cache
   label: Conversation cache

@@ -229,50 +229,6 @@ _EXT_MODULE = None
 #: ENG-413 WP5: the line the extension's before_load gave for the log (its session monitor's policy)
 _EXT_EARLY: str | None = None
 
-#: ENG-413 WP13: TandemApp's modules the engine still runs until WP14 (setup mode's page, the
-#: /v1/chat-app forward, the System view's hosts), each with the module names whose absence means
-#: "not here" (any other missing import inside one is an error and is raised)
-_APP_PART_MODULES = {"static": ("tandemapp", "tandemapp.static"),
-                     "chat_forward": ("tandemapp", "tandemapp.chat_forward"),
-                     "hostcollect": ("proxy", "proxy.hostcollect")}
-_APP_PARTS: dict = {}
-#: the chat forward's prefix (TandemApp's tandemapp/chat_forward.py PREFIX)
-CHAT_APP = "/v1/chat-app"
-
-
-def _app_parts_here() -> bool:
-    """ENG-413 WP13: TandemApp's modules are this process's when the tree carries the vendored app/
-    (server/__init__.py's finder) or QSE_EXT names TandemApp's extension (its wheel, installed
-    beside the engine). Otherwise the engine is headless: no page, no chat forward, no hosts."""
-    import server
-    if getattr(server, "APP_VENDORED", False):
-        return True
-    return (os.environ.get("QSE_EXT") or "").strip().split(".")[0] == "tandemapp"
-
-
-def _app_part(name: str):
-    """ENG-413 WP13: one of TandemApp's modules (`_APP_PART_MODULES`), imported at its first use;
-    None on a headless engine (`_app_parts_here`) or where TandemApp is not installed. Its callers
-    answer then as the contract's headless engine: 404 no_ui for the page, 404 not_on_engine for
-    the chat forward, no `hosts` in the System view."""
-    if name not in _APP_PARTS:
-        mod = None
-        if _app_parts_here():
-            try:
-                if name == "static":
-                    from tandemapp import static as mod
-                elif name == "chat_forward":
-                    from tandemapp import chat_forward as mod
-                elif name == "hostcollect":
-                    from proxy import hostcollect as mod
-                else:
-                    raise KeyError(name)
-            except ModuleNotFoundError as exc:
-                if exc.name not in _APP_PART_MODULES[name]:
-                    raise
-                mod = None
-        _APP_PARTS[name] = mod
-    return _APP_PARTS[name]
 # the routers' prices for this weight set (engine/prices.py); empty = the code's constants
 PRICES: dict = {}
 LOCK = EngineLock()
@@ -1532,7 +1488,7 @@ def _own_idle_s() -> float | None:
     """VIS-119 (the router's `own_idle`): the seconds since the last request or side-lane job
     ended while nothing runs, waits, plans in the router or holds the engine lock; None while
     something does. The router's shadow questions after their turn wait for it
-    (app/tandemapp/conductor/deferred.py)."""
+    (TandemApp's tandemapp/conductor/deferred.py)."""
     with QUEUE:
         if INFLIGHT["waiting"] or INFLIGHT["running"] or INFLIGHT["lane"] or WAITERS or \
                 PLANNING["n"]:
@@ -2982,7 +2938,7 @@ def _generate_stream(prompt: torch.Tensor, max_new: int, eos: set[int], think=No
     caches key on `mm.key_ids`. None for text, and set (to None) on every request, so a request
     never inherits the previous one's images.
 
-    `sup` (app/tandemapp/conductor/monitor/): the request's supervisor, None when it runs raw -- and
+    `sup` (TandemApp's tandemapp/conductor/monitor/): the request's supervisor, None when it runs raw -- and
     then every line below runs as it did without one. SP1 is after a block's `think.observe`:
     the supervisor may close the reasoning with a hidden phrase (`_force_close` with its
     action). SP2 is where an end token is decided, before anything commits it: a hidden continue
@@ -3667,7 +3623,7 @@ def _generate_stream(prompt: torch.Tensor, max_new: int, eos: set[int], think=No
 
 def context_choice(ids: list[int], letters: list[int], at: int, conv_id: str | None = None,
                    on_chunk=None, images: list | None = None) -> tuple[list[float], dict]:
-    """The in-context stage's forward (app/tandemapp/conductor/incontext.py): `ids` prefilled through
+    """The in-context stage's forward (TandemApp's tandemapp/conductor/incontext.py): `ids` prefilled through
     the caches as a turn's prompt is -- the resident prefix's anchors, the store's entries and
     its prefix snapshots (only at lines up to `at`, where the turn's own prompt parts from it),
     the memory gate -- and the logits of its last row at `letters` with how many tokens it
@@ -5045,7 +5001,7 @@ def _session_header(headers) -> str | None:
 
 
 #: ENG-371: the sessions an agent's worker names as its parent (`X-Tandem-Parent-Session`,
-#: app/chatd/render.py `headers`), each with the time of its worker's last request. The parent comes
+#: TandemApp's chatd/render.py `headers`), each with the time of its worker's last request. The parent comes
 #: back when its worker ends, so while it waits its rows go to the NVMe rather than being dropped:
 #: from a side slot another session's prefill takes (`_keep_parent`), and from slot 0's park when
 #: the memory policy gives the park back (`_shed_park`). An entry lasts PARENT_KEEP_S past its
@@ -5783,7 +5739,7 @@ def _writer_look(got: str) -> None:
                   flush=True)
 
 
-# P-M2 (2026-10-05): the memory writer's hidden turn (app/tandemapp/conductor/memwriter.py), behind the
+# P-M2 (2026-10-05): the memory writer's hidden turn (TandemApp's tandemapp/conductor/memwriter.py), behind the
 # summary written ahead
 RANK_MEMORY = 3
 
@@ -7056,7 +7012,7 @@ def _kv_reclaim_idle(d: dict, owner) -> int:
 
 def _memory_release(want: int, why: str = "sandbox") -> dict:
     """SRV-483, `POST /v1/cache/release`: room on the unified memory for something beside the
-    engine, a chat's sandbox (app/chatd/sandbox.py), which has priority over what the engine holds
+    engine, a chat's sandbox (TandemApp's chatd/sandbox.py), which has priority over what the engine holds
     idle (ruling of 2026-10-15). The KV pool's own order, cheapest first: the caches and the
     allocator's free blocks (under the engine lock, only while it is idle), then the small models,
     the idle side slots' conversations, slot 0's idle conversation (to the NVMe first when the
@@ -8145,9 +8101,7 @@ def _live() -> dict:
             "lane": INFLIGHT["lane"],
             "uptime_s": round(time.time() - STATE.get("started", time.time()), 1),
             "last_request_at": dashboard_api.iso_utc(last * 1000) if last else None,
-            **_monitor_mode(),
-            # 1.3: the proxy's backends (--backends); absent without it
-            **({"backends": _proxy_backends()} if STATE.get("proxy") is not None else {})}
+            **_monitor_mode()}
 
 
 def _system() -> dict:
@@ -8175,12 +8129,7 @@ def _system() -> dict:
     mem["roles"] = _safe(roles_report)            # the small models under memory pressure
     led = STATE.get("ledger")
     li = led.info() if led is not None else None
-    hosts = _hosts()
-    gpu = None
-    if hosts:
-        gpu = _app_part("hostcollect").gpu_block(STATE)      # NVML or one nvidia-smi call, not two
-    if gpu is None:
-        gpu = STATE.setdefault("gpu_sampler", dashboard_api.GpuSampler()).sample()
+    gpu = STATE.setdefault("gpu_sampler", dashboard_api.GpuSampler()).sample()
     try:
         caches = cache_stats()
     except Exception:                                              # noqa: BLE001
@@ -8219,41 +8168,16 @@ def _system() -> dict:
                    "oldest": dashboard_api.iso_utc((li or {}).get("oldest_ms")),
                    "queue": (li or {}).get("queue") or 0, "dropped": (li or {}).get("dropped") or 0},
         "disk": {"state_dir_free_bytes": dashboard_api.disk_free()},
-        # VIS-54: `off` without --backends, so the Backends view need not ask /v1/config (a 404)
-        "proxy": ({"mode": "embedded", "backends": _proxy_backends() or []}
-                  if STATE.get("proxy") is not None else {"mode": "off", "backends": []}),
-        **({"hosts": hosts} if hosts is not None else {}),
+        # VIS-54: always `off` (ENG-413 WP14: other backends sit behind TandemApp's controller)
+        "proxy": {"mode": "off", "backends": []},
     }
-
-
-def _hosts() -> list | None:
-    """P1.5: this machine (the engine's process and every backend on it) and the backends'
-    remote hosts (app/proxy/hostcollect.py); sampled when the System view asks, at most every 5 s,
-    the process scan every 15 s. `--host-collector off` leaves it out, and so does a headless
-    engine (ENG-413 WP13: the collector is TandemApp's)."""
-    if (STATE.get("args") or {}).get("host_collector", "on") == "off":
-        return None
-    hostcollect = _app_part("hostcollect")
-    if hostcollect is None:
-        return None
-    px = STATE.get("proxy")
-    try:
-        backends = px.cfg.backends() if px is not None else []
-    except Exception:                                              # noqa: BLE001
-        backends = []
-    return hostcollect.hosts_for(
-        STATE, backends,
-        hostcollect.engine_entry((STATE.get("args") or {}).get("port"), served_name()),
-        paths=[os.path.expanduser("~/.qwen38-spark-engine")])
 
 
 def dashboard() -> "dashboard_api.DashboardAPI":
     api = STATE.get("dashboard_api")
     if api is None or api.ledger is not STATE.get("ledger"):
-        px = STATE.get("proxy")
         api = STATE["dashboard_api"] = dashboard_api.DashboardAPI(
-            STATE.get("ledger"), live=_live, system=_system,
-            backends=(lambda: px.cfg.backends()) if px is not None else None)
+            STATE.get("ledger"), live=_live, system=_system, backends=None)
     return api
 
 
@@ -8360,14 +8284,9 @@ def live_registry() -> "live_mod.LiveRegistry":
             activity=bool(STATE.get("live_activity", True)) and hz > 0,
             queue_timeout=lambda: float(STATE.get("queue_timeout", 120.0)),
             windows=STATE.get("live_windows"))
-        # the parallel view (/v1/dashboard/parallel): the engine's own requests and, with
-        # --backends, every relayed one, on the same registry
+        # the parallel view (/v1/dashboard/parallel): the engine's own requests
         STATE["parallel"] = parallel_mod.ParallelBoard(
-            reg, engine_name=served_name,
-            cost=lambda rec, tokens: (STATE["proxy"].live_cost(rec, tokens)
-                                      if STATE.get("proxy") is not None else None),
-            peers=lambda: (STATE["proxy"].peer_backends()
-                           if STATE.get("proxy") is not None else []))
+            reg, engine_name=served_name)
         if dict.get(STATE, "pool") is not None:
             STATE["parallel"].slots = _par_brief
     return reg
@@ -8384,83 +8303,6 @@ def _par_brief() -> dict:
             "rounds": meet.get("rounds"), "joint_rounds": meet.get("joint_rounds"),
             "joint_hist": meet.get("joint_hist"), "timeouts": meet.get("timeouts"),
             "admission": pool.admission.report() if pool.admission is not None else None}
-
-
-def start_proxy(a) -> None:
-    """`--backends PATH`: the proxy in this process (app/proxy/service.py). Imported only then, so a
-    server without it loads and serves exactly as before."""
-    path = getattr(a, "backends", "off") or "off"
-    if path == "off":
-        STATE["proxy"] = None
-        return
-    if not _app_parts_here():
-        raise SystemExit("[proxy] --backends runs TandemApp's proxy in this process, and this engine "
-                         "has none (no vendored app/, and QSE_EXT names no TandemApp extension): "
-                         "tandem-app serves other backends")
-    from proxy import config as proxy_config
-    from proxy.service import Service
-    try:
-        cfg = proxy_config.ConfigDB(path).open()
-        cfg.apply_env()
-    except proxy_config.ConfigError as exc:
-        raise SystemExit(f"[proxy] configuration error: {exc.message}")
-    svc = Service(cfg, ledger=STATE.get("ledger"), live=live_registry(), auth=_auth(),
-                  reserved=tuple(x for x in (served_name(), STATE.get("model")) if x),
-                  registry=metrics.REGISTRY, engine_version=STATE.get("version", ""),
-                  code_sha=STATE.get("code_sha", ""), log=lambda m: print(m, flush=True),
-                  # P4: the harness in front of the backends runs this engine's own conductor
-                  conductor=STATE.get("conductor"),
-                  monitor_base=(STATE["monitor"].policy if STATE.get("monitor") is not None
-                                else None))
-    svc.engine_info = lambda: {"model": served_name(), "base_model": STATE.get("model"),
-                               "embedded": True, **_engine_own_settings()}
-    STATE["proxy"] = svc.start()
-    print(f"[proxy] on: {cfg.path}, {len(cfg.backends())} backends "
-          f"({', '.join(b['id'] for b in cfg.backends()) or 'none yet: the Backends screen'}); "
-          f"{served_name()} stays the engine's", flush=True)
-
-
-def _engine_own_settings() -> dict:
-    """What only this engine has, for the Backends screen (PL1): its parallel requests (the
-    sequences it decodes at once: slot 0 and its side slots; a relayed backend takes what it
-    accepts and gets no such setting from us) and the small models it runs beside Qwen."""
-    pool = dict.get(STATE, "pool")
-    a = dict.get(STATE, "args") or {}
-    par = {"n": 1, "requested": int(a.get("parallel") or 1), "side_max_len": None,
-           "side_graphs": None, "floor_gib": a.get("parallel_floor_gb"), "max_len": a.get("max_len")}
-    if pool is not None and getattr(pool, "n", 1) > 1:
-        side = pool.side()
-        par.update(n=pool.n, side_max_len=side[0].max_len if side else None,
-                   side_graphs=a.get("side_graphs"))
-    roles: dict = {}
-    try:
-        dec = dict.get(STATE, "deciders")
-        if dec is not None:
-            st = dec.status() if hasattr(dec, "status") else []
-            roles["deciders"] = [m.get("name") for m in (st or []) if m.get("state") == "loaded"]
-    except Exception:                                              # noqa: BLE001
-        pass
-    try:
-        nar = dict.get(STATE, "narrator")
-        slot = getattr(nar, "slot", None) if nar is not None else None
-        if slot is not None:
-            rm = dict.get(STATE, "role_mem")
-            state = (rm.state_of("narrator") if rm is not None and "narrator" in rm.by_name
-                     else slot.state)
-            roles["narrator"] = {"model": getattr(slot.model, "name", None), "state": state}
-    except Exception:                                              # noqa: BLE001
-        pass
-    return {"parallel": par, "roles": roles}
-
-
-def _proxy_backends() -> list | None:
-    px = STATE.get("proxy")
-    if px is None:
-        return None
-    try:
-        return px.backends_view()
-    except Exception:                                              # noqa: BLE001
-        return None
 
 
 # The framing -- BodyError, the body cap, the Content-Length spine, the chunked parser --
@@ -8496,7 +8338,7 @@ class Handler(BaseHTTPRequestHandler):
     # 2026-10-05: no Nagle, as uvicorn's servers. The headers and the first frame
     # go out as two writes; on a keep-alive connection (the proxy's pool, an SDK's) Linux holds
     # the second for the reader's delayed ACK, up to 40 ms (the night pass measured that stall
-    # on app/tests/fake_backend.py)
+    # on TandemApp's tests/fake_backend.py)
     disable_nagle_algorithm = True
     _status: int | None = None
     _tandem: str | None = None          # the conductor mode of the completion in hand
@@ -8745,16 +8587,6 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": {"message": "messages must be a non-empty list",
                                               "type": "invalid_request_error",
                                               "param": "messages"}})
-        px = STATE.get("proxy")
-        if px is not None and body.get("model"):
-            from proxy import route as proxy_route
-            try:
-                routed = px.route("/v1/chat/completions", body) is not None
-            except proxy_route.NotFound:
-                routed = True
-            if routed:
-                return self._json(404, {"error": {"message": "this model is not the engine's: no "
-                                                             "cache to read", "type": "not_found"}})
         try:
             ids, session = _peek_ids(body, self.headers)
         except Exception as exc:                                   # noqa: BLE001
@@ -8769,14 +8601,10 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, out)
 
     def _chat(self, method: str) -> bool:
-        """`/v1/chat-app/*`: the Chat tab's service, chatd, behind the dashboard's auth
-        (app/tandemapp/chat_forward.py, SRV-343); False for every other path. ENG-413 WP13: an
-        engine without TandemApp's forward answers the prefix 404 not_on_engine."""
-        cf = _app_part("chat_forward")
-        if cf is not None:
-            return cf.route(self, method, _auth())
+        """`/v1/chat-app` and every path under it: 404 not_on_engine (engine API 1.8; the Chat tab's
+        service is TandemApp's, behind its controller); False for every other path."""
         p = self.path.split("?")[0]
-        if p != CHAT_APP and not p.startswith(CHAT_APP + "/"):
+        if p != "/v1/chat-app" and not p.startswith("/v1/chat-app/"):
             return False
         self.close_connection = True                 # a body it may carry is not read
         self._not_here(p.rstrip("/"), "chatd's forward is TandemApp's (its controller serves "
@@ -9595,9 +9423,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         raw = self.path.split("?")[0]
         if raw == "/dashboard" or raw.startswith("/dashboard/"):
-            # the dashboard's static shell: public, no data in it; the extension serves it until it
-            # leaves the engine (ENG-413 WP14), a headless engine answers 404 no_ui
-            return self._ext_route("GET", raw, None)
+            # 404 no_ui on every engine since ENG-413 WP14: TandemApp's controller serves the page
+            return self._not_here(raw)
         path = raw.rstrip("/") or "/"
         if path.startswith("/v1/dashboard/"):
             return self._dashboard_get(path)
@@ -9614,7 +9441,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._config("GET", path, None)
         if path == "/v1/library" or path.startswith("/v1/library/"):
             # R1: the package library for the model's own scripts, open like the chat API
-            # (app/tandemapp/library_api.py), the extension's route (ENG-413 WP3a)
+            # (TandemApp's tandemapp/library_api.py), the extension's route (ENG-413 WP3a)
             return self._ext_route("GET", path, None)
         if path == "/v1/memory" or path.startswith("/v1/memory/"):
             # 2026-10-05: the model's own memory, under its session's address only
@@ -9683,8 +9510,6 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/v1/replica/identity":
             # SRV-741: what replicas compare before they serve one model (server/identity.py); the
             # caller rule of /v1/models
-            if STATE.get("proxy") is not None and not STATE["proxy"].authorize(self)[0]:
-                return
             return self._json(*identity_mod.answer(STATE, served_name, weights_profile))
         if path == "/v1/models":
             # with an extension that lists models (the conductor's `TandemLLM`), those alone: the raw
@@ -9694,11 +9519,6 @@ class Handler(BaseHTTPRequestHandler):
                 ext_models if ext_models else
                 [{"id": STATE["model"], "object": "model", "created": STATE["started"],
                   "owned_by": "local"}])}
-            if STATE.get("proxy") is not None:
-                # the backends' real models after the engine's own (app/proxy/route.py)
-                if not STATE["proxy"].authorize(self)[0]:
-                    return
-                out["data"] = out["data"] + STATE["proxy"].models(STATE["started"])
             # SRV-347: the engine model's capability card (server/model_card.py)
             out["data"] = model_card.annotate(out["data"], _card_facts())
             if STATE.get("deciders") is not None:
@@ -9724,9 +9544,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(code, out)
         if path.startswith("/v1/models/"):
             # the key the list asks for, before any lookup: a 404-vs-401 difference would
-            # name the models to a stranger (app/proxy/app.py does the same)
-            if STATE.get("proxy") is not None and not STATE["proxy"].authorize(self)[0]:
-                return
+            # name the models to a stranger
             from urllib.parse import unquote
             name = unquote(path[len("/v1/models/"):])
             if EXT.models():
@@ -9739,8 +9557,6 @@ class Handler(BaseHTTPRequestHandler):
                 card = model_card.annotate([card], _card_facts())[0]     # SRV-347
             if card is None and STATE.get("deciders") is not None:
                 card = decider_api.card(STATE["deciders"], name, STATE["started"])
-            if card is None and STATE.get("proxy") is not None:
-                card = STATE["proxy"].table.card(name, STATE["started"])
             if card is None:
                 return self._json(404, {"error": {"message": f"no model {name!r}",
                                                   "type": "invalid_request_error",
@@ -9770,7 +9586,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/v1/dashboard/session":
             return self._session("DELETE")
         if path.startswith("/v1/conductor/memory/notes"):
-            # 2026-10-05: a note, or a user's whole memory (app/tandemapp/conductor/routes.py)
+            # 2026-10-05: a note, or a user's whole memory (TandemApp's tandemapp/conductor/routes.py)
             return self._conductor_write("DELETE")
         if path == "/v1/config" or path.startswith("/v1/config/"):
             return self._config("DELETE", path, None)
@@ -9789,13 +9605,9 @@ class Handler(BaseHTTPRequestHandler):
         return self._conductor_write("PATCH")       # VIS-48: a session's keep
 
     def _config(self, method: str, path: str, body) -> None:
-        """`/v1/config/*`: the Backends and Setup screens (app/proxy/config_api.py); 404 without
-        `--backends`."""
-        px = STATE.get("proxy")
-        if px is None:                               # ENG-413 WP3a: 404 not_on_engine
-            return self._not_here(path, "this engine runs no proxy (--backends off)")
-        from proxy import config_api
-        return config_api.handle(self, px, method, path, body)
+        """`/v1/config/*`, the Backends screen's: 404 not_on_engine (ENG-413 WP14: TandemApp's
+        controller serves other backends)."""
+        return self._not_here(path, "this engine runs no proxy")
 
     def _conductor_write(self, method: str):
         path = self.path.split("?")[0].rstrip("/")
@@ -9824,7 +9636,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._conductor(method, body)
 
     def _conductor(self, method: str, body: dict | None = None) -> None:
-        """`/v1/conductor/*` (app/tandemapp/conductor/routes.py): the extension's route (ENG-413
+        """`/v1/conductor/*` (TandemApp's tandemapp/conductor/routes.py): the extension's route (ENG-413
         WP3a); 404 not_on_engine on a headless engine."""
         return self._ext_route(method, self.path.split("?")[0].rstrip("/"), body)
 
@@ -9917,12 +9729,8 @@ class Handler(BaseHTTPRequestHandler):
             return setup_api.handle(self, sys.modules[__name__], "POST", path, body)
         if path == "/v1/config" or path.startswith("/v1/config/"):
             return self._config("POST", path, body)
-        if path.startswith("/v1/collect/"):          # P6: a vLLM or SGLang plugin's batch
-            px = STATE.get("proxy")
-            if px is None:                           # ENG-413 WP3a: 404 not_on_engine
-                return self._not_here(path, "this engine runs no proxy (--backends off)")
-            from proxy import collect_api
-            return collect_api.handle(self, px, path, body)
+        if path.startswith("/v1/collect/"):          # a plugin's batch: TandemApp's controller's
+            return self._not_here(path, "this engine runs no host collector")
         if path == "/v1/cache/release":
             # SRV-483: a chat's sandbox needs room; the engine gives back what it holds idle
             if not self._allowed("cache_clear"):
@@ -9982,12 +9790,6 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/v1/systemone", "/v1/predict") and STATE.get("deciders") is not None:
             # typed decisions (SRV-131): the Jev contract, answered in the idle window
             return decider_api.handle(self, STATE["deciders"], body)
-        self._proxy_user = None
-        px = STATE.get("proxy")
-        if px is not None and path in ("/v1/chat/completions", "/v1/completions",
-                                       "/v1/embeddings", "/v1/responses"):
-            if self._proxied(px, path, body):
-                return
         if path not in ("/v1/chat/completions", "/v1/completions"):
             if EXT.route("POST", path) is not None:         # ENG-413 WP3a: the extension's own path
                 return self._ext_route("POST", path, body)
@@ -10100,30 +9902,6 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return "owner"
 
-    def _proxied(self, px, path: str, body) -> bool:
-        """`--backends`: the users' keys on every completion route, then a model that routes to a
-        backend goes to the relay on this thread (no engine lock, no queue). True when answered
-        here; False for the engine's own model, which goes on as before."""
-        from proxy import route as proxy_route
-        t_arrival = time.perf_counter()
-        ok, user = px.authorize(self)
-        if not ok:
-            px.account_refusal(self, path, body, 401, finish="refused",
-                               error_type="invalid_api_key")
-            return True
-        self._proxy_user = user
-        try:
-            route = px.route(path, body)
-        except proxy_route.NotFound as exc:
-            px.account_refusal(self, path, body, 404, user=user, error_type="model_not_found")
-            self._json(404, exc.body())
-            return True
-        if route is None:
-            return False
-        px.serve(self, path, getattr(self, "_raw", b"") or json.dumps(body).encode(), body,
-                 route, user, t_arrival=t_arrival)
-        return True
-
     def _complete_logged(self, body: dict, path: str) -> None:
         try:
             return self._complete(body, chat=path.endswith("chat/completions"))
@@ -10194,10 +9972,9 @@ class Handler(BaseHTTPRequestHandler):
             rec.model_served = served_name()       # from the start: the Live view shows it in flight
         rec.client_id, rec.client_kind = ledger_mod.client_of(self.headers, body)
         if rec.client_kind == "internal":
-            # VIS-60: the turn this question served (app/tandemapp/conductor/classify.py PARENT)
+            # VIS-60: the turn this question served (TandemApp's tandemapp/conductor/classify.py PARENT)
             par = self.headers.get(ledger_mod.PARENT_HEADER)
             rec.parent_request = par[:80] if isinstance(par, str) and par else None
-        rec.user = getattr(self, "_proxy_user", None)       # the proxy key's label (--backends)
         # a proxy in front of this engine names its own lane for the request (server/api/parallel.py)
         rid = self.headers.get("X-Tandem-Relay-Id")
         rec.relay_id = rid[:64] if isinstance(rid, str) and rid else None
@@ -10262,7 +10039,7 @@ class Handler(BaseHTTPRequestHandler):
         if chat and STATE.get("thinking_default") == "off":
             body = thinking_mod.server_default_off(body)
         # TandemLLM's state lines that a client sends back in its earlier reasoning are taken out
-        # before anything reads the messages (app/tandemapp/conductor/states.py): Qwen never sees them,
+        # before anything reads the messages (TandemApp's tandemapp/conductor/states.py): Qwen never sees them,
         # and the prompt is the one the request would have without them
         stripped = 0
         if chat and STATE.get("conductor") is not None and isinstance(body.get("messages"), list):
@@ -10510,7 +10287,7 @@ class Handler(BaseHTTPRequestHandler):
                          f"top_k {sampler.top_k} seed {sampler.seed}" if rd.sample
                          else "the client's sampling, as sent"), flush=True)
         # SRV-475: the loop escape and the profile's `sampling.agentic_default`
-        # (app/tandemapp/conductor/loopescape.py), on a turn that offers tools under an active plan;
+        # (TandemApp's tandemapp/conductor/loopescape.py), on a turn that offers tools under an active plan;
         # raw, bench, side requests, compactions and a regenerate are never looked at
         if (STATE.get("escapes") is not None and chat and plan is not None and plan.active
                 and plan.side is None and not getattr(plan, "compaction", False)
@@ -10788,7 +10565,7 @@ class Handler(BaseHTTPRequestHandler):
         side = None
         me = {"rank": rank, "t": time.monotonic(),
               "side": plan.side if plan is not None and plan.side is not None else None,
-              # the conductor's own question to Qwen (app/tandemapp/conductor/classify.py's agent): the
+              # the conductor's own question to Qwen (TandemApp's tandemapp/conductor/classify.py's agent): the
               # waiting line of a turn behind it says so
               "own": own_q,
               # SPD-249: its prompt rows, for the router's `own_eta` behind it
@@ -11091,7 +10868,7 @@ class Handler(BaseHTTPRequestHandler):
             clean_ids = None
             plan_hidden = 0                        # SRV-165: the router's tokens in the prompt
             if plan is not None and plan.context is not None and not micro:
-                # Qwen decides the class inside the conversation (app/tandemapp/conductor/incontext.py):
+                # Qwen decides the class inside the conversation (TandemApp's tandemapp/conductor/incontext.py):
                 # one prefill of the prompt up to its last message plus a hidden question, right
                 # before this turn's own prefill, which then resumes from the anchors it left
                 prompt_n = int(prompt.numel())
@@ -11887,7 +11664,7 @@ class Handler(BaseHTTPRequestHandler):
             pyc = _tool_format().stream_rewriter() if tbuf is not None else None
             rec.live_refs = (think, tbuf)
             # 2026-10-05: the model's memory blocks held back from the client and written
-            # (app/tandemapp/memblock.py, app/tandemapp/conductor/memory.py); None with the profile's memory off
+            # (TandemApp's tandemapp/memblock.py, TandemApp's tandemapp/conductor/memory.py); None with the profile's memory off
             mf = [_memory_filter(plan, chat, n_choices, ui, tool_names)]
             # SRV-187: a bare `</think>` line the model writes in its answer never reaches the
             # client (a conductor plan only: the raw path is the release's, byte for byte)
@@ -12104,7 +11881,7 @@ class Handler(BaseHTTPRequestHandler):
                          "n": int(prog["thinking_every_tokens"])}
                         if live_lines and in_think and not use_voice else None)
             # N2: `ui.narrator: thoughts` -- the narrator sums up each stretch of thinking from
-            # Qwen's own ids (app/tandemapp/conductor/narrator.py Thoughts)
+            # Qwen's own ids (TandemApp's tandemapp/conductor/narrator.py Thoughts)
             narr = STATE.get("narrator")
             # SR1: `shadow.narrator: on` -- the summary is read from the session's shadow
             reader = (shadow_svc.thought_slot(shadow_key)
@@ -13124,14 +12901,14 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--no-think-stall", dest="think_stall", action="store_false",
                     help="never run the reasoning-loop arms (the budget still applies)")
     ap.add_argument("--conductor", default="raw", choices=("raw", "off", "shadow", "on"),
-                    help="the second-level harness (app/tandemapp/conductor/monitor/). raw, the "
+                    help="the second-level harness (TandemApp's tandemapp/conductor/monitor/). raw, the "
                          "default (off is the same): nothing of it runs and the output is the raw "
                          "engine's. shadow: every rule runs and journals, nothing is done. on: "
                          "each task acts in its policy mode. A request's X-Tandem header may "
                          "lower it, never raise it")
     ap.add_argument("--conductor-policy", default="",
-                    help="the monitor's policy file (default app/ops/supervisor.yaml), validated "
-                         "at start against app/ops/supervisor.schema.json")
+                    help="the monitor's policy file (default TandemApp's ops/supervisor.yaml), validated "
+                         "at start against TandemApp's ops/supervisor.schema.json")
     ap.add_argument("--conductor-watch-s", type=float, default=30.0,
                     help="with --conductor shadow or on, how often the stall watchdog's watch "
                          "looks for sessions whose client has gone (S4: client_gone, and NOTIFY "
@@ -13308,7 +13085,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--disk-cache-min-tokens", type=int, default=4096,
                     help="the shortest prefix the disk tier writes an anchor for")
     ap.add_argument("--conductor-defaults", default="builtin", choices=("builtin", "shipped"),
-                    help="0.3.22-test (app/tandemapp/conductor/shipped.py): shipped, the live "
+                    help="0.3.22-test (TandemApp's tandemapp/conductor/shipped.py): shipped, the live "
                          "documents of 2026-10-03 are stored as version 1 for every document the "
                          "conductor's directory has no version of (ops/start.sh passes it to the "
                          ":8000 service); builtin, the minimal built-ins stay version 0")
@@ -13510,26 +13287,17 @@ def parser() -> argparse.ArgumentParser:
                          "and every benchmark server stays off")
     ap.add_argument("--conductor-config", default="off",
                     help="the conductor's config directory (versioned profiles, router, roles, "
-                         "packages and its journal, app/tandemapp/conductor/), or off (the "
+                         "packages and its journal, TandemApp's tandemapp/conductor/), or off (the "
                          "default). On, /v1/models lists `TandemLLM` alone (the raw name is a "
                          "hidden alias; `X-Tandem: raw` serves the raw path) and /v1/conductor/* "
                          "exists; the raw model name is served as before. NOT read from the "
                          "environment: ops/start.sh passes serve.env's QSE_CONDUCTOR_CONFIG for "
                          "the :8000 service, and every benchmark server stays off")
     ap.add_argument("--backends", default="off",
-                    help="the proxy's config database (app/proxy/, app/docs/proxy.md), or off "
-                         "(the default). On, a request whose model routes to a configured backend "
-                         "(vLLM, SGLang, any OpenAI-compatible server, OpenAI, DeepSeek) is "
-                         "relayed on its handler's thread, never touching the engine's lock or "
-                         "queue; /v1/models adds the backends' models and /v1/config/* serves the "
-                         "Backends screen. TandemLLM and the raw name stay the engine's. The "
-                         "TANDEM_* variables overlay the database (the environment wins). NOT "
-                         "read from the environment: ops/start.sh passes serve.env's QSE_BACKENDS")
-    ap.add_argument("--host-collector", default="on", choices=("on", "off"),
-                    help="the System view's hosts (app/proxy/hostcollect.py): this machine's "
-                         "memory, GPU, CPU, disks and network, and the process behind each "
-                         "backend on it. Sampled only when the view asks, at most every 5 s (the "
-                         "process scan every 15 s); off leaves system.hosts out")
+                    help="off, the only value this engine takes: any other stops the start with "
+                         "one line. Other backends sit behind TandemApp's controller "
+                         "(`tandem-app`), in front of this engine. NOT read from the environment: "
+                         "ops/start.sh passes serve.env's QSE_BACKENDS")
     ap.add_argument("--usage-retention-days", type=int, default=ledger_mod.MIN_RETENTION_DAYS,
                     help="rows older than this are pruned daily at 04:00; below 400 only with "
                          "QSE_TEST=1")
@@ -13547,13 +13315,11 @@ def parser() -> argparse.ArgumentParser:
                          "yet). off, the default: the dashboard's read API answers without a "
                          "token. With no admin password set every admin route is open and this "
                          "flag changes nothing. Default from QSE_DASHBOARD_LOGIN")
-    ap.add_argument("--dashboard-dir", default=None,
-                    help="where the dashboard's built files are (default: app/dashboard/dist in "
-                         "this repository); /dashboard/ serves them, or a placeholder when missing")
     ap.add_argument("--setup", action="store_true",
                     help="setup mode (docs/setup.md, `ops/start.sh --setup`): no served model "
-                         "is loaded; the dashboard, /v1/setup/* and Wren, the setup guide's "
-                         "assistant, alone. Every other route answers 503 setup_mode")
+                         "is loaded; the Setup Guide's API /v1/setup/* and Wren, its assistant, "
+                         "alone (`tandem setup` in a terminal, or TandemApp's Setup page pointed "
+                         "at this engine). Every other route answers 503 setup_mode")
     ap.add_argument("--fake-engine", action="store_true",
                     help="the e2e: no weights, no GPU -- a deterministic CPU token source "
                          "(server/fake_engine.py) behind the real handler, auth, ledger, metrics "
@@ -13628,6 +13394,10 @@ def main() -> None:
     if a.dashboard_login not in ("on", "off"):
         ap.error(f"--dashboard-login / {auth_mod.LOGIN_ENV} is on or off, not "
                  f"{a.dashboard_login!r}")
+    # ENG-413 WP14: the proxy left the engine; refused before anything loads
+    if (a.backends or "off") != "off":
+        raise SystemExit("[proxy] --backends is not served by this engine: tandem-app serves other "
+                         "backends in front of it")
     # the tokens come from the environment (ops/start.sh sources secrets.env); a token that
     # is too short stops the start here, before the minutes of loading
     STATE["auth"] = auth_mod.Auth.from_env(trust_loopback=a.trust_loopback,
@@ -13658,17 +13428,17 @@ def main() -> None:
 
 def _serve_setup(a) -> None:
     """Setup mode (OPS-93, docs/setup.md): a box with no configured engine yet. Nothing of Qwen's
-    loads, nothing of the engine's caches, ledger, conductor or proxy opens; the server answers
-    the dashboard, /v1/setup/* and /health (`mode: setup`) and loads Wren alone, which the setup
+    loads, nothing of the engine's caches, ledger or extension opens; the server answers
+    /v1/setup/* and /health (`mode: setup`) and loads Wren alone, which the setup
     guide's apply job unloads before it starts the configured engine in this one's place."""
     from server import setup_api
     ident = identity()
     ident["version"] = ident["version"].split("+")[0]   # no weight profile serves here
     STATE.update(ident)
     STATE.update(setup_mode=True, started=time.time(), args=vars(a), port=a.port,
-                 dashboard_dir=a.dashboard_dir, model="setup")
+                 model="setup")
     print(f"[server] {STATE['auth'].describe()}", flush=True)
-    print(f"[setup] setup mode {STATE['version']}: the dashboard's #/setup, /v1/setup/* and Wren "
+    print(f"[setup] setup mode {STATE['version']}: the Setup Guide's API /v1/setup/* and Wren "
           f"on http://{a.host}:{a.port}; no served model loaded", flush=True)
     w = setup_api.wren_of(sys.modules[__name__])
     threading.Thread(target=w.load, name="wren-autoload", daemon=True).start()
@@ -14732,7 +14502,6 @@ def _serve(a, led) -> None:
     # SRV-475: the loop escape's sessions (the card's sampling is read with the weights); /health's
     # `sampling.loop_escape` reports them on every engine, the extension's loop escape steps them
     STATE["escapes"] = loop_escapes()
-    STATE["dashboard_dir"] = a.dashboard_dir
     STATE["live_hz"] = live_mod.hz_from_env(os.environ.get("QSE_LIVE_HZ"))
     STATE["live_activity"] = getattr(a, "live_activity", "on") == "on" and STATE["live_hz"] > 0
     STATE["live_windows"] = w = live_mod.windows_from_env(os.environ)
@@ -14776,7 +14545,6 @@ def _serve(a, led) -> None:
     journal = STATE.get("journal")
     if STATE.get("conductor") is None:
         print("[conductor] off: /v1/models lists only the raw engine", flush=True)
-    start_proxy(a)
     # The decision models this engine serves itself (ENG-179, SRV-131): None, and nothing of
     # engine/decision imported, with QWEN38_DECIDER_MODELS empty. They load later, through the
     # residency planner: ops/start.sh asks for the on_start ones once /health answers and the page
@@ -14863,22 +14631,21 @@ def _serve(a, led) -> None:
 
 
 class SetupHandler(Handler):
-    """Setup mode's routes (`--setup`): the dashboard's files and session, /health, /v1/setup/*
-    and an empty /v1/models; every other route answers 503 `setup_mode` with Retry-After."""
+    """Setup mode's routes (`--setup`): /health, /v1/setup/* (the Setup Guide's API, with Wren), the
+    session and an empty /v1/models; the page answers 404 no_ui as on every engine; every other
+    route answers 503 `setup_mode` with Retry-After."""
 
     def _setup_only(self, path: str) -> None:
         self._json(503, {"error": {"type": "setup_mode", "code": "setup_mode",
                                    "message": f"this box is in setup mode and serves no model yet "
-                                              f"({path}); open /dashboard/#/setup to set it up"}},
+                                              f"({path}); set it up with `tandem setup` or the "
+                                              f"Setup Guide's API under /v1/setup/"}},
                    extra_headers=(("Retry-After", "60"),))
 
     def do_GET(self):
         raw = self.path.split("?")[0]
         if raw == "/dashboard" or raw.startswith("/dashboard/"):
-            page = _app_part("static")
-            if page is None:                         # ENG-413 WP13: no page here, 404 no_ui
-                return self._not_here(raw)
-            return page.serve(self, self.path, STATE.get("dashboard_dir"))
+            return self._not_here(raw)               # 404 no_ui: this engine has no page
         path = raw.rstrip("/") or "/"
         if path.startswith("/v1/setup/"):
             from server import setup_api
@@ -14961,7 +14728,7 @@ def identity() -> dict:
 
 
 def _identity_name() -> str | None:
-    """0.8.2: the served model's name for the identity note (app/tandemapp/conductor/schema.py
+    """0.8.2: the served model's name for the identity note (TandemApp's tandemapp/conductor/schema.py
     `model_name`): the label of the model card whose packs match the weight profile
     (models/<model>/card.json; "Qwen3.8-27B" for exl3-4.5 or nvfp4, the second model's label for its
     packs); None when no card matches (the note's default name)."""

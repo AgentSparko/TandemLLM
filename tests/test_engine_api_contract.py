@@ -4,24 +4,16 @@ tests/test_engine_api_contract.py against its pinned copy; the live engine is
 tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_toolcalls.py.
 
   1  every path of routes.json's routes and app_routes_via_engine is one the engine dispatches
-     (server/app.py, server/engine_routes.py, server/setup_api.py, ops/engine_status.py for the
-     status responder, and the two in-process app modules that own a prefix); the engine-only
-     screens' old paths reach the extension and their new ones an engine_routes handler; no
-     planned route is dispatched yet
-                                                                  test_every_route_is_dispatched
+     (server/app.py, server/engine_routes.py, server/api/session_tokens.py, server/setup_api.py,
+     ops/engine_status.py for the status responder); group 9 has an engine_routes handler each;
+     no planned route is dispatched yet                          test_every_route_is_dispatched
   2  server/engine_api.py VERSION, routes.json's version and ops/engine_status.py's literal are one
-     version; the vendored TandemApp's proxy/engineapi.py SPEAKS has its major and is not newer, and
-     its PIN (once it has one) says SPEAKS                       test_one_version
-  3  reverse-deps.json equals the inventory this file computes from the engine's tree (python
-     tests/test_engine_api_contract.py --write writes it); each read AST cannot see names a file
-     that holds its mark; README.md lists every engine->app import    test_reverse_deps
-  4  the copied values are the contract's (1.3; TandemApp holds its copies to the same files):
+     version, and both /health answers carry it                  test_one_version
+  3  (retired with reverse-deps.json at ENG-413 WP14: the no-app guard is tests/test_app_hook.py)
+  4  the values are the contract's (1.3; TandemApp holds its copies to the same files):
      server/setup_api.py and server/api/auth.py same_origin and same_origin_json answer
      auth.json's cases, server/cache_peek.py and server/api/usage.py TIER_OF are cache.json's;
-     1.5: no screen carries an off_why copy any more, server/ext.py EXT_DEFAULT_DIR is the
-     conductor's default directory and server/api/seeds.py's deciders seed the conductor's
-     models and questions (the vendored TandemApp, until WP14)
-                                                                  test_values_are_the_contracts
+     1.5: no off_why copy; the engine's own off texts     test_values_are_the_contracts
   5  setup/: estimate-cases.json is models/estimate-cases.json byte for byte, limits.json's
      engine_max_slots is the registry's ENGINE_MAX_SLOTS          test_setup_fixtures
   6  node/: ops/serve.env carries PORT= and QSE_STATUS_PORT= as serve.env.example does and
@@ -30,12 +22,12 @@ tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_to
      out as hub_manifest.example.json says and refuses a changed byte; control.json's stage keys
      (1.2) are the ones ops/start.sh and ops/engines.sh read, and its status line is bin/tandem's
                                                                   test_node_fixtures
-  7  the byte copies (test helpers, contract_check, the licenses, the setup fixture) are
-     identical                                                    test_byte_copies
+  7  (the copies both trees keep equal are checked by the pair test tests/test_pair_copies.py
+     since ENG-413 WP14)
   8  every schema and example here validates (dashboard/, decision/, health, setup); a reference
-     leaves the folder only to TandemApp's conductor-v1, dashboard-v1 and fleet-v1, and only from
-     the lists that name TandemApp's routes; routes.json's after_eng413 and leaves marks are well
-     formed                                                       test_schemas_and_references
+     leaves the folder only to TandemApp's conductor-v1 and fleet-v1, and only from the lists that
+     name TandemApp's routes; routes.json's after_eng413 marks are `extension` but the sign-in's
+     and the leaves mark is well formed                                          test_schemas_and_references
   9  metrics-families.json names every family of the engine's /metrics registry with its type and
      labels, the conductor's as owner ext; metrics.md has a row for each and no other
                                                                   test_metrics_families
@@ -64,6 +56,11 @@ tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_to
      launchers have no chatd launcher and serve.env reads on as node, unset as off (the behaviour:
      tests/test_chatd_lifecycle.py, tests/test_install_headless.py)
                                                                   test_additive_1_7
+ 15  1.8 (ENG-413 WP14): every 1.7 route is here unchanged; the 1.7 examples validate and the 1.8
+     ones equal them but for engine_api; the Chat tab forward 1.7 planned is an answer, the
+     sign-in stays planned; the other leaving app routes and the screens' old paths are out;
+     dashboard/ has session, error and gap; server/app.py imports no TandemApp module and has no
+     --dashboard-dir or --host-collector flag                    test_additive_1_8
 
 CPU only, no torch, standard library only. Run: python tests/test_engine_api_contract.py
 """
@@ -71,7 +68,6 @@ CPU only, no torch, standard library only. Run: python tests/test_engine_api_con
 from __future__ import annotations
 
 import ast
-import functools
 import hashlib
 import json
 import os
@@ -84,146 +80,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 CONTRACT = os.path.join(ROOT, "contracts", "engine-api-v1")
-REVERSE = os.path.join(CONTRACT, "reverse-deps.json")
-#: TandemApp's top-level packages, run in the engine's process until ENG-413 (server/__init__.py)
-APP_PACKAGES = ("tandemapp", "proxy", "chatd")
-#: the engine's tree the inventory reads; app/ is TandemApp's
-ENGINE_DIRS = ("bench", "engine", "manual", "models", "ops", "server", "tests", "tools")
-SKIP_DIRS = ("__pycache__", "node_modules")
 
 
 def _routes() -> dict:
     with open(os.path.join(CONTRACT, "routes.json")) as f:
         return json.load(f)
-
-
-# ---------------------------------------------------------------------------- the inventory
-
-@functools.lru_cache(maxsize=None)
-def _names(d: str) -> frozenset:
-    try:
-        return frozenset(os.listdir(d))
-    except OSError:
-        return frozenset()
-
-
-def _exists(*parts: str) -> bool:
-    """Whether ROOT/parts exists, each part in its exact case (a case-blind file system would read
-    `monitor.Journal` as the module journal.py)."""
-    d = ROOT
-    for part in "/".join(parts).split("/"):
-        if part not in _names(d):
-            return False
-        d = os.path.join(d, part)
-    return True
-
-
-def _app_module(name: str, path: str) -> str | None:
-    """`name` as the reverse-deps entry when the engine file `path` imports it from TandemApp's
-    tree: a package of APP_PACKAGES, a `tools.X` only app/tools has (the namespace `tools` spans
-    both trees once app/ is on the path), or, in a test, a bare name only app/tests or app/tools
-    has (a test that puts that directory on the path)."""
-    top = name.split(".")[0]
-    if top in APP_PACKAGES:
-        return name
-    if top == "tools" and name.count(".") == 1:
-        mod = name.split(".")[1]
-        if _exists("app", "tools", mod + ".py") and not _exists("tools", mod + ".py"):
-            return name
-    if "." not in name and path.startswith("tests/"):
-        for d in ("tests", "tools"):
-            if _exists("app", d, name + ".py") and not _exists(d, name + ".py"):
-                return f"app/{d}/{name}.py"
-    return None
-
-
-def _is_app_path(parts: list[str]) -> bool:
-    return _exists("app", *parts)
-
-
-def _scan(path: str, tree: ast.AST) -> tuple[set, set]:
-    mods, reads = set(), set()
-    for n in ast.walk(tree):
-        if isinstance(n, ast.Import):
-            for a in n.names:
-                m = _app_module(a.name, path)
-                if m:
-                    mods.add(m)
-        elif isinstance(n, ast.ImportFrom) and n.level == 0 and n.module:
-            for a in n.names:
-                full = f"{n.module}.{a.name}"
-                sub = full.split(".")
-                if (n.module.split(".")[0] in APP_PACKAGES or n.module == "tools") and \
-                        _app_module(full, path) and \
-                        (_exists("app", *sub[:-1], sub[-1] + ".py") or _exists("app", *sub)):
-                    mods.add(full)                              # a module
-                elif n.module.split(".")[0] in APP_PACKAGES:
-                    mods.add(f"{n.module}:{a.name}")             # a name in a module
-                elif _app_module(n.module, path):
-                    mods.add(_app_module(n.module, path))
-        elif isinstance(n, ast.Call) and \
-                getattr(n.func, "attr", getattr(n.func, "id", None)) == "import_module" and \
-                n.args and isinstance(n.args[0], ast.Constant) and \
-                isinstance(n.args[0].value, str) and _app_module(n.args[0].value, path):
-            mods.add(n.args[0].value)
-        # a path into app/: "app" then a part of the tree in one call, tuple or list
-        seqs = [n.args] if isinstance(n, ast.Call) else \
-            [n.elts] if isinstance(n, (ast.Tuple, ast.List)) else []
-        for s in seqs:
-            for i, a in enumerate(s):
-                if not (isinstance(a, ast.Constant) and a.value == "app"):
-                    continue
-                if i + 1 == len(s):
-                    reads.add("app/")
-                elif isinstance(s[i + 1], ast.Constant) and isinstance(s[i + 1].value, str) and \
-                        _is_app_path([s[i + 1].value]):
-                    reads.add("app/" + s[i + 1].value)
-        if isinstance(n, ast.Constant) and isinstance(n.value, str) and \
-                n.value.startswith("app/") and not any(c.isspace() for c in n.value):
-            part = n.value.split("/")[1]
-            if not part:
-                reads.add("app/")
-            elif _is_app_path([part]):
-                reads.add("app/" + part)
-    return mods, reads
-
-
-def inventory(root: str = ROOT) -> dict:
-    """What the engine's Python reaches of TandemApp's tree, from the AST of every .py outside
-    app/: `imports` and `reads` of the engine's code, `tests` for tests/."""
-    out = {"imports": {}, "reads": {}, "tests": {}}
-    files = []
-    for top in ENGINE_DIRS:
-        for base, dirs, names in os.walk(os.path.join(root, top)):
-            dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not d.startswith("."))
-            files += [os.path.join(base, x) for x in names if x.endswith(".py")]
-    for full in sorted(files):
-        rel = os.path.relpath(full, root).replace(os.sep, "/")
-        try:
-            with open(full, encoding="utf-8", errors="replace") as f:
-                tree = ast.parse(f.read())
-        except SyntaxError:
-            continue
-        mods, reads = _scan(rel, tree)
-        if rel.startswith("tests/"):
-            if mods or reads:
-                out["tests"][rel] = {"imports": sorted(mods), "reads": sorted(reads)}
-            continue
-        if mods:
-            out["imports"][rel] = sorted(mods)
-        if reads:
-            out["reads"][rel] = sorted(reads)
-    return out
-
-
-def write_reverse_deps() -> None:
-    """reverse-deps.json's inventory from this tree; its hand-kept sections stay."""
-    with open(REVERSE) as f:
-        doc = json.load(f)
-    doc.update(inventory())
-    with open(REVERSE, "w") as f:
-        json.dump(doc, f, indent=1)
-        f.write("\n")
 
 
 # ---------------------------------------------------------------------------- dispatch
@@ -263,11 +124,11 @@ def test_every_route_is_dispatched():
     engine = _constants("server/app.py") | _constants("server/engine_routes.py")
     setup = _constants("server/setup_api.py")
     status = _constants("ops/engine_status.py")
-    # app modules that own a prefix and run in the engine's process until ENG-413
-    inproc_app = _constants("app/tandemapp/chat_forward.py") | \
-        _constants("app/tandemapp/session_tokens.py")
+    tokens = _constants("server/api/session_tokens.py")      # the engine strips /s/<token>
     misses = []
     for r in doc["routes"]:
+        if r.get("relay_only"):                    # 1.8: only ever relayed, answered 404 here
+            continue
         for p in [r["path"]] + r["aliases"]:
             if r.get("port") == "QSE_STATUS_PORT":
                 ok = _dispatched(p, status) and (not p.startswith("/v1/setup/") or
@@ -280,19 +141,14 @@ def test_every_route_is_dispatched():
                 misses.append(f"{r['method']} {p} (group {r['group']})")
     for r in doc["app_routes_via_engine"]:
         p = r["path"].replace("{token}", "x1")
-        ok = _dispatched(p, engine | inproc_app)
+        ok = _dispatched(p, engine | tokens)
         if not ok and p.startswith("/s/"):
-            ok = "/s/" in inproc_app
+            ok = "/s/" in tokens
         if not ok and p.endswith("*"):
-            ok = _dispatched(p.rstrip("*").rstrip("/"), engine | inproc_app)
+            ok = _dispatched(p.rstrip("*").rstrip("/"), engine | tokens)
         if not ok:
             misses.append(f"app route {r['path']}")
     from server import engine_routes
-    for s in doc["engine_screens_until_eng413"]:
-        if not _dispatched(s["path"], engine):
-            misses.append(f"screen {s['path']}")
-        if not s["handler"].startswith("host.engine"):
-            misses.append(f"screen {s['path']}: handler {s['handler']}")
     # 1.5: group 9 is the engine's own (server/engine_routes.py's table)
     for r in doc["routes"]:
         if r["group"] == 9:
@@ -304,8 +160,8 @@ def test_every_route_is_dispatched():
     assert not early, f"served but still planned (move them into routes): {early}"
     assert not misses, misses
     n = sum(1 + len(r["aliases"]) for r in doc["routes"])
-    return f"{n} paths of {len(doc['routes'])} routes, {len(doc['app_routes_via_engine'])} app " \
-           f"routes, {len(doc['engine_screens_until_eng413'])} screens"
+    return f"{n} paths of {len(doc['routes'])} routes, {len(doc['app_routes_via_engine'])} " \
+           f"extension routes"
 
 
 def _literal(path: str, name: str):
@@ -328,54 +184,11 @@ def test_one_version():
            "routes.json version": _routes()["version"],
            "ops/engine_status.py ENGINE_API": _literal("ops/engine_status.py", "ENGINE_API")}
     assert len(set(got.values())) == 1, got
-    mine = _mm(engine_api.VERSION)
-    # TandemApp speaks the contract it pinned: this major, never a newer minor than the engine's
-    speaks = _literal("app/proxy/engineapi.py", "SPEAKS")
-    assert _mm(speaks)[0] == mine[0] and _mm(speaks) <= mine, (speaks, engine_api.VERSION)
-    pin = os.path.join(ROOT, "app", "contracts", "engine-api-v1", "PIN")
-    if os.path.exists(pin):
-        with open(pin) as f:
-            said = dict(ln.split(None, 1) for ln in f.read().splitlines() if ln and not ln.startswith("#"))
-        assert said["engine_api"].strip() == speaks, (said, speaks)
+    _mm(engine_api.VERSION)
     with open(os.path.join(ROOT, "server", "app.py")) as f:
         src = f.read()
     assert src.count('"engine_api": engine_api.VERSION') == 2       # the full and setup answers
-    return f"engine API {engine_api.VERSION} in 3 places, TandemApp speaks {speaks}"
-
-
-def test_reverse_deps():
-    with open(REVERSE) as f:
-        doc = json.load(f)
-    got = inventory()
-    for key in ("imports", "reads", "tests"):
-        assert doc[key] == got[key], (
-            f"reverse-deps.json {key} differs from the tree "
-            f"(python tests/test_engine_api_contract.py --write): "
-            f"only in the file {sorted(set(doc[key]) - set(got[key]))[:5]}, only in the tree "
-            f"{sorted(set(got[key]) - set(doc[key]))[:5]}, changed "
-            f"{[k for k in doc[key] if k in got[key] and doc[key][k] != got[key][k]][:5]}")
-    bad = []
-    for e in doc["not_ast"]:
-        for f in e["files"]:
-            if not _exists(*f.split("/")):
-                bad.append(f"{f}: missing")
-                continue
-            with open(os.path.join(ROOT, f), encoding="utf-8", errors="replace") as fh:
-                text = fh.read()
-            bad += [f"{f}: no {m!r}" for m in e["marks"] if m not in text]
-        bad += [f"{n}: missing" for n in e["names"] if not _exists(*n.rstrip("/").split("/"))]
-    assert not bad, bad
-    with open(os.path.join(CONTRACT, "README.md")) as f:
-        readme = f.read()
-    unlisted = []
-    for path, mods in doc["imports"].items():
-        if f"`{path}`" not in readme:
-            unlisted.append(path)
-        unlisted += [f"{path}: {m}" for m in {m.split(":")[0] for m in mods}
-                     if f"`{m}`" not in readme]
-    assert not unlisted, unlisted
-    return f"{len(doc['imports'])} engine files import app code, {len(doc['reads'])} read it, " \
-           f"{len(doc['tests'])} test files reach it, {len(doc['not_ast'])} reads outside the AST"
+    return f"engine API {engine_api.VERSION} in 3 places"
 
 
 def _json(*parts: str):
@@ -399,20 +212,11 @@ def test_values_are_the_contracts():
     assert {c["headers"].get("Origin") is not None for c in cases} == {True, False}
     assert cache_peek.TIER_OF == _json("cache.json")["tier_of"]
     assert api_usage.TIER_OF == _json("cache.json")["tier_of"]
-    # 1.5 (ENG-413 WP5): the engine answers its screens itself; no copy of its off texts is kept
-    assert not any("off_why" in s for s in _routes()["engine_screens_until_eng413"])
+    # 1.5 (ENG-413 WP5): the engine answers its screens itself; no copy of its off texts was kept
+    assert not any("off_why" in s for s in _json("compat", "1.7", "routes.json")["engine_screens_until_eng413"])
     assert decider_api.OFF_WHY.startswith("this engine serves no decision model")
     assert shadow.OFF_WHY.startswith("this engine serves no shadow reader")
-    # the values the engine copied from TandemApp's conductor (until WP14 the vendored app/ holds them)
-    from server import ext as ext_mod
-    from server.api import seeds
-    store = _literal("app/tandemapp/conductor/store.py", "DEFAULT_ROOT")
-    assert ext_mod.EXT_DEFAULT_DIR == store, (ext_mod.EXT_DEFAULT_DIR, store)
-    copies = {c["engine"] for c in _json("reverse-deps.json")["copies"] if c["kind"] == "value"}
-    assert "server/ext.py EXT_DEFAULT_DIR" in copies and "server/api/seeds.py DECIDERS" in copies
-    assert not any("OFF_WHY" in c for c in copies), copies
-    return f"same_origin on {len(cases)} cases (2 copies), TIER_OF (2 copies), EXT_DEFAULT_DIR, " \
-           f"no OFF_WHY copy"
+    return f"same_origin on {len(cases)} cases (2 copies), TIER_OF (2 copies), no OFF_WHY copy"
 
 
 def test_setup_fixtures():
@@ -491,26 +295,11 @@ def test_node_fixtures():
            f"{len(man['files'])} files verified"
 
 
-def test_byte_copies():
-    with open(REVERSE) as f:
-        doc = json.load(f)
-    pairs = [(c["engine"], c["app"]) for c in doc["copies"] if c.get("kind") == "file"]
-    assert pairs
-    diff = []
-    for a, b in pairs:
-        with open(os.path.join(ROOT, a), "rb") as f1, open(os.path.join(ROOT, b), "rb") as f2:
-            if f1.read() != f2.read():
-                diff.append(f"{a} != {b}")
-    assert not diff, diff
-    return f"{len(pairs)} file pairs identical"
-
-
-
 # ---------------------------------------------------------------------------- 1.3
 
 #: where a reference may leave this folder: TandemApp's contracts, from the lists that name its routes
-APP_CONTRACTS = ("../conductor-v1/", "../dashboard-v1/", "../fleet-v1")
-APP_LISTS = ("engine_screens_until_eng413", "app_routes_via_engine", "app_families", "planned")
+APP_CONTRACTS = ("../conductor-v1/", "../fleet-v1")
+APP_LISTS = ("app_routes_via_engine", "app_families", "planned")
 
 
 def _refs(node, out: list) -> list:
@@ -560,24 +349,17 @@ def test_schemas_and_references():
                 v = e.get(f)
                 if v and v.startswith("..") and not v.startswith(APP_CONTRACTS):
                     bad.append(f"{key} {e.get('path') or e.get('what')}: {f} {v}")
-    # the marks: what leaves and what an extension serves
+    # the marks: since 1.8 every app route left is an extension's, but the sign-in, which leaves
     after = {e["path"]: e["after_eng413"] for e in doc["app_routes_via_engine"]}
+    assert {p for p, v in after.items() if v == "leaves"} == {"/v1/dashboard/session"}, after
     assert set(after.values()) == {"leaves", "extension"}, after
-    for p in ("/dashboard/*", "/v1/dashboard/session", "/v1/config", "/v1/config/*", "/v1/collect/*"):
-        assert after[p] == "leaves", p
     assert all(e.get("why") for e in doc["app_routes_via_engine"])
-    for sc in doc["engine_screens_until_eng413"]:
-        assert sc["after_eng413"].startswith("/v1/engine/"), sc
-        # 1.5: the engine's route replaces the screen, which leaves with WP14
-        assert any(r.get("replaces") == sc["path"] and r["path"].startswith(sc["after_eng413"].rstrip("*"))
-                   for r in doc["routes"]), sc["path"]
-        assert sc["leaves"].startswith("ENG-413 WP14"), sc
     leaving = [r["path"] for r in doc["routes"] if r.get("leaves")]
     assert leaving == ["/v1/dashboard/metrics"], leaving
     assert all(r["leaves"].startswith("2.0:") for r in doc["routes"] if r.get("leaves"))
     assert not bad, bad
-    return f"{n} examples valid, references inside the folder, {len(after)} app routes marked " \
-           f"({sum(v == 'leaves' for v in after.values())} leave), {len(doc['planned'])} planned"
+    return f"{n} examples valid, references inside the folder, {len(after)} extension routes, " \
+           f"{len(doc['planned'])} planned"
 
 
 def test_metrics_families():
@@ -612,7 +394,7 @@ def test_additive_1_3():
             gone.append(f"{r['method']} {r['path']}")
     assert not gone, f"1.3 dropped or narrowed 1.2 routes: {gone}"
     assert {s["path"] for s in old["engine_screens_until_eng413"]} == \
-        {s["path"] for s in _routes()["engine_screens_until_eng413"]}
+        {s["path"] for s in _json("compat", "1.3", "routes.json")["engine_screens_until_eng413"]}
     health = contract_check.load("health", CONTRACT)
 
     def ok(d, schema):
@@ -761,13 +543,13 @@ def test_additive_1_7():
     """ENG-413 WP7: 1.7: the engine runs no chatd (node or off; on is node, unset is off) and
     install.sh --with-chat --app-wheel installs TandemApp; no route or answer changes."""
     from tools import contract_check
-    old, doc = _json("compat", "1.6", "routes.json"), _routes()
+    old, doc = _json("compat", "1.6", "routes.json"), _json("compat", "1.7", "routes.json")   # 1.7 as it was
     assert (old["version"], doc["version"]) == ("1.6", "1.7")
     assert {k: v for k, v in doc.items() if k != "version"} == \
         {k: v for k, v in old.items() if k != "version"}, "1.7 changes no route"
     health = contract_check.load("health", CONTRACT)
     for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
-        a, b = _json(name), _json("compat", "1.6", name)
+        a, b = _json("compat", "1.7", name), _json("compat", "1.6", name)
         assert not contract_check.validate(b, health, root=CONTRACT), name    # a 1.6 engine's answer
         assert {k: v for k, v in a.items() if k != "engine_api"} == \
             {k: v for k, v in b.items() if k != "engine_api"}, name
@@ -795,10 +577,61 @@ def test_additive_1_7():
     return "routes unchanged, 1.6 examples valid, chat: node or off, the install's flags"
 
 
+def test_additive_1_8():
+    """ENG-413 WP14: 1.8: the page, its sign-in, the Chat tab forward and --backends left the
+    engine; every 1.7 route stays, the 1.7 examples validate, what 1.7 planned is an answer."""
+    from tools import contract_check
+    old, doc = _json("compat", "1.7", "routes.json"), _routes()
+    assert (old["version"], doc["version"]) == ("1.7", "1.8")
+    # no route goes; the two the engine never answered itself say so (`relay_only`)
+    relay = [r["path"] for r in doc["routes"] if r.get("relay_only")]
+    assert relay == ["/v1/embeddings", "/v1/responses"], relay
+    assert [{k: v for k, v in r.items() if k != "relay_only"} for r in doc["routes"]] == old["routes"]
+    # what left the engine is the controller's own family now (never the engine's)
+    assert doc["app_families"][:len(old["app_families"])] == old["app_families"]
+    health = contract_check.load("health", CONTRACT)
+    for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
+        a, b = _json(name), _json("compat", "1.7", name)
+        assert not contract_check.validate(b, health, root=CONTRACT), name    # a 1.7 engine's answer
+        assert {k: v for k, v in a.items() if k != "engine_api"} == \
+            {k: v for k, v in b.items() if k != "engine_api"}, name
+        assert a.get("engine_api") in (None, "1.8"), name
+    # the Chat tab forward that 1.7 planned is an answer; the sign-in stays planned
+    was = [p for p in old["planned"] if p["kind"] == "answer"]
+    assert [p["paths"] for p in was] == [["/v1/chat-app", "/v1/chat-app/*", "/v1/dashboard/session"]]
+    now = [a for a in doc["answers"] if a.get("since") == "1.8"]
+    assert [(a["what"], a["paths"]) for a in now] == [("404 not_on_engine", ["/v1/chat-app", "/v1/chat-app/*"])]
+    assert [(p["what"], p["paths"]) for p in doc["planned"]] == [("404 not_on_engine", ["/v1/dashboard/session"])]
+    assert {a["what"] for a in doc["answers"]} == {"404 no_ui", "404 not_on_engine"}
+    # the leaving app routes and the screens' old paths are out but the sign-in; the extension's stay
+    left = [e["path"] for e in old["app_routes_via_engine"] if e["after_eng413"] == "leaves"
+            and e["path"] != "/v1/dashboard/session"]
+    assert sorted(left) == sorted(["/v1/config", "/v1/config/*", "/v1/collect/*",
+                                   "/v1/chat-app", "/v1/chat-app/*", "/dashboard/*"]), left
+    assert [e["path"] for e in doc["app_routes_via_engine"]] == \
+        [e["path"] for e in old["app_routes_via_engine"] if e["path"] not in left]
+    assert [e["path"] for e in doc["app_families"][len(old["app_families"]):]] == left
+    assert "engine_screens_until_eng413" not in doc and doc["shared_prefixes"] == old["shared_prefixes"]
+    # the shapes the engine serves under /v1/dashboard are its own
+    for name in ("session", "error", "gap"):
+        assert os.path.isfile(os.path.join(CONTRACT, "dashboard", f"{name}.schema.json")), name
+    replaced = {r["replaces"] for r in doc["routes"] if r.get("replaces")}
+    assert replaced == {s["path"] for s in old["engine_screens_until_eng413"]}
+    paths = {p for a in doc["answers"] for p in a["paths"]}
+    assert set(left) - {"/dashboard/*"} <= paths and "/dashboard/*" in paths, sorted(set(left) - paths)
+    # the server: no TandemApp module, the page and the rest answered, the page's flags gone
+    with open(os.path.join(ROOT, "server", "app.py")) as f:
+        src = f.read()
+    tree = ast.parse(src)
+    mods = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module} | \
+        {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+    assert not {m for m in mods if m.split(".")[0] in ("tandemapp", "proxy", "chatd")}, mods
+    for gone in ("--dashboard-dir", "--host-collector", "_app_part", "dashboard_dir"):
+        assert gone not in src, gone
+    return f"{len(old['routes'])} 1.7 routes kept, 1.7 examples valid, {len(left)} app routes " \
+           f"left, {len(replaced)} old screen paths out, the sign-in planned"
+
+
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--write"]:
-        write_reverse_deps()
-        print(f"wrote {os.path.relpath(REVERSE, ROOT)}")
-        sys.exit(0)
     from scriptmode import run
     run(globals())

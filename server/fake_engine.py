@@ -1,17 +1,17 @@
-"""A fake engine for the dashboard's end-to-end tests: the real server, no model.
+"""A fake engine for end-to-end tests of the engine's clients: the real server, no model.
 
     QSE_ADMIN_TOKEN=$(python3 -c 'print("e2e-" + "0" * 40)') \\
     python server/app.py --fake-engine --port 8011 --served-model qwen38-spark-engine \\
-        --usage-ledger /tmp/qse-e2e/ledger.sqlite3 --dashboard-dir ../qwen38-spark-engine-dash/dashboard/dist
+        --usage-ledger /tmp/qse-e2e/ledger.sqlite3
 
-Everything a browser can reach is the real code -- the handler, the streaming, usage and timings,
-the usage ledger, the dashboard API, the log stream, /metrics, the access control, the static
-files. Only `generate_stream` and the tokenizer are replaced: a character-level tokenizer and a
-deterministic writer that answers every prompt with the same text for the same prompt, at
-`--fake-tps` tokens a second in blocks of four, and fills the loop's own counters (blocks, the
-first-miss histogram, the prefill's reused/forwarded) so every number the dashboard shows is
-populated. It needs CPU torch and nothing else: no weights, no triton, no transformers, no GPU.
-It refuses the production ledger (it is a test run).
+Everything a client can reach is the real code -- the handler, the streaming, usage and timings,
+the usage ledger, the dashboard API, the log stream, /metrics and the access control. Only
+`generate_stream` and the tokenizer are replaced: a character-level tokenizer and a deterministic
+writer that answers every prompt with the same text for the same prompt, at `--fake-tps` tokens
+a second in blocks of four, and fills the loop's own counters (blocks, the first-miss histogram,
+the prefill's reused/forwarded) so every number the dashboard shows is populated. It needs CPU
+torch and nothing else: no weights, no triton, no transformers, no GPU. It refuses the production
+ledger (it is a test run).
 
 Words in the last user message steer it, for the e2e's error and edge states:
 

@@ -1,21 +1,16 @@
-"""What Wren reads from (SRV-325): sections of the docs, the manual, the model registry and the
-packages that describe TandemLLM itself, and a BM25 search over them.
+"""What Wren reads from (SRV-325): sections of the engine's docs, its manual and the model
+registry, and a BM25 search over them.
 
 The scorer is server/api/textindex.py's `TextIndex` (ENG-413 WP2c: the engine's copy of the
 conductor's BM25, the one the package library and the memory notes use: lower-case words, a plural
 s dropped, no embeddings). The documents:
 
     docs/*.md                 one per heading section (#, ##, ###), long sections cut in parts
-    APP_DOCS                  the same: TandemApp's documents (app/docs/proxy.md)
     manual/chapters/*.tex     the same, after a plain-text pass over the LaTeX
     models/*/model.yaml       one per model overview, weight profile, tool and field, in words
                               built from the registry (numbers with their units)
-    PACKAGES                  the packages that describe TandemLLM to the model (app/packages)
 
-APP_DOCS and PACKAGES are TandemApp's files: extra knowledge, read by their paths under app/
-until TandemApp's extension hands them in (ENG-413 WP3); a missing one is skipped, and an index
-given none of them (`Knowledge(packages=(), app_docs=())`) holds the engine's own documents only,
-the same sections in the same order otherwise.
+Only the engine's own texts (ENG-413 WP14); TandemApp's documents are its own.
 
 A section's title counts three times. The index is built at the first search and again when a
 source file's mtime moves or a file comes or goes, looked at once a second at most; a build over
@@ -34,9 +29,6 @@ from server.api.textindex import TextIndex
 from server.setup import registry
 
 ROOT = registry.ROOT
-PACKAGES = ("app/packages/system/tandem-core/PACKAGE.md", "app/packages/inline/tandem-harness.md",
-            "app/packages/inline/tandem-memory.md", "app/packages/skills/tandem-library/SKILL.md")
-APP_DOCS = ("app/docs/proxy.md",)
 PART_CHARS = 1800
 RECHECK_S = 1.0
 WEIGHTS = {"title": 3, "text": 1}
@@ -200,11 +192,8 @@ def model_sections(m: dict) -> list[dict]:
 
 
 class Knowledge:
-    def __init__(self, root: str | None = None, packages=PACKAGES, clock=time.monotonic,
-                 app_docs=APP_DOCS):
+    def __init__(self, root: str | None = None, clock=time.monotonic):
         self.root = root or ROOT
-        self.packages = packages
-        self.app_docs = app_docs
         self.clock = clock
         self.docs: list[dict] = []
         self.text = TextIndex()
@@ -217,10 +206,8 @@ class Knowledge:
     def _files(self) -> list[str]:
         r = self.root
         files = sorted(glob.glob(os.path.join(r, "docs", "*.md")))
-        files += [os.path.join(r, p) for p in self.app_docs if os.path.isfile(os.path.join(r, p))]
         files += sorted(glob.glob(os.path.join(r, "manual", "chapters", "*.tex")))
         files += sorted(glob.glob(os.path.join(r, "models", "*", "model.yaml")))
-        files += [os.path.join(r, p) for p in self.packages if os.path.isfile(os.path.join(r, p))]
         return files
 
     def ensure(self) -> None:

@@ -8,7 +8,7 @@
 \texttt{401} & \texttt{unauthorized} & a guarded route without the token or the session it needs, once an admin password is set; a wrong collect token \\
 \texttt{404} & \texttt{not\_\allowbreak{}found} & no such route, or a route whose part is off on this server (the conductor, the proxy, the decision models) \\
 \texttt{404} & \texttt{not\_\allowbreak{}on\_\allowbreak{}engine} & a route TandemApp serves (the conductor, its library, memory and Laya, the backends) on an engine where no extension serves it \\
-\texttt{404} & \texttt{no\_\allowbreak{}ui} & the page on an engine without TandemApp: TandemApp's controller serves it \\
+\texttt{404} & \texttt{no\_\allowbreak{}ui} & the page, on every engine: TandemApp's controller serves it \\
 \texttt{404} & \texttt{model\_\allowbreak{}not\_\allowbreak{}found} & a model id no backend serves, or one two backends serve (the message names the prefixed forms) (code \texttt{model\_\allowbreak{}not\_\allowbreak{}found}) \\
 \texttt{409} & \texttt{busy}, \texttt{not\_\allowbreak{}loaded}, \texttt{role\_\allowbreak{}off} & an action that needs a role or a decision model in another state, or a role the roles document switches off (\texttt{role\_\allowbreak{}off}) \\
 \texttt{409} & \texttt{stage\_\allowbreak{}front} & any route but \texttt{/\allowbreak{}health} on the front stage of a split model (\texttt{-{}-stage}): requests go to the tail stage \\

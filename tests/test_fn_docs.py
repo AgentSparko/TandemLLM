@@ -35,7 +35,7 @@ def test_every_flashnext_switch_is_in_the_manual():
 
 def test_wren_finds_each_packs_window_and_table():
     from server.setup.knowledge import Knowledge
-    k = Knowledge(ROOT, packages=())
+    k = Knowledge(ROOT)
     hits = k.search("flashnext-6.05 EXL3 6.05 bpw context window fit", k=6)
     six = [h for h in hits if h["path"] == "models/qwen3.8-flash-next/model.yaml" and "6.05" in h["title"]]
     assert six and "does not fit at any window" in six[0]["text"], [(h["path"], h["title"]) for h in hits]

@@ -152,7 +152,7 @@ status() { "$STATUS_PY" "$HERE/engine_status.py" set "$@" >/dev/null 2>&1 || tru
 load_secrets
 T_START=$(date +%s)
 if [ "$SETUP" = "1" ]; then
-    # Setup mode: the server with no model of Qwen's, the dashboard and Wren alone (no caches, no
+    # Setup mode: the server with no model of Qwen's, the Setup Guide's API and Wren alone (no caches, no
     # store, no drafters, no conductor, no ledger: nothing of serve.env's engine flags reaches it)
     status starting --reason "starting the setup guide"
     export PYTHONPATH TZ=Europe/Berlin QSE_OPS_DIR="$HERE" QSE_SETUP_MODE=1

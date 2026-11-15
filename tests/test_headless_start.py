@@ -1,17 +1,12 @@
-"""The engine starts and serves with no TandemApp present (ENG-413 WP13; QA ENG-414).
+"""The engine starts and serves with no TandemApp present (ENG-413 WP13, WP14; QA ENG-414).
 
-server/app.py takes TandemApp's three modules it still runs until WP14 (setup mode's page
-tandemapp.static, the /v1/chat-app forward tandemapp.chat_forward, the System view's hosts
-proxy.hostcollect) at their first use, from the vendored tree while it is here or from the
-extension's package when QSE_EXT names TandemApp's (`_app_part`). Without either the engine is
-headless and answers as engine API 1.4 says. Each test runs in a copy of the engine's tree with no
-TandemApp folder and with TandemApp's packages blocked in the child, so an installed TandemApp
-cannot stand in for one.
+Since WP14 server/app.py runs no module of TandemApp's at all: no page, no /v1/chat-app forward,
+no host collector, no proxy (engine API 1.8). Each test runs in a copy of the engine's tree with
+TandemApp's packages blocked in the child, so an installed TandemApp cannot stand in for one.
 
-  1  the server imports: no finder, no TandemApp module loaded, every part None, the setup registry
-     holds every model (the backends' docs link into TandemApp is TandemApp's own); with QSE_EXT
-     naming TandemApp's extension the parts are asked for (and missing here); in this tree, when
-     it carries the vendored folder, the parts are the vendored modules
+  1  the server imports: no finder, no TandemApp module loaded, no part of TandemApp's to ask for,
+     the setup registry holds every model with no error; with QSE_EXT naming TandemApp's
+     extension the import loads nothing of TandemApp either (the extension loads at the start)
                                                    test_the_server_imports_without_tandemapp
   2  a fake engine starts in that copy: /health mode engine and extensions []; the page 404 no_ui;
      /v1/chat-app and every path under it 404 not_on_engine (GET and POST); the conductor's,
@@ -45,7 +40,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
 #: what the copy carries: the engine's code and what its start reads
-KEEP = ("server", "engine", "models", "ops", "contracts", "tools", "docs", "VERSION")
+KEEP = ("server", "engine", "models", "ops", "contracts", "tools", "docs", "README.md", "VERSION")
 #: TandemApp's packages, blocked in every child (None in sys.modules: an import of one fails)
 BLOCK = ("tandemapp", "proxy", "chatd")
 RAW = "qwen38-spark-engine"
@@ -65,7 +60,7 @@ def _torch() -> bool:
 
 
 def _copy() -> str:
-    """The engine's tree without the vendored folder, in a fresh temp dir."""
+    """The engine's code and what its start reads, in a fresh temp dir."""
     d = os.path.join(tempfile.mkdtemp(prefix="headless-"), "engine")
     os.makedirs(d)
     for name in KEEP:
@@ -90,24 +85,21 @@ PROBE = PRELUDE + r"""
 import json, os
 import server
 from server import app as A
-before = sorted(m for m in sys.modules if m.split('.')[0] in %r and sys.modules[m] is not None)
-parts = {n: A._app_part(n) for n in A._APP_PART_MODULES}
 from server.setup import registry as R
 models, errors = R.load_all()
+loaded = sorted(m for m in sys.modules if m.split('.')[0] in %r and sys.modules[m] is not None)
 print(json.dumps({
     "models": sorted(models), "registry_errors": [str(e)[:200] for e in errors],
-    "vendored": server.APP_VENDORED,
-    "finder": any(getattr(f, "tandem_app_finder", False) for f in sys.meta_path),
-    "here": A._app_parts_here(),
-    "parts": {n: (getattr(m, "__file__", None) if m is not None else None) for n, m in parts.items()},
-    "loaded": before,
+    "finder": any("Finder" in type(f).__name__ and type(f).__module__.startswith("server") for f in sys.meta_path),
+    "parts": [n for n in ("_app_part", "_app_parts_here", "_APP_PART_MODULES", "start_proxy", "CHAT_APP")
+              if hasattr(A, n)] + [n for n in ("APP_VENDORED", "AppFinder") if hasattr(server, n)],
+    "loaded": loaded,
 }))
 """ % (BLOCK,)
 
 
-def _probe(tree: str, env_extra: dict | None = None, block: bool = True) -> dict:
-    code = PROBE if block else PROBE.replace(PRELUDE, "import sys;", 1)
-    r = subprocess.run([sys.executable, "-c", code], cwd=tree, env=_env(tree, **(env_extra or {})),
+def _probe(tree: str, env_extra: dict | None = None) -> dict:
+    r = subprocess.run([sys.executable, "-c", PROBE], cwd=tree, env=_env(tree, **(env_extra or {})),
                        capture_output=True, text=True, timeout=300)
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-3000:]
     return json.loads(r.stdout.strip().splitlines()[-1])
@@ -118,31 +110,18 @@ def test_the_server_imports_without_tandemapp():
         return "skipped: no torch"
     tree = _copy()
     try:
-        assert not os.path.exists(os.path.join(tree, "app"))
         got = _probe(tree)
-        assert got["vendored"] is False and got["finder"] is False and got["here"] is False, got
-        assert got["loaded"] == [] and set(got["parts"].values()) == {None}, got
-        # the setup registry: every model of models/, the backends' TandemApp docs link taken as TandemApp's
+        assert got["finder"] is False and got["loaded"] == [] and got["parts"] == [], got
+        # the setup registry: every model of models/ (the backends' docs link is the engine's README)
         want = sorted(d for d in os.listdir(os.path.join(tree, "models"))
                       if os.path.isfile(os.path.join(tree, "models", d, "model.yaml")))
         assert want and len(got["models"]) == len(want) and got["registry_errors"] == [], (want, got)
-        # QSE_EXT names TandemApp's extension: the parts are asked for, and none is installed here
+        # QSE_EXT names TandemApp's extension: importing the server still loads nothing of it
         got = _probe(tree, {"QSE_EXT": "tandemapp.engine_ext"})
-        assert got["here"] is True and set(got["parts"].values()) == {None}, got
-        # another extension's module does not make TandemApp's parts this process's
-        got = _probe(tree, {"QSE_EXT": "fake_ext"})
-        assert got["here"] is False and set(got["parts"].values()) == {None}, got
+        assert got["loaded"] == [] and got["parts"] == [], got
     finally:
         shutil.rmtree(os.path.dirname(tree), ignore_errors=True)
-    import server
-    if not server.APP_VENDORED:
-        return "headless: no finder, nothing of TandemApp loaded, every part None (this tree has no vendored folder)"
-    # this tree carries the vendored folder: the parts are its modules, as before WP13
-    got = _probe(ROOT, block=False)
-    assert got["vendored"] is True and got["finder"] is True and got["here"] is True, got
-    for n, f in got["parts"].items():
-        assert f and os.path.dirname(os.path.dirname(f)) == os.path.join(ROOT, "app"), (n, f)
-    return "headless: no finder, nothing of TandemApp loaded, every part None; vendored: the vendored modules"
+    return "no finder, nothing of TandemApp loaded or asked for, every model registered"
 
 
 def _start(tree: str, *args: str, env_extra: dict | None = None) -> subprocess.Popen:

@@ -85,7 +85,7 @@ Why: an engine asked for chat mode that came up without its extension would serv
 
 MAJOR.MINOR. A minor step adds a hook, an argument with a default, a host attribute, an event field, a plan field or an act kind. A major step removes or renames one, or changes a meaning or the failure rule.
 
-Until ENG-413 is finished (decided 2026-11-14): the engine and TandemApp's extension are always vendored and pinned together (the engine's `app.pin`, TandemApp's `PIN`), so an engine and an extension from different steps never meet, and every contract change in that time is a minor step, even one a mismatched pair would feel. The release step then sets one clean major and freezes it; from there the rule above holds for every change.
+Until ENG-413's release (decided 2026-11-14) every contract change is a minor step, even one a mismatched pair would feel: the extension is tested with the engine its `PIN` names (TandemApp's `PIN`; the engine vendored TandemApp until WP14), so an engine and an extension from different steps never meet. The release step then sets one clean major and freezes it; from there the rule above holds for every change.
 
 ## Tests
 

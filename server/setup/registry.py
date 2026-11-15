@@ -425,17 +425,10 @@ def field_error(f: dict, value) -> str | None:
     return None
 
 
-#: ENG-413 WP13: a docs link into TandemApp's vendored tree (the backends' app/docs/proxy.md): a file
-#: there while the tree carries app/; a tree without it takes the link as TandemApp's own document
-APP_DOCS = "app/"
-
-
 def _docs_ok(link: str, root: str) -> bool:
     path = link.split("#", 1)[0]
     if not path or os.path.isabs(path) or ".." in path.split("/"):
         return False
-    if path.startswith(APP_DOCS) and not os.path.isdir(os.path.join(root, APP_DOCS)):
-        return True
     return os.path.isfile(os.path.join(root, path))
 
 

@@ -690,7 +690,7 @@ components:
     knobs:
       QSE_BACKENDS: {"on": "${HOME}/.qwen38-spark-engine/backends/config.sqlite3", "off": ""}
     assets: []
-    docs: app/docs/proxy.md
+    docs: README.md#tandemapp
     note: You add the backends later, on the Backends screen.
   - id: kv_fp8
     label: Long-context cache (FP8)

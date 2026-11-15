@@ -1,10 +1,10 @@
 # Engine API contract v1
 
-These files are the truth for what TandemApp (the dashboard, the controller, the conductor, chatd and TandemNode) may use of a TandemLLM engine (`engine/`, `server/`): the HTTP routes, the extensions to the OpenAI shapes, the shapes of the engine's own reads, its metrics, its tool-call parsing, and how TandemNode controls an install without importing it. The engine owns them: they live at the engine's root (`contracts/engine-api-v1/`, since 1.3), and TandemApp keeps a copy pinned to an engine commit (`PIN` in its copy, `tests/test_contract_pin.py`). The engine's tests hold its code to them (`tests/test_engine_api_contract.py`, `tests/test_engine_api_live.py`, `tests/test_contract_toolcalls.py`); TandemApp's tests hold its callers and its copies to them (`tests/test_engine_api_contract.py`, `tests/test_contract_toolcalls.py`). Its version is `1.7`, independent of either release. The in-process extension interface is its neighbour, `../engine-ext-v1` (its own version).
+These files are the truth for what TandemApp (the dashboard, the controller, the conductor, chatd and TandemNode) may use of a TandemLLM engine (`engine/`, `server/`): the HTTP routes, the extensions to the OpenAI shapes, the shapes of the engine's own reads, its metrics, its tool-call parsing, and how TandemNode controls an install without importing it. The engine owns them: they live at the engine's root (`contracts/engine-api-v1/`, since 1.3), and TandemApp keeps a copy pinned to an engine commit (`PIN` in its copy, `tests/test_contract_pin.py`). The engine's tests hold its code to them (`tests/test_engine_api_contract.py`, `tests/test_engine_api_live.py`, `tests/test_contract_toolcalls.py`); TandemApp's tests hold its callers and its copies to them (`tests/test_engine_api_contract.py`, `tests/test_contract_toolcalls.py`). Its version is `1.8`, independent of either release. The in-process extension interface is its neighbour, `../engine-ext-v1` (its own version).
 
 | file | what |
 |-|-|
-| `routes.json` | every route by group with its TandemApp callers (`used_by`, or `consumer` when no TandemApp file calls it), its shape, and `live`: a GET an engine without a model (`--fake-engine`) answers 200; the engine-only screens until ENG-413; TandemApp's routes the engine serves in its process until ENG-413; the controller's own families |
+| `routes.json` | every route by group with its TandemApp callers (`used_by`, or `consumer` when no TandemApp file calls it), its shape, and `live`: a GET an engine without a model (`--fake-engine`) answers 200; the extension's routes in the engine's process; the answers where nothing serves a path; the controller's own families |
 | `health.schema.json`, `health.example.json` | `GET /health`: the open, full, setup-mode and status responder answers |
 | `health.stage-front.example.json`, `health.stage-tail.example.json` | `GET /health` of the two stage processes of a split model, with the `stage` block (since 1.2) |
 | `setup/estimate-cases.json` | `models/estimate-cases.json` byte for byte: the Setup Guide's estimate formula pinned by cases |
@@ -23,10 +23,10 @@ These files are the truth for what TandemApp (the dashboard, the controller, the
 | `compat/1.4/` | the 1.4 routes and `/health` examples as they were, which 1.5 still has to accept (since 1.5) |
 | `compat/1.5/` | the 1.5 routes and `/health` examples as they were, which 1.6 still has to accept (since 1.6) |
 | `compat/1.6/` | the 1.6 routes and `/health` examples as they were, which 1.7 still has to accept (since 1.7) |
+| `compat/1.7/` | the 1.7 routes and `/health` examples as they were, which 1.8 still has to accept (since 1.8) |
 | `engine/` | group 9, the engine-only screens (since 1.5): `residency-plan`, `disk`, `disk-clear`, `deciders-status`, `decider-action`, `narrator-status`, `narrator-action`, `shadow-status`, `shadow-ask` and `error` schemas, with examples |
 | `node/control.json` | bin/tandem's verbs and the install.sh flags TandemNode and the controller use; `stage`: the `run/local.env` keys of a split model's stage, the start and stop order and `bin/tandem status`'s stage line (since 1.2); `chat`: who runs chatd on an engine box, the engine's `QSE_CHATD` on, off or node, and what each launcher does with node (since 1.6); since 1.7 the engine runs no chatd: node or off, `on` read as node and unset as off, and the `install.sh --with-chat --app-wheel` install |
 | `PIN` | only in TandemApp's copy: the engine commit it was taken from, the versions, and the tree id of this folder and of `../engine-ext-v1` (since 1.3) |
-| `reverse-deps.json` | what the engine's tree still takes from TandemApp's: the engine->app imports, the engine test files that reach app code, the reads across the boundary, and the copies both keep equal |
 
 ## The version
 
@@ -40,7 +40,8 @@ These files are the truth for what TandemApp (the dashboard, the controller, the
 - 1.5 is additive (ENG-413 WP5): group 9, the engine-only screens as the engine's own `/v1/engine/*` routes (below). Every 1.4 route is still here, the 1.4 examples (`compat/1.4/`) still validate, and the conductor's old paths answer as before while they last.
 - 1.6 is additive (ENG-413 WP6, SRV-823): `node/control.json` `chat`. With `QSE_CHATD=node` TandemNode owns chatd: `ops/start.sh`, `ops/watchdog.sh` and `bin/tandem` neither start nor stop it, and `bin/tandem chat` runs `tandem-node chat`. No route or answer changes; the 1.5 examples (`compat/1.5/`) still validate. An engine before 1.6 reads node as on, so TandemNode hands chatd over only to a 1.6 engine, or to one that says off.
 - 1.7 (ENG-413 WP7, OPS-272): the engine has no chatd launcher. `ops/start.sh`, `ops/watchdog.sh` and `bin/tandem` never start or stop chatd; `QSE_CHATD` is node (TandemNode runs it) or off (nobody does), serve.env's mode block reads `on` as node (start.sh says so in one line) and unset as off, and `bin/tandem chat` and `bin/tandem node` run TandemApp's `tandem-node`. `install.sh --with-chat --app-wheel FILE` installs TandemApp's wheel into the engine's venv and TandemNode's unit with `--chat on`, and writes `QSE_CHATD=node`. No route or answer changes; the 1.6 examples (`compat/1.6/`) still validate. An install from before 1.7 keeps its own launchers until it is installed again (`node/control.json` `chat.update`).
-- A field or route of `planned` is not part of 1.7: an engine has it only from the minor that lists it under `routes`, `answers` or in a schema.
+- 1.8 (ENG-413 WP14): the engine serves no page, no Chat tab forward and no other backends. `/dashboard*` answers 404 `no_ui` and `/v1/chat-app*`, `/v1/config*` and `/v1/collect/*` 404 `not_on_engine` on every engine, with or without an extension and in setup mode; `--backends` takes only `off`; `/v1/dashboard/system` has no `hosts` and `proxy.mode` is `off`. These paths were TandemApp's routes in the engine's process, never routes of this API, so no route of it goes. `dashboard/` gains `session`, `error` and `gap`, the shapes of what the engine serves under `/v1/dashboard` (byte copies of TandemApp's `dashboard-v1` files). Two routes of group 1 say `relay_only`: `POST /v1/embeddings` and `POST /v1/responses`. The engine never answered them itself. The `--backends` proxy relayed them to a backend, and an engine without it answered 404 `not_found`, as every engine does since 1.8. The 1.7 examples (`compat/1.7/`) still validate.
+- A field or route of `planned` is not part of the minor that plans it: an engine has it only from the minor that lists it under `routes`, `answers` or in a schema.
 - TandemApp's `proxy/engineapi.py` (`SPEAKS` 1.2) reads it for an engine of kind `tandemllm`. Another major is not ok: "this engine speaks engine API 2.0; TandemApp 0.15.0 needs 1.x". TandemNode's engine view then says `unhealthy` with that text in `health.api_why`; a deployment member on that engine is `down` with it and takes no request, not as a fallback and not for a model no record names (a derived Single's or a routing rule's: 503 `no_member`); a deployment's start fails at once with it (`start_failed`).
 - Not read here yet: chatd's own engine (SRV-735) and backends the controller reaches directly (SRV-749).
 
@@ -59,7 +60,7 @@ These files are the truth for what TandemApp (the dashboard, the controller, the
 
 ### 2. Health and metrics
 
-The full answer goes to a loopback caller without proxy headers (TandemNode on its box) or a caller with the token: `status_port`, `version`, `model`, `base_model`, `weights.name`, `uptime_s`, `max_len`, `default_max_tokens`, `memory`, `parallel`, `engine_api`. `status` is `ok`, `busy`, `draining` (503) or `failed` (500, a GPU context that no longer answers); a tail stage says `degraded` (200) while its link is down (since 1.2). The setup-mode answer: `mode` setup, `status_port`, `assistant`, `engine_api`. `/metrics` is the `qse_*` families of `tandemapp/METRICS.md`.
+The full answer goes to a loopback caller without proxy headers (TandemNode on its box) or a caller with the token: `status_port`, `version`, `model`, `base_model`, `weights.name`, `uptime_s`, `max_len`, `default_max_tokens`, `memory`, `parallel`, `engine_api`. `status` is `ok`, `busy`, `draining` (503) or `failed` (500, a GPU context that no longer answers); a tail stage says `degraded` (200) while its link is down (since 1.2). The setup-mode answer: `mode` setup, `status_port`, `assistant`, `engine_api`. `/metrics` is the `qse_*` families of `metrics.md` here.
 
 **The `stage` block (since 1.2, optional).** Only a stage process of a split model has it (`health.schema.json` `stage`, `docs/server.md` "The stage block"); any other engine has no `stage` key. Shape 1, every field always present: `shape`, `role` (`front` or `tail`), `lo`, `hi`, `range` (`LO:HI`), `layers`, `cut`, `identity` (16 hex digits, null on the tail before its first link), `options` (the stage's limits: `slots`, `caches`, ...), `link` (`state` up or down, `epoch`, `reason` null while up, `transport`, `bytes`, `peer` with the other stage's `role`, `lo`, `hi`, `identity`); the front adds `steps`, and with caches on both add `state` (live counters). A later field is optional. Nothing in it is measured. The tail is a full engine (its `/health` has `engine_api`); the front runs a small server of its own that answers `/health` with `status`, `stage`, `model` and `uptime_s` only, and 409 `stage_front` on every other route. The front has no `engine_api`: a caller reads its block by its presence, and the link's handshake refuses a front of other code (`refused (code)`), so a front linked to a tail on 1.2 runs the same code. A deployment's checks: both `link.state` up, the same `link.epoch`, each side's `link.peer.identity` the other's `identity`, `front.hi == tail.lo`, `tail.hi == layers`, equal `options.slots` and `options.caches`.
 
@@ -150,7 +151,7 @@ The same paths on the status responder's port, answered while the engine is away
 
 ### 9. Engine-only screens (since 1.5, ENG-413 WP5)
 
-What the conductor's screens read or load of the engine's own models and memory, served by the engine itself (`server/engine_routes.py`), on a headless engine too. They replace the conductor's paths of the same screens (`replaces`); while those last (they leave with WP14) the extension hands the same handlers in process (`host.engine`, `../engine-ext-v1` 3.0) and the old paths answer the same body plus the conductor contract's `contract_version`. Every answer carries `Cache-Control: no-store`; an error is `{"error": {"type", "message"}}` (`engine/error.schema.json`).
+What the conductor's screens read or load of the engine's own models and memory, served by the engine itself (`server/engine_routes.py`), on a headless engine too. They replace the conductor's paths of the same screens (`replaces`), which left this API with 1.8; the extension still gets the same handlers in process (`host.engine`, `../engine-ext-v1` 3.0). Every answer carries `Cache-Control: no-store`; an error is `{"error": {"type", "message"}}` (`engine/error.schema.json`).
 
 | route | access | answer | shape |
 |-|-|-|-|
@@ -187,106 +188,60 @@ The access rules are `server/api/auth.py`'s, as the conductor's paths had them: 
 - A pack's `<weights dir>/_hub_manifest.json` (`node/hub_manifest.example.json`); `proxy/nodeweights.py` reads its sizes and sha256 for a content id.
 - The agent never imports engine code and never runs `python -m server.*`. TandemApp's `tests/test_import_boundary.py` enforces this.
 
-## TandemApp's routes the engine serves until ENG-413
+## TandemApp's routes in the engine's process
 
-The engine runs TandemApp's conductor, ledger and dashboard API in its own process until ENG-413 (the headless engine). The dashboard reaches these behind the engine's address on the LAN, and chatd answers through the engine port. They are TandemApp's, under their own contracts (`../conductor-v1/` and `../dashboard-v1/` in TandemApp's tree), not part of this API. The last column is `routes.json` `after_eng413`:
-
-- **leaves**: decided 2026-11-13. An engine-only install has no dashboard: the `/dashboard/` page, its cookie sign-in, the browser `--setup` flow (the same page in setup mode), `--backends` (the proxy and its host collector in the engine's process) and the Chat tab's way to chatd through the engine port leave the engine. TandemApp's controller serves all of them, and TandemApp runs with or without an engine. 1.3 adds nothing that only these need.
-- **extension**: served only by an engine extension that registers it (`../engine-ext-v1`, `routes`); TandemApp's conductor in chat mode.
-
-Nothing is removed in 1.3: every path here is served as before until the package that moves it (ENG-413 WP3a to WP14). Since 1.4 (WP3a) the conductor's paths (`/v1/conductor/*`, `/v1/library*`, `/v1/memory*`) and the page are the extension's routes (`../engine-ext-v1`), served in chat mode by the extension (WP3a's interim adapter `server/ext_app.py`; TandemApp's `tandemapp.engine_ext` since WP4), and a headless engine answers them as `answers` says.
+Since 1.8 (ENG-413 WP14) the engine runs no TandemApp code of its own. What TandemApp still serves inside an engine process is the extension's: an engine in chat mode loads TandemApp's extension by name (`QSE_EXT`, `../engine-ext-v1`), and the extension registers these routes. They are TandemApp's, under its own contract (`../conductor-v1/` in TandemApp's tree), not part of this API. A headless engine answers them as `answers` says. The last column is `routes.json` `after_eng413`:
 
 | path | what | contract | after ENG-413 |
 |-|-|-|-|
-| `/v1/conductor/*` except the engine-only screens | TandemApp's conductor, run in the engine's process | `../conductor-v1/` | extension |
-| `/v1/dashboard/session` | the dashboard's sign-in | `../dashboard-v1/session.schema.json` | leaves (the engine keeps the bearer token and the loopback rule) |
-| `/v1/config` | the proxy's backends and rules (--backends) | - | leaves |
-| `/v1/config/*` | the proxy's backends and rules (--backends) | - | leaves |
-| `/v1/collect/*` | the host collector (--backends) | - | leaves |
-| `/v1/chat-app` | chatd, the Chat tab's service, through the engine port (tandemapp/chat_forward.py) | - | leaves (the controller forwards the Chat tab) |
-| `/v1/chat-app/*` | chatd, the Chat tab's service, through the engine port (tandemapp/chat_forward.py) | - | leaves |
+| `/v1/conductor/*` | TandemApp's conductor, run in the engine's process | `../conductor-v1/` | extension |
 | `/v1/library*` | the package library (library.schema.json) | `../conductor-v1/` | extension |
 | `/v1/laya*` | Laya (laya-ask.schema.json) | `../conductor-v1/` | extension |
 | `/v1/memory` | the model's own memory, under its session's address | - | extension |
 | `/v1/memory/*` | the model's own memory, under its session's address | - | extension |
 | `/s/{token}/*` | a session address: /v1/library, /v1/laya and /v1/memory under the session's token (tandemapp/session_tokens.py) | - | extension |
-| `/dashboard/*` | the dashboard's built files (the not-built page without them); in setup mode the Setup Guide's page | - | leaves |
+| `/v1/dashboard/session` | the page's cookie sign-in | `dashboard/session.schema.json` | leaves, in a later minor with the cookie rule of `server/api/auth.py` (`planned`) |
 
-One route of this API leaves too, at the next major: `GET /v1/dashboard/metrics` (`routes.json` `leaves`). Only the page on the engine's origin reads `/metrics` that way, under its cookie rule; callers read `GET /metrics`. It is served through every 1.x. The other `/v1/dashboard/*` reads stay: they are the engine's own data, read by TandemNode, chatd and the controller with the bearer token or from loopback.
+Six paths left the engine with 1.8, as decided on 2026-11-13: the page (`/dashboard/*`), the Chat tab's way to chatd through the engine port (`/v1/chat-app`, `/v1/chat-app/*`) and `--backends` (`/v1/config`, `/v1/config/*`, `/v1/collect/*`). TandemApp's controller serves all of them, and TandemApp runs with or without an engine: since 1.8 they are among the controller's own families below. `compat/1.7/routes.json` keeps them as they were listed, and `--backends` takes only `off`. The page's cookie sign-in (`/v1/dashboard/session`) is still served: it leaves together with the cookie check in `server/api/auth.py`, which the engine's admin rule still reads.
+
+One route of this API leaves too, at the next major: `GET /v1/dashboard/metrics` (`routes.json` `leaves`). Only the page on the engine's origin read `/metrics` that way; callers read `GET /metrics`. It is served through every 1.x. The other `/v1/dashboard/*` reads stay: they are the engine's own data, read by TandemNode, chatd and the controller with the bearer token or from loopback.
 
 The controller's own families, never the engine's:
 
 | path | what | contract |
 |-|-|-|
 | `/v1/fleet/*` | the controller's fleet API; never the engine | `../fleet-v1` |
+| `/v1/config`, `/v1/config/*` | the proxy's backends and rules; the controller's since 1.8 | - |
+| `/v1/collect/*` | the host collector; the controller's since 1.8 | - |
+| `/v1/chat-app`, `/v1/chat-app/*` | chatd, the Chat tab's service; the controller's since 1.8 | - |
+| `/dashboard/*` | the page; the controller's since 1.8 | - |
 
 `shared_prefixes` names a base the dashboard joins with sub-paths that fall in more than one list: `/v1/dashboard` (the ledger reads and the sign-in).
 
-## The engine-only screens' old paths (until ENG-413 WP14)
-
-These `/v1/conductor/*` screens read or load the engine's own models and memory. Since 1.5 the engine serves them as group 9 (`/v1/engine/*`, `after_eng413`); the conductor's paths stay while they last (they leave with WP14, `leaves`): in chat mode the extension answers them over the engine's handlers in process (`host.engine`, engine-ext-v1 3.0), the same body plus `contract_version`, an error the same bytes. The engine no longer puts handlers or the speed-guard report into the server's state, and TandemApp keeps no copy of the engine's off texts: its controller (tandem-app) runs no engine and answers as the third column says (`../conductor-v1/README.md`).
-
-| route | the engine's handler | tandem-app | after ENG-413 |
-|-|-|-|-|
-| `GET /v1/conductor/residency/plan` | host.engine[residency_plan] | 404 not_found, routes.ENGINE_ONLY | `/v1/engine/residency/plan` |
-| `GET /v1/conductor/memory/disk` | host.engine[disk] | 404 not_found, routes.ENGINE_ONLY | `/v1/engine/disk` |
-| `POST /v1/conductor/memory/disk/clear` | host.engine[disk_clear] | 404 not_found, routes.ENGINE_ONLY | `/v1/engine/disk/clear` |
-| `* /v1/conductor/deciders/*` | host.engine[deciders] | status: 200, enabled false, why routes.ENGINE_ONLY; the rest 404 not_found with that text | `/v1/engine/deciders/*` |
-| `* /v1/conductor/narrator/*` | host.engine[narrator] | status: 200, enabled false, why routes.ENGINE_ONLY; the rest 404 not_found with that text | `/v1/engine/narrator/*` |
-| `* /v1/conductor/shadow/*` | host.engine[shadow] | status: 200, enabled false, why routes.ENGINE_ONLY; the rest 404 not_found with that text | `/v1/engine/shadow/*` |
+The engine-only screens' old paths under `/v1/conductor/` (`residency/plan`, `memory/disk`, `memory/disk/clear`, `deciders/*`, `narrator/*`, `shadow/*`) left this API with 1.8 too. Since 1.5 the engine serves the screens itself as group 9 (`/v1/engine/*`; each route's `replaces` names the old path). What TandemApp's extension does with the old paths is TandemApp's.
 
 ## Answers where nothing serves the path (since 1.4)
 
-`routes.json` `answers`. ENG-413 WP3a (the extension host) serves them; they were `planned` in 1.3.
+`routes.json` `answers`. ENG-413 WP3a (the extension host) serves the first two; WP14 adds the third, out of `planned`.
 
 | answer | paths | when |
 |-|-|-|
-| 404 `no_ui` (`error.type` and `error.code`, the message names TandemApp) | `/dashboard`, `/dashboard/*` | the engine runs no extension that serves the page: every headless engine. The setup-mode server still serves its page until it leaves the engine (WP14) |
-| 404 `not_on_engine` (`error.type` and `error.code`, the message names TandemApp) | `/v1/conductor/*`, `/v1/library*`, `/v1/memory*`, `/v1/laya*`, a session address of those (`/s/{token}/...`), `/v1/config*`, `/v1/collect/*` | nothing in the engine's process serves the path: no extension route for it; `/v1/laya*` without the engine's decision models; `/v1/config*` and `/v1/collect/*` with `--backends off`. Each answered 404 before, with `not_found` |
+| 404 `no_ui` (`error.type` and `error.code`, the message names TandemApp) | `/dashboard`, `/dashboard/*` | every engine since 1.8, in setup mode too: the engine has no page. From 1.4 to 1.7 a headless engine did, and an extension that served the page answered it |
+| 404 `not_on_engine` (`error.type` and `error.code`, the message names TandemApp) | `/v1/conductor/*`, `/v1/library*`, `/v1/memory*`, `/v1/laya*`, a session address of those (`/s/{token}/...`), `/v1/config*`, `/v1/collect/*` | nothing in the engine's process serves the path: no extension route for it; `/v1/laya*` without the engine's decision models; `/v1/config*` and `/v1/collect/*` on every engine since 1.8 (before it, with `--backends off`). Each answered 404 before, with `not_found` |
+| 404 `not_on_engine`, since 1.8 | `/v1/chat-app`, `/v1/chat-app/*` | every engine. A body the request carries is not read |
 
-## Planned (not part of 1.5)
+`planned` holds one answer in 1.8: 404 `not_on_engine` on `/v1/dashboard/session`, in the minor that removes the cookie rule. The plan's `/health` `ui` flag was never planned: with no page on any engine it would always be false and tell a caller nothing.
 
-`routes.json` `planned` fixes their shapes now so the packages that build them have a target; each becomes part of the API in the minor of the engine that serves it, and moves from `planned` into `routes`, `answers` or a schema then.
+## ENG-413: the engine without TandemApp
 
-| what | shape | lands with |
-|-|-|-|
-| 404 `not_on_engine` on `/v1/chat-app*` and `/v1/dashboard/session` | as above | WP14: the engine serves them until they leave it (the decision of 2026-11-13); since WP13 an engine without TandemApp's forward (no vendored `app/`, no TandemApp extension) answers `/v1/chat-app*` so already |
+Since 1.8 the engine's tree has no `app/`, no finder and no import of `tandemapp`, `proxy` or `chatd` (`tests/test_app_hook.py`, the no-app guard). The only way TandemApp's code runs in an engine process is the extension seam: `server/ext.py` imports the module `QSE_EXT` names, by name, and hands it the engine's objects. The engine's own copies of what it used to import are in `server/api/` (the wire format since WP2a, what it reports of itself since WP2b, the small helpers since WP2c), each held to the contract's fixtures.
 
-The plan's `/health` `ui` flag is not planned: with no page on any engine it would always be false and tell a caller nothing.
+Two kinds of files still need TandemApp beside the engine, and neither is part of the engine's own suite:
 
-## ENG-413: what the engine still takes from TandemApp
+- The pair tools (`tests/test_api_import_guard.py` `PAIR_TOOLS` says why each one): they find TandemApp through `tools/pair_app.py` (`TANDEMAPP_SRC`, else an installed `tandemapp`) and stop with one line without it.
+- The pair tests (`tests/test-ledger.json` `pair_suite`): they run the engine and TandemApp's extension, packages or test helpers together. `tools/pair_suite.sh` runs them with a TandemApp checkout whose `PIN` names this contract; TandemApp's `tools/pair_suite.sh` runs them from its side against an engine checkout at its `PIN`.
 
-Until the headless engine, a finder in `server/__init__.py` serves only `tandemapp`, `proxy` and `chatd` from `app/` to every entry point (server/app.py, `python -m server.setup.*`, the tools and the tests; `tests/test_app_hook.py` holds this), and these engine modules import TandemApp's (`reverse-deps.json` `imports` has each imported name):
-
-| engine file | app modules |
-|-|-|
-| `server/app.py` | `proxy.collect_api`, `proxy.config`, `proxy.config_api`, `proxy.hostcollect`, `proxy.route`, `proxy.service` (`--backends`, leaves at WP14), `tandemapp.chat_forward` (`/v1/chat-app*`, leaves at WP14), `tandemapp.static` (the page, leaves at WP14) |
-| `tools/conductor_eval.py` | `tandemapp.conductor.classify`, `tandemapp.conductor.schema`, `tandemapp.conductor.signals`, `tandemapp.conductor.store` |
-| `tools/narrator_reference.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.schema`, `tandemapp.conductor.states` |
-| `tools/shadow_ab.py` | `tandemapp.conductor.schema`, `tandemapp.conductor.store` |
-| `tools/shadow_measure.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.schema` |
-| `tools/shadow_router_eval.py` | `tandemapp.conductor.schema` |
-| `tools/stall_replay.py` | `tandemapp.conductor.monitor.policy` |
-| `tools/thought_narrator_measure.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.schema`, `tandemapp.conductor.states`, `tandemapp.conductor.store` |
-| `tools/voice_replay.py` | `tandemapp.conductor.narrator`, `tandemapp.conductor.states`, `tandemapp.conductor.voice` |
-
-Since ENG-413 WP10 the tools that import TandemApp are the pair tools above, each of which needs the engine and TandemApp's conductor together (`tests/test_api_import_guard.py` PAIR_TOOLS says why), and they find TandemApp only through `tools/pair_app.py` (`TANDEMAPP_SRC`, else the vendored `app/`, else an installed `tandemapp`). The tools that read only TandemApp moved there; `tools/ledger_synth.py` and `tools/ledger_migrate_check.py` read the engine's `server/api/ledger.py`, `tools/contract_check.py` defaults to this folder's `dashboard/`, and no tool calls a screen's old `/v1/conductor/*` path.
-
-Since ENG-413 WP5 `server/conductor/inproc.py`, `server/conductor/residency.py` and `server/decider_api.py` import nothing of TandemApp, and `server/app.py` neither the conductor's routes, store nor monitor: the screens are the engine's (group 9), the documents and the rest come through engine-ext-v1 3.0.
-
-Since ENG-413 WP13 `server/app.py` imports those three (the page `tandemapp.static`, the chat forward `tandemapp.chat_forward`, the System view's hosts `proxy.hostcollect`) at their first use (`_app_part`), and the `--backends` proxy only with `--backends`: from the vendored `app/` while it is here, or from TandemApp's package when `QSE_EXT` names TandemApp's extension (its wheel beside the engine). A tree with neither imports and serves headless: `/dashboard*` answers 404 `no_ui` (setup mode too), `/v1/chat-app*` 404 `not_on_engine` (the shape `planned` gives it; an engine with the forward serves it until WP14), `/v1/dashboard/system` has no `hosts` (as with `--host-collector off`), `/health` says `extensions: []`, and `--backends` refuses to start with one line (`tests/test_headless_start.py`).
-
-Since ENG-413 WP5b the only engine file under `server/` that imports TandemApp is `server/app.py`, and only what WP14 removes (the `--backends` proxy, the page, the chat-app forward; the finder in `server/__init__.py` works by path). The session addresses (`server/api/session_tokens.py`: the engine strips `/s/<token>` from every path and keeps the registry `/v1/cache/stats` reports) and the loop escape's engine part (`server/api/loopescape.py`: the card's sampling, which every sampled request that names no filter runs with, and the escapes' counts `/health` `sampling.loop_escape` reports) are the engine's own, as is the shadow reader's question form (`server/api/incontext.py`, which `POST /v1/engine/shadow/ask` answers with); each runs with the conductor off (`tests/test_owner_trace.py`). Laya (`/v1/laya*`) is the extension's route over the engine's decision models, as `app_routes_via_engine` says (`extension`), and the router's question to the shadow reader is the extension's call (engine-ext-v1 3.1 `shadow_question`). An engine with decision models and no extension answers `/v1/laya*` 404 `not_on_engine` (it served Laya itself before WP5b); `ops/serve.env`'s engine mode loads no decision model, so a started engine answers as before.
-
-Since ENG-413 WP2a the wire format is the engine's own: `server/api/` holds its copies of `toolcall`, `toolformats`, `callrepair`, `refusal`, `thinking` and `argloop`, and no engine file imports TandemApp's (`tests/test_api_import_guard.py`). TandemApp keeps its copies for its extension and its controller; both pass `toolcalls/`.
-
-Since ENG-413 WP2b what the engine reports of itself is its own too: `server/api/` holds its copies of `metrics` (the registry and the `qse_*` families; `metrics.md` here is their document), `usage`, `ledger` (the request tables), `live`, `parallel`, `activity`, `logbuf`, `dashboard_api` (the `/v1/dashboard/*` reads and `GpuSampler`), `http_body` `auth` (the tokens, trusted loopback, the session check, `same_origin`) and `compaction` (it runs with the conductor off: the engine tells a compaction request by its shape, `tests/test_compaction_trace.py`), and no engine file imports TandemApp's. The ledger file keeps its two owners: the engine writes `requests` and `meta`, the conductor's journal `conductor_events` and `conductor_texts`, with the schema unchanged (`tests/test_ledger_owners.py`). The TandemApp tools that read the ledger or the compaction texts stay on TandemApp's copy until they move.
-
-Since ENG-413 WP2c the small helpers the setup, the probe and the disk cache read are the engine's own as well: `server/api/` holds copies of the conductor's JSON-schema `validate` (the setup registry and the community index), its `residency` and `roles` seeds (`seeds`: the decision models' planner, the role memory, Wren's planner), the secret refusal `redact` (the setup jobs' logs), the BM25 `TextIndex` (`textindex`: Wren's knowledge), `in_repository` (`repository`: the disk cache and the probe refuse a directory in a git work tree) and chatd's address (`chat_url`: `/health` `loaded.chatd`). Each copy holds only the names it took, held to TandemApp's by `tests/test_api_import_guard.py`, and answers as TandemApp's does (`tests/test_api_helpers.py`). Wren's index takes TandemApp's package texts and `app/docs/proxy.md` as extra knowledge (`Knowledge(packages=..., app_docs=...)`); without them it holds the engine's own documents. Since ENG-413 WP5 the extension hands those in: `server/decider_api.py` gets the documents through `document`, the role contract through `role_errors`, Laya's part of the status through `deciders_api`, and the extension gets the decision models' registry through `deciders`; `server/conductor/residency.py` reads its documents through the extension's module (`read_document`) or the engine's seeds (`server/api/seeds.py` adds the `deciders` seed's models and questions).
-
-Since ENG-413 WP3a the conductor runs as the engine's extension (`../engine-ext-v1`, the host `server/ext.py`): chat mode needs `QSE_EXT`. Since WP4 the extension is TandemApp's own, `tandemapp.engine_ext` (`ops/serve.env` sets it in chat mode; vendored in `app/` until WP14): it does what the engine's start did for the conductor (its shipped documents, its journal, the Conductor, its migrations), runs the session monitor, answers the request path's hooks and engine-ext-v1 1.3's calls, and serves its routes (the conductor's, the library, the model's memory, the page). WP3a's interim adapter `server/ext_app.py` and the engine's copy of the memory routes `server/memory_api.py` are gone.
-
-`reverse-deps.json` also lists the engine's reads of app files (`reads`: the knob rows, the manual's generators, the setup knowledge index, the contracts), the engine test files that reach app code (`tests`), the reads the AST cannot see (`not_ast`: install.sh, ops/start.sh and ops/watchdog.sh starting chatd and TandemNode from `app/`, the models' docs links, the Grafana panels, the manual's tables) and the copies both trees keep equal until the split (`copies`: `same_origin`, `TIER_OF`, the conductor's default directory (since 1.5; the `OFF_WHY` texts until 1.4), the `deciders` seed, the test helpers, `contract_check`, the licenses, the setup fixtures). At the split the engine takes byte copies of what it reads here, its own `/metrics` document and registry, and its own helpers; the app-only tools and tests move to `app/`.
+The values TandemApp keeps equal to the engine's are held from TandemApp's side now: `same_origin` and `same_origin_json` answer `auth.json`, `TIER_OF` is `cache.json`'s, and its `dashboard-v1` copies equal `dashboard/` byte for byte (TandemApp's `tests/test_engine_api_contract.py`). The engine holds its own to the same files. `reverse-deps.json`, the inventory of the engine's reach into the vendored `app/`, ended with 1.8.
 
 ## Tests
 
@@ -294,13 +249,14 @@ Since ENG-413 WP3a the conductor runs as the engine's extension (`../engine-ext-
 - TandemApp's `tests/test_engine_api_contract.py` (standard library): routes.json is well formed and its version is `proxy.engineapi.SPEAKS`; every engine path literal in the Python callers and in `dashboard/src` falls in exactly one list (a `${...}` is `{param}`, the query is dropped, a base matches as a prefix, all of it when text follows a `{param}`); every route is used by a file or a relay; `nodeengines.RELAY` is in the routes; the version cases, `nodeengines.health` against fake engines, the health example against its schema, and the node fixtures read by `nodeengines.default_engine` and `nodeweights`; since 1.3 the copied values (`auth.json` against `tandemapp/auth.py`, `cache.json` against `tandemapp/usage.py`; until 1.4 `off_why` against `tandemapp/conductor/routes.py`, since 1.5 no copy of it), the metrics families against `tandemapp/metrics.py`'s registry, its `dashboard-v1` copies of `dashboard/` byte for byte, and the 1.2 examples.
 - TandemApp's `tests/test_contract_toolcalls.py`: its parser passes `toolcalls/`.
 - TandemApp's `tests/test_node_agent.py` and `tests/test_deployments.py`: an engine on engine API 2.0 is `unhealthy` and names 1.x, its member is `down` and takes no request, a start fails within seconds; 1.4 and a missing field work.
-- `tests/test_engine_api_contract.py` (the engine, no torch): every route is dispatched and no planned route is yet; the version is one (TandemApp's vendored `SPEAKS` the same major, not newer); `reverse-deps.json` is the AST inventory; the engine's values answer `auth.json` and `cache.json`; the fixtures match the engine's files; the schemas and examples here validate, every reference stays in this folder but the named TandemApp ones; the metrics families are the registry's and `metrics.md`'s; 1.3 is additive over `compat/1.2/`, 1.4 over `compat/1.3/` and 1.5 over `compat/1.4/`. `tests/test_engine_routes.py`: group 9 on a fake engine (headless and with an extension), each body and refusal, the access rules, and the same handlers in process. `tests/test_engine_ext_host.py`: the engine's extension host against `../engine-ext-v1` (its loader's refusals, the per-request failure rule, `/health` `extensions` and the answers of a headless engine, on a fake engine).
+- `tests/test_engine_api_contract.py` (the engine, no torch): every route is dispatched and no planned route is yet; the version is one; the engine's values answer `auth.json` and `cache.json`; the fixtures match the engine's files; the schemas and examples here validate, every reference stays in this folder but the named TandemApp ones; the metrics families are the registry's and `metrics.md`'s; 1.3 is additive over `compat/1.2/`, and each minor after it over the one before (`compat/1.3/` to `compat/1.7/`). `tests/test_engine_routes.py`: group 9 on a fake engine (headless and with an extension), each body and refusal, the access rules, and the same handlers in process. `tests/test_engine_ext_host.py`: the engine's extension host against `../engine-ext-v1` (its loader's refusals, the per-request failure rule, `/health` `extensions` and the answers of a headless engine, on a fake engine).
 - `tests/test_contract_toolcalls.py` (the engine, CPU): the engine's parser passes `toolcalls/`, every form has a file, and the runner catches a changed answer.
 - `tests/test_stage_contract.py` and `tests/test_split_estimate.py` (the engine, CPU): both stages' real `/health` answers validate against `health.schema.json`, and the split blocks the engine computes (splittable and each not-splittable reason) against `setup/split.schema.json`.
-- `tests/test_engine_api_live.py` (CPU torch): `server/app.py --fake-engine` without a built dashboard answers `/health` with `engine_api` and every live GET route with 200, each read with a schema here validating; every `/metrics` family it names is in `metrics-families.json` with its type; once more from a copy of the tree without `app/dashboard`.
+- `tests/test_engine_api_live.py` (CPU torch): `server/app.py --fake-engine` without a built dashboard answers `/health` with `engine_api` and every live GET route with 200, each read with a schema here validating; every `/metrics` family it names is in `metrics-families.json` with its type; and nothing under `/dashboard` is served.
 
 ## Changes
 
+- v1.8 (ENG-427, ENG-413 WP14): the page, the Chat tab forward and `--backends` left the engine (`answers`: `no_ui` and `not_on_engine` on every engine; `/v1/chat-app*` out of `planned`, the sign-in still planned); the engine-only screens' old paths and the leaving entries of `app_routes_via_engine` but the sign-in out of `routes.json`; `relay_only` on `POST /v1/embeddings` and `/v1/responses`; `dashboard/` session, error and gap; `reverse-deps.json` retired; `compat/1.7/`. 1.0 to 1.7 engines stay valid.
 - v1.5 (ENG-433, ENG-413 WP5): group 9, the engine-only screens as `/v1/engine/*` (14 routes, `engine/` schemas and examples), out of `planned`; the screens' old paths marked to leave with WP14 and answered over the same handlers; the `off_why` copies gone from TandemApp; `compat/1.4/`. Additive: 1.0 to 1.4 engines stay valid.
 - v1.4 (ENG-429, ENG-413 WP3a): `/health` `extensions`; the answers 404 `no_ui` and `not_on_engine` (`answers`, out of `planned`); `qse_ext_errors_total` in `metrics-families.json`; `compat/1.3/`. Additive: 1.0 to 1.3 engines stay valid.
 - v1.3 (ENG-427): the folder moves to the engine's root and TandemApp pins a copy (`PIN`); `dashboard/` (the engine's reads, from TandemApp's `dashboard-v1`), `decision/systemone.schema.json`, `metrics-families.json` and `metrics.md`, `toolcalls/`, `auth.json`, `cache.json`, `off_why` on the deciders and shadow screens; `after_eng413` on the app routes and the screens, `leaves` on `GET /v1/dashboard/metrics`; `planned`; `compat/1.2/`. No answer changes: 1.0, 1.1 and 1.2 engines stay valid.

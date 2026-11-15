@@ -14,7 +14,7 @@ It never imports the project: every table comes from parsing the source with `as
 argument parser, the engine's settings registry, the metric registrations, the usage ledger's
 schema) or from plain text (install.sh's usage text, ops/serve.env, the verify price tables).
 
-The engine's code only (ENG-413): nothing here reads app/. The QWEN38_* knobs the engine extension
+The engine's code only (ENG-413): nothing here reads TandemApp's tree. The QWEN38_* knobs the engine extension
 reads (contracts/engine-ext-v1/knobs.json) are TandemApp's rows, and so are the proxy's flags, the
 TANDEM_* variables TandemApp documents, its metrics and its routes: TandemApp's manual has them,
 from its own copy of this tool. Standard library only, Python 3.9 or newer.
@@ -481,8 +481,8 @@ def gen_serve_env(root: str, knobs: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-# The code the variable tables scan: the engine's own (ENG-413: TandemApp's tree under app/ is
-# TandemApp's manual's)
+# The code the variable tables scan: the engine's own (ENG-413: TandemApp's code is TandemApp's
+# manual's)
 QSE_DIRS = ("server", "ops", "install.sh", "engine")
 TANDEM_DIRS = ("server", "ops", "install.sh")
 
