@@ -962,6 +962,7 @@
     "tandemapp.knobs"
    ],
    "reads": [
+    "app/manual",
     "app/packages",
     "app/tests"
    ]
