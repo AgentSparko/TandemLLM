@@ -12,24 +12,6 @@
    "tandemapp.chat_forward",
    "tandemapp.static"
   ],
-  "tools/class_core_eval.py": [
-   "tandemapp.conductor.classify:Qwen",
-   "tandemapp.conductor.router:NONE_OPTION",
-   "tandemapp.conductor.router:Router",
-   "tandemapp.conductor.router:_about",
-   "tandemapp.conductor.router:_code_guard",
-   "tandemapp.conductor.router:_qwen_prompt",
-   "tandemapp.conductor.schema",
-   "tandemapp.conductor.signals"
-  ],
-  "tools/class_fallback_eval.py": [
-   "tandemapp.conductor.classify:Qwen",
-   "tandemapp.conductor.router:_code_guard",
-   "tandemapp.conductor.signals"
-  ],
-  "tools/conductor_contract.py": [
-   "tandemapp.conductor.schema"
-  ],
   "tools/conductor_eval.py": [
    "tandemapp.conductor.classify",
    "tandemapp.conductor.classify:Qwen",
@@ -38,42 +20,20 @@
    "tandemapp.conductor.signals",
    "tandemapp.conductor.store:Store"
   ],
-  "tools/ledger_migrate_check.py": [
-   "tandemapp.ledger"
-  ],
-  "tools/ledger_synth.py": [
-   "tandemapp.ledger"
-  ],
-  "tools/loop_words_fp.py": [
-   "tandemapp.conductor.monitor.tier0_words"
-  ],
-  "tools/memory_measure.py": [
-   "tandemapp.compaction",
-   "tandemapp.conductor.notes:NoteStore"
-  ],
-  "tools/memory_recall_check.py": [
-   "tandemapp.conductor.notes:NoteStore",
-   "tandemapp.conductor.transcripts:memory_root"
-  ],
   "tools/narrator_reference.py": [
    "tandemapp.conductor.narrator",
    "tandemapp.conductor.schema",
    "tandemapp.conductor.states:TEXTS"
-  ],
-  "tools/prefill_reuse_e2e.py": [
-   "chatd.render"
   ],
   "tools/shadow_ab.py": [
    "tandemapp.conductor.schema",
    "tandemapp.conductor.store:Store"
   ],
   "tools/shadow_measure.py": [
-   "tandemapp.conductor.incontext",
    "tandemapp.conductor.narrator",
    "tandemapp.conductor.schema"
   ],
   "tools/shadow_router_eval.py": [
-   "tandemapp.conductor.incontext",
    "tandemapp.conductor.schema"
   ],
   "tools/stall_replay.py": [
@@ -99,18 +59,6 @@
   "engine/settings.py": [
    "app/tandemapp"
   ],
-  "manual/tools/gen_reference.py": [
-   "app/",
-   "app/ops",
-   "app/packaging",
-   "app/plugins",
-   "app/proxy",
-   "app/tandemapp"
-  ],
-  "manual/tools/http_ref.py": [
-   "app/proxy",
-   "app/tandemapp"
-  ],
   "server/__init__.py": [
    "app/"
   ],
@@ -118,79 +66,24 @@
    "app/docs",
    "app/packages"
   ],
-  "tools/class_core_eval.py": [
+  "server/setup/registry.py": [
    "app/"
   ],
-  "tools/class_fallback_eval.py": [
-   "app/"
-  ],
-  "tools/conductor_contract.py": [
-   "app/",
-   "app/contracts"
-  ],
-  "tools/conductor_eval.py": [
-   "app/"
-  ],
-  "tools/contract_check.py": [
-   "app/contracts"
-  ],
-  "tools/disk_cache_live.py": [
-   "app/tandemapp"
-  ],
-  "tools/ledger_migrate_check.py": [
-   "app/"
-  ],
-  "tools/ledger_synth.py": [
-   "app/"
-  ],
-  "tools/loop_words_fp.py": [
-   "app/"
-  ],
-  "tools/memory_measure.py": [
-   "app/"
-  ],
-  "tools/memory_recall_check.py": [
-   "app/"
-  ],
-  "tools/narrator_reference.py": [
-   "app/"
-  ],
-  "tools/parallel_load.py": [
-   "app/proxy"
-  ],
-  "tools/prefill_reuse_e2e.py": [
-   "app/"
-  ],
-  "tools/shadow_ab.py": [
-   "app/"
-  ],
-  "tools/shadow_measure.py": [
-   "app/"
-  ],
-  "tools/shadow_router_eval.py": [
-   "app/"
-  ],
-  "tools/stall_replay.py": [
-   "app/"
-  ],
-  "tools/thought_narrator_measure.py": [
-   "app/"
-  ],
-  "tools/voice_replay.py": [
+  "tools/pair_app.py": [
    "app/"
   ]
  },
  "tests": {
+  "tests/dash_contract.py": {
+   "imports": [],
+   "reads": [
+    "app/contracts"
+   ]
+  },
   "tests/gpu/setup_wren_gpu.py": {
    "imports": [
     "tandemapp.conductor.narrator"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_activity.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -225,28 +118,11 @@
     "tandemapp.conductor.schema"
    ],
    "reads": [
+    "app/",
     "app/tandemapp"
    ]
   },
   "tests/test_app_hook.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_argkey_calls.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_argloop.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_auth.py": {
    "imports": [],
    "reads": [
     "app/"
@@ -260,29 +136,11 @@
     "app/"
    ]
   },
-  "tests/test_cache_peek.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_call_in_think.py": {
    "imports": [
     "tandemapp.conductor.states",
     "tandemapp.conductor.voice"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_callrepair.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_capture_lock.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -294,12 +152,6 @@
    ],
    "reads": [
     "app/"
-   ]
-  },
-  "tests/test_chatd_docs.py": {
-   "imports": [],
-   "reads": [
-    "app/ops"
    ]
   },
   "tests/test_chatd_lifecycle.py": {
@@ -353,24 +205,6 @@
     "tandemapp.conductor.schema",
     "tandemapp.conductor.signals"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_client_budgets.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_client_cached.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_compaction_continue.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -465,12 +299,6 @@
    "imports": [
     "tandemapp.conductor.inject"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_contract_toolcalls.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -704,13 +532,7 @@
     "app/"
    ]
   },
-  "tests/test_grammar.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_images.py": {
+  "tests/test_headless_start.py": {
    "imports": [],
    "reads": [
     "app/"
@@ -752,13 +574,6 @@
     "app/tandemapp"
    ]
   },
-  "tests/test_kvpool_admission.py": {
-   "imports": [],
-   "reads": [
-    "app/",
-    "app/contracts"
-   ]
-  },
   "tests/test_laya_api.py": {
    "imports": [
     "tandemapp.laya_api"
@@ -773,12 +588,6 @@
    "reads": [
     "app/contracts",
     "app/tandemapp"
-   ]
-  },
-  "tests/test_ledger.py": {
-   "imports": [],
-   "reads": [
-    "app/"
    ]
   },
   "tests/test_ledger_owners.py": {
@@ -826,18 +635,11 @@
     "app/tests"
    ]
   },
-  "tests/test_live_app.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_live_rates.py": {
    "imports": [
     "app/tests/test_live.py"
    ],
    "reads": [
-    "app/",
     "app/tests"
    ]
   },
@@ -851,7 +653,6 @@
   "tests/test_logbuf.py": {
    "imports": [],
    "reads": [
-    "app/",
     "app/dashboard"
    ]
   },
@@ -879,32 +680,6 @@
     "app/"
    ]
   },
-  "tests/test_memory_api.py": {
-   "imports": [
-    "app/tests/test_transcripts.py",
-    "tandemapp.conductor.transcripts"
-   ],
-   "reads": [
-    "app/",
-    "app/tests"
-   ]
-  },
-  "tests/test_memory_notes.py": {
-   "imports": [
-    "tandemapp.conductor.classify:Answer",
-    "tandemapp.conductor.hook:Conductor",
-    "tandemapp.conductor.memory",
-    "tandemapp.conductor.notes",
-    "tandemapp.conductor.notes:NoteStore",
-    "tandemapp.conductor.notes:Refused",
-    "tandemapp.conductor.routes",
-    "tandemapp.memblock",
-    "tandemapp.memory_api"
-   ],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_memory_router.py": {
    "imports": [
     "tandemapp.conductor.memory",
@@ -917,12 +692,6 @@
    ],
    "reads": [
     "app/"
-   ]
-  },
-  "tests/test_memory_wait.py": {
-   "imports": [],
-   "reads": [
-    "app/contracts"
    ]
   },
   "tests/test_memory_where.py": {
@@ -948,24 +717,6 @@
     "app/"
    ]
   },
-  "tests/test_metrics.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_metrics_app.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_monitoring.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_narrator.py": {
    "imports": [
     "tandemapp.conductor.narrator",
@@ -984,12 +735,6 @@
     "tandemapp.conductor.schema",
     "tandemapp.conductor.store:Store"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_nemotron_h_api.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1082,12 +827,6 @@
     "app/tests"
    ]
   },
-  "tests/test_parallel_card.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_playtest_install.py": {
    "imports": [
     "tandemapp.conductor.hook:Conductor"
@@ -1113,12 +852,6 @@
    "reads": [
     "app/",
     "app/contracts"
-   ]
-  },
-  "tests/test_probe_train.py": {
-   "imports": [],
-   "reads": [
-    "app/"
    ]
   },
   "tests/test_proxy_affinity.py": {
@@ -1151,18 +884,6 @@
     "app/"
    ]
   },
-  "tests/test_reasoning_effort_off.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_regenerate.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_release_gate_setup.py": {
    "imports": [],
    "reads": [
@@ -1189,8 +910,7 @@
     "tandemapp.conductor.store:Store"
    ],
    "reads": [
-    "app/",
-    "app/contracts"
+    "app/"
    ]
   },
   "tests/test_resident_guard.py": {
@@ -1245,6 +965,7 @@
     "tandemapp.knobs"
    ],
    "reads": [
+    "app/manual",
     "app/packages",
     "app/tests"
    ]
@@ -1254,12 +975,6 @@
     "tandemapp.conductor.loopescape"
    ],
    "reads": []
-  },
-  "tests/test_scratch_turn_images.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
   },
   "tests/test_secret_mask.py": {
    "imports": [
@@ -1330,65 +1045,11 @@
     "app/tandemapp"
    ]
   },
-  "tests/test_setup_api.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_apply.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_job_stream.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_mode.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_setup_registry.py": {
    "imports": [],
    "reads": [
     "app/dashboard",
     "app/docs"
-   ]
-  },
-  "tests/test_setup_remove.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_reset.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_reset_job_lock.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_retry.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_setup_wren.py": {
-   "imports": [],
-   "reads": [
-    "app/"
    ]
   },
   "tests/test_shadow.py": {
@@ -1521,7 +1182,6 @@
     "app/tools/tandem_eval.py"
    ],
    "reads": [
-    "app/",
     "app/tools"
    ]
   },
@@ -1530,8 +1190,13 @@
     "app/tools/tandem_eval.py"
    ],
    "reads": [
-    "app/",
     "app/tools"
+   ]
+  },
+  "tests/test_test_ledger.py": {
+   "imports": [],
+   "reads": [
+    "app/"
    ]
   },
   "tests/test_think.py": {
@@ -1609,18 +1274,6 @@
     "app/"
    ]
   },
-  "tests/test_toolformats.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_tools_api.py": {
-   "imports": [],
-   "reads": [
-    "app/"
-   ]
-  },
   "tests/test_tools_profile.py": {
    "imports": [
     "tandemapp.conductor.router",
@@ -1663,12 +1316,6 @@
     "tandemapp.conductor.states",
     "tandemapp.conductor.transcripts"
    ],
-   "reads": [
-    "app/"
-   ]
-  },
-  "tests/test_usage.py": {
-   "imports": [],
    "reads": [
     "app/"
    ]
@@ -1737,34 +1384,6 @@
   },
   {
    "files": [
-    "tools/grafana_dashboard.py",
-    "ops/monitoring/qse-engine-dashboard.json",
-    "ops/monitoring/qse-engine-dashboard-configmap.yaml"
-   ],
-   "names": [
-    "app/tandemapp/METRICS.md"
-   ],
-   "marks": [
-    "app/tandemapp/METRICS.md"
-   ],
-   "why": "the Grafana panels follow the /metrics document, in text"
-  },
-  {
-   "files": [
-    "manual/generated/engine-knobs.tex",
-    "manual/generated/qse-vars.tex",
-    "manual/generated/tandem-vars.tex"
-   ],
-   "names": [
-    "app/"
-   ],
-   "marks": [
-    "texttt{app/"
-   ],
-   "why": "tables manual/tools/gen_reference.py and http_ref.py write from the app sources (the flag, route, header and error tables too, without a path in their text)"
-  },
-  {
-   "files": [
     "tools/stream_identity.py"
    ],
    "names": [
@@ -1814,41 +1433,6 @@
   }
  ],
  "copies": [
-  {
-   "kind": "file",
-   "engine": "tests/conftest.py",
-   "app": "app/tests/conftest.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tests/ports.py",
-   "app": "app/tests/ports.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tests/realnode.py",
-   "app": "app/tests/realnode.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tests/script_suite.py",
-   "app": "app/tests/script_suite.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tests/scriptmode.py",
-   "app": "app/tests/scriptmode.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tests/test_script_suite.py",
-   "app": "app/tests/test_script_suite.py"
-  },
-  {
-   "kind": "file",
-   "engine": "tools/contract_check.py",
-   "app": "app/tools/contract_check.py"
-  },
   {
    "kind": "file",
    "engine": "LICENSE",
