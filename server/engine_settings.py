@@ -157,16 +157,17 @@ def serve(handler, state, method: str, body) -> None:
         status, out = patch(state, tree, body, peer)
         if out.get("applied"):
             row["version"] = out["version"]
-        return handler._json(status, out, extra_headers=(("Cache-Control", "no-store"),))
     except Refusal as ref:
         rc = ref.exit_code
         row["error"] = ref.code
-        return _error(handler, _status(ref), ref.code, str(ref))
+        status, out = _status(ref), {"error": {"type": ref.code, "message": str(ref)}}
     except Exception as exc:                                       # noqa: BLE001
         rc = grammar.EXIT_INTERNAL
         row["error"] = "internal"
-        return _error(handler, 500, "internal", f"{type(exc).__name__}: {str(exc)[:300]}")
-    finally:
-        row["exit"] = rc
-        row["ms"] = int((time.monotonic() - t0) * 1000)
-        journal.write(tree.journal, row)
+        status, out = 500, {"error": {"type": "internal", "message": f"{type(exc).__name__}: {str(exc)[:300]}"}}
+    # the journal line is written before the answer goes out: a caller that reads the journal after
+    # the answer finds its line there
+    row["exit"] = rc
+    row["ms"] = int((time.monotonic() - t0) * 1000)
+    journal.write(tree.journal, row)
+    return handler._json(status, out, extra_headers=(("Cache-Control", "no-store"),))
