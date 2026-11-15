@@ -8,7 +8,8 @@ headless and answers as engine API 1.4 says. Each test runs in a copy of the eng
 TandemApp folder and with TandemApp's packages blocked in the child, so an installed TandemApp
 cannot stand in for one.
 
-  1  the server imports: no finder, no TandemApp module loaded, every part None; with QSE_EXT
+  1  the server imports: no finder, no TandemApp module loaded, every part None, the setup registry
+     holds every model (the backends' docs link into TandemApp is TandemApp's own); with QSE_EXT
      naming TandemApp's extension the parts are asked for (and missing here); in this tree, when
      it carries the vendored folder, the parts are the vendored modules
                                                    test_the_server_imports_without_tandemapp
@@ -91,7 +92,10 @@ import server
 from server import app as A
 before = sorted(m for m in sys.modules if m.split('.')[0] in %r and sys.modules[m] is not None)
 parts = {n: A._app_part(n) for n in A._APP_PART_MODULES}
+from server.setup import registry as R
+models, errors = R.load_all()
 print(json.dumps({
+    "models": sorted(models), "registry_errors": [str(e)[:200] for e in errors],
     "vendored": server.APP_VENDORED,
     "finder": any(getattr(f, "tandem_app_finder", False) for f in sys.meta_path),
     "here": A._app_parts_here(),
@@ -118,6 +122,10 @@ def test_the_server_imports_without_tandemapp():
         got = _probe(tree)
         assert got["vendored"] is False and got["finder"] is False and got["here"] is False, got
         assert got["loaded"] == [] and set(got["parts"].values()) == {None}, got
+        # the setup registry: every model of models/, the backends' TandemApp docs link taken as TandemApp's
+        want = sorted(d for d in os.listdir(os.path.join(tree, "models"))
+                      if os.path.isfile(os.path.join(tree, "models", d, "model.yaml")))
+        assert want and len(got["models"]) == len(want) and got["registry_errors"] == [], (want, got)
         # QSE_EXT names TandemApp's extension: the parts are asked for, and none is installed here
         got = _probe(tree, {"QSE_EXT": "tandemapp.engine_ext"})
         assert got["here"] is True and set(got["parts"].values()) == {None}, got

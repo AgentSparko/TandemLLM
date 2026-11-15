@@ -66,6 +66,9 @@
    "app/docs",
    "app/packages"
   ],
+  "server/setup/registry.py": [
+   "app/"
+  ],
   "tools/pair_app.py": [
    "app/"
   ]
