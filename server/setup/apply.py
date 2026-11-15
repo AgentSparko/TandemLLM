@@ -62,6 +62,7 @@ import urllib.request
 from server.setup import device as device_mod
 from server.setup import estimate as estimate_mod
 from server.setup import registry
+from server.setup.idle import requests_in
 
 # the checkout this server runs from; serve.env's REPO must be the same folder (the plan checks),
 # since serve.env reads ${REPO}/run/setup.env and start.sh ${REPO}/run/setup-pending
@@ -88,6 +89,7 @@ DISK_MARGIN_GB = 60          # ops/use-profile.sh's: the disk tier and the spill
 SCRIPTS = ("use-profile.sh", "start.sh", "stop.sh", "make-secrets.sh")
 TIMEOUTS = {"fetch": 7200, "switch": 1800, "stop": 300, "secrets": 60, "start": 900}
 # before anything stops, the engine's requests finish: at most this long, asked this often
+# (server/setup/idle.py, which `tandem remote restart --when idle` reads too)
 IDLE_WAIT_S = 600
 IDLE_POLL_S = 2.0
 # VIS-153: the tools whose model is a role of the engine (`/health` roles; Laya: the decision
@@ -1332,10 +1334,7 @@ class Runner:
         shown = None
         while True:
             try:
-                h = self.http(f"http://127.0.0.1:{port}/health", timeout=5)
-                inf = (h or {}).get("inflight") or {}
-                n = int(inf.get("running", 0)) + int(inf.get("waiting", 0)) + \
-                    int(inf.get("lane", 0))
+                n = requests_in(self.http(f"http://127.0.0.1:{port}/health", timeout=5))
             except Exception:                                    # noqa: BLE001
                 return True                 # no engine answers: there is nothing to drain
             if n == 0:
