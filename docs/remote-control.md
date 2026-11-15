@@ -1,6 +1,6 @@
 # Remote control
 
-`tandem remote` is the engine's control CLI for a controller on another machine. The controller reaches the engine box over SSH with a key whose line in `authorized_keys` runs only `tandem remote`: the key can start, stop and restart the engine, switch its mode, change its settings, read its logs and run its checks, and nothing else. No shell, no terminal, no port forward. No sudo is needed. The contract is [contracts/engine-ctl-v1](../contracts/engine-ctl-v1/README.md); the code is `server/remote/`.
+`tandem remote` is the engine's control CLI for a controller on another machine. The controller reaches the engine box over SSH with a key whose line in `authorized_keys` runs only `tandem remote`: the key can start, stop and restart the engine, switch its mode, change its settings, install extensions, upgrade the engine, read its logs and run its checks, and nothing else. No shell, no terminal, no port forward. No sudo is needed. The contract is [contracts/engine-ctl-v1](../contracts/engine-ctl-v1/README.md); the code is `server/remote/`.
 
 ## The key's line
 
@@ -35,8 +35,13 @@ By hand on the box, the same verbs: `bin/tandem remote status`.
 | `logs [--follow] [--lines N] [--which engine\|launcher]` | the engine's log, or what the jobs' start and stop printed (`logs/launcher.log`); `--follow` streams one JSON line a log line |
 | `doctor` | `tandem doctor --check`: each finding with a code and a fix |
 | `unpair` | removes the `authorized_keys` line of the key this call came with, and no other |
+| `ext list` | the extensions in the engine's venv, each read as the engine reads it at load: its name, version and `EXT_API`, whether this engine takes it, and whether chat mode runs it (1.1) |
+| `ext install --sha256 HEX --name FILE.whl [--module M] [--when ...]` | an extension's wheel, on stdin, into the venv (below) (1.1) |
+| `ext remove DIST [--and-mode engine] [--when ...]` | the distribution out of the venv; the one chat mode runs only with `--and-mode engine` (1.1) |
+| `upgrade plan --ref REF` or `upgrade plan --sha256 HEX` | the engine's tree at another release, from the origin or from an archive on stdin: what changes and a confirm token (1.1) |
+| `upgrade apply ... --confirm T [--when ...]` | the upgrade as a job (default `idle`), rolled back when it fails (1.1) |
 
-Every answer is one JSON document with `ok`, and the exit status says the same: 0 ok, 1 not ok (doctor found something), 2 usage, 3 refused, 4 busy (a job acts), 5 internal. Lifecycle verbs answer at once with their job; `status` follows it. One job acts at a time; a new one replaces a job that still waits.
+Every answer is one JSON document with `ok`, and the exit status says the same: 0 ok, 1 not ok (doctor found something, or the venv's installer failed), 2 usage, 3 refused, 4 busy (a job acts), 5 internal. Lifecycle verbs answer at once with their job; `status` follows it. One job acts at a time; a new one replaces a job that still waits.
 
 ## The settings overlay
 
@@ -48,6 +53,40 @@ A key that feeds the disk cache's fingerprint (the `QWEN38_*` arithmetic switche
 
 An install whose `run/ops/serve.env` was written by an older release does not read the overlay; `settings plan` says so (`hook_missing`) until the installer runs again.
 
+## Extensions
+
+An extension is an engine-ext-v1 module the engine loads in chat mode (`QSE_EXT`). `ext install` takes its wheel on stdin:
+
+    ssh -i ctl-1 u@engine-box "ext install --sha256 $(sha256sum x-1.0-py3-none-any.whl | cut -d' ' -f1) --name x-1.0-py3-none-any.whl" < x-1.0-py3-none-any.whl
+
+- The bytes are refused, with nothing written, when their sha256 is not `--sha256`, when they are more than 256 MiB, or when they are not a wheel whose METADATA names the file's distribution and version.
+- The extension module is the one `--module` names, else the one the wheel's entry point group `tandemllm.engine_ext` names, else its one `<package>/engine_ext` module.
+- `ops/venv-wheel.sh` installs it into the install's venv, with the engine's pins (`run/requirements.lock`) as constraints, the same way `install.sh --with-chat --app-wheel` installs the chat's wheel. Only an install has a venv: a checkout is refused.
+- The answer reads the module back as the engine's extension host does. `run/remote/extensions.json` keeps its distribution, module, wheel and sha256.
+- The running engine keeps the code it loaded. The answer says a restart is needed; `--when now|idle|at=TIME` starts the restart job.
+
+`ext remove DIST` uninstalls the distribution. If its module is the extension chat mode runs, the call is refused unless `--and-mode engine` is given; then the overlay gets `QSE_MODE=engine` and an empty `QSE_EXT`, as `mode set engine` writes them, and a restart job (default `idle`) makes them current.
+
+## Upgrades
+
+`upgrade` puts the install's tree at another release. Only an install has one: `DIR/src` is the git checkout `install.sh` made, and it must have no local changes.
+
+    ssh -i ctl-1 u@engine-box 'upgrade plan --ref v0.16.0'
+    git archive --format=tar.gz v0.16.0 | ssh -i ctl-1 u@engine-box "upgrade plan --sha256 $SHA"
+    ssh -i ctl-1 u@engine-box "upgrade apply --sha256 $SHA --confirm $TOKEN --when idle"
+
+- `--ref` fetches the install's origin and resolves REF as `install.sh` does (a tag, a branch, a commit). An archive comes on stdin, at most 512 MiB, the tree at its root (`git archive` without `--prefix`). Its sha256 must be `--sha256`. Absolute paths, `..`, links that leave the tree and macOS `._` files are refused. The plan keeps it as `run/remote/upgrades/<sha256>.tar` for the apply.
+- The target must have `tandem remote` and an `install.sh` that takes `--update` and `--no-fetch`, so the key still reaches the engine afterwards.
+- The plan names both trees (commit, version, engine API, this contract's version, the venv's pins), whether the venv is synced to new pins, what is kept and the steps, and gives a token bound to the current commit and the target.
+- The job, once it acts:
+  1. keeps the previous tree: its commit as `refs/tandem/previous`, and a copy of `run/ops`, `bin/tandem` and its `install.sh`;
+  2. stops the engine;
+  3. makes an archive a commit of `src`'s repository;
+  4. runs the target's `install.sh --update --no-fetch --ref COMMIT`: the checkout, the venv synced to its pins, `run/ops` and `bin/tandem` written again with this install's keys, no weights, no start;
+  5. starts the engine.
+- A failed install or a start that does not reach `/health` rolls back: the previous commit checked out, the venv synced back with the previous `install.sh --update` when the pins changed, `run/ops` and `bin/tandem` put back byte for byte, the engine started again. The job fails and says `rolled_back`.
+- The overlay, `run/local.env`, the weights, the logs and the engine's data are not touched.
+
 ## The journal
 
-Every call, refused ones included, is one line of `run/remote/journal.jsonl`: the UTC time, the verb, its arguments (the value of a secret-looking key cut out), the exit status, the duration, the key id and the address it came from. Past 4 MiB the file moves to `journal.jsonl.1`, up to three old files.
+Every call, refused ones included, is one line of `run/remote/journal.jsonl`: the UTC time, the verb, its arguments (the value of a secret-looking key cut out), the exit status, the duration, the key id and the address it came from. `ext install` and `upgrade` add the sha256 of the bytes they checked (`checked`). Past 4 MiB the file moves to `journal.jsonl.1`, up to three old files.
