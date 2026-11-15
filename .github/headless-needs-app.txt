@@ -12,7 +12,6 @@ tests/test_auth.py  # imports TandemApp (tandemapp), through server/app.py or a 
 tests/test_base_plain.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_body_limits.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_callrepair.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_chatd_docs.py  # reads app/ops/chatd.service
 tests/test_chunked_keepalive.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_client_cached.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_community_weights.py  # fails without app/: KeyError: 'nemotron-3.5-super-vl-120b-a12b'
@@ -43,7 +42,6 @@ tests/test_ledger.py  # imports TandemApp (tandemapp), through server/app.py or 
 tests/test_lfm2_moe_stage.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_live_app.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_login_throttle_key.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_manual_braces.py  # reads app/proxy/__main__.py
 tests/test_memory_wait.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_metrics_app.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_mm_end_anchor.py  # imports TandemApp (tandemapp), through server/app.py or a test module
@@ -67,7 +65,6 @@ tests/test_roles_dynamic.py  # imports TandemApp (tandemapp), through server/app
 tests/test_roles_memory.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_router_question_burst.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_sample_tree.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_security_docs.py  # its document check names app/ paths
 tests/test_serve_identity.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_session_trim.py  # imports TandemApp (tandemapp), through server/app.py or a test module
 tests/test_setup_api.py  # imports TandemApp (tandemapp), through server/app.py or a test module
