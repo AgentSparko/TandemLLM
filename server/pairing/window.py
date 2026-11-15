@@ -351,6 +351,11 @@ class Service:
                 self._journal("confirm", peer, exit_code=3, key=s["key_id"], fingerprint=s["key_fp"],
                               error=exc.code)
                 raise PairError(exc.code, exc.message, 409) from None
+            except Exception as exc:                                  # noqa: BLE001
+                w.undo()
+                self._journal("confirm", peer, exit_code=5, key=s["key_id"], fingerprint=s["key_fp"],
+                              error="install_failed")
+                raise PairError("install_failed", f"the key was not installed ({type(exc).__name__})", 500) from None
             try:
                 token = access.issue(self.tree.http_token, s["key_id"])
             except OSError as exc:

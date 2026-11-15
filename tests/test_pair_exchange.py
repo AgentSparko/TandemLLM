@@ -29,7 +29,8 @@ The test matrix (the Gherkin of SEC-10):
      one (its code no longer pairs)                        test_open_and_close
   7  open refuses a checkout (no bin/tandem), no host key, an unsafe ~/.ssh; step 2 refuses a key
      that already has a line of its own (409 key_present: the file unchanged, the window still
-     open, the run spent)                                   test_the_refusals
+     open, the run spent), and a line that fails another way (500 install_failed, the window
+     still open)                                            test_the_refusals
   8  the rate limit: 20 requests a minute from one address, then 429 with Retry-After; another
      address still passes; this host is not limited        test_the_rate_limit
   9  `tandem pair`: the code, the fingerprint and the address as the last three lines; --status
@@ -412,6 +413,23 @@ def test_the_refusals():
         assert st["state"] == "open" and st["tries_left"] == 4, st
         assert not os.path.exists(box.tree.http_token)
         out.append("key_present (file unchanged, window open, 4 tries left)")
+        # an install that fails another way: 500 install_failed, the window still open (not stuck)
+        real = keys.install
+
+        def broken(*a, **k):
+            raise OSError(5, "I/O error")
+        keys.install = broken
+        try:
+            box.client(code, key_id="tandemapp-9", key=ed25519_line("third")).pair()
+            raise AssertionError("a failed install paired")
+        except PairFailed as exc:
+            assert (exc.kind, exc.status) == ("install_failed", 500), exc
+            valid("error", exc.body)
+        finally:
+            keys.install = real
+        st = box.svc.status()
+        assert st["state"] == "open" and st["tries_left"] == 3, st
+        out.append("install_failed (window open, 3 tries left)")
         return ", ".join(out)
     finally:
         box.close()

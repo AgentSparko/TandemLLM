@@ -142,7 +142,10 @@ def ssh_port(env=None, etc: str = ETC_SSH) -> int:
 
 
 def ssh_user() -> str:
-    return pwd.getpwuid(os.getuid()).pw_name
+    try:
+        return pwd.getpwuid(os.getuid()).pw_name
+    except KeyError:                      # no passwd entry (a bare container)
+        return os.environ.get("USER") or os.environ.get("LOGNAME") or str(os.getuid())
 
 
 # ---------------------------------------------------------------------------------------- addresses

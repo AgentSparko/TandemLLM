@@ -96,8 +96,8 @@ Nothing is installed before the confirmation, and nothing at all from a wrong co
 | `rate_limited` | 429 | too many requests from the address, with `Retry-After` |
 | `local_only`, `window_key` | 403 | `open` or `close` from the network, or without the window key |
 | `no_install`, `no_host_key`, `ssh_dir_*`, `authorized_keys_*` | 409 | `open`: a checkout (no `bin/tandem` to force), no readable SSH host key, an unsafe `~/.ssh` |
-| `key_present`, `key_id_taken`, `ssh_dir_*`, `authorized_keys_*` | 409 | step 2: the key could not be installed |
-| `token_write` | 500 | step 2: the token file could not be written |
+| `key_present`, `key_id_taken`, `ssh_dir_*` (`ssh_dir_create` too), `authorized_keys_*` | 409 | step 2: the key could not be installed |
+| `token_write`, `install_failed` | 500 | step 2: the token file could not be written, or the key's line failed another way; the window stays open, the run spent |
 
 ## The journal
 

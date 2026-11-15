@@ -28,7 +28,9 @@
       "authorized_keys_type",
       "authorized_keys_owner",
       "authorized_keys_mode",
-      "authorized_keys_open"
+      "authorized_keys_open",
+      "ssh_dir_create",
+      "install_failed"
      ]
     },
     "message": {

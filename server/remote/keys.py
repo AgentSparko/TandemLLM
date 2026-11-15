@@ -162,7 +162,11 @@ class Unsafe(Exception):
 
 
 def default_path() -> str:
-    return os.path.join(pwd.getpwuid(os.getuid()).pw_dir, ".ssh", "authorized_keys")
+    try:
+        home = pwd.getpwuid(os.getuid()).pw_dir
+    except KeyError:                      # no passwd entry (a bare container): the environment's
+        home = os.path.expanduser("~")
+    return os.path.join(home, ".ssh", "authorized_keys")
 
 
 def _check(st: os.stat_result, what: str, uid: int, kind: str) -> None:
@@ -201,8 +205,11 @@ def install(control: str, key_id: str, key_type: str, key_b64: str, path: str | 
     check_place(path, uid)
     d = os.path.dirname(path)
     if not os.path.lexists(d):
-        os.mkdir(d, 0o700)
-        os.chmod(d, 0o700)
+        try:
+            os.mkdir(d, 0o700)
+            os.chmod(d, 0o700)
+        except OSError as exc:
+            raise Unsafe("ssh_dir_create", f"{d} cannot be created ({exc.strerror})") from None
     flags = os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
     created = not os.path.lexists(path)
     try:
