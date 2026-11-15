@@ -1,12 +1,12 @@
-# The CPU test suites (CONTRIBUTING.md) on every pull request and push to main, as two jobs.
-# cpu: each tests/test_*.py through tests/script_suite.py in a clean process, CUDA hidden, four files
-# at a time. The engine's Python packages are the versions install.sh pins, with the CPU builds of
-# torch and torchvision. A file that fails or runs no test fails the job; a file that prints
-# `skipped: <why>` (a GPU kernel test) is listed. .github/cpu-suite-skip.txt names files left out
-# here, one a line; it is empty.
-# headless (ENG-413 WP12): the engine's own tests (tools/headless_tests.py: the test ledger's engine
-# files) in a copy of the checkout without app/, through tools/headless_suite.sh, the same way.
-# TandemApp's suite and its page build run in TandemApp's own repository (OPS-250).
+# The engine's CPU suite (CONTRIBUTING.md) on every pull request and push to main.
+# cpu: tools/engine_suite.sh, each file tools/engine_tests.py lists (every tests/test_*.py but the
+# pair tests, which need TandemApp beside the engine) through tests/script_suite.py in a clean
+# process, CUDA hidden, four files at a time. The engine's Python packages are the versions
+# install.sh pins, with the CPU builds of torch and torchvision. A file that fails or runs no test
+# fails the job; a file that prints `skipped: <why>` (a GPU kernel test) is listed.
+# .github/cpu-suite-skip.txt names files left out here, one a line; it is empty. No TandemApp is
+# checked out or read (ENG-413 WP14): TandemApp's suite runs in its own repository (OPS-250), and the
+# pair tests run on the box with TandemApp at its PIN (tools/pair_suite.sh).
 # The GPU tests in tests/gpu/ run on a DGX Spark (the run-gpu label).
 name: tests
 
@@ -46,32 +46,9 @@ jobs:
 
       - name: Run the CPU suite
         env:
+          PY: python
           SUITE_JOBS: "4"
-        run: |
-          mkdir -p results/suite
-          ls tests/test_*.py | grep -vxF -f .github/cpu-suite-skip.txt > results/suite/FILES
-          xargs -P "$SUITE_JOBS" -I{} sh -c \
-            'python tests/script_suite.py --all --timeout 900 --out results/suite/logs "$1" | tail -1 >> results/suite/RESULT' \
-            _ {} < results/suite/FILES
-          python - <<'PY'
-          import re
-          lines = open("results/suite/RESULT").read().splitlines()
-          total = {"files": 0, "ok": 0, "fail": 0, "skipped": 0, "tests": 0}
-          bad, skipped = [], []
-          for line in lines:
-              for k, v in re.findall(r"(\w+)=(\d+)", line):
-                  total[k] += int(v)
-              if "fail=1" in line:
-                  bad += line.split(" -- ")[1].split()
-              if "skipped=1" in line:
-                  skipped += line.split("skipped: ")[1].split()
-          print(" ".join(f"{k}={v}" for k, v in total.items()))
-          for f in skipped:
-              print("skipped", f)
-          for f in bad:
-              print(f"::error file={f}::{f} failed or ran no test (results/suite/logs)")
-          raise SystemExit(1 if bad or total["files"] == 0 else 0)
-          PY
+        run: bash tools/engine_suite.sh results/suite
 
       - name: Keep the logs
         if: failure()
@@ -79,45 +56,4 @@ jobs:
         with:
           name: cpu-suite-logs
           path: results/suite
-          retention-days: 7
-
-  headless:
-    name: engine suite without app/
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - name: Check out
-        uses: actions/checkout@v4.2.2
-
-      - name: Set up Python
-        uses: actions/setup-python@v5.3.0
-        with:
-          python-version: "3.12"
-
-      - name: Install the engine's packages (CPU builds)
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0 torchvision==0.28.0
-          python -m pip install numpy==2.3.5 safetensors==0.8.0 tokenizers==0.22.2 transformers==5.12.1 \
-            huggingface-hub==1.30.0 pyyaml==6.0.1 pillow==11.3.0 jinja2==3.1.6 regex==2026.9.3 \
-            pyarrow==25.0.1 triton==3.7.1 cryptography psutil pytest jsonschema zstandard
-
-      - name: A copy of the checkout without app/
-        run: |
-          mkdir -p "$RUNNER_TEMP/headless"
-          git archive HEAD -- . ':(exclude)app' | tar -x -C "$RUNNER_TEMP/headless"
-          test ! -e "$RUNNER_TEMP/headless/app"
-
-      - name: Run the engine's own tests there
-        env:
-          PY: python
-          SUITE_JOBS: "4"
-        run: bash "$RUNNER_TEMP/headless/tools/headless_suite.sh" "$GITHUB_WORKSPACE/results/headless"
-
-      - name: Keep the logs
-        if: failure()
-        uses: actions/upload-artifact@v4.4.3
-        with:
-          name: headless-suite-logs
-          path: results/headless
           retention-days: 7
