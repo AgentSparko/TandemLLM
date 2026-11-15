@@ -81,11 +81,14 @@ def before_load(args):
     if args.get("conductor", "raw") not in ("shadow", "on"):
         return None
     from tandemapp.conductor import monitor as conductor
+    from tandemapp.conductor.monitor import policy as mpolicy
     mode = conductor.parse_mode(args.get("conductor", "raw"))
     if mode in (None, "raw"):
         return None
     try:
-        pol = conductor.load(args.get("conductor_policy", "") or None)
+        # the given file, else ops/supervisor.yaml in a checkout, else the copy the package ships
+        # (an installed wheel has no ops/; ENG-413 WP13)
+        pol = mpolicy.load_default(args.get("conductor_policy", "") or None)
     except conductor.PolicyError as exc:
         raise SystemExit(f"[conductor] the policy does not load: {exc}")
     _EARLY["policy"] = pol

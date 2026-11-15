@@ -34,7 +34,8 @@ engine's interface engine-ext-v1 at the version PIN names, through the reference
   8  3.0, the module before the start: read_document reads the stored document (version 0, the
      built-in one, in a new directory); before_load checks the session monitor's policy and gives
      its line, nothing without --conductor shadow|on, and a policy that does not load stops the
-     start with the line the engine printed before                  test_the_module_before_the_start
+     start with the line the engine printed before; without ops/ (an installed wheel) it takes
+     the package's copy of the same policy                       test_the_module_before_the_start
   9  3.1 (ENG-413 WP5b): Laya is the extension's route over the engine's decision models (the
      registry deciders(registry) hands in): the reference host finds it for GET, POST and the
      preflight (a `*` route never answers a preflight); the card 200 with CORS, the preflight 204
@@ -387,8 +388,19 @@ def test_the_module_before_the_start():
         assert str(exc).startswith("[conductor] the policy does not load:"), exc
     else:
         raise AssertionError("a bad policy loaded")
+    # an installed wheel has no ops/supervisor.yaml: the package's JSON copy, the same policy
+    from tandemapp.conductor.monitor import policy as mpolicy
+    keep = mpolicy.DEFAULT_PATH
+    mpolicy.DEFAULT_PATH = os.path.join(root, "no-ops", "supervisor.yaml")
+    try:
+        wheel = engine_ext.before_load({"conductor": "on"})
+        got = engine_ext._EARLY["policy"]
+    finally:
+        mpolicy.DEFAULT_PATH = keep
+    assert got.path == mpolicy.DEFAULT_JSON and mpolicy.DEFAULT_JSON in wheel, wheel
+    assert got.data == mpolicy.load(keep).data, "the shipped copy is not the checkout's policy"
     engine_ext.before_load({})
-    return f"read_document v0, before_load: {line[:40]}..."
+    return f"read_document v0, before_load: {line[:40]}...; without ops/: the shipped copy"
 
 
 # ---------------------------------------------------------------------------- 9, 10, 11 (3.1)
