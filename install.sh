@@ -27,6 +27,13 @@
 # weights, no corpus, no config, nothing started. TandemApp's Add Spark wizard installs a new
 # node's engine this way (proxy/nodeinstall.py); its Serve a model step brings the weights.
 #
+# With --update (an install that has its config; `tandem remote upgrade` runs it, ENG-454) it does
+# steps 1 to 3 and 6: the source at --ref and the venv, then run/ops/serve.env rendered again from
+# the new release's template with the keys this install wrote, their values as written (the
+# address, the port, the weights, the mode, chatd's owner), the run/ops scripts and bin/tandem. No
+# Hugging Face check, no weights, no corpus, nothing started. --no-fetch takes --ref from what
+# DIR/src already has (a commit the caller put there) instead of fetching the origin.
+#
 # The primary target is one NVIDIA DGX Spark (GB10, aarch64, sm_121). Other CUDA GPUs are best
 # effort: the engine's GPU adapter (tools/gpu) builds the skinny NVFP4 kernel for sm_121a only and
 # keeps it off elsewhere, and StairCut's cost tables were measured on the Spark. The check below runs
@@ -195,6 +202,8 @@ UNINSTALL=0
 REPO_SET=0
 MODE_ARG=""
 RUNTIME_ONLY=0
+UPDATE=0
+NO_FETCH=0
 APP_WHEEL=""
 APP_SHA=""
 RETIRE_BACKENDS=0
@@ -230,7 +239,11 @@ Usage: bash install.sh [options]
   --systemd         also install a systemd user unit, tandemllm.service (off by default)
   --runtime-only    the engine's source and Python environment only: no weights, no corpus, no
                     config, no start (what TandemApp's Add Spark wizard installs on a new node)
-  --retire-backends on a re-run whose config sets QSE_BACKENDS (the relay the engine had before
+  --update          an install with its config: the source at --ref and the venv, then the config
+                    rendered again from the new release with this install's keys as they are; no
+                    weights, no corpus, no start (tandem remote upgrade runs it)
+  --no-fetch        take --ref from what DIR/src already has; no git fetch
+  --retire-backends  on a re-run whose config sets QSE_BACKENDS (the relay the engine had before
                     engine API 1.8): once its backends are on TandemApp's controller, comment the
                     line out (dated) and go on; the backends' database stays
   --yes, -y         non-interactive: answer yes to every question
@@ -271,6 +284,8 @@ while [ $# -gt 0 ]; do
         --force-setup) FORCE_SETUP=1; shift ;;
         --systemd) SYSTEMD=1; shift ;;
         --runtime-only) RUNTIME_ONLY=1; START=0; CORPUS_MODE=none; shift ;;
+        --update) UPDATE=1; START=0; CORPUS_MODE=none; shift ;;
+        --no-fetch) NO_FETCH=1; shift ;;
         --retire-backends) RETIRE_BACKENDS=1; shift ;;
         --yes|-y) YES=1; shift ;;
         --dry-run) DRY=1; shift ;;
@@ -305,6 +320,13 @@ fi
 if [ "$MODE_ARG" = chat ] && [ "$RUNTIME_ONLY" = 1 ]; then
     die "--with-chat writes the config and --runtime-only writes none: install the chat with --with-chat --app-wheel FILE"
 fi
+if [ "$UPDATE" = 1 ]; then
+    # an update keeps what the install is: its mode, its chat, its weights
+    for f in "$MODE_ARG" "$APP_WHEEL"; do
+        [ -z "$f" ] || die "--update keeps the install's mode and its chat: no --with-chat, --engine-only or --app-wheel"
+    done
+    [ "$SETUP" = 0 ] && [ "$RUNTIME_ONLY" = 0 ] || die "--update goes alone: not with --setup or --runtime-only"
+fi
 
 SRC="$DIR/src"
 VENV="$DIR/venv"
@@ -333,6 +355,12 @@ if [ "$SETUP" = 1 ]; then
         case "$ans" in y|Y|yes|YES) HOST=0.0.0.0 ;; *) HOST=127.0.0.1 ;; esac
     fi
 fi
+if [ "$UPDATE" = 1 ] && [ ! -f "$RUN/ops/serve.env" ]; then
+    die "--update needs an install with its config ($RUN/ops/serve.env): run the installer without it"
+fi
+if [ "$NO_FETCH" = 1 ] && [ ! -d "$SRC/.git" ]; then
+    die "--no-fetch takes --ref from $SRC, and $SRC is not a checkout"
+fi
 # fast parallel Xet downloads (the defaults leave most of a fast line unused)
 export HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}"
 export HF_XET_NUM_CONCURRENT_RANGE_GETS="${HF_XET_NUM_CONCURRENT_RANGE_GETS:-64}"
@@ -344,6 +372,7 @@ export HF_XET_NUM_CONCURRENT_RANGE_GETS="${HF_XET_NUM_CONCURRENT_RANGE_GETS:-64}
 STEP=0
 STEPS=7
 [ "$RUNTIME_ONLY" = 1 ] && STEPS=3
+[ "$UPDATE" = 1 ] && STEPS=5
 if [ -t 1 ]; then B=$'\033[1m'; Y=$'\033[33m'; G=$'\033[32m'; N=$'\033[0m'; else B=""; Y=""; G=""; N=""; fi
 step() { STEP=$((STEP + 1)); printf '\n%s==> [%d/%d] %s%s\n' "$B" "$STEP" "$STEPS" "$*" "$N"; }
 info() { printf '    %s\n' "$*"; }
@@ -534,6 +563,7 @@ TO_GET=$(( $(still_to_get "$(hf_repo_dir "$BASE_REPO")" "$BASE_GIB") + $(still_t
          + $(still_to_get "$(hf_repo_dir "$B8_REPO")" "$DRAFTER_GIB") + $(still_to_get "$(hf_repo_dir "$B16_REPO")" "$DRAFTER_GIB") ))
 [ "$SETUP" = 1 ] && TO_GET=5           # Wren's model (and the corpus' shards); the setup guide checks the weights' room
 [ "$RUNTIME_ONLY" = 1 ] && TO_GET=0    # no weights: Serve a model checks their room
+[ "$UPDATE" = 1 ] && TO_GET=0          # the weights the install has stay as they are
 [ "$CORPUS_MODE" != none ] && [ ! -f "$CORPUS_DIR/meta.json" ] \
     && TO_GET=$((TO_GET + $(still_to_get "$HF_HUB_DIR/datasets--wikimedia--wikipedia" "$WIKI_GIB")))
 NEED_HF=$((TO_GET + 1))
@@ -561,6 +591,7 @@ MEM_AVAIL="$(meminfo_gib MemAvailable)"
 MIN_FREE=64; [ "$SPARK" = 1 ] || MIN_FREE=16      # host RAM on a discrete-GPU box
 [ "$SETUP" = 1 ] && MIN_FREE=8                     # setup mode holds Wren alone
 [ "$RUNTIME_ONLY" = 1 ] && MIN_FREE=4              # nothing is loaded: the engine starts later
+[ "$UPDATE" = 1 ] && MIN_FREE=4                    # the same: an update starts nothing
 if [ "$MEM_AVAIL" -ge "$MIN_FREE" ]; then
     ok "memory: ${MEM_AVAIL} GiB available"
 elif [ "$START" = 1 ]; then
@@ -674,6 +705,7 @@ fi
 for r in "$BASE_REPO" "$NVFP4_REPO" "$B8_REPO" "$B16_REPO"; do
     [ "$SETUP" = 1 ] && break             # the setup guide checks the weights it is asked for
     [ "$RUNTIME_ONLY" = 1 ] && break      # no weights here
+    [ "$UPDATE" = 1 ] && break            # the install's weights stay
     # the token goes to curl on stdin, never on its command line
     code="$( { [ -n "$HF_AUTH" ] && printf 'header = "Authorization: Bearer %s"\n' "$HF_AUTH"; true; } \
         | curl -s -K - -o /dev/null -w '%{http_code}' -m 20 "https://huggingface.co/api/models/$r" || true)"
@@ -683,7 +715,7 @@ for r in "$BASE_REPO" "$NVFP4_REPO" "$B8_REPO" "$B16_REPO"; do
         *) fail "cannot reach huggingface.co for $r (HTTP ${code:-none}); check the network" ;;
     esac
 done
-[ "$SETUP" = 1 ] || [ "$RUNTIME_ONLY" = 1 ] || ok "Hugging Face: the four model repositories are readable"
+[ "$SETUP" = 1 ] || [ "$RUNTIME_ONLY" = 1 ] || [ "$UPDATE" = 1 ] || ok "Hugging Face: the four model repositories are readable"
 unset HF_AUTH
 
 cat <<EOF
@@ -725,7 +757,11 @@ if [ -d "$SRC/.git" ]; then
     if [ -n "$(git -C "$SRC" status --porcelain --untracked-files=no)" ]; then
         fail "$SRC has local changes; commit or stash them (git -C $SRC stash), then re-run"
     fi
-    run git -C "$SRC" fetch --quiet --tags --force --prune origin || die "git fetch failed (origin: $(git -C "$SRC" remote get-url origin))"
+    if [ "$NO_FETCH" = 1 ]; then
+        info "no fetch (--no-fetch): $TANDEM_REF from what $SRC has"
+    else
+        run git -C "$SRC" fetch --quiet --tags --force --prune origin || die "git fetch failed (origin: $(git -C "$SRC" remote get-url origin))"
+    fi
 else
     [ -e "$SRC" ] && die "$SRC exists and is not a git checkout; move it away"
     run git clone --quiet "$TANDEM_REPO" "$SRC" \
@@ -805,16 +841,15 @@ EOF
 fi
 # TandemApp's wheel (--with-chat --app-wheel, ENG-413 WP7): into this venv, beside the engine, its
 # dependencies resolved with the engine's pins as constraints, so no pinned package moves. Its sha256
-# is kept in state/tandemapp-wheel.json (node/control.json chat.install)
+# is kept in state/tandemapp-wheel.json (node/control.json chat.install). The release's
+# ops/venv-wheel.sh runs the install, the same way `tandem remote ext install` does (ENG-454)
 if [ -n "$APP_WHEEL" ]; then
     if [ "$DRY" != 1 ]; then printf '%s\n' "$LOCK" > "$RUN/requirements.lock"; fi
-    if [ "$PY_MODE" = venv ]; then
-        run "$PY" -m pip install --disable-pip-version-check --force-reinstall -c "$RUN/requirements.lock" \
-            "$APP_WHEEL" --index-url "$PYPI_INDEX" --extra-index-url "$TORCH_INDEX"
-    else
-        run "$UV" pip install --python "$PY" --reinstall-package tandemapp -c "$RUN/requirements.lock" \
-            "$APP_WHEEL" --index-url "$PYPI_INDEX" --extra-index-url "$TORCH_INDEX" --index-strategy unsafe-best-match
-    fi
+    [ "$DRY" = 1 ] || [ -f "$SRC/ops/venv-wheel.sh" ] \
+        || die "$TANDEM_REF has no ops/venv-wheel.sh: --app-wheel needs a release that installs wheels with it"
+    WHEEL_TOOL=pip; [ "$PY_MODE" = venv ] || WHEEL_TOOL=uv
+    run env VENV_WHEEL_TOOL="$WHEEL_TOOL" UV="$UV" PYPI_INDEX="$PYPI_INDEX" TORCH_INDEX="$TORCH_INDEX" \
+        bash "$SRC/ops/venv-wheel.sh" install "$DIR" "$APP_WHEEL" tandemapp
     if [ "$DRY" != 1 ]; then
         [ -x "$NODE_BIN" ] || die "TandemApp's wheel did not install tandem-node into $VENV/bin"
         printf '{"wheel": "%s", "version": "%s", "sha256": "%s", "installed": "%s"}\n' "${APP_WHEEL##*/}" \
@@ -833,6 +868,9 @@ fi
 
 # No page: the engine serves its API alone (ENG-413 WP7). The dashboard and the Chat tab are
 # TandemApp's, served by its controller pointed at this engine.
+
+# --update: the weights and the corpus the install has stay; steps 4 and 5 are skipped
+if [ "$UPDATE" != 1 ]; then
 
 # ---------------------------------------------------------------------------------------------
 # 4. Weights
@@ -971,6 +1009,7 @@ EOF
         ok "built: $CORPUS_DIR"
     fi
 fi
+fi    # [ "$UPDATE" != 1 ]: steps 4 and 5
 
 # ---------------------------------------------------------------------------------------------
 # 6. Config and control script
@@ -988,6 +1027,29 @@ q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }    # single-q
 ENV_KEYS=()
 ENV_ASSIGN=()
 setv() { ENV_KEYS+=("$1"); ENV_ASSIGN+=("TV_$1=$2"); }
+if [ "$UPDATE" = 1 ]; then
+    # --update (ENG-454): the keys the header of this install's serve.env names, each with the value
+    # its first line gives, as written; the template is the new release's
+    OLD_ENV="$RUN/ops/serve.env"
+    # shellcheck disable=SC2207  # the header's keys, one word each
+    KEYS_OLD=($(awk 'f { sub(/^#[[:space:]]*/, ""); print; exit } /these keys are this machine.s:/ { f = 1 }' "$OLD_ENV"))
+    [ "${#KEYS_OLD[@]}" -gt 0 ] \
+        || die "--update: $OLD_ENV names no keys of this install (an older installer wrote it): run the installer without --update"
+    for k in "${KEYS_OLD[@]}"; do
+        case "$k" in [A-Za-z_]*) ;; *) die "--update: $OLD_ENV names a key '$k'" ;; esac
+        case "$k" in *[!A-Za-z0-9_]*) die "--update: $OLD_ENV names a key '$k'" ;; esac
+        setv "$k" "$(awk -v k="$k" 'index($0, k "=") == 1 { print substr($0, length(k) + 2); exit }' "$OLD_ENV")"
+    done
+    CHATD_OLD="$(sed -n 's/^QSE_CHATD=//p' "$OLD_ENV" | tail -1 | tr -d "'\"")"
+    NPORT_OLD="$(sed -n 's/^TANDEM_NODE_PORT=//p' "$OLD_ENV" | tail -1 | tr -dc 0-9)"
+    [ -z "$NPORT_OLD" ] || NODE_PORT="$NPORT_OLD"
+    # what the messages below name: this install's address, port and model name
+    PORT="$(sed -n 's/^PORT=//p' "$OLD_ENV" | head -1 | tr -dc 0-9)"; PORT="${PORT:-8000}"
+    HOST="$(sed -n 's/^HOST=//p' "$OLD_ENV" | head -1 | tr -d "'\"")"; HOST="${HOST:-127.0.0.1}"
+    SERVED_MODEL="$(sed -n 's/^SERVED_MODEL=//p' "$OLD_ENV" | head -1 | tr -d "'\"")"
+    SERVED_MODEL="${SERVED_MODEL:-qwen3.8-27b-tandem}"
+    ok "the keys of this install kept: ${KEYS_OLD[*]}"
+else
 setv REPO "$(q "$SRC")"
 setv PY "$(q "$PY")"
 setv PYTHONPATH ""
@@ -1043,6 +1105,7 @@ if [ "$SPARK" != 1 ]; then
     # GPU adapter's, tools/gpu)
     if [ "$GPU_MEM_GIB" -lt 100 ]; then setv MAX_LEN 65536; fi
 fi
+fi    # [ "$UPDATE" = 1 ]
 render_env() {
     printf '# Written by install.sh on %s for %s. Regenerated on every run of the installer:\n' "$(date -Iseconds 2>/dev/null || date)" "$DIR"
     printf '# put your own settings in %s/local.env, which is read after the template but before its mode block.\n' "$RUN"
@@ -1096,7 +1159,7 @@ else
             # setup mode until the setup guide's apply job removes it (a reboot comes back to it)
             mkdir -p "$SRC/run"
             printf 'HOST=%s\n' "$HOST" > "$SRC/run/setup-pending"
-        elif [ -f "$SRC/run/setup-pending" ]; then
+        elif [ "$UPDATE" != 1 ] && [ -f "$SRC/run/setup-pending" ]; then
             # a plain install configures the engine itself: an old --setup's marker would make
             # every start setup mode again
             rm -f "$SRC/run/setup-pending"

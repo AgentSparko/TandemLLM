@@ -43,8 +43,14 @@ The test matrix, the Gherkin of OPS-272:
   6  the engine's argv from ops/start.sh is byte for byte the pre-WP7 start.sh's, in engine and in
      chat mode, with its environment's models (the WP7 gate)
                                                          test_start_argv_unchanged
+  7  install.sh --update --no-fetch --ref COMMIT (ENG-454, what `tandem remote upgrade` runs): src
+     at the commit, which was fetched by hand (no git fetch); run/ops/serve.env rendered again from
+     the new template with this install's keys as written (the address, the port, the weights, the
+     mode); the venv kept with the same pins; no Hugging Face check, no weights, no corpus, no
+     start; refusals: --update with --with-chat, on a directory with no config, --no-fetch with no
+     checkout                                            test_update_keeps_the_install
 
-Run: python tests/test_install_headless.py   (1 to 5 need Linux: install.sh stops anywhere else)
+Run: python tests/test_install_headless.py   (1 to 5 and 7 need Linux: install.sh stops anywhere else)
 """
 
 from __future__ import annotations
@@ -653,6 +659,67 @@ def test_start_argv_unchanged():
     for mode in ("engine", "chat"):
         assert got[("pre", mode)] == got[("now", mode)], (mode, got[("pre", mode)], got[("now", mode)])
     return "engine and chat: argv and environment equal to the pre-WP7 start.sh's"
+
+
+# ---------------------------------------------------------------------------------------- 7
+def test_update_keeps_the_install():
+    if _skip("update"):
+        return "skipped off Linux"
+    box = install("updt")
+    d, src, rel = box["dir"], os.path.join(box["dir"], "src"), box["rel"]
+    envf = os.path.join(d, "run", "ops", "serve.env")
+    keys = re.search(r"these keys are this machine's:\n#\s+(.*)\n", open(envf).read()).group(1).split()
+    mine = {k: written(box, k) for k in keys}
+    assert mine["PORT"] == [f"PORT={box['port']}"] and mine["QSE_MODE"] == ["QSE_MODE=engine"], mine
+    uv_before = list(_log(box, "uv.log"))
+    # the next release: one more documented line in the template, another VERSION
+    git = ["git", "-C", rel, "-c", "user.name=t", "-c", "user.email=t@example.com"]
+    rev0 = subprocess.run(git + ["rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    with open(os.path.join(rel, "ops", "serve.env"), "a") as fh:
+        fh.write("\n# ENG-454: a line of the next release's template\n#QSE_UPDATE_TEST=1\n")
+    with open(os.path.join(rel, "VERSION"), "w") as fh:
+        fh.write("9.9.9-update\n")
+    for cmd in (["add", "-A"], ["commit", "-qm", "next"]):
+        subprocess.run(git + cmd, check=True, capture_output=True)
+    rev1 = subprocess.run(git + ["rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    try:
+        # refusals first, nothing changed
+        for extra, why in ((["--with-chat"], "--update keeps the install's mode"),
+                           (["--dir", os.path.join(box["home"], "none")], "--update needs an install with its config")):
+            r = subprocess.run(["bash", os.path.join(rel, "install.sh"), "--yes", "--dir", d, "--ref", rev1,
+                                "--update", *extra], env=box["env"], capture_output=True, text=True, timeout=300,
+                               stdin=subprocess.DEVNULL)
+            assert r.returncode != 0 and why in r.stderr, (extra, r.stderr[-1500:])
+        r = subprocess.run(["bash", os.path.join(rel, "install.sh"), "--yes", "--dir", os.path.join(box["home"], "none"),
+                            "--ref", rev1, "--no-fetch", "--no-start"], env=box["env"], capture_output=True,
+                           text=True, timeout=300, stdin=subprocess.DEVNULL)
+        assert r.returncode != 0 and "--no-fetch takes --ref from" in r.stderr, r.stderr[-1500:]
+        # the commit is in src by hand (as `tandem remote upgrade` puts an archive there); then the update
+        subprocess.run(["git", "-C", src, "fetch", "-q", rel, rev1], check=True, capture_output=True)
+        os.rename(rel, rel + ".away")                       # no fetch may reach the origin now
+        r = subprocess.run(["bash", os.path.join(rel + ".away", "install.sh"), "--yes", "--dir", d, "--ref", rev1,
+                            "--no-fetch", "--update"], env=box["env"], capture_output=True, text=True, timeout=900,
+                           stdin=subprocess.DEVNULL)
+        out = _plain(r.stdout)
+        assert r.returncode == 0, out[-3000:] + r.stderr[-3000:]
+        head = subprocess.run(["git", "-C", src, "rev-parse", "HEAD"], check=True, capture_output=True,
+                              text=True).stdout.strip()
+        assert head == rev1 != rev0, (head, rev0, rev1)
+        assert "no fetch (--no-fetch)" in out and "the keys of this install kept" in out, out[-3000:]
+        assert "Weights (Hugging Face cache" not in out and "Lookup corpus" not in out, out[-3000:]
+        assert "Hugging Face: the four model repositories are readable" not in out, out[-3000:]
+        assert "up to date (lock" in out, out[-3000:]
+        text = open(envf).read()
+        assert "#QSE_UPDATE_TEST=1" in text and "(9.9.9-update" not in text
+        assert {k: written(box, k) for k in keys} == mine, "an install key changed"
+        assert [ln for ln in _log(box, "uv.log") if ln not in uv_before] == [], "the venv was touched"
+        assert not os.path.exists(os.path.join(src, "logs", "engine.pid")), "something started"
+        assert "skipped (--no-start)" in out
+    finally:
+        if os.path.isdir(rel + ".away"):
+            os.rename(rel + ".away", rel)
+        subprocess.run(git + ["checkout", "-q", "--detach", rev0], capture_output=True)   # the release as it was
+    return "src at the commit with no fetch, the template's new line, the install's keys and venv kept"
 
 
 if __name__ == "__main__":
