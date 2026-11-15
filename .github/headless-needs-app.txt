@@ -1,98 +1,30 @@
 # Engine tests left out of the headless suite (tools/headless_tests.py) because they still need the
-# vendored app/ (ENG-413 WP12). Measured on the box: each failed in a tree without app/ with the reason
-# given (20261114T225227Z-eng413-wp10-hdiag). Most load TandemApp at import: server/app.py imports
-# tandemapp.static and tandemapp.chat_forward at module level until WP14. One file a line, the reason
-# after a #. WP14 empties this list. The three guards that read app/ by design come first.
+# vendored app/ or TandemApp's packages (ENG-413 WP12). Measured on the box: each failed in a tree
+# without app/ with the reason given (20261115T012237Z-eng413-wp13-hdiag2). Since WP13 the server
+# imports and serves without TandemApp, so what is left runs TandemApp's own code: its conductor, its
+# extension, its proxy or its files. One file a line, the reason after a #. WP14 empties this list.
+# The three guards that read app/ by design come first.
 tests/test_app_hook.py  # the no-app guard: while VENDORED_APP is True it asserts app/ and app.pin are here (WP14 flips it)
 tests/test_app_pin.py  # hashes app/ against app.pin (WP14 removes both)
-tests/test_engine_api_contract.py  # reverse-deps.json is the inventory of the engine's reach into app/ (WP14 empties it)
-tests/test_activity_app.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_app_loop.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_auth.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_base_plain.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_body_limits.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_callrepair.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_chunked_keepalive.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_client_cached.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_community_weights.py  # fails without app/: KeyError: 'nemotron-3.5-super-vl-120b-a12b'
-tests/test_compat.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_docs_defaults.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_doctor.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_eng413_baseline.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_engine_only.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_engine_routes.py  # fails without app/: AssertionError: the fake engine did not come up
-tests/test_floor_wait.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_fn_docs.py  # fails without app/; the cause is not traced (no error line)
-tests/test_fn_joint_prefill.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_fn_joint_tables.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_fn_pf_window_grant.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_fn_split_state.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_fn_stage.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_fp_equivalents.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_fresh_install.py  # fails without app/; the cause is not traced (no error line)
-tests/test_grammar.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_graph_set.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_handler_timeout.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_health_capture.py  # fails without app/; the cause is not traced (no error line)
-tests/test_idle_graphs.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_images.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_kvpool_admission.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_launch_first.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_ledger.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_lfm2_moe_stage.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_live_app.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_login_throttle_key.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_memory_wait.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_metrics_app.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_mm_end_anchor.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_modelspec.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_narrow_arm.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_nh_vision.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_no_exec_bit.py  # fails without app/: TypeError: 'NoneType' object is not subscriptable
-tests/test_par_continue.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_parallel_app.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_parallel_card.py  # fails without app/: TypeError: 'NoneType' object is not subscriptable
-tests/test_parallel_verify.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_pinned_cache.py  # fails without app/; the cause is not traced (no error line)
-tests/test_pool_snapshot_refcount.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_prefill_watch.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_reasoning_effort_off.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_regenerate.py  # reads app/tandemapp/conductor/fake_decider.py
-tests/test_release_report_e2e.py  # reads a file that is not written without app/
-tests/test_replica_identity.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_resident_park.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_roles_dynamic.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_roles_memory.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_router_question_burst.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_sample_tree.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_serve_identity.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_session_trim.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_api.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_apply.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_change_list.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_cli.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_estimate.py  # fails without app/: TypeError: 'NoneType' object is not subscriptable
-tests/test_setup_job_stream.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_mode.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_preflight.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_remove.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_reset.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_reset_install_layout.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_reset_job_lock.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_retry.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_tool_models.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_setup_window.py  # fails without app/: AssertionError: []
-tests/test_setup_wren.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_side_images.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_side_images_route.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_side_lane.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_slot0_wait.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_slot_affinity.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_split_estimate.py  # fails without app/: TypeError: 'NoneType' object is not subscriptable
-tests/test_stage_server.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_suffix_raw.py  # its child process finds no server package without app/ (not traced)
-tests/test_think_off.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_tools_api.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_usage.py  # imports TandemApp (tandemapp), through server/app.py or a test module
-tests/test_weight_profiles.py  # its child process finds no server package without app/ (not traced)
-tests/test_window_cap_runner.py  # imports TandemApp (tandemapp), through server/app.py or a test module
+tests/test_engine_api_contract.py  # reverse-deps.json is the inventory of the engine's reach into app/; reads app/ files (WP14 empties it)
+tests/test_auth.py  # checks the session answer against TandemApp's dashboard-v1 session schema (tests/dash_contract.py PAGE)
+tests/test_callrepair.py  # two cases run the conductor's call repair (tandemapp)
+tests/test_eng413_baseline.py  # the fixtures' fake engine runs QSE_EXT=tandemapp.engine_ext
+tests/test_engine_only.py  # starts chat mode, QSE_EXT=tandemapp.engine_ext
+tests/test_engine_routes.py  # case 5 starts chat mode (QSE_EXT=tandemapp.engine_ext) for both paths
+tests/test_floor_wait.py  # imports TandemApp (tandemapp) in a test module it uses
+tests/test_fp_equivalents.py  # imports TandemApp (tandemapp) in a test module it uses
+tests/test_handler_timeout.py  # tests the /v1/chat-app forward, TandemApp's tandemapp.chat_forward
+tests/test_kvpool_admission.py  # imports TandemApp (tandemapp) in a test module it uses
+tests/test_memory_wait.py  # imports TandemApp (tandemapp) in a test module it uses
+tests/test_reasoning_effort_off.py  # imports TandemApp (tandemapp) in a test module it uses
+tests/test_regenerate.py  # runs app/tandemapp/conductor/fake_decider.py
+tests/test_replica_identity.py  # one case starts --backends, TandemApp's proxy in the engine's process
+tests/test_resident_park.py  # imports TandemApp (tandemapp) in a test module it uses
+tests/test_roles_dynamic.py  # imports TandemApp (tandemapp) in a test module it uses
+tests/test_router_question_burst.py  # one case starts a fake engine in chat mode (QSE_EXT=tandemapp.engine_ext)
+tests/test_setup_wren.py  # asserts Wren's extra knowledge, TandemApp's app/packages and app/docs/proxy.md, is in the repository
+tests/test_side_lane.py  # imports TandemApp (tandemapp) in a test module it uses
+tests/test_slot0_wait.py  # imports TandemApp (tandemapp) in a test module it uses
+tests/test_slot_affinity.py  # imports TandemApp (tandemapp) in a test module it uses
+tests/test_think_off.py  # test_the_server imports TandemApp (tandemapp)
