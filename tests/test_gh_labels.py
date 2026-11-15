@@ -1,4 +1,5 @@
-"""docs/labels.md holds the table that tools/gh_labels.sh --table prints (OPS-229)."""
+"""docs/labels.md holds the table that tools/gh_labels.sh --table prints (OPS-229), and every label
+the labeler adds is in it (ENG-413: TandemApp's areas left with its paths)."""
 import os
 import re
 import subprocess
@@ -20,7 +21,7 @@ def test_docs_table_is_the_scripts_table():
 
 def test_every_label_has_a_short_description_and_a_colour():
     rows = _table()[2:]
-    assert len(rows) >= 50
+    assert len(rows) >= 40
     names = set()
     for row in rows:
         _, group, name, desc, _ = row.split("|")
@@ -34,6 +35,14 @@ def test_every_label_has_a_short_description_and_a_colour():
         script = f.read()
     for colour in re.findall(r"^\w+\|[^|]+\|([^|]*)\|", script, re.M):
         assert re.fullmatch(r"[0-9a-f]{6}", colour), colour
+
+
+def test_the_labeler_adds_only_these_labels():
+    names = {row.split("|")[2].strip().strip("`") for row in _table()[2:]}
+    with open(os.path.join(ROOT, ".github", "labeler.yml"), encoding="utf-8") as f:
+        used = re.findall(r"^([a-z0-9][\w./-]*):\s*$", f.read(), re.M)
+    assert used and not set(used) - names, sorted(set(used) - names)
+    return f"{len(used)} labeler labels"
 
 
 if __name__ == "__main__":

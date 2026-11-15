@@ -19,19 +19,8 @@ GitHub's own `duplicate`, `invalid`, `wontfix`, `good first issue` and `help wan
 | area | `engine/drafting` | Engine: drafters and speculation (lookup, StairCut, MTP, DFlash2) |
 | area | `engine/cache` | Engine: KV cache, prefix cache, disk cache |
 | area | `server/api` | Server: the OpenAI API, tool calls, streaming, structured output |
-| area | `server/conductor` | Server: the conductor (session monitor, deciders, policies) |
-| area | `server/proxy` | Server: the proxy in front of the engine and other backends |
-| area | `chat` | Chat service (chatd): agent loop, sandbox, files, tools |
-| area | `dash/setup` | Dashboard: Setup Guide |
-| area | `dash/chat` | Dashboard: Chat |
-| area | `dash/usage` | Dashboard: Usage |
-| area | `dash/performance` | Dashboard: Performance |
-| area | `dash/dev` | Dashboard: Dev (logs and request inspector) |
-| area | `dash/playground` | Dashboard: Playground |
-| area | `dash/conductor` | Dashboard: Conductor |
-| area | `dash/memory` | Dashboard: memory screens (conductor memory, disk cache) |
-| area | `dash/backends` | Dashboard: Backends |
-| area | `dash/system` | Dashboard: System |
+| area | `server/conductor` | Server: the engine side of chat mode (residency, the shadow reader, the engine-only screens) |
+| area | `dash/setup` | Setup Guide: the Setup API, the model registry and Wren |
 | area | `models/new` | Support for a model that TandemLLM does not run yet |
 | area | `models/flint` | Model: Recursive Flint |
 | area | `models/qwen3.8` | Model: Qwen3.8 27B and Qwen3.8 Flash-Next |

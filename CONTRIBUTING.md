@@ -5,19 +5,17 @@ Thank you for helping. Bug reports, measurements from other boards and pull requ
 ## Before a pull request
 
 - Run the CPU test suite: every `tests/test_*.py` is a standalone script (`python tests/test_cache.py`), and all of them must pass: `python tests/script_suite.py --all` runs each one and fails a file that ran no test. A pytest-style module ends with `from scriptmode import run; run(globals())` under `if __name__ == "__main__":`. The GPU tests in `tests/gpu/` need a DGX Spark.
-- A Chat-tab bug is tested on a recorded conversation, not with a new model run: `app/tools/chat_trace.py` replays a chat's snapshot through chatd with the fake engine in seconds and checks the requests it builds (`--reread` names every request that does not only append, `--store` puts the recorded screenshots back); `app/tools/prefix_check.py` sends those requests to a served engine one token each and reports what it read again; `app/tools/chat_fork.py --at TURN:STEP` replays up to a step and runs the live model from there for a few steps (`--patch` gives the call before it a fixed result). Each tool's usage text says the rest.
-- Run the dashboard tests if you touched `app/dashboard/`: `npm ci && npm test` in that folder.
-- TandemApp's tests, `app/tests/test_*.py`, run the same way: `python app/tests/script_suite.py --all`.
-- GitHub runs the CPU suite on every pull request as the `cpu suite` check, with the engine's packages in their CPU builds, and TandemApp's tests as the `app suite` check, with `./app[host]` installed and no torch.
+- The dashboard, the Chat tab, chatd, the conductor and the proxy are TandemApp's ([TandemApp](https://github.com/TandemLLM/TandemApp)), with their own tests and pull requests there. This repository carries a copy under `app/` until the two are split; change TandemApp in its own repository, never `app/` here.
+- GitHub runs the CPU suite on every pull request as the `cpu suite` check, with the engine's packages in their CPU builds, and the engine's suite in a tree without `app/` as the `engine suite without app/` check.
 - A change must not change the text the engine writes. [docs/exactness.md](docs/exactness.md) lists the checks, and a speed claim needs the method in [docs/measurement.md](docs/measurement.md).
-- A pull request that changes the engine, a model, a kernel or the server carries a gate report: run `python -m tools.gate run` on your GPU and paste `gate-report.md` into the description. It measures main and your branch side by side on the same box. `python -m tools.gate map` names the level your diff needs; docs and dashboard changes need none. The `gate` check refuses a missing, stale or failing report, and [docs/quality-gate.md](docs/quality-gate.md) explains the suites and the verdicts.
+- A pull request that changes the engine, a model, a kernel or the server carries a gate report: run `python -m tools.gate run` on your GPU and paste `gate-report.md` into the description. It measures main and your branch side by side on the same box. `python -m tools.gate map` names the level your diff needs; docs changes need none. The `gate` check refuses a missing, stale or failing report, and [docs/quality-gate.md](docs/quality-gate.md) explains the suites and the verdicts.
 
 ## Issues and the board
 
 Every new issue starts with `needs-triage`, which its form adds. Triage gives it one type label, at least one area label, a priority (`p0` to `p3`) and a milestone, and then removes `needs-triage`. An issue that waits for the reporter gets `needs-info`, or `needs-repro` when it has no steps that show the bug. [docs/labels.md](docs/labels.md) lists every label and what it means:
 
 - type: what the work is (`bug`, `feature`, `perf`, `docs`, `refactor`, `test`, `security`, `question`), one per issue;
-- area: the part of TandemLLM, such as `engine/kernels`, `server/conductor`, `chat` or `dash/setup`. A pull request gets its area labels from the paths it changes;
+- area: the part of TandemLLM, such as `engine/kernels`, `server/api` or `dash/setup`. A pull request gets its area labels from the paths it changes;
 - `models/*`, `quant/*` and `hw/*`: the model, the weight format and the GPU an issue is about;
 - priority: `p0` is broken for everyone or loses data, `p3` waits until there is time.
 

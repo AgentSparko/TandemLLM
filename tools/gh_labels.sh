@@ -2,6 +2,7 @@
 # The GitHub labels of the repository, as one table (OPS-229). Creates the missing ones and updates the
 # colour and description of the rest; renames enhancement to feature and documentation to docs, which
 # keeps their issues. Never deletes a label. docs/labels.md is this table (tests/test_gh_labels.py).
+# TandemApp's areas (chat, the proxy, the dashboard's views) are labelled in its own repository (ENG-413).
 #
 #   bash tools/gh_labels.sh [--repo OWNER/NAME] [--dry-run]     apply (needs gh with admin on the repo)
 #   bash tools/gh_labels.sh --table                             print the table as markdown
@@ -34,19 +35,8 @@ area|engine/kernels|b45309|Engine: GPU kernels, matrix products, attention
 area|engine/drafting|c2410c|Engine: drafters and speculation (lookup, StairCut, MTP, DFlash2)
 area|engine/cache|ea580c|Engine: KV cache, prefix cache, disk cache
 area|server/api|116329|Server: the OpenAI API, tool calls, streaming, structured output
-area|server/conductor|1a7f37|Server: the conductor (session monitor, deciders, policies)
-area|server/proxy|2da44e|Server: the proxy in front of the engine and other backends
-area|chat|0f766e|Chat service (chatd): agent loop, sandbox, files, tools
-area|dash/setup|5a32a3|Dashboard: Setup Guide
-area|dash/chat|6639ba|Dashboard: Chat
-area|dash/usage|7b4bc9|Dashboard: Usage
-area|dash/performance|8250df|Dashboard: Performance
-area|dash/dev|8d5ee0|Dashboard: Dev (logs and request inspector)
-area|dash/playground|9b6ce3|Dashboard: Playground
-area|dash/conductor|a475f9|Dashboard: Conductor
-area|dash/memory|b392f0|Dashboard: memory screens (conductor memory, disk cache)
-area|dash/backends|c297fa|Dashboard: Backends
-area|dash/system|d2a8ff|Dashboard: System
+area|server/conductor|1a7f37|Server: the engine side of chat mode (residency, the shadow reader, the engine-only screens)
+area|dash/setup|5a32a3|Setup Guide: the Setup API, the model registry and Wren
 area|models/new|7d4e00|Support for a model that TandemLLM does not run yet
 area|models/flint|9a6700|Model: Recursive Flint
 area|models/qwen3.8|bf8700|Model: Qwen3.8 27B and Qwen3.8 Flash-Next
