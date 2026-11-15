@@ -1,0 +1,69 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "doctor"
+  },
+  "ok": {
+   "type": "boolean"
+  },
+  "healthy": {
+   "type": "boolean"
+  },
+  "checks": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  },
+  "findings": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string",
+      "pattern": "^doctor\\.[a-z_]+$"
+     },
+     "state": {
+      "enum": [
+       "problem",
+       "repaired"
+      ]
+     },
+     "text": {
+      "type": "string"
+     },
+     "fix": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "code",
+     "state",
+     "text",
+     "fix"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "healthy",
+  "checks",
+  "findings"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/doctor"
+}

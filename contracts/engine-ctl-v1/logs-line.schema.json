@@ -1,0 +1,33 @@
+{
+ "$id": "engine-ctl-v1/logs-line",
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "verb": {
+   "const": "logs"
+  },
+  "which": {
+   "enum": [
+    "engine",
+    "launcher"
+   ]
+  },
+  "seq": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "line": {
+   "type": "string"
+  }
+ },
+ "required": [
+  "ctl",
+  "verb",
+  "which",
+  "seq",
+  "line"
+ ],
+ "additionalProperties": false
+}

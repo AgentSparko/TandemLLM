@@ -1,0 +1,51 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "mode get"
+  },
+  "ok": {
+   "const": true
+  },
+  "mode": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "ext": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "source": {
+   "type": "string"
+  },
+  "inferred": {
+   "type": "boolean"
+  },
+  "config_error": {
+   "type": "string"
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "mode",
+  "ext",
+  "source",
+  "inferred"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/mode-get"
+}

@@ -1,0 +1,204 @@
+{
+ "ctl": "engine-ctl-v1",
+ "version": "1.0",
+ "about": "tandem remote: the engine's control verbs. One command line (SSH_ORIGINAL_COMMAND under a forced command, else the arguments), split without a shell; one JSON document on stdout (JSON lines for logs --follow); an exit status; a journal line a call. server/remote/grammar.py VERBS is this table; tests/test_remote_contract.py holds them equal.",
+ "line": {
+  "max_chars": 8192,
+  "max_tokens": 64,
+  "max_token_chars": 1024,
+  "token": "printable ASCII, no space (after shlex's POSIX quoting)",
+  "forced_command_args": [
+   "--key-id",
+   "ID"
+  ]
+ },
+ "kinds": {
+  "flag": "no value",
+  "int:LO:HI": "a whole number LO..HI",
+  "enum:A|B": "one of the values",
+  "when": "now, idle or at=<ISO 8601 time with a zone, at most 7 days ahead>",
+  "key": "a settings key, repeatable",
+  "confirm": "16 hex digits from a plan",
+  "module": "a dotted module name"
+ },
+ "arguments": {
+  "none": "no argument",
+  "keys": "KEY ... (settings get: only these)",
+  "changes": "KEY=VALUE ... (with --unset KEY: at least one)",
+  "version": "one overlay version number",
+  "mode": "engine or chat"
+ },
+ "verbs": {
+  "status": {
+   "options": {},
+   "arguments": "none",
+   "answer": "status.schema.json"
+  },
+  "start": {
+   "options": {},
+   "arguments": "none",
+   "answer": "job.schema.json"
+  },
+  "stop": {
+   "options": {},
+   "arguments": "none",
+   "answer": "job.schema.json"
+  },
+  "restart": {
+   "options": {
+    "--when": "when",
+    "--deadline": "int:10:86400"
+   },
+   "arguments": "none",
+   "answer": "job.schema.json"
+  },
+  "mode get": {
+   "options": {},
+   "arguments": "none",
+   "answer": "mode-get.schema.json"
+  },
+  "mode set": {
+   "options": {
+    "--when": "when",
+    "--deadline": "int:10:86400",
+    "--ext": "module"
+   },
+   "arguments": "mode",
+   "answer": "job.schema.json"
+  },
+  "settings get": {
+   "options": {},
+   "arguments": "keys",
+   "answer": "settings-get.schema.json"
+  },
+  "settings plan": {
+   "options": {
+    "--unset": "key"
+   },
+   "arguments": "changes",
+   "answer": "settings-plan.schema.json"
+  },
+  "settings apply": {
+   "options": {
+    "--unset": "key",
+    "--confirm": "confirm",
+    "--confirm-fingerprint": "confirm",
+    "--when": "when",
+    "--deadline": "int:10:86400"
+   },
+   "arguments": "changes",
+   "answer": "job.schema.json"
+  },
+  "settings versions": {
+   "options": {},
+   "arguments": "none",
+   "answer": "settings-versions.schema.json"
+  },
+  "settings restore": {
+   "options": {
+    "--confirm": "confirm",
+    "--confirm-fingerprint": "confirm",
+    "--when": "when",
+    "--deadline": "int:10:86400"
+   },
+   "arguments": "version",
+   "answer": "job.schema.json"
+  },
+  "logs": {
+   "options": {
+    "--follow": "flag",
+    "--lines": "int:1:5000",
+    "--which": "enum:engine|launcher"
+   },
+   "arguments": "none",
+   "answer": "logs.schema.json",
+   "follow_answer": "logs-line.schema.json (one a line)"
+  },
+  "doctor": {
+   "options": {},
+   "arguments": "none",
+   "answer": "doctor.schema.json"
+  },
+  "unpair": {
+   "options": {},
+   "arguments": "none",
+   "answer": "unpair.schema.json"
+  }
+ },
+ "planned": {
+  "ext": "a later minor of this contract; refused as unknown_verb until then",
+  "upgrade": "a later minor of this contract; refused as unknown_verb until then",
+  "models": "a later minor of this contract; refused as unknown_verb until then",
+  "token": "a later minor of this contract; refused as unknown_verb until then",
+  "pair": "a later minor of this contract; refused as unknown_verb until then"
+ },
+ "exit": {
+  "0": "ok",
+  "1": "answered, not ok (doctor found problems)",
+  "2": "usage: the command does not parse",
+  "3": "refused: the session, a path, a key, a missing confirm, the overlay hook",
+  "4": "busy: a lifecycle job acts",
+  "5": "internal error"
+ },
+ "errors": {
+  "usage": [
+   "bad_command",
+   "unknown_verb",
+   "unknown_subcommand",
+   "unknown_option",
+   "extra_argument",
+   "missing_argument",
+   "bad_value",
+   "duplicate_option",
+   "unknown_key"
+  ],
+  "refused": [
+   "no_command",
+   "pty_refused",
+   "forward_refused",
+   "path_outside",
+   "key_not_managed",
+   "not_in_overlay",
+   "no_change",
+   "confirm_required",
+   "confirm_mismatch",
+   "hook_missing",
+   "config_error",
+   "unknown_version",
+   "key_unknown",
+   "key_ambiguous"
+  ],
+  "busy": [
+   "busy"
+  ],
+  "internal": [
+   "internal"
+  ]
+ },
+ "journal": {
+  "file": "run/remote/journal.jsonl",
+  "rotate": "past 4 MiB to .1 .. .3",
+  "fields": [
+   "at",
+   "verb",
+   "args",
+   "exit",
+   "ms",
+   "via",
+   "key",
+   "from",
+   "error",
+   "job"
+  ],
+  "redacted": "the value of every secret-looking KEY=VALUE or --name VALUE"
+ },
+ "files": {
+  "run/managed.env": "the current overlay version, read by ops/serve.env after run/local.env",
+  "run/managed.d/<n>.env": "version n",
+  "run/managed.d/manifest.json": "current, good, versions",
+  "run/remote/jobs/<id>/job.json": "a lifecycle job",
+  "run/remote/stopped": "a stop on purpose; ops/watchdog.sh leaves the engine down",
+  "logs/launcher.log": "what the jobs' ops/start.sh and ops/stop.sh printed"
+ },
+ "key_line": "command=\"/bin/bash DIR/bin/tandem remote --key-id ID\",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding[,from=\"...\"] ssh-ed25519 AAAA... COMMENT"
+}

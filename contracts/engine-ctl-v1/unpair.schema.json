@@ -1,0 +1,54 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "unpair"
+  },
+  "ok": {
+   "const": true
+  },
+  "removed": {
+   "type": "object",
+   "properties": {
+    "type": {
+     "type": "string"
+    },
+    "comment": {
+     "type": "string"
+    },
+    "key_id": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   },
+   "required": [
+    "type",
+    "comment",
+    "key_id"
+   ],
+   "additionalProperties": false
+  },
+  "left": {
+   "type": "integer"
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "removed",
+  "left"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/unpair"
+}

@@ -1109,7 +1109,7 @@ else
     fi
 fi
 
-# DIR/bin/tandem: start | stop | restart | status | smoke | logs | env | doctor | setup | node | chat
+# DIR/bin/tandem: start | stop | restart | status | smoke | logs | env | doctor | setup | remote | node | chat
 write_control() {
     printf '#!/usr/bin/env bash\n# TandemLLM control script, written by install.sh.\nTANDEM_DIR=%q\n' "$DIR"
     cat <<'CTL'
@@ -1125,6 +1125,16 @@ doctor() {
     (cd "$TANDEM_DIR/src" && PYTHONPATH="$TANDEM_DIR/src" "$py" -m server.setup.doctor "$@")
 }
 if [ "${1:-}" = doctor ]; then shift; doctor "$@"; exit $?; fi
+# tandem remote (engine-ctl-v1, docs/remote-control.md): the control verbs, answered in JSON, for the
+# forced command of a controller's SSH key (its command in SSH_ORIGINAL_COMMAND) or by hand; before
+# the config loads too, so status answers on a config that does not load
+if [ "${1:-}" = remote ]; then
+    shift
+    py="$TANDEM_DIR/venv/bin/python"
+    [ -x "$py" ] || py=python3
+    cd "$TANDEM_DIR/src" || exit 5
+    PYTHONPATH="$TANDEM_DIR/src" exec "$py" -s -m server.remote "$@"
+fi
 # TandemNode (SRV-725), the agent TandemApp's controller talks to, is TandemApp's: the tandem-node
 # install.sh --with-chat --app-wheel put in this venv, else TANDEM_NODE_BIN or tandem-node on PATH.
 # The engine's tree carries none (ENG-413 WP7). tandem node [serve|check|unit|...] runs it with this
@@ -1302,12 +1312,12 @@ case "${1:-}" in
         SETUP_PY="${PY:-}"; [ -x "$SETUP_PY" ] || SETUP_PY="$TANDEM_DIR/venv/bin/python"
         [ -x "$SETUP_PY" ] || SETUP_PY=python3
         PYTHONPATH="$REPO" exec "$SETUP_PY" -m server.setup.cli --tandem-dir "$TANDEM_DIR" "$@" ;;
-    *) echo "usage: $0 start | stop [grace-s] | restart | status | smoke | logs [n] | env | doctor [--check] | setup [command] | node [serve|check|unit] | chat start|stop|restart|status|logs" >&2; exit 2 ;;
+    *) echo "usage: $0 start | stop [grace-s] | restart | status | smoke | logs [n] | env | doctor [--check] | setup [command] | remote VERB | node [serve|check|unit] | chat start|stop|restart|status|logs" >&2; exit 2 ;;
 esac
 CTL
 }
 if [ "$DRY" = 1 ]; then
-    note "would write $DIR/bin/tandem (start | stop | restart | status | smoke | logs | env | setup | chat | node)"
+    note "would write $DIR/bin/tandem (start | stop | restart | status | smoke | logs | env | setup | remote | chat | node)"
 else
     write_control > "$DIR/bin/tandem.tmp" && chmod 755 "$DIR/bin/tandem.tmp" && mv "$DIR/bin/tandem.tmp" "$DIR/bin/tandem"
     ok "wrote $DIR/bin/tandem"

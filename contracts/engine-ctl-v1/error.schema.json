@@ -1,0 +1,174 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "ok": {
+   "const": false
+  },
+  "error": {
+   "type": "object",
+   "properties": {
+    "code": {
+     "type": "string"
+    },
+    "message": {
+     "type": "string"
+    },
+    "plan": {
+     "type": "object",
+     "properties": {
+      "base": {
+       "type": "integer"
+      },
+      "overlay": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "key": {
+          "type": "string"
+         },
+         "from": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "to": {
+          "type": [
+           "string",
+           "null"
+          ]
+         }
+        },
+        "required": [
+         "key",
+         "from",
+         "to"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "effect": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "key": {
+          "type": "string"
+         },
+         "from": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "to": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "was_set": {
+          "type": "boolean"
+         },
+         "is_set": {
+          "type": "boolean"
+         },
+         "restart": {
+          "enum": [
+           "hot",
+           "engine"
+          ]
+         },
+         "fingerprint": {
+          "type": "boolean"
+         }
+        },
+        "required": [
+         "key",
+         "from",
+         "to",
+         "was_set",
+         "is_set",
+         "restart",
+         "fingerprint"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "shadowed": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "restart_needed": {
+       "type": "boolean"
+      },
+      "fingerprint_keys": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "confirm": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      },
+      "confirm_fingerprint": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      },
+      "warnings": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      }
+     },
+     "required": [
+      "base",
+      "overlay",
+      "effect",
+      "shadowed",
+      "restart_needed",
+      "fingerprint_keys",
+      "confirm",
+      "warnings"
+     ],
+     "additionalProperties": false
+    },
+    "job": {
+     "type": "object"
+    }
+   },
+   "required": [
+    "code",
+    "message"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "error"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/error"
+}

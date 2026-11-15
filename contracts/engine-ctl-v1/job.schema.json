@@ -1,0 +1,278 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "ok": {
+   "const": true
+  },
+  "job": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^[0-9]{8}T[0-9]{6}-[0-9a-f]{6}$"
+    },
+    "kind": {
+     "enum": [
+      "start",
+      "stop",
+      "restart",
+      "settings",
+      "mode",
+      "restore"
+     ]
+    },
+    "state": {
+     "enum": [
+      "waiting",
+      "acting",
+      "done",
+      "failed",
+      "cancelled",
+      "lost"
+     ]
+    },
+    "phase": {
+     "type": "string"
+    },
+    "when": {
+     "type": "object",
+     "properties": {
+      "mode": {
+       "enum": [
+        "now",
+        "idle",
+        "at"
+       ]
+      },
+      "at": {
+       "type": "string"
+      },
+      "deadline_s": {
+       "type": "integer"
+      }
+     },
+     "required": [
+      "mode"
+     ],
+     "additionalProperties": false
+    },
+    "created_at": {
+     "type": "string"
+    },
+    "ended_at": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "message": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "waiting_for": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "overlay": {
+     "type": "object",
+     "properties": {
+      "from": {
+       "type": "integer"
+      },
+      "to": {
+       "type": "integer"
+      },
+      "values": {
+       "type": "object"
+      },
+      "note": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "from"
+     ]
+    },
+    "restored": {
+     "type": "object",
+     "properties": {
+      "version": {
+       "type": "integer"
+      },
+      "healthy": {
+       "type": "boolean"
+      }
+     },
+     "required": [
+      "version",
+      "healthy"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "required": [
+    "id",
+    "kind",
+    "state",
+    "when",
+    "created_at"
+   ],
+   "additionalProperties": false
+  },
+  "follow": {
+   "type": "string"
+  },
+  "plan": {
+   "type": "object",
+   "properties": {
+    "base": {
+     "type": "integer"
+    },
+    "overlay": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "key": {
+        "type": "string"
+       },
+       "from": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "to": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "required": [
+       "key",
+       "from",
+       "to"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "effect": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "key": {
+        "type": "string"
+       },
+       "from": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "to": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "was_set": {
+        "type": "boolean"
+       },
+       "is_set": {
+        "type": "boolean"
+       },
+       "restart": {
+        "enum": [
+         "hot",
+         "engine"
+        ]
+       },
+       "fingerprint": {
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "key",
+       "from",
+       "to",
+       "was_set",
+       "is_set",
+       "restart",
+       "fingerprint"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "shadowed": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "restart_needed": {
+     "type": "boolean"
+    },
+    "fingerprint_keys": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "confirm": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{16}$"
+    },
+    "confirm_fingerprint": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{16}$"
+    },
+    "warnings": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   },
+   "required": [
+    "base",
+    "overlay",
+    "effect",
+    "shadowed",
+    "restart_needed",
+    "fingerprint_keys",
+    "confirm",
+    "warnings"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "job",
+  "follow"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/job"
+}

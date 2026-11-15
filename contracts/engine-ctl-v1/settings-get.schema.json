@@ -1,0 +1,139 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "settings get"
+  },
+  "ok": {
+   "const": true
+  },
+  "keys": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+     },
+     "set": {
+      "type": "boolean"
+     },
+     "value": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source": {
+      "enum": [
+       "default",
+       "install",
+       "profile",
+       "setup",
+       "local",
+       "managed",
+       "mode"
+      ]
+     },
+     "type": {
+      "enum": [
+       "string",
+       "integer",
+       "number",
+       "path",
+       "enum",
+       "module"
+      ]
+     },
+     "managed": {
+      "type": "boolean"
+     },
+     "restart": {
+      "enum": [
+       "hot",
+       "engine"
+      ]
+     },
+     "fingerprint": {
+      "type": "boolean"
+     },
+     "default": {
+      "type": "string"
+     },
+     "values": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "why": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "set",
+     "value",
+     "source",
+     "type",
+     "managed",
+     "restart",
+     "fingerprint"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "overlay": {
+   "type": "object",
+   "properties": {
+    "current": {
+     "type": "integer"
+    },
+    "good": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "versions": {
+     "type": "integer"
+    },
+    "file": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "current",
+    "good",
+    "versions",
+    "file"
+   ],
+   "additionalProperties": false
+  },
+  "hook": {
+   "type": "boolean"
+  },
+  "config_error": {
+   "type": "string"
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "keys",
+  "overlay",
+  "hook"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/settings-get"
+}

@@ -1,0 +1,70 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "settings versions"
+  },
+  "ok": {
+   "const": true
+  },
+  "current": {
+   "type": "integer"
+  },
+  "good": {
+   "type": [
+    "integer",
+    "null"
+   ]
+  },
+  "versions": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "n": {
+      "type": "integer"
+     },
+     "at": {
+      "type": "string"
+     },
+     "note": {
+      "type": "string"
+     },
+     "set": {
+      "type": "object"
+     },
+     "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+     }
+    },
+    "required": [
+     "n",
+     "at",
+     "note",
+     "set",
+     "sha256"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "current",
+  "good",
+  "versions"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/settings-versions"
+}

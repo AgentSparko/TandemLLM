@@ -1,0 +1,44 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "logs"
+  },
+  "ok": {
+   "const": true
+  },
+  "which": {
+   "enum": [
+    "engine",
+    "launcher"
+   ]
+  },
+  "file": {
+   "type": "string"
+  },
+  "lines": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "which",
+  "file",
+  "lines"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/logs"
+}
