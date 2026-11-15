@@ -16,6 +16,9 @@ import sys
 _APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app")
 #: TandemApp's packages the engine imports until ENG-413
 APP_PACKAGES = ("tandemapp", "proxy", "chatd")
+#: ENG-413 WP13: whether this tree carries the vendored app/ (a tree without it is headless unless
+#: QSE_EXT names TandemApp's extension; server/app.py `_app_part`)
+APP_VENDORED = os.path.isdir(_APP)
 
 
 class AppFinder:

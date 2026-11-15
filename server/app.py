@@ -85,7 +85,6 @@ from server.api import parallel as parallel_mod  # noqa: E402
 from server.api import activity as activity_mod  # noqa: E402
 from server.api import logbuf  # noqa: E402
 from server.api import auth as auth_mod  # noqa: E402
-from tandemapp import static  # noqa: E402
 from server import images as images_mod  # noqa: E402
 from server import memlimits  # noqa: E402
 from server import gpu_health  # noqa: E402
@@ -99,7 +98,6 @@ from server import diskcache as diskcache_mod  # noqa: E402
 from server import identity as identity_mod  # noqa: E402  (SRV-741 the replica identity)
 from server import stage as stage_mod  # noqa: E402  (ENG-307 one model as two stage processes)
 from server import cache_peek, model_card, tokenize_api  # noqa: E402
-from tandemapp import chat_forward  # noqa: E402
 from server import mode as mode_mod  # noqa: E402  (OPS-260 engine or chat, and what runs beside the engine)
 from server import ext as ext_mod  # noqa: E402  (ENG-413 WP3a the engine-ext-v1 host)
 from server.api import compaction as compaction_mod  # noqa: E402
@@ -230,6 +228,51 @@ EXT = ext_mod.NULL
 _EXT_MODULE = None
 #: ENG-413 WP5: the line the extension's before_load gave for the log (its session monitor's policy)
 _EXT_EARLY: str | None = None
+
+#: ENG-413 WP13: TandemApp's modules the engine still runs until WP14 (setup mode's page, the
+#: /v1/chat-app forward, the System view's hosts), each with the module names whose absence means
+#: "not here" (any other missing import inside one is an error and is raised)
+_APP_PART_MODULES = {"static": ("tandemapp", "tandemapp.static"),
+                     "chat_forward": ("tandemapp", "tandemapp.chat_forward"),
+                     "hostcollect": ("proxy", "proxy.hostcollect")}
+_APP_PARTS: dict = {}
+#: the chat forward's prefix (TandemApp's tandemapp/chat_forward.py PREFIX)
+CHAT_APP = "/v1/chat-app"
+
+
+def _app_parts_here() -> bool:
+    """ENG-413 WP13: TandemApp's modules are this process's when the tree carries the vendored app/
+    (server/__init__.py's finder) or QSE_EXT names TandemApp's extension (its wheel, installed
+    beside the engine). Otherwise the engine is headless: no page, no chat forward, no hosts."""
+    import server
+    if getattr(server, "APP_VENDORED", False):
+        return True
+    return (os.environ.get("QSE_EXT") or "").strip().split(".")[0] == "tandemapp"
+
+
+def _app_part(name: str):
+    """ENG-413 WP13: one of TandemApp's modules (`_APP_PART_MODULES`), imported at its first use;
+    None on a headless engine (`_app_parts_here`) or where TandemApp is not installed. Its callers
+    answer then as the contract's headless engine: 404 no_ui for the page, 404 not_on_engine for
+    the chat forward, no `hosts` in the System view."""
+    if name not in _APP_PARTS:
+        mod = None
+        if _app_parts_here():
+            try:
+                if name == "static":
+                    from tandemapp import static as mod
+                elif name == "chat_forward":
+                    from tandemapp import chat_forward as mod
+                elif name == "hostcollect":
+                    from proxy import hostcollect as mod
+                else:
+                    raise KeyError(name)
+            except ModuleNotFoundError as exc:
+                if exc.name not in _APP_PART_MODULES[name]:
+                    raise
+                mod = None
+        _APP_PARTS[name] = mod
+    return _APP_PARTS[name]
 # the routers' prices for this weight set (engine/prices.py); empty = the code's constants
 PRICES: dict = {}
 LOCK = EngineLock()
@@ -8135,8 +8178,7 @@ def _system() -> dict:
     hosts = _hosts()
     gpu = None
     if hosts:
-        from proxy import hostcollect
-        gpu = hostcollect.gpu_block(STATE)      # NVML or one nvidia-smi call, not two
+        gpu = _app_part("hostcollect").gpu_block(STATE)      # NVML or one nvidia-smi call, not two
     if gpu is None:
         gpu = STATE.setdefault("gpu_sampler", dashboard_api.GpuSampler()).sample()
     try:
@@ -8187,10 +8229,13 @@ def _system() -> dict:
 def _hosts() -> list | None:
     """P1.5: this machine (the engine's process and every backend on it) and the backends'
     remote hosts (app/proxy/hostcollect.py); sampled when the System view asks, at most every 5 s,
-    the process scan every 15 s. `--host-collector off` leaves it out."""
+    the process scan every 15 s. `--host-collector off` leaves it out, and so does a headless
+    engine (ENG-413 WP13: the collector is TandemApp's)."""
     if (STATE.get("args") or {}).get("host_collector", "on") == "off":
         return None
-    from proxy import hostcollect
+    hostcollect = _app_part("hostcollect")
+    if hostcollect is None:
+        return None
     px = STATE.get("proxy")
     try:
         backends = px.cfg.backends() if px is not None else []
@@ -8348,6 +8393,10 @@ def start_proxy(a) -> None:
     if path == "off":
         STATE["proxy"] = None
         return
+    if not _app_parts_here():
+        raise SystemExit("[proxy] --backends runs TandemApp's proxy in this process, and this engine "
+                         "has none (no vendored app/, and QSE_EXT names no TandemApp extension): "
+                         "tandem-app serves other backends")
     from proxy import config as proxy_config
     from proxy.service import Service
     try:
@@ -8721,8 +8770,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def _chat(self, method: str) -> bool:
         """`/v1/chat-app/*`: the Chat tab's service, chatd, behind the dashboard's auth
-        (app/tandemapp/chat_forward.py, SRV-343); False for every other path."""
-        return chat_forward.route(self, method, _auth())
+        (app/tandemapp/chat_forward.py, SRV-343); False for every other path. ENG-413 WP13: an
+        engine without TandemApp's forward answers the prefix 404 not_on_engine."""
+        cf = _app_part("chat_forward")
+        if cf is not None:
+            return cf.route(self, method, _auth())
+        p = self.path.split("?")[0]
+        if p != CHAT_APP and not p.startswith(CHAT_APP + "/"):
+            return False
+        self.close_connection = True                 # a body it may carry is not read
+        self._not_here(p.rstrip("/"), "chatd's forward is TandemApp's (its controller serves "
+                                      "/v1/chat-app)")
+        return True
 
     def _send_empty(self, code: int, headers: tuple = ()) -> None:
         try:
@@ -14816,7 +14875,10 @@ class SetupHandler(Handler):
     def do_GET(self):
         raw = self.path.split("?")[0]
         if raw == "/dashboard" or raw.startswith("/dashboard/"):
-            return static.serve(self, self.path, STATE.get("dashboard_dir"))
+            page = _app_part("static")
+            if page is None:                         # ENG-413 WP13: no page here, 404 no_ui
+                return self._not_here(raw)
+            return page.serve(self, self.path, STATE.get("dashboard_dir"))
         path = raw.rstrip("/") or "/"
         if path.startswith("/v1/setup/"):
             from server import setup_api

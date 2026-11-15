@@ -64,9 +64,11 @@ RAW = "qwen38-spark-engine"
 #: ENG-413 WP5 took out the conductor's routes (the screens are /v1/engine/*), its store (the
 #: fake-engine guard's directory is a value copy, the residency limits come through the module's
 #: read_document) and its monitor (the policy is checked by the module's before_load)
+#: ENG-413 WP13: the page and the chat forward are imported at their first use (`_app_part`), so a
+#: tree without TandemApp imports and serves headless
 ALLOWED = {
-    ("tandemapp.static", None): "WP14: setup mode's page",
-    ("tandemapp.chat_forward", None): "WP14: /v1/chat-app leaves the engine",
+    ("tandemapp.static", "_app_part"): "WP14: setup mode's page",
+    ("tandemapp.chat_forward", "_app_part"): "WP14: /v1/chat-app leaves the engine",
 }
 #: what WP5 took out of server/app.py: none of it may come back
 GONE_WP5 = ("tandemapp.conductor.routes", "tandemapp.conductor.store", "tandemapp.conductor.monitor")
@@ -80,7 +82,7 @@ GONE_WP5B = ("tandemapp.laya_api", "tandemapp.session_tokens", "tandemapp.conduc
 WP14 = {"server/app.py": ("proxy", "tandemapp.static", "tandemapp.chat_forward")}
 #: --backends: the proxy in the engine's process, with the engine's conductor as its harness (it
 #: leaves the engine with the controller, WP7/WP14); none of these functions is the request path
-for _fn in ("start_proxy", "do_POST", "_proxied", "_config", "_hosts", "_system", "_cache_peek"):
+for _fn in ("start_proxy", "do_POST", "_proxied", "_config", "_app_part", "_cache_peek"):
     ALLOWED[("proxy", _fn)] = "--backends: the proxy in the engine's process (WP7/WP14)"
 
 
