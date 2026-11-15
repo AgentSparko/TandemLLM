@@ -529,6 +529,12 @@
     "app/"
    ]
   },
+  "tests/test_headless_start.py": {
+   "imports": [],
+   "reads": [
+    "app/"
+   ]
+  },
   "tests/test_install_docs.py": {
    "imports": [],
    "reads": [

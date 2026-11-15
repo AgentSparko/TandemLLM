@@ -70,8 +70,11 @@ def test_the_setup_routes():
     assert code == 200 and json.loads(raw) == {"object": "list", "data": []}
     code, _, raw = Req("GET", "/v1/dashboard/session").go()
     assert code == 200 and json.loads(raw)["login"] is False
-    code, _, _ = Req("GET", "/dashboard/").go()
-    assert code == 200
+    code, _, raw = Req("GET", "/dashboard/").go()
+    if app._app_part("static") is not None:
+        assert code == 200
+    else:                                       # ENG-413 WP13: a tree without TandemApp has no page
+        assert code == 404 and json.loads(raw)["error"]["type"] == "no_ui", raw
     for method, path in (("POST", "/v1/chat/completions"), ("POST", "/v1/completions"),
                          ("GET", "/v1/dashboard/summary"), ("GET", "/metrics"),
                          ("PUT", "/v1/conductor/settings"), ("DELETE", "/v1/config/x")):
