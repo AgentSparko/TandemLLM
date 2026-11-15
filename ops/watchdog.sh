@@ -40,7 +40,12 @@ fi
 # code "000000" in every log line of 2026-09-19.
 CODE="$(curl -s -o /dev/null -m 10 -w '%{http_code}' "http://127.0.0.1:$PORT/health")"
 CODE="${CODE:-000}"
-if [ "$CODE" = "200" ]; then echo 0 > "$STATE"; rm -f "$LOGS/loading.since"; exit 0; fi
+# engine-ctl-v1: `tandem remote stop` leaves run/remote/stopped, and a remote restart holds it while
+# the engine is down: that silence is on purpose. An engine that answers again was started, so the
+# marker goes, and the next silence is a crash again
+STOPPED="$REPO/run/remote/stopped"
+if [ "$CODE" = "200" ]; then echo 0 > "$STATE"; rm -f "$LOGS/loading.since" "$STOPPED"; exit 0; fi
+if [ -f "$STOPPED" ]; then echo 0 > "$STATE"; exit 0; fi
 if [ "$CODE" = "503" ]; then say "draining (503), leaving it alone"; echo 0 > "$STATE"; exit 0; fi
 # SRV-671: the engine says it failed (500, `"status": "failed"`, the reason under `failed`)
 FAILED=""
