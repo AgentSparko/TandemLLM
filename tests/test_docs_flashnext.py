@@ -67,7 +67,7 @@ def test_the_chapter_is_in_the_manual():
     assert "\\input{chapters/flashnext}" in main
     # in the part on how the engine works, after the chapter on adding a model
     assert main.index("\\input{chapters/adding-model}") < main.index("\\input{chapters/flashnext}") \
-        < main.index("\\part{The conductor}")
+        < main.index("\\part{Reference}")
     return "chapters/flashnext.tex, input after adding-model"
 
 

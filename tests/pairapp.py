@@ -10,8 +10,10 @@ contract (tools/pair_suite.sh checks that before it runs the list):
           engine's own modules always come first (both trees have a tools/) and a child process
           the test starts imports TandemApp's packages too
 
-Without it the file prints `skipped: <why>` and exits 0, which tests/script_suite.py lists as
-skipped, never as passed. Standard library only.
+Without it a pair test run as the main file prints `skipped: <why>` and exits 0, which
+tests/script_suite.py lists as skipped, never as passed. A pair file that an engine test imports
+for its helpers (tests/test_fake_engine.py's fake engine, for one) loads all the same: FOUND is
+False and APP a path that does not exist, so only its pair cases fail. Standard library only.
 """
 
 from __future__ import annotations
@@ -28,13 +30,26 @@ def _tree(d: str) -> str | None:
 
 APP = _tree(os.environ.get("TANDEMAPP_SRC", ""))
 
-if APP is None:
+
+def _main_imports_me() -> bool:
+    """Whether the module importing this one is the file being run (not a helper it imports)."""
+    f = sys._getframe(1)
+    skip = ("importlib", "_frozen_importlib", "pairapp")
+    while f is not None and f.f_globals.get("__name__", "").startswith(skip):
+        f = f.f_back
+    return f is not None and f.f_globals.get("__name__") == "__main__"
+
+
+FOUND = APP is not None
+if not FOUND and _main_imports_me():
     print("skipped: a pair test needs TandemApp beside the engine: set TANDEMAPP_SRC to a TandemApp "
           "checkout (tools/pair_suite.sh)", flush=True)
     raise SystemExit(0)
+if not FOUND:
+    APP = os.path.join(os.sep, "no-tandemapp-checkout")      # a helper import: nothing is there
 
-if APP not in sys.path:
+if FOUND and APP not in sys.path:
     sys.path.append(APP)
 _pp = os.environ.get("PYTHONPATH", "")
-if APP not in _pp.split(os.pathsep):
+if FOUND and APP not in _pp.split(os.pathsep):
     os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (_pp, APP) if p)

@@ -80,7 +80,7 @@ def test_the_setup_routes():
         code, head, raw = Req(method, path, {"model": "TandemLLM", "messages": []}).go()
         err = json.loads(raw)["error"]
         assert code == 503 and err["code"] == "setup_mode", (path, raw)
-        assert "tandem setup" in err["message"] and "/dashboard" not in err["message"], err
+        assert "tandem setup" in err["message"] and "#/setup" not in err["message"], err
         assert "Retry-After: 60" in head
     code, _, raw = Req("POST", "/v1/setup/estimate", {"model": "qwen3.8-27b"}).go()
     assert code == 200 and json.loads(raw)["fits"] is True
