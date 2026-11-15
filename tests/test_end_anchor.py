@@ -53,7 +53,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 import test_forward_tree as T  # noqa: E402  (sets the CPU environment before the engine imports)
 os.environ.setdefault("QWEN38_PROMPT_END", "0")   # the grid and the end anchor alone (tests/test_prompt_end.py)
 

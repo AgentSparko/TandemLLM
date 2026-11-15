@@ -17,9 +17,9 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(os.path.join(ROOT, "app", "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
+sys.path.append(os.path.join(pairapp.APP, "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
 
 from proxy import affinity  # noqa: E402
 from proxy import deployments  # noqa: E402

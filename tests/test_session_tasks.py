@@ -32,7 +32,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 
 import yaml  # noqa: E402
 
@@ -642,7 +642,7 @@ def test_the_watch_lists_what_the_session_tasks_hold():
     assert row["compaction"] == {"task": "S2", "count": 1, "watching": True, "steps": 0}
     assert row["watch"]["minutes"] == 20 and row["watch"]["notify"] is False
     assert row["idle_minutes"] == round(25 - 1 / 60, 1) and not row["running"]
-    schema = json.load(open(os.path.join(ROOT, "app", "contracts", "conductor-v1",
+    schema = json.load(open(os.path.join(pairapp.APP, "contracts", "conductor-v1",
                                          "watch.schema.json")))
     from tools import contract_check
     errs = contract_check.validate({"contract_version": "1.0", "monitor": True, "sessions": w},

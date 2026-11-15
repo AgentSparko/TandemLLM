@@ -31,6 +31,7 @@ import time
 import types
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from test_par_continue import HEAD, FakeResident, _need, _restore, _session, _setup, _turns  # noqa: E402,I001
 
 from server import app as A  # noqa: E402

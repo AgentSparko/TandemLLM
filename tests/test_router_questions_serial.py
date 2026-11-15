@@ -71,8 +71,9 @@ import types
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
-sys.path.append(os.path.join(os.path.dirname(HERE), "app", "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
+sys.path.append(os.path.join(pairapp.APP, "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from test_class_core import PAGODA, make  # noqa: E402
 from test_conductor_router import COMPOSITE, TOOLS, turn  # noqa: E402
 from test_libsearch import SKILLS  # noqa: E402
@@ -536,7 +537,7 @@ def test_end_to_end_on_the_fake_engine():
         port = _wait(None, srv)
         st, _, cfg = _call(port, "GET", "/v1/config")
         assert st == 200 and cfg["engine"]["embedded"], "the proxy is on in the process"
-        lib = os.path.join(ROOT, "app", "packages", "library")
+        lib = os.path.join(pairapp.APP, "packages", "library")
         names = [n for n in ("browser-game", "canvas-2d")
                  if os.path.exists(os.path.join(lib, n, "SKILL.md"))]
         assert names, "the shipped library"

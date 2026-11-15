@@ -63,6 +63,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 DIR = os.path.join(ROOT, "contracts", "engine-ext-v1")
 
 from server import ext as E  # noqa: E402
@@ -632,7 +633,7 @@ def test_chat_mode_through_the_adapter():
         st, _, h = _get(port, "/health")
         assert st == 200 and h["mode"] == "chat" and h["loaded"]["conductor"] is True, h
         (x,) = h["extensions"]
-        with open(os.path.join(ROOT, "app", "VERSION")) as f:
+        with open(os.path.join(pairapp.APP, "VERSION")) as f:
             release = f.read().strip()
         assert x == {"name": "tandemapp", "version": release, "ext_api": E.EXT_API}, x
         st, _, m = _get(port, "/v1/models")

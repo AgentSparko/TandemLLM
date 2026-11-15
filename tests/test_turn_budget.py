@@ -55,7 +55,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, HERE)
 
 from tandemapp.conductor.monitor import RequestEvent  # noqa: E402
@@ -375,7 +375,7 @@ def test_policy_and_migration():
     assert p.version == 8
     with open(policy_mod.DEFAULT_JSON) as f:
         assert json.load(f) == p.data, "policy.default.json is stale: app/tools/conductor_policy.py --json"
-    sys.path.insert(0, os.path.join(ROOT, "app", "tools"))
+    sys.path.insert(0, os.path.join(pairapp.APP, "tools"))
     import monitor_migrate
     old = json.loads(json.dumps(p.data))
     del old["tasks"]["S5"]

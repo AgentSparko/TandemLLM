@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 import sys
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 for _k in ("NORM", "GDN", "HEAD", "ATTN", "GDNBLOCK", "GDNTREE", "GDNPRE"):
     os.environ.setdefault(f"QWEN38_FUSED_{_k}", "0")
 

@@ -35,6 +35,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 CONTRACT = os.path.join(ROOT, "contracts", "engine-api-v1")
 ADMIN = "live-" + "0" * 40
 MODEL = "tandem-live"
@@ -186,11 +187,11 @@ def test_the_engine_answers_the_contract():
 def test_the_engine_runs_without_app_dashboard():
     tree = os.path.join(tempfile.mkdtemp(prefix="engine-api-tree-"), "src")
     skip = shutil.ignore_patterns(".git", "node_modules", "__pycache__", ".pytest_cache")
-    dash = os.path.join(ROOT, "app", "dashboard")
+    dash = os.path.join(pairapp.APP, "dashboard")
 
     def ignore(d, names):
         out = set(skip(d, names))
-        if os.path.realpath(d) == os.path.realpath(os.path.join(ROOT, "app")):
+        if os.path.realpath(d) == os.path.realpath(pairapp.APP):
             out.add("dashboard")
         return out
     shutil.copytree(ROOT, tree, ignore=ignore, symlinks=True)

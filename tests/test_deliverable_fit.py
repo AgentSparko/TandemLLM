@@ -31,7 +31,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(1, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_conductor_router as T  # noqa: E402
@@ -73,7 +73,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def _skill(name: str) -> str:
     """A shipped everyday package's text, its frontmatter left out."""
-    with open(os.path.join(ROOT, "app", "packages", "everyday", name, "SKILL.md")) as f:
+    with open(os.path.join(pairapp.APP, "packages", "everyday", name, "SKILL.md")) as f:
         return packages_mod.split_frontmatter(f.read())[1].strip()
 
 

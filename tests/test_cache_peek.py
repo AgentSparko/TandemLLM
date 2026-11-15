@@ -36,6 +36,7 @@ import threading
 import time
 import types
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 os.environ.setdefault("QWEN38_PROMPT_END", "0")   # the grid and the end anchor alone (tests/test_prompt_end.py)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

@@ -28,6 +28,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 def _out(r: subprocess.CompletedProcess) -> str:
     return r.stdout + r.stderr
 
@@ -110,7 +111,7 @@ def test_tandem_node_in_bin_tandem():
     # it there); here TandemApp's agent from its source stands in for the wheel's entry point
     node = os.path.join(d, "venv", "bin", "tandem-node")
     with open(node, "w") as f:
-        f.write(f'#!/bin/bash\nPYTHONPATH={os.path.join(ROOT, "app")} exec {sys.executable} -m proxy.nodeagent "$@"\n')
+        f.write(f'#!/bin/bash\nPYTHONPATH={pairapp.APP} exec {sys.executable} -m proxy.nodeagent "$@"\n')
     os.chmod(node, 0o755)
     with open(os.path.join(d, "bin", "tandem"), "w") as f:
         f.write(script)

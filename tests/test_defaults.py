@@ -42,7 +42,7 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_conductor_e2e import ADMIN, LAUNCH, _call, _port, _wait  # noqa: E402
@@ -135,7 +135,7 @@ def _same(want, got, path, filled, out):
 
 def _server(home, cdir):
     port = _port()
-    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home, "PYTHONPATH": ROOT,
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home, "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p),
            "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN,
            "QSE_EXT": "tandemapp.engine_ext"}                   # ENG-413 WP3a: chat mode's extension
     ledger = os.path.join(home, "ledger.sqlite3")

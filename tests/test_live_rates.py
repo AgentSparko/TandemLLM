@@ -15,8 +15,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
+sys.path.append(os.path.join(pairapp.APP, "tests"))  # SRV-747: TandemApp's test helpers, until ENG-413
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from server.api import activity, live, metrics, usage  # noqa: E402
 from test_live import Clock, _rec, _reg, _row, _valid  # noqa: E402
 

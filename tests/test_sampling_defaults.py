@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 
+import pairapp  # noqa: F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from server import sampling_defaults as sd
 from tandemapp.conductor import loopescape as le
 

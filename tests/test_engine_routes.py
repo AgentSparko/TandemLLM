@@ -48,6 +48,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 CONTRACT = os.path.join(ROOT, "contracts", "engine-api-v1")
 ADMIN = "routes-" + "0" * 40
 LAUNCH = ("import sys, runpy; sys.modules['triton'] = None; sys.modules['triton.language'] = None;"
@@ -299,7 +300,7 @@ class Engine:
         self.tmp = tempfile.mkdtemp(prefix="engine-routes-")
         home = os.path.join(self.tmp, "home")
         os.makedirs(home)
-        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home, "PYTHONPATH": ROOT,
+        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home, "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p),
                "CUDA_VISIBLE_DEVICES": "", "TMPDIR": self.tmp}
         if admin:
             env["QSE_ADMIN_TOKEN"] = admin

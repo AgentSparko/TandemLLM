@@ -34,7 +34,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, HERE)
 
 import yaml  # noqa: E402
@@ -385,7 +385,7 @@ def test_6_a_profile_stored_before_c5_loads_and_is_migrated_once():
 
 
 def test_6_a_stored_monitor_document_gets_c5_by_the_migrate_tool():
-    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "app", "tools"))
+    sys.path.insert(0, os.path.join(pairapp.APP, "tools"))
     import monitor_migrate
     p = policy_mod.load()
     old = json.loads(json.dumps(p.data))

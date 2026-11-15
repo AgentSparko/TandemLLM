@@ -18,6 +18,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from engine.settings import KNOBS, SETTINGS, EngineSettings  # noqa: E402
 
 KERNEL = re.compile(r"_kernels|fp8_linear|nvfp4_linear|exl3_linear|nvfp4_skinny|nvfp4_verify_tiles|head_gemv|"

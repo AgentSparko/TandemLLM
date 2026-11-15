@@ -32,13 +32,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
-sys.path.append(os.path.join(ROOT, "app", "tools"))  # SRV-747: TandemApp's tools, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
+sys.path.append(os.path.join(pairapp.APP, "tools"))  # SRV-747: TandemApp's tools, until ENG-413
 
 from tools import contract_check  # noqa: E402  (the engine's tools/contract_check.py)
 import tandem_eval as te  # noqa: E402
 
-EXAMPLE = os.path.join(ROOT, "app", "contracts", "dashboard-v1", "tandem-eval.example.json")
+EXAMPLE = os.path.join(pairapp.APP, "contracts", "dashboard-v1", "tandem-eval.example.json")
 BUILD = {"version": "0.3.2-test", "code_sha": "abc123def456"}
 
 FAKE_OPENCODE = r'''#!/usr/bin/env python3

@@ -22,6 +22,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 SCRIPT = os.path.join(ROOT, "tools", "release.sh")
 GATE = os.path.join(ROOT, "tools", "release_box_gate.sh")
 BASH = "/bin/bash" if os.path.exists("/bin/bash") else (shutil.which("bash") or "bash")

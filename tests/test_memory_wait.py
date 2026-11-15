@@ -44,6 +44,7 @@ import types
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from server import slots  # noqa: E402
 from test_kvpool_admission import _Clock, _FNMem, _H, _HomeRes, _app  # noqa: E402
 

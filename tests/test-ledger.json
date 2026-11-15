@@ -9,17 +9,17 @@
   "engine_ids": 4357,
   "engine_files": 510,
   "to": {
-   "engine": 3203,
-   "pair": 1123,
-   "tandemapp": 33,
-   "dropped": 0
+   "engine": 2966,
+   "pair": 1343,
+   "tandemapp": 37,
+   "dropped": 13
   },
   "to_note": "destinations: an id of a split file with two homes counts in both",
   "tandemapp_ids": 1133,
   "tandemapp_files": 145
  },
  "pair_suite": {
-  "about": "the placeholders of the pair suite (WP13): test files that run the engine and TandemApp's extension, packages or test helpers together; until WP13 the engine's suite runs them against the vendored app/",
+  "about": "the pair suite (ENG-413 WP13, WP14): test files that run the engine and TandemApp's extension, packages or test helpers together. They are not part of the engine's own suite (tools/engine_tests.py); tools/pair_suite.sh runs them with a TandemApp checkout at TANDEMAPP_SRC whose PIN names this engine's contract, and each finds TandemApp through tests/pairapp.py",
   "files": [
    "tests/gpu/setup_wren_gpu.py",
    "tests/test_adapter_guards.py",
@@ -31,6 +31,7 @@
    "tests/test_cache_peek.py",
    "tests/test_cache_prompt.py",
    "tests/test_call_in_think.py",
+   "tests/test_callrepair.py",
    "tests/test_cards.py",
    "tests/test_chatd_lifecycle.py",
    "tests/test_chatd_memory_wait.py",
@@ -64,9 +65,12 @@
    "tests/test_end_anchor.py",
    "tests/test_end_anchor_memory.py",
    "tests/test_end_cut.py",
+   "tests/test_eng413_baseline.py",
    "tests/test_engine_api_live.py",
    "tests/test_engine_deps.py",
    "tests/test_engine_ext_host.py",
+   "tests/test_engine_only.py",
+   "tests/test_engine_routes.py",
    "tests/test_engine_scripts.py",
    "tests/test_evaluate.py",
    "tests/test_ext_request_path.py",
@@ -74,12 +78,14 @@
    "tests/test_fail_open_busy.py",
    "tests/test_fake_engine.py",
    "tests/test_files_care.py",
+   "tests/test_floor_wait.py",
+   "tests/test_fp_equivalents.py",
    "tests/test_gpu_adapters.py",
    "tests/test_gpu_health.py",
-   "tests/test_install_docs.py",
    "tests/test_install_headless.py",
    "tests/test_judge.py",
    "tests/test_knobs_standalone.py",
+   "tests/test_kvpool_admission.py",
    "tests/test_laya_api.py",
    "tests/test_laya_drive_api.py",
    "tests/test_ledger_owners.py",
@@ -94,6 +100,7 @@
    "tests/test_loop_guard.py",
    "tests/test_memory_api.py",
    "tests/test_memory_router.py",
+   "tests/test_memory_wait.py",
    "tests/test_memory_where.py",
    "tests/test_memory_writer.py",
    "tests/test_narrator.py",
@@ -109,26 +116,30 @@
    "tests/test_owui_status.py",
    "tests/test_package_sticky.py",
    "tests/test_packages_catalog.py",
+   "tests/test_pair_copies.py",
    "tests/test_playtest_install.py",
    "tests/test_probe_snapshots.py",
    "tests/test_probe_stage.py",
    "tests/test_prompt_end.py",
    "tests/test_proxy_affinity.py",
-   "tests/test_proxy_engine.py",
    "tests/test_queue_wait.py",
+   "tests/test_reasoning_effort_off.py",
+   "tests/test_regenerate.py",
    "tests/test_release_gate_setup.py",
    "tests/test_release_script.py",
    "tests/test_residency.py",
    "tests/test_resident_guard.py",
+   "tests/test_resident_park.py",
    "tests/test_role_contract.py",
+   "tests/test_roles_dynamic.py",
    "tests/test_round2_fixes.py",
    "tests/test_round_runner.py",
+   "tests/test_router_question_burst.py",
    "tests/test_router_questions_serial.py",
    "tests/test_sampling_defaults.py",
    "tests/test_scratch_turn_images.py",
    "tests/test_secret_mask.py",
    "tests/test_sequential_mutations.py",
-   "tests/test_server_model_card_auth.py",
    "tests/test_session_identity.py",
    "tests/test_session_spill.py",
    "tests/test_session_tasks.py",
@@ -138,12 +149,14 @@
    "tests/test_side_carry.py",
    "tests/test_side_drain.py",
    "tests/test_side_home.py",
+   "tests/test_side_lane.py",
    "tests/test_side_requests.py",
+   "tests/test_slot0_wait.py",
+   "tests/test_slot_affinity.py",
    "tests/test_snapshots.py",
    "tests/test_spill_codec.py",
    "tests/test_state_channel.py",
    "tests/test_state_inline.py",
-   "tests/test_static.py",
    "tests/test_status_restart.py",
    "tests/test_supervisor_frame.py",
    "tests/test_supervisor_views.py",
@@ -153,6 +166,7 @@
    "tests/test_think.py",
    "tests/test_think_always_open.py",
    "tests/test_think_budgets.py",
+   "tests/test_think_off.py",
    "tests/test_thoughts.py",
    "tests/test_tool_fit.py",
    "tests/test_tool_media_turn.py",
@@ -166,7 +180,82 @@
    "tests/test_worker_cache.py"
   ]
  },
- "dropped": {},
+ "dropped": {
+  "tests/test_app_hook.py": {
+   "ids": [
+    "test_server_serves_the_app_packages",
+    "test_nothing_else_of_app_is_found"
+   ],
+   "why": "they held the finder that served tandemapp, proxy and chatd from the vendored app/; both are gone",
+   "gone": [
+    "app",
+    "app.pin"
+   ]
+  },
+  "tests/test_app_pin.py": {
+   "ids": [
+    "test_the_pin_reads",
+    "test_the_folder_is_the_pinned_tree",
+    "test_the_hasher_sees_every_edit",
+    "test_no_excluded_path_is_vendored",
+    "test_head_matches_the_pin"
+   ],
+   "why": "they hashed the vendored app/ against app.pin; both are gone, with the vendor tool",
+   "gone": [
+    "app",
+    "app.pin",
+    "tools/app_vendor.sh",
+    "tests/test_app_pin.py"
+   ]
+  },
+  "tests/test_engine_api_contract.py": {
+   "ids": [
+    "test_reverse_deps"
+   ],
+   "why": "reverse-deps.json, the inventory of the engine's reach into app/, is retired; the no-app guard (tests/test_app_hook.py) holds the empty reach",
+   "gone": [
+    "contracts/engine-api-v1/reverse-deps.json"
+   ]
+  },
+  "tests/test_handler_timeout.py": {
+   "ids": [
+    "test_a_forward_that_lifts_the_timeout_leaves_the_next_request_guarded"
+   ],
+   "why": "the chat forward whose relay lifted the socket timeout is not in the engine any more",
+   "gone": [
+    "app/tandemapp/chat_forward.py"
+   ]
+  },
+  "tests/test_replica_identity.py": {
+   "ids": [
+    "test_fake_engine_route_is_gated_with_the_model_list_by_the_users_keys"
+   ],
+   "why": "the users' keys came from the --backends proxy's config database, which the engine no longer opens",
+   "gone": [
+    "app/proxy/config.py"
+   ]
+  },
+  "tests/test_proxy_engine.py": {
+   "ids": [
+    "test_the_engine_with_backends",
+    "test_the_harness_inside_the_engine"
+   ],
+   "why": "--backends ran TandemApp's proxy in the engine's process; the engine refuses it now",
+   "gone": [
+    "app/proxy/service.py",
+    "app/tests/fake_backend.py"
+   ]
+  },
+  "tests/test_server_model_card_auth.py": {
+   "ids": [
+    "test_card_needs_the_key_the_list_needs"
+   ],
+   "why": "the card's key rule came from the --backends proxy's users",
+   "gone": [
+    "app/proxy/config.py"
+   ]
+  }
+ },
  "engine": {
   "tests/conftest.py": {
    "home": "engine",
@@ -791,13 +880,19 @@
    }
   },
   "tests/test_app_hook.py": {
-   "home": "engine",
-   "why": "reads app/ only as a fixture path or guard: the no-app guard itself (WP14 changes the read)",
-   "ids": [
-    "test_server_serves_the_app_packages",
-    "test_nothing_else_of_app_is_found",
-    "test_no_app_no_finder"
-   ]
+   "home": "split",
+   "why": "the finder and app/ are gone (ENG-413 WP14); test_no_app_no_finder stays as the no-app guard's first case",
+   "ids": {
+    "test_server_serves_the_app_packages": [
+     "dropped"
+    ],
+    "test_nothing_else_of_app_is_found": [
+     "dropped"
+    ],
+    "test_no_app_no_finder": [
+     "engine"
+    ]
+   }
   },
   "tests/test_app_loop.py": {
    "home": "engine",
@@ -835,14 +930,15 @@
    ]
   },
   "tests/test_app_pin.py": {
-   "home": "engine",
+   "home": "dropped",
    "ids": [
     "test_the_pin_reads",
     "test_the_folder_is_the_pinned_tree",
     "test_the_hasher_sees_every_edit",
     "test_no_excluded_path_is_vendored",
     "test_head_matches_the_pin"
-   ]
+   ],
+   "why": "app.pin and the vendored app/ are gone (ENG-413 WP14)"
   },
   "tests/test_argkey_calls.py": {
    "home": "engine",
@@ -1313,7 +1409,7 @@
    ]
   },
   "tests/test_callrepair.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_the_rules",
     "test_the_real_failure_and_the_gate",
@@ -1321,7 +1417,8 @@
     "test_a_tool_the_request_did_not_offer",
     "test_c4_writes_an_unmapped_tool_again",
     "test_the_server_on_both_paths"
-   ]
+   ],
+   "why": "two cases run the conductor's call repair (TandemApp's extension); the file runs in the pair suite (ENG-413 WP14) (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_capture_lock.py": {
    "home": "engine",
@@ -2881,7 +2978,7 @@
    ]
   },
   "tests/test_eng413_baseline.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_the_normaliser",
     "test_metric_families",
@@ -2892,27 +2989,56 @@
     "test_a_sent_title_seed_draws_none",
     "test_the_live_port_is_refused",
     "test_fake_engine_records_repeat"
-   ]
+   ],
+   "why": "the fixtures' fake engine runs QSE_EXT=tandemapp.engine_ext (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_engine_api_contract.py": {
-   "home": "engine",
-   "why": "reads app/ only as a fixture path or guard: the reverse-deps scan of the engine's reach into app/ (WP14 changes the read)",
-   "ids": [
-    "test_every_route_is_dispatched",
-    "test_one_version",
-    "test_reverse_deps",
-    "test_values_are_the_contracts",
-    "test_setup_fixtures",
-    "test_node_fixtures",
-    "test_byte_copies",
-    "test_schemas_and_references",
-    "test_metrics_families",
-    "test_additive_1_3",
-    "test_additive_1_4",
-    "test_additive_1_5",
-    "test_additive_1_6",
-    "test_additive_1_7"
-   ]
+   "home": "split",
+   "why": "reverse-deps.json is retired (ENG-413 WP14); the byte copies both trees keep are a pair check now",
+   "ids": {
+    "test_every_route_is_dispatched": [
+     "engine"
+    ],
+    "test_one_version": [
+     "engine"
+    ],
+    "test_reverse_deps": [
+     "dropped"
+    ],
+    "test_values_are_the_contracts": [
+     "engine"
+    ],
+    "test_setup_fixtures": [
+     "engine"
+    ],
+    "test_node_fixtures": [
+     "engine"
+    ],
+    "test_byte_copies": [
+     "pair:tests/test_pair_copies.py"
+    ],
+    "test_schemas_and_references": [
+     "engine"
+    ],
+    "test_metrics_families": [
+     "engine"
+    ],
+    "test_additive_1_3": [
+     "engine"
+    ],
+    "test_additive_1_4": [
+     "engine"
+    ],
+    "test_additive_1_5": [
+     "engine"
+    ],
+    "test_additive_1_6": [
+     "engine"
+    ],
+    "test_additive_1_7": [
+     "engine"
+    ]
+   }
   },
   "tests/test_engine_api_live.py": {
    "home": "split",
@@ -3006,7 +3132,7 @@
    }
   },
   "tests/test_engine_only.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_a_new_box_resolves_engine",
     "test_the_upgrade_keeps_the_mode",
@@ -3016,17 +3142,19 @@
     "test_install_mode",
     "test_the_setup_guide_switch",
     "test_the_live_seed_keeps_the_chat"
-   ]
+   ],
+   "why": "starts chat mode, QSE_EXT=tandemapp.engine_ext (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_engine_routes.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_the_handlers",
     "test_the_route_table",
     "test_no_tandemapp",
     "test_a_headless_engine_serves_them",
     "test_both_paths_answer_alike"
-   ]
+   ],
+   "why": "case 5 starts chat mode (QSE_EXT=tandemapp.engine_ext) for both paths (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_engine_scripts.py": {
    "home": "split",
@@ -3250,7 +3378,7 @@
    ]
   },
   "tests/test_floor_wait.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_the_pools_floor_is_the_guard_at_the_prefills_class",
     "test_failure_1_without_the_pools_check_the_admission_admits_what_the_gate_refuses",
@@ -3278,7 +3406,8 @@
     "test_a_backoff_says_so_and_ends_admitted_at_its_bound",
     "test_a_continuation_over_the_peak_is_refused_as_such",
     "test_the_backoff_counts_the_tokens_since_the_last_give_way"
-   ]
+   ],
+   "why": "imports a pair test module (test_ui_states, test_slot0_wait) that loads TandemApp (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_fn_config.py": {
    "home": "engine",
@@ -3680,7 +3809,7 @@
    ]
   },
   "tests/test_fp_equivalents.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_registering_a_server_knob_keeps_the_fingerprint",
     "test_an_arithmetic_default_changes_the_fingerprint",
@@ -3688,7 +3817,8 @@
     "test_the_first_start_adopts_the_old_formula_once_and_records_it",
     "test_the_tier_reads_adopted_files_bit_for_bit_and_a_later_formula_sweeps_them",
     "test_the_session_spill_reads_adopted_entries"
-   ]
+   ],
+   "why": "imports pair test modules that load TandemApp (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_fp_same_rows.py": {
    "home": "engine",
@@ -4028,16 +4158,31 @@
    ]
   },
   "tests/test_handler_timeout.py": {
-   "home": "engine",
-   "ids": [
-    "test_the_handler_ships_a_bounded_default_timeout",
-    "test_a_body_stalled_mid_flight_is_a_408_and_the_thread_dies",
-    "test_an_idle_keep_alive_connection_is_closed_by_the_timeout",
-    "test_a_client_that_keeps_sending_is_served_keep_alive_and_all",
-    "test_a_forward_that_lifts_the_timeout_leaves_the_next_request_guarded",
-    "test_a_write_that_times_out_is_a_client_gone_and_closes_the_connection",
-    "test_a_reader_that_stops_reading_mid_stream_is_abandoned"
-   ]
+   "home": "split",
+   "ids": {
+    "test_the_handler_ships_a_bounded_default_timeout": [
+     "engine"
+    ],
+    "test_a_body_stalled_mid_flight_is_a_408_and_the_thread_dies": [
+     "engine"
+    ],
+    "test_an_idle_keep_alive_connection_is_closed_by_the_timeout": [
+     "engine"
+    ],
+    "test_a_client_that_keeps_sending_is_served_keep_alive_and_all": [
+     "engine"
+    ],
+    "test_a_forward_that_lifts_the_timeout_leaves_the_next_request_guarded": [
+     "dropped"
+    ],
+    "test_a_write_that_times_out_is_a_client_gone_and_closes_the_connection": [
+     "engine"
+    ],
+    "test_a_reader_that_stops_reading_mid_stream_is_abandoned": [
+     "engine"
+    ]
+   },
+   "why": "the /v1/chat-app forward left the engine (ENG-413 WP14); the 408 after a chat-app answer is test_a_chat_app_answer_leaves_the_next_request_guarded"
   },
   "tests/test_head_build.py": {
    "home": "engine",
@@ -4133,30 +4278,18 @@
    ]
   },
   "tests/test_install_docs.py": {
-   "home": "split",
+   "home": "engine",
    "in_place": true,
    "loads_app_at_import": false,
-   "why": "reads app/contracts, app/dashboard, app/docs",
-   "ids": {
-    "test_two_commands": [
-     "engine"
-    ],
-    "test_how_to_open_the_guide": [
-     "engine"
-    ],
-    "test_the_command_line_is_advanced": [
-     "engine"
-    ],
-    "test_the_installer_says_where": [
-     "engine"
-    ],
-    "test_no_model_count": [
-     "pair"
-    ],
-    "test_no_doc_calls_the_figure_a_bird": [
-     "pair"
-    ]
-   }
+   "why": "reads the engine's texts only since ENG-413 WP14; TandemApp's texts are held by its tests/test_doc_words.py",
+   "ids": [
+    "test_two_commands",
+    "test_how_to_open_the_guide",
+    "test_the_command_line_is_advanced",
+    "test_the_installer_says_where",
+    "test_no_model_count",
+    "test_no_doc_calls_the_figure_a_bird"
+   ]
   },
   "tests/test_install_headless.py": {
    "home": "split",
@@ -4305,7 +4438,7 @@
    ]
   },
   "tests/test_kvpool_admission.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_kv_part_is_reserved_and_credited_as_it_commits",
     "test_credit_never_goes_negative_or_past_the_kv_part",
@@ -4350,7 +4483,8 @@
     "test_srv787_a_streamed_chat_wait_opens_its_stream_keeps_it_alive_and_ends_with_the_reason",
     "test_srv787_a_planned_stop_ends_a_wait_for_memory_at_once_with_a_retryable_503",
     "test_srv787_a_streamed_chat_wait_that_ends_in_time_is_served"
-   ]
+   ],
+   "why": "imports pair test modules (test_end_anchor, test_budget) that load TandemApp (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_lane_check.py": {
    "home": "engine",
@@ -5202,7 +5336,7 @@
    ]
   },
   "tests/test_memory_wait.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_a_turn_of_the_chat_slot_0_holds_is_charged_the_rows_it_reads",
     "test_slot_0s_share_counts_the_last_answer_as_the_client_sends_it_back",
@@ -5229,7 +5363,8 @@
     "test_a_lane_short_at_its_first_forward_gives_way_and_is_admitted_on_what_it_reads",
     "test_rows_that_changed_hands_leave_no_view",
     "test_a_quiet_run_says_its_last_count_when_the_wait_ends"
-   ]
+   ],
+   "why": "imports test_kvpool_admission and test_floor_wait, which load TandemApp (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_memory_where.py": {
    "home": "pair",
@@ -6363,14 +6498,13 @@
   "tests/test_proxy_engine.py": {
    "home": "split",
    "in_place": true,
-   "loads_app_at_import": true,
-   "why": "imports app/tests/fake_backend.py, app/tests/proxy_util.py; reads app/tests; loads app code at import: its engine ids run headless once WP13 moves the pair ids out",
+   "why": "--backends left the engine (ENG-413 WP14); the engine's refusal and its answers without a proxy stay",
    "ids": {
     "test_the_engine_with_backends": [
-     "pair"
+     "dropped"
     ],
     "test_the_harness_inside_the_engine": [
-     "pair"
+     "dropped"
     ],
     "test_without_backends_the_proxy_is_not_loaded": [
      "engine"
@@ -6504,13 +6638,14 @@
    ]
   },
   "tests/test_reasoning_effort_off.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_1_the_server_starts_with_none_or_off",
     "test_2_a_request_that_says_nothing_gets_thinking_off",
     "test_3_a_request_that_says_something_keeps_it",
     "test_4_the_old_values_are_unchanged"
-   ]
+   ],
+   "why": "imports TandemApp in a test module it uses (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_refactor_gate.py": {
    "home": "engine",
@@ -6521,7 +6656,7 @@
    ]
   },
   "tests/test_regenerate.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_owui_regenerate_is_detected_after_an_answer",
     "test_not_a_regenerate_before_any_answer",
@@ -6539,7 +6674,8 @@
     "test_sampling_is_fresh_and_in_range",
     "test_answered_ok",
     "test_regenerate_over_http"
-   ]
+   ],
+   "why": "runs TandemApp's tandemapp/conductor/fake_decider.py (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_relax.py": {
    "home": "engine",
@@ -6620,23 +6756,49 @@
    }
   },
   "tests/test_replica_identity.py": {
-   "home": "engine",
-   "why": "reads app/ only as a fixture path or guard: asserts no engine name is an app package (WP14 changes the read)",
-   "ids": [
-    "test_digest_is_canonical_and_short",
-    "test_code_digest_counts_source_only",
-    "test_code_digest_is_stable_across_processes",
-    "test_identity_module_imports_no_proxy_and_no_app",
-    "test_pending_until_the_fixed_part_is_ready",
-    "test_the_block_fields_and_their_sources",
-    "test_a_checkpoint_folder_names_its_family_and_layers",
-    "test_a_setting_moves_only_its_field",
-    "test_a_part_that_fails_says_so",
-    "test_the_route_takes_the_caller_rule_of_the_model_list",
-    "test_fake_engines_compare_by_their_flags",
-    "test_fake_engine_route_answers_whoever_the_model_list_answers",
-    "test_fake_engine_route_is_gated_with_the_model_list_by_the_users_keys"
-   ]
+   "home": "split",
+   "why": "the users' keys were the --backends proxy's, which left the engine (ENG-413 WP14)",
+   "ids": {
+    "test_digest_is_canonical_and_short": [
+     "engine"
+    ],
+    "test_code_digest_counts_source_only": [
+     "engine"
+    ],
+    "test_code_digest_is_stable_across_processes": [
+     "engine"
+    ],
+    "test_identity_module_imports_no_proxy_and_no_app": [
+     "engine"
+    ],
+    "test_pending_until_the_fixed_part_is_ready": [
+     "engine"
+    ],
+    "test_the_block_fields_and_their_sources": [
+     "engine"
+    ],
+    "test_a_checkpoint_folder_names_its_family_and_layers": [
+     "engine"
+    ],
+    "test_a_setting_moves_only_its_field": [
+     "engine"
+    ],
+    "test_a_part_that_fails_says_so": [
+     "engine"
+    ],
+    "test_the_route_takes_the_caller_rule_of_the_model_list": [
+     "engine"
+    ],
+    "test_fake_engines_compare_by_their_flags": [
+     "engine"
+    ],
+    "test_fake_engine_route_answers_whoever_the_model_list_answers": [
+     "engine"
+    ],
+    "test_fake_engine_route_is_gated_with_the_model_list_by_the_users_keys": [
+     "dropped"
+    ]
+   }
   },
   "tests/test_reread_after_think.py": {
    "home": "engine",
@@ -6775,7 +6937,7 @@
    }
   },
   "tests/test_resident_park.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_a_session_switch_back_swaps_the_parked_rows_in_bit_for_bit",
     "test_a_park_smaller_than_the_session_holds_what_fits_and_still_resumes_exactly",
@@ -6791,7 +6953,8 @@
     "test_a_parked_chat_without_its_reasoning_comes_back_at_its_end",
     "test_a_parked_conversation_without_an_end_parks_as_before",
     "test_an_end_the_park_cannot_hold_parks_the_grid_as_before"
-   ]
+   ],
+   "why": "imports pair test modules (test_end_anchor, test_end_align) that load TandemApp (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_resident_pin.py": {
    "home": "engine",
@@ -6868,7 +7031,7 @@
    }
   },
   "tests/test_roles_dynamic.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_the_pool_reclaims_roles_before_conversations",
     "test_a_role_out_for_memory_stays_out",
@@ -6877,7 +7040,8 @@
     "test_no_thrash",
     "test_the_report",
     "test_the_split_counts_committed_pages"
-   ]
+   ],
+   "why": "imports test_residency, a pair test module (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_roles_memory.py": {
    "home": "engine",
@@ -7100,7 +7264,7 @@
    ]
   },
   "tests/test_router_question_burst.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_the_question_held_for_its_own_parent",
     "test_a_question_never_holds_for_its_parent",
@@ -7109,7 +7273,8 @@
     "test_the_incoming_count_cannot_leak",
     "test_the_question_joins_the_forward_that_held_for_its_turn",
     "test_the_class_question_finds_its_turn_on_the_fake_engine"
-   ]
+   ],
+   "why": "one case starts a fake engine in chat mode (QSE_EXT=tandemapp.engine_ext) (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_router_questions_serial.py": {
    "home": "pair",
@@ -7389,12 +7554,16 @@
    ]
   },
   "tests/test_server_model_card_auth.py": {
-   "home": "pair",
-   "why": "imports the test modules test_proxy_engine.py; loads app code at import: its engine ids run headless once WP13 moves the pair ids out",
-   "ids": [
-    "test_card_needs_the_key_the_list_needs",
-    "test_without_backends_unchanged"
-   ]
+   "home": "split",
+   "why": "the users' keys were the --backends proxy's (ENG-413 WP14); the card's answer without them stays",
+   "ids": {
+    "test_card_needs_the_key_the_list_needs": [
+     "dropped"
+    ],
+    "test_without_backends_unchanged": [
+     "engine"
+    ]
+   }
   },
   "tests/test_session_identity.py": {
    "home": "pair",
@@ -7931,7 +8100,7 @@
    ]
   },
   "tests/test_side_lane.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_engine_after_a_full_and_a_partial_accept_bit_for_bit",
     "test_engine_two_guests_in_a_row_and_one_past_the_generation_bit_for_bit",
@@ -7959,7 +8128,8 @@
     "test_spd249_side_free_reads_busy_slots_and_kept_ends",
     "test_spd249_an_own_question_takes_an_idle_side_slot_not_the_lane",
     "test_spd249_a_long_own_question_does_not_wait_behind_own_work"
-   ]
+   ],
+   "why": "imports pair test modules (test_side_requests, test_ui_states) that load TandemApp (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_side_requests.py": {
    "home": "pair",
@@ -8010,7 +8180,7 @@
    ]
   },
   "tests/test_slot0_wait.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_a_spill_match_at_the_clients_head_is_a_new_conversation",
     "test_a_spilled_conversation_tries_slot_0_first",
@@ -8023,10 +8193,11 @@
     "test_the_handler_takes_a_side_slot_after_the_short_wait",
     "test_without_the_bound_it_waits_behind_slot_0",
     "test_the_queued_line_while_the_router_asks"
-   ]
+   ],
+   "why": "imports test_par_continue and test_ui_states, pair test modules (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_slot_affinity.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_the_next_turn_goes_to_the_slot_that_holds_the_conversation",
     "test_no_end_anchor_same_slot",
@@ -8040,7 +8211,8 @@
     "test_replay_the_incident_on_side_slots",
     "test_replay_the_incident_with_slot_0_free",
     "test_the_handler_counts_a_hop_when_the_home_slot_stays_busy"
-   ]
+   ],
+   "why": "imports test_par_continue, test_slot0_wait and test_ui_states, pair test modules (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_slots.py": {
    "home": "engine",
@@ -8287,15 +8459,26 @@
    ]
   },
   "tests/test_static.py": {
-   "home": "pair",
-   "why": "imports tandemapp.static; reads app/; loads app code at import: its engine ids run headless once WP13 moves the pair ids out",
-   "ids": [
-    "test_the_redirect_and_the_placeholder",
-    "test_files_types_and_caching",
-    "test_nothing_outside_the_directory",
-    "test_the_shell_is_public_and_holds_no_data",
-    "test_a_headless_engine_has_no_page"
-   ]
+   "home": "split",
+   "why": "the page's files are TandemApp's tandemapp/static.py (tests/test_static.py there); the engine answers every page path 404 no_ui (ENG-413 WP14)",
+   "ids": {
+    "test_the_redirect_and_the_placeholder": [
+     "tandemapp"
+    ],
+    "test_files_types_and_caching": [
+     "tandemapp"
+    ],
+    "test_nothing_outside_the_directory": [
+     "tandemapp"
+    ],
+    "test_the_shell_is_public_and_holds_no_data": [
+     "tandemapp"
+    ],
+    "test_a_headless_engine_has_no_page": [
+     "engine"
+    ]
+   },
+   "to": "tests/test_static.py"
   },
   "tests/test_status_restart.py": {
    "home": "split",
@@ -8617,14 +8800,15 @@
    ]
   },
   "tests/test_think_off.py": {
-   "home": "engine",
+   "home": "pair",
    "ids": [
     "test_the_rule",
     "test_the_formats",
     "test_the_stream_filter",
     "test_the_server",
     "test_a_system_first_line"
-   ]
+   ],
+   "why": "test_the_server runs the conductor (TandemApp's extension) beside the raw path (ENG-413 WP14: left the engine's suite with app/)"
   },
   "tests/test_thoughts.py": {
    "home": "split",

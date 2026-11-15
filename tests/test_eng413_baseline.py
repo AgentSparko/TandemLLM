@@ -42,6 +42,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from tools import eng413_baseline as B  # noqa: E402
 
 LAUNCH = ("import sys, runpy; sys.modules['triton'] = None; sys.modules['triton.language'] = None;"
@@ -361,7 +362,7 @@ def _free_port() -> int:
 
 def _fake(port: int, ledger: str, config: str):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.path.dirname(ledger),
-           "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin"}
+           "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p), "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin"}
     if config != "-":
         env["QSE_EXT"] = "tandemapp.engine_ext"               # ENG-413 WP3a/WP3b: the conductor, the monitor
     p = subprocess.Popen([sys.executable, "-c", LAUNCH, "--fake-engine", "--host", "127.0.0.1", "--port", str(port),

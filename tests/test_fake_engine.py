@@ -27,6 +27,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from tools import usage_check  # noqa: E402
 import dash_contract  # noqa: E402
 
@@ -43,7 +44,7 @@ def _port() -> int:
 
 def _start(port, ledger, home=None, extra=(), env_extra=None, admin=ADMIN):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home or os.environ["HOME"],
-           "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": ""}
+           "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p), "CUDA_VISIBLE_DEVICES": ""}
     if admin:
         env["QSE_ADMIN_TOKEN"] = admin
     env.update(env_extra or {})
@@ -259,7 +260,7 @@ GIVE_UP = "No tool call after two tries. Stopping this turn."
 
 def _policy_file(tasks_extra: dict | None = None, only: dict | None = None) -> str:
     import yaml
-    with open(os.path.join(ROOT, "app", "ops", "supervisor.yaml")) as f:
+    with open(os.path.join(pairapp.APP, "ops", "supervisor.yaml")) as f:
         d = yaml.safe_load(f)
     if only is not None:
         d["tasks"] = only
@@ -272,7 +273,7 @@ def _policy_file(tasks_extra: dict | None = None, only: dict | None = None) -> s
 
 def _start_conductor(port, mode, policy_path=None, tps="4000"):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ["HOME"],
-           "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": ""}
+           "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p), "CUDA_VISIBLE_DEVICES": ""}
     if mode not in ("raw", "off"):
         env["QSE_EXT"] = "tandemapp.engine_ext"     # ENG-413 WP3b: the monitor runs behind the extension
     ledger = os.path.join(tempfile.mkdtemp(prefix="qse-e2e-"), "ledger.sqlite3")

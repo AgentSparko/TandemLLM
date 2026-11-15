@@ -30,9 +30,9 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, HERE)
-sys.path.append(os.path.join(ROOT, "app", "tools"))  # SRV-747: TandemApp's tools, until ENG-413
+sys.path.append(os.path.join(pairapp.APP, "tools"))  # SRV-747: TandemApp's tools, until ENG-413
 
 from test_conductor_router import CODE, SYSTEM, body, by_label, setup, text_of, turn  # noqa: E402
 

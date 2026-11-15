@@ -12,6 +12,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 import test_end_anchor as E  # noqa: E402  (the served loop on the random model)
 
 from engine import cache  # noqa: E402

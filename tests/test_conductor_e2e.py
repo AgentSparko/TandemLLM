@@ -45,10 +45,11 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from tools import contract_check  # noqa: E402
 import dash_contract  # noqa: E402
 
-CONTRACT = os.path.join(ROOT, "app", "contracts", "conductor-v1")
+CONTRACT = os.path.join(pairapp.APP, "contracts", "conductor-v1")
 ADMIN = "e2e-" + "0" * 40
 PROXY = {"X-Forwarded-For": "203.0.113.44", "X-Real-IP": "203.0.113.44"}
 LAUNCH = ("import sys, runpy; sys.modules['triton'] = None; sys.modules['triton.language'] = None;"
@@ -66,7 +67,7 @@ def _port() -> int:
 
 def _env():
     return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ["HOME"],
-            "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN}
+            "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p), "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN}
 
 
 def _server(port, conductor_dir=None, extra=()):
@@ -86,7 +87,7 @@ def _server(port, conductor_dir=None, extra=()):
 
 
 def _decider(port, *extra):
-    return subprocess.Popen([sys.executable, os.path.join(ROOT, "app", "tandemapp", "conductor",
+    return subprocess.Popen([sys.executable, os.path.join(pairapp.APP, "tandemapp", "conductor",
                                                           "fake_decider.py"),
                              "--port", str(port), *extra], cwd=ROOT, env=_env(),
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)

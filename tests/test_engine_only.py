@@ -62,6 +62,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 TEMPLATE = os.path.join(ROOT, "ops", "serve.env")
 MARK = "# OPS-260: the mode (QSE_MODE above), applied last"
 KEYS = ("QSE_MODE", "CONDUCTOR", "QSE_CONDUCTOR_CONFIG", "QWEN38_DECIDER_MODELS", "QWEN38_NARRATOR_MODEL",
@@ -280,7 +281,7 @@ def test_health_reports_the_mode():
             if mode == "chat":
                 args += ["--conductor", "on", "--conductor-config", os.path.join(home, "conductor"),
                          "--conductor-defaults", "shipped"]
-            env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home, "PYTHONPATH": ROOT,
+            env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home, "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p),
                    "CUDA_VISIBLE_DEVICES": "", "QSE_CHAT_URL": f"http://127.0.0.1:{chat}"}
             if mode == "chat":
                 env["QSE_EXT"] = "tandemapp.engine_ext"       # ENG-413 WP3a: chat mode's extension

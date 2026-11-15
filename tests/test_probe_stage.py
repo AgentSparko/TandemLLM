@@ -37,7 +37,7 @@ import torch  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, HERE)
 
 from server import app  # noqa: E402
@@ -237,7 +237,7 @@ def test_the_document_refuses_on_without_a_file():
 
 
 def test_the_contract():
-    with open(os.path.join(ROOT, "app", "contracts", "conductor-v1",
+    with open(os.path.join(pairapp.APP, "contracts", "conductor-v1",
                            "decisions.schema.json")) as f:
         c = json.load(f)
     item = c["$defs"]["decision"]["properties"]["stages"]["items"]
@@ -246,7 +246,7 @@ def test_the_contract():
     stage.update(prompt_tokens=10, prefilled=3, reused=7, stage_ms=1.5)
     assert schema.validate(stage, item) == [], schema.validate(stage, item)
     assert "probe" in c["$defs"]["decision"]["properties"]["source"]["enum"]
-    with open(os.path.join(ROOT, "app", "contracts", "conductor-v1", "seeds.json")) as f:
+    with open(os.path.join(pairapp.APP, "contracts", "conductor-v1", "seeds.json")) as f:
         seeds = json.load(f)
     assert seeds["router"]["classifier"]["probe_stage"]["mode"] == "off"
 

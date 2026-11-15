@@ -29,7 +29,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 
 from engine.spec import StallArms, ThinkBudget  # noqa: E402
 from tandemapp.conductor.monitor import (  # noqa: E402

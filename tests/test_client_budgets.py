@@ -34,6 +34,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 import test_supervisor_frame as frame  # noqa: E402  (sets the CPU kernel switches first)
 from test_app_loop import Req, _deltas, serve  # noqa: E402
 from test_conductor_router import CODE, SYSTEM, QTok, by_label, setup, turn  # noqa: E402

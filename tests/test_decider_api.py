@@ -34,13 +34,13 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, HERE)
 
 from test_conductor_e2e import ADMIN, LAUNCH, PROXY, _call, _port, _wait  # noqa: E402
 from tools import contract_check  # noqa: E402
 
-CONTRACT = os.path.join(ROOT, "app", "contracts", "conductor-v1")
+CONTRACT = os.path.join(pairapp.APP, "contracts", "conductor-v1")
 CHOICE = {"cls": {"type": "choice", "instructions": "Which kind of work is this?",
                   "criteria": {"debug": "fix a bug", "plan": "plan the work", "chat": "talk"}}}
 MIXED = {**CHOICE, "urgent": {"type": "noul", "instructions": "The user is in a hurry."},
@@ -51,7 +51,7 @@ LOCK_DIR = tempfile.mkdtemp(prefix="dec-api-lock-")
 
 def _env(models: str):
     return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ["HOME"],
-            "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN,
+            "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p), "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN,
             "QWEN38_DECIDER_MODELS": models, "FAKE_MEM_AVAILABLE_GIB": "64",
             "BOX_LOCK": os.path.join(LOCK_DIR, "no-box.flock")}
 

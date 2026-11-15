@@ -45,10 +45,11 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from test_conductor_e2e import ADMIN, LAUNCH, PROXY, _call, _port, _wait  # noqa: E402
 from tools import contract_check  # noqa: E402
 
-CONTRACT = os.path.join(ROOT, "app", "contracts", "conductor-v1")
+CONTRACT = os.path.join(pairapp.APP, "contracts", "conductor-v1")
 LEDGER = os.path.join(tempfile.mkdtemp(prefix="drive-led-"), "ledger.sqlite3")
 MODEL = "other-decider"
 LOCK_DIR = tempfile.mkdtemp(prefix="drive-lock-")
@@ -56,7 +57,7 @@ LOCK_DIR = tempfile.mkdtemp(prefix="drive-lock-")
 
 def _env(models: str):
     return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ["HOME"],
-            "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN,
+            "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p), "CUDA_VISIBLE_DEVICES": "", "QSE_ADMIN_TOKEN": ADMIN,
             "QWEN38_DECIDER_MODELS": models, "FAKE_MEM_AVAILABLE_GIB": "64",
             "BOX_LOCK": os.path.join(LOCK_DIR, "no-box.flock"),
             "QSE_EXT": "tandemapp.engine_ext"}                # ENG-413 WP3a: chat mode's extension
@@ -232,7 +233,7 @@ def test_7_kit():
                               raw=True)
         assert st == 200 and hdr["Content-Type"].startswith(ctype), hdr
         assert hdr["Access-Control-Allow-Origin"] == "*"
-        with open(os.path.join(ROOT, "app", "tandemapp", "laya_kit", name), "rb") as f:
+        with open(os.path.join(pairapp.APP, "tandemapp", "laya_kit", name), "rb") as f:
             assert body == f.read()
     assert _call(PORT, "GET", "/v1/laya/kit/../app.py", headers=PROXY, token=None, raw=True)[0] == 404
     assert _call(PORT, "GET", "/v1/laya/kit/nothing.py", headers=PROXY, token=None, raw=True)[0] == 404

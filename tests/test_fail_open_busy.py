@@ -55,6 +55,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from test_conductor_router import body, by_label, setup, turn  # noqa: E402
 
 from tandemapp.conductor import libsearch, migrations, schema  # noqa: E402
@@ -306,7 +307,7 @@ def test_8_an_asked_stage_has_its_estimate():
     assert st.get("error") is None and st["eta_ms"] == FREE and "ms" in st, st
     assert plan.row["class_id"] == "research"
     # both rows (asked with its estimate, skipped busy) are what the decisions contract allows
-    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app",
+    with open(os.path.join(pairapp.APP,
                            "contracts", "conductor-v1", "decisions.schema.json")) as f:
         c = json.load(f)
     busy, _, _ = _chat(_box()[0])

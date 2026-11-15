@@ -5,19 +5,23 @@ The test matrix (the Gherkin of OPS-149):
   1  the README's Install section, docs/setup.md's Setup mode and the manual's section "A new box" each
      open with exactly two commands (the installer's curl line and `bash install.sh --setup --yes`),
      with no weight profile in them                          test_two_commands
-  2  each says how to open the Setup Guide: on the box at http://127.0.0.1:8000/dashboard/#/setup, from
-     another computer through `ssh -L 8000:127.0.0.1:8000`, or with `--host 0.0.0.0`
+  2  each says how to reach the Setup Guide (ENG-413 WP14: the engine serves no page): `bin/tandem
+     setup` in a terminal, TandemApp's Setup page pointed at http://127.0.0.1:8000 on the box, from
+     another computer through `ssh -L 8000:127.0.0.1:8000`, or with `--host 0.0.0.0`; none sends a
+     user to the engine's /dashboard
                                                              test_how_to_open_the_guide
   3  each has an "Advanced: from the command line" part whose first command is use-profile.sh --list
                                                              test_the_command_line_is_advanced
   4  install.sh's setup message names the engine's address on the box for the Setup Guide
      (TandemApp's page since ENG-413 WP7: the engine serves only the Setup API), the ssh tunnel and
      --host 0.0.0.0 (tests/test_fresh_install.py runs it on Linux)   test_the_installer_says_where
-  5  no README, docs (docs/, app/docs/, the READMEs of app/contracts/), manual or dashboard text counts
-     the models ("five models", "three models")              test_no_model_count
-  6  nothing under docs/ or app/contracts/ calls the Setup Guide's figure a bird
-     (app/dashboard/tests/setup-wren.test.ts holds the dashboard's code and mock and app/docs/ to the
-     same words)                                             test_no_doc_calls_the_figure_a_bird
+  5  no README, docs, contract README or manual text counts the models ("five models", "three
+     models")                                                test_no_model_count
+  6  nothing under docs/ or contracts/ calls the Setup Guide's figure a bird
+                                                             test_no_doc_calls_the_figure_a_bird
+
+TandemApp's texts (its docs, contracts and page) are held to the same two rules in TandemApp's own
+tests (tests/test_doc_words.py, and dashboard/tests/setup-wren.test.ts for the page's words).
 
 Run: python tests/test_install_docs.py
 """
@@ -29,7 +33,7 @@ import os
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-URL = "http://127.0.0.1:8000/dashboard/#/setup"
+URL = "http://127.0.0.1:8000"
 CURL = re.compile(r"^curl -fsSLO https://raw\.githubusercontent\.com/0xBakeer/TandemLLM/v[0-9.]+/install\.sh$")
 PROFILE = re.compile(r"\b(?:flashnext|exl3|lfm25|nemotron|nvfp4)-[0-9a-z.]")
 
@@ -82,9 +86,9 @@ def test_two_commands():
 def test_how_to_open_the_guide():
     for name, (text, _cmds, _adv) in _docs().items():
         before = text.split("Advanced: from the command line")[0]
-        for want in (URL, "ssh -L 8000:127.0.0.1:8000", "--host 0.0.0.0"):
+        for want in (URL, "bin/tandem setup", "TandemApp", "ssh -L 8000:127.0.0.1:8000", "--host 0.0.0.0"):
             assert want in before, (name, want)
-        assert "flashnext-3.05" not in before, name
+        assert "flashnext-3.05" not in before and "dashboard/" not in before.replace("dashboard/src", ""), name
 
 
 def test_the_command_line_is_advanced():
@@ -112,10 +116,8 @@ COUNT = re.compile(r"(?<![\w.])(?:two|three|four|five|six|seven|eight|nine|ten|[
 ALLOWED = ("two models working in tandem",)
 
 
-#: where a count is looked for besides README.md: the engine's docs and manual, TandemApp's docs,
-#: contracts and dashboard
-COUNT_GLOBS = (("docs", "**", "*.md"), ("app", "docs", "**", "*.md"), ("app", "contracts", "**", "*.md"),
-               ("manual", "chapters", "*.tex"), ("app", "dashboard", "src", "**", "*.ts"))
+#: where a count is looked for besides README.md: the engine's docs, contracts and manual
+COUNT_GLOBS = (("docs", "**", "*.md"), ("contracts", "**", "*.md"), ("manual", "chapters", "*.tex"))
 
 
 def test_no_model_count():
@@ -134,10 +136,10 @@ def test_no_model_count():
     assert not hits, hits
 
 
-# the words app/dashboard/tests/setup-wren.test.ts keeps out of the dashboard and app/docs/
+# the words TandemApp's dashboard/tests/setup-wren.test.ts keeps out of its page and docs
 BIRD = re.compile(r"\b(bird|beak|feathers?|wings?|perch\w*|chirp\w*|preen\w*|ruffle\w*)\b", re.I)
-#: where they are looked for here: the engine's docs and TandemApp's contracts, which that test does not read
-BIRD_ROOTS = (("docs",), ("app", "contracts"))
+#: where they are looked for here: the engine's docs and contracts
+BIRD_ROOTS = (("docs",), ("contracts",))
 
 
 def test_no_doc_calls_the_figure_a_bird():

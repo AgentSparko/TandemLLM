@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import sys
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 os.environ["QSE_ROUND_RUNNER"] = "1"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

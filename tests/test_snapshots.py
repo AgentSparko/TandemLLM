@@ -44,7 +44,7 @@ import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-sys.path.insert(1, os.path.join(os.path.dirname(HERE), "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, HERE)
 
 from test_conductor_router import QTok, by_label, setup  # noqa: E402
@@ -332,7 +332,7 @@ def test_the_writer():
     assert meta["counts"]["snapshots"] == 7 and meta["counts"]["blocks"] == 8
     sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
     import contract_check
-    root = os.path.join(os.path.dirname(HERE), "app", "contracts", "conductor-v1")
+    root = os.path.join(pairapp.APP, "contracts", "conductor-v1")
     for name in ("memory-sessions", "memory-session"):
         sch = contract_check.load(name, root)
         assert not contract_check.validate(meta["counts"], sch["$defs"]["counts"], root=root), name

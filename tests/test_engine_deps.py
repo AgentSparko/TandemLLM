@@ -33,6 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 # a module's top-level name -> its distribution, where the two differ
 DIST_OF = {"PIL": "pillow", "yaml": "pyyaml", "google": "protobuf"}
 
@@ -64,7 +65,7 @@ def lock() -> dict:
 def pyproject_deps() -> set:
     """TandemApp's own dependencies (app/pyproject.toml): the engine imports app modules
     in-process until ENG-413, so what they need counts as the engine's too."""
-    src = open(os.path.join(ROOT, "app", "pyproject.toml")).read()
+    src = open(os.path.join(pairapp.APP, "pyproject.toml")).read()
     m = re.search(r"^dependencies = \[(.*?)\]", src, re.S | re.M)
     return {norm(re.split(r"[<>=!~\[; ]", d.strip().strip('"'))[0])
             for d in (m.group(1).split(",") if m else []) if d.strip()}

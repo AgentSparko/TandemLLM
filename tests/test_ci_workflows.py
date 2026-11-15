@@ -1,23 +1,23 @@
-"""The engine's CI without TandemApp (ENG-413 WP12, OPS-250; QA OPS-251), read from the files.
+"""The engine's CI without TandemApp (ENG-413 WP12, WP14; OPS-250; QA OPS-251), read from the files.
 
 TandemApp's suite and its page build left with OPS-250 (TandemApp's own .github/workflows); this
-repository's CI runs the engine. The workflows are read here; their commands are run by the box
-(the headless job's script on an archive without app/) and by the tests below on made-up trees.
+repository's CI runs the engine, in its checkout, with no TandemApp anywhere. The workflows are read
+here; their commands are run by the box and by the tests below on made-up trees.
 
-  1  tests.yml has the cpu and the headless job only, on the triggers it had; no job builds the
-     page or runs app/tests; dashboard-dist.yml is gone   test_the_ci_runs_the_engine_only
-  2  the headless job installs what the cpu job installs, copies the checkout without app/
-     (git archive, app/ excluded, then checked absent) and runs tools/headless_suite.sh there with
-     PY and SUITE_JOBS; logs kept on a failure; every action pinned to a full version
-                                                                  test_the_headless_job
-  3  no workflow, the labeler or CODEOWNERS names a path into app/ (the headless job's exclusion
-     aside)                                                      test_no_ci_file_names_app_paths
-  4  tools/headless_tests.py lists the top-level test files whose ledger home is engine (or that
-     came after the ledger's base), less NEEDS_APP (each an engine file here, with a reason);
-     no pair, split or TandemApp file; its summary passes a clean run and fails a failed file, a
-     missing result or none                                      test_the_headless_list_and_summary
-  5  tools/headless_suite.sh refuses a tree with app/; in a made-up tree it runs each listed file
-     through the tree's script_suite and exits 0, or 1 when one fails   test_the_headless_script
+  1  tests.yml has the cpu job only, on the triggers it had; no job builds the page, checks out
+     TandemApp or runs its tests; dashboard-dist.yml is gone       test_the_ci_runs_the_engine_only
+  2  the cpu job installs the engine's packages and runs tools/engine_suite.sh with PY and
+     SUITE_JOBS; logs kept on a failure; every action pinned to a full version
+                                                                  test_the_cpu_job
+  3  no workflow, the labeler or CODEOWNERS names a path into app/   test_no_ci_file_names_app_paths
+  4  tools/engine_tests.py lists every top-level test file but cpu-suite-skip.txt's and the pair
+     suite's (tests/test-ledger.json); --pair lists the pair suite's top-level files; its summary
+     passes a clean run and fails a failed file, a missing result or none
+                                                                  test_the_engine_list_and_summary
+  5  tools/engine_suite.sh runs each listed file through the tree's script_suite with no
+     TANDEMAPP_SRC and exits 0, or 1 when one fails; tools/pair_suite.sh refuses without a TandemApp
+     checkout or with one pinned to other contracts, and runs the pair list with one that is
+                                                                  test_the_suite_scripts
 
 Standard library and PyYAML. Run: python tests/test_ci_workflows.py
 """
@@ -39,11 +39,9 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
-from tools import headless_tests as H  # noqa: E402
+from tools import engine_tests as H  # noqa: E402
 
 GH = os.path.join(ROOT, ".github")
-#: the vendored folder the headless script refuses
-VENDORED = "app"
 WF = os.path.join(GH, "workflows")
 
 
@@ -55,38 +53,34 @@ def _yaml(path: str) -> dict:
 
 def test_the_ci_runs_the_engine_only():
     wf = _yaml(os.path.join(WF, "tests.yml"))
-    assert set(wf["jobs"]) == {"cpu", "headless"}, sorted(wf["jobs"])
+    assert set(wf["jobs"]) == {"cpu"}, sorted(wf["jobs"])
     assert wf["on"] == {"pull_request": "", "push": {"branches": ["main"]}}, wf["on"]
     assert wf["permissions"] == {"contents": "read"}
     assert not os.path.exists(os.path.join(WF, "dashboard-dist.yml"))
     with open(os.path.join(WF, "tests.yml")) as f:
         text = f.read()
-    for gone in (r"\bapp/tests", "dashboard-dist", "download-artifact", "npm "):
+    for gone in (r"\bapp/tests", "dashboard-dist", "download-artifact", "npm ", "TandemApp.git",
+                 "TANDEMAPP_SRC", "headless"):
         assert not re.search(gone, text), gone
-    return "cpu and headless"
+    return "cpu only"
 
 
-def test_the_headless_job():
+def test_the_cpu_job():
     wf = _yaml(os.path.join(WF, "tests.yml"))
-    cpu, job = wf["jobs"]["cpu"], wf["jobs"]["headless"]
-    install = [s for s in cpu["steps"] if "pip install" in s.get("run", "")]
-    assert len(install) == 1 and install[0] in job["steps"], "the same packages as the cpu job"
-    steps = job["steps"]
-    copy = next(s for s in steps if "git archive" in s.get("run", ""))
-    assert "git archive HEAD -- . ':(exclude)app' | tar -x -C \"$RUNNER_TEMP/headless\"" in copy["run"]
-    assert 'test ! -e "$RUNNER_TEMP/headless/app"' in copy["run"]
-    run = next(s for s in steps if "headless_suite.sh" in s.get("run", ""))
-    assert run["run"].startswith('bash "$RUNNER_TEMP/headless/tools/headless_suite.sh" ')
+    steps = wf["jobs"]["cpu"]["steps"]
+    install = [s for s in steps if "pip install" in s.get("run", "")]
+    assert len(install) == 1 and "torch==" in install[0]["run"]
+    run = next(s for s in steps if "engine_suite.sh" in s.get("run", ""))
+    assert run["run"] == "bash tools/engine_suite.sh results/suite", run["run"]
     assert set(run["env"]) == {"PY", "SUITE_JOBS"}
-    assert steps.index(install[0]) < steps.index(copy) < steps.index(run)
+    assert steps.index(install[0]) < steps.index(run)
     keep = steps[-1]
     assert keep["if"] == "failure()" and keep["uses"].startswith("actions/upload-artifact@")
-    assert keep["with"]["path"] == "results/headless"
-    assert run["run"].endswith('"$GITHUB_WORKSPACE/results/headless"')
-    for s in steps + cpu["steps"]:
+    assert keep["with"]["path"] == "results/suite"
+    for s in steps:
         if "uses" in s:
             assert re.fullmatch(r"[\w-]+/[\w-]+@v\d+\.\d+\.\d+", s["uses"]), s["uses"]
-    return f"{len(steps)} steps: install, copy without app/, the suite, the logs"
+    return f"{len(steps)} steps: install, the engine suite, the logs"
 
 
 def test_no_ci_file_names_app_paths():
@@ -97,28 +91,23 @@ def test_no_ci_file_names_app_paths():
     for p in files:
         with open(p) as f:
             for i, line in enumerate(f, 1):
-                left = line.replace("':(exclude)app'", "").replace("headless/app", "") \
-                           .replace("without app/", "")
-                if re.search(r"(?<![\w/.-])app/|/dashboard/", left):
+                if re.search(r"(?<![\w/.-])app/|/dashboard/", line):
                     bad.append(f"{os.path.relpath(p, ROOT)}:{i}: {line.strip()}")
     assert not bad, bad
     return f"{len(files)} files"
 
 
-def test_the_headless_list_and_summary():
-    got = H.files()
+def test_the_engine_list_and_summary():
+    got, pair = H.files(), H.pair()
     with open(os.path.join(ROOT, "tests", "test-ledger.json")) as f:
-        led = json.load(f)["engine"]
+        listed = set(json.load(f)["pair_suite"]["files"])
+    top = sorted(f"tests/{n}" for n in os.listdir(os.path.join(ROOT, "tests"))
+                 if re.fullmatch(r"test_[^/]+\.py", n))
     assert got and len(got) == len(set(got)) and got == sorted(got)
-    for rel in got:
-        assert os.path.isfile(os.path.join(ROOT, rel)), rel
-        assert led.get(rel, {"home": "engine"})["home"] == "engine", rel
-    for rel, why in H.NEEDS_APP.items():
-        assert led[rel]["home"] == "engine" and os.path.isfile(os.path.join(ROOT, rel)) and why, rel
-        assert rel not in got
-    pair = [r for r, e in led.items() if e["home"] != "engine"]
-    assert not set(pair) & set(got)
-    with tempfile.TemporaryDirectory(prefix="headless-sum-") as d:
+    assert pair == [r for r in top if r in listed] and pair
+    assert not set(pair) & set(got) and sorted(set(got) | set(pair)) == top
+    assert "tests/test_app_hook.py" in got and "tests/test_pair_copies.py" in pair
+    with tempfile.TemporaryDirectory(prefix="engine-sum-") as d:
         res = os.path.join(d, "RESULT")
 
         def run(lines, want):
@@ -139,63 +128,87 @@ def test_the_headless_list_and_summary():
         assert rc == 1 and "2 files listed, 1 results" in out, out
         rc, out = run([], [])
         assert rc == 1
-    return f"{len(got)} files, {len(H.NEEDS_APP)} wait for WP14"
+    return f"{len(got)} engine files, {len(pair)} pair files"
 
 
 #: a stand-in for tests/script_suite.py: one total line a file; a file whose text says FAIL fails
 FAKE_SUITE = r'''
-import sys
+import os, sys
 f = sys.argv[-1]
-bad = "FAIL" in open(f).read()
+bad = "FAIL" in open(f).read() or ("NEEDS_APP" in open(f).read() and not os.environ.get("TANDEMAPP_SRC"))
+if "NO_APP" in open(f).read() and os.environ.get("TANDEMAPP_SRC"):
+    bad = True
 print(f"files=1 ok={0 if bad else 1} fail={1 if bad else 0} skipped=0 tests=1" + (f" -- {f}" if bad else ""))
 '''
 
 
 def _tree(d: str, fail: bool) -> str:
     t = os.path.join(d, "tree")
-    os.makedirs(os.path.join(t, "tools"))
-    os.makedirs(os.path.join(t, "tests"))
-    for n in ("headless_suite.sh", "headless_tests.py"):
+    for sub in ("tools", "tests", "contracts/engine-api-v1", "contracts/engine-ext-v1"):
+        os.makedirs(os.path.join(t, sub))
+    for n in ("engine_suite.sh", "engine_tests.py", "pair_suite.sh"):
         shutil.copy(os.path.join(ROOT, "tools", n), os.path.join(t, "tools", n))
     with open(os.path.join(t, "tests", "script_suite.py"), "w") as f:
         f.write(FAKE_SUITE)
-    led = {"engine": {"tests/test_a.py": {"home": "engine", "ids": []},
-                      "tests/test_p.py": {"home": "pair", "ids": []}}}
     with open(os.path.join(t, "tests", "test-ledger.json"), "w") as f:
-        json.dump(led, f)
-    for n, body in (("test_a.py", "ok"), ("test_b.py", "FAIL" if fail else "ok"), ("test_p.py", "FAIL")):
+        json.dump({"pair_suite": {"files": ["tests/test_p.py"]}}, f)
+    for n, body in (("test_a.py", "NO_APP"), ("test_b.py", "FAIL" if fail else "ok"), ("test_p.py", "NEEDS_APP")):
         with open(os.path.join(t, "tests", n), "w") as f:
             f.write(body + "\n")
+    for folder in ("engine-api-v1", "engine-ext-v1"):
+        with open(os.path.join(t, "contracts", folder, "routes.json"), "w") as f:
+            f.write("{}\n")
     return t
 
 
-def _suite(t: str, out: str) -> subprocess.CompletedProcess:
-    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
-    env.update(PY=sys.executable, SUITE_JOBS="2")
-    return subprocess.run(["bash", os.path.join(t, "tools", "headless_suite.sh"), out],
+def _app(d: str, t: str, same: bool = True) -> str:
+    """A made-up TandemApp checkout whose contract copy is the tree's (or not), with its PIN."""
+    a = os.path.join(d, "app-checkout")
+    os.makedirs(os.path.join(a, "tandemapp"))
+    open(os.path.join(a, "tandemapp", "__init__.py"), "w").close()
+    shutil.copytree(os.path.join(t, "contracts"), os.path.join(a, "contracts"))
+    with open(os.path.join(a, "contracts", "engine-api-v1", "PIN"), "w") as f:
+        f.write("engine_commit 0\n")
+    if not same:
+        with open(os.path.join(a, "contracts", "engine-ext-v1", "routes.json"), "w") as f:
+            f.write("{\"x\": 1}\n")
+    return a
+
+
+def _run(script: str, t: str, out: str, **env_extra) -> subprocess.CompletedProcess:
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "TANDEMAPP_SRC")}
+    env.update(PY=sys.executable, SUITE_JOBS="2", **env_extra)
+    return subprocess.run(["bash", os.path.join(t, "tools", script), out],
                           capture_output=True, text=True, timeout=120, env=env, cwd=os.path.dirname(t))
 
 
-def test_the_headless_script():
-    with tempfile.TemporaryDirectory(prefix="headless-sh-") as d:
+def test_the_suite_scripts():
+    with tempfile.TemporaryDirectory(prefix="engine-sh-") as d:
         t = _tree(d, fail=False)
-        os.makedirs(os.path.join(t, VENDORED))
-        p = _suite(t, os.path.join(d, "out0"))
-        assert p.returncode == 2 and "app/ is here" in p.stderr, (p.returncode, p.stderr)
-        os.rmdir(os.path.join(t, VENDORED))
-        p = _suite(t, "out1")                        # relative to the caller's folder
+        a = _app(d, t)
+        # the engine's suite: no TandemApp, even when the caller has one set
+        p = _run("engine_suite.sh", t, "out1", TANDEMAPP_SRC=a)       # relative to the caller's folder
         assert p.returncode == 0, (p.stdout, p.stderr)
         out = os.path.join(d, "out1")
         with open(os.path.join(out, "FILES")) as f:
             assert f.read().split() == ["tests/test_a.py", "tests/test_b.py"]
-        with open(os.path.join(out, "RESULT")) as f:
-            assert len(f.read().splitlines()) == 2
         assert p.stdout.splitlines()[-1] == "files=2 ok=2 fail=0 skipped=0 tests=2", p.stdout
-    with tempfile.TemporaryDirectory(prefix="headless-sh-") as d:
+        # the pair suite: refused without TandemApp, run with it
+        p = _run("pair_suite.sh", t, os.path.join(d, "outp0"))
+        assert p.returncode == 2 and "TANDEMAPP_SRC must name" in p.stderr, (p.returncode, p.stderr)
+        p = _run("pair_suite.sh", t, os.path.join(d, "outp1"), TANDEMAPP_SRC=a)
+        assert p.returncode == 0, (p.stdout, p.stderr)
+        assert "is pinned to this engine's contracts" in p.stdout
+        with open(os.path.join(d, "outp1", "FILES")) as f:
+            assert f.read().split() == ["tests/test_p.py"]
+    with tempfile.TemporaryDirectory(prefix="engine-sh-") as d:
         t = _tree(d, fail=True)
-        p = _suite(t, os.path.join(d, "out"))
+        p = _run("engine_suite.sh", t, os.path.join(d, "out"))
         assert p.returncode == 1 and "::error file=tests/test_b.py::" in p.stdout, (p.stdout, p.stderr)
-    return "refuses app/; runs the list; fails on a failed file"
+        a = _app(d, t, same=False)
+        p = _run("pair_suite.sh", t, os.path.join(d, "outp"), TANDEMAPP_SRC=a)
+        assert p.returncode == 2 and "engine-ext-v1/routes.json: differs" in p.stderr, p.stderr
+    return "the engine suite with no TandemApp; the pair suite only with TandemApp at this contract"
 
 
 if __name__ == "__main__":

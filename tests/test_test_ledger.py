@@ -4,14 +4,15 @@ lost on the way: each has a home, and that home has it.
 
   1  the ledger's counts are its own lists: ids per home, files, the pair suite's files, the
      dropped ids (each with its proof)                         test_the_counts_are_the_lists
-  2  every engine id is where the ledger says: in the engine's file (engine, pair) or in
-     TandemApp's tests (tandemapp), no id without a home, no home without the id
+  2  every engine id is where the ledger says: in the engine's file (engine, pair; `pair:path`
+     for an id that moved into another pair test) or in TandemApp's tests (tandemapp), no id
+     without a home, no home without the id
                                                                test_no_engine_id_is_lost
   3  every TandemApp id of its base is still in TandemApp's tests      test_no_tandemapp_id_is_lost
   4  a dropped id names the code that is gone, and it is gone          test_a_dropped_id_has_its_proof
 
-TandemApp's tests are read from the vendored app/tests until WP14, then from the checkout that
-TANDEMAPP_SRC names; without either, 2 and 3 check the engine's side only and say so.
+TandemApp's tests are read from the checkout TANDEMAPP_SRC names (ENG-413 WP14: the vendored app/
+is gone); without one, 2 and 3 check the engine's side only and say so.
 
 CPU, standard library only. Run: python tests/test_test_ledger.py
 """
@@ -36,10 +37,10 @@ def _ledger() -> dict:
 
 
 def _app_root() -> str | None:
-    """TandemApp's tree: the vendored app/ until WP14, else TANDEMAPP_SRC."""
-    for d in (os.path.join(ROOT, "app"), os.environ.get("TANDEMAPP_SRC", "")):
-        if d and os.path.isdir(os.path.join(d, "tests")) and os.path.isdir(os.path.join(d, "tandemapp")):
-            return d
+    """TandemApp's tree: the checkout TANDEMAPP_SRC names, or None."""
+    d = os.environ.get("TANDEMAPP_SRC", "")
+    if d and os.path.isdir(os.path.join(d, "tests")) and os.path.isdir(os.path.join(d, "tandemapp")):
+        return d
     return None
 
 
@@ -90,8 +91,8 @@ def test_the_counts_are_the_lists():
             assert dests, f"{rel}::{i} has no home"
             for x in dests:
                 counts[x.split(":")[0]] += 1
-            if "pair" in dests:
-                pair.add(rel)
+                if x.split(":")[0] == "pair":
+                    pair.add(x.partition(":")[2] or rel)    # pair:path, an id moved to that pair test
         if entry["home"] == "pair":
             pair.add(rel)                       # a pair file with no test ids (a GPU script)
     s = led["summary"]
@@ -114,8 +115,8 @@ def test_no_engine_id_is_lost():
             for x in dests:
                 home, _, to = x.partition(":")
                 if home in ("engine", "pair"):
-                    have = _ids(os.path.join(ROOT, rel))
-                    where = rel
+                    where = to or rel
+                    have = _ids(os.path.join(ROOT, where))
                 elif home == "tandemapp":
                     if app is None:
                         unread += 1
@@ -131,7 +132,7 @@ def test_no_engine_id_is_lost():
     for f in led["pair_suite"]["files"]:
         assert os.path.isfile(os.path.join(ROOT, f)), f"pair file gone: {f}"
     if unread:
-        print(f"note: no TandemApp tree (no app/, no TANDEMAPP_SRC): {unread} TandemApp homes not read")
+        print(f"note: no TandemApp tree (no TANDEMAPP_SRC): {unread} TandemApp homes not read")
     return f"{checked} homes checked, {unread} not read"
 
 
@@ -139,7 +140,7 @@ def test_no_tandemapp_id_is_lost():
     led = _ledger()
     app = _app_root()
     if app is None:
-        print("note: no TandemApp tree (no app/, no TANDEMAPP_SRC): TandemApp's ids not read")
+        print("note: no TandemApp tree (no TANDEMAPP_SRC): TandemApp's ids not read")
         return "TandemApp not here"
     lost = []
     for rel, ids in led["tandemapp"]["files"].items():

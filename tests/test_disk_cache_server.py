@@ -31,7 +31,7 @@ for _k in ("NORM", "GDN", "HEAD", "ATTN", "GDNBLOCK", "GDNTREE", "GDNPRE"):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 from engine import cache, disk_cache as dc  # noqa: E402
@@ -43,7 +43,7 @@ from test_cache import fresh, tokens  # noqa: E402
 from disk_tier_util import waiting  # noqa: E402
 from test_disk_cache import CH, HUGE, Pos  # noqa: E402
 
-CONTRACT = os.path.join(ROOT, "app", "contracts", "conductor-v1")
+CONTRACT = os.path.join(pairapp.APP, "contracts", "conductor-v1")
 
 
 def _check(obj, name):

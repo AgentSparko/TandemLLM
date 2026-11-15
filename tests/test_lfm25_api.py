@@ -33,6 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from server import app  # noqa: E402
 from engine.models.adapter import ServeSpec  # noqa: E402
 from test_toolcheck import Req, serve  # noqa: E402

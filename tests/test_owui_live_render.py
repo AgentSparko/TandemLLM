@@ -50,6 +50,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from server import compat  # noqa: E402
 from server.stream import Reasoning  # noqa: E402
 from test_ui_states import TOOLS, _go, serve  # noqa: E402

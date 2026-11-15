@@ -55,6 +55,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from test_memory_router import CHAT_APP, _chat_app, _index_store, _cfg  # noqa: E402
 from test_ui_states import TOOLS, _go  # noqa: E402
 

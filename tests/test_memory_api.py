@@ -22,6 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 # ------------------------------------------------------------------------- the fake engine
 def test_the_memory_routes_on_the_fake_engine():
     from tests.test_conductor_e2e import PROXY, TOOLS, _call, _check, _port, _server, _wait

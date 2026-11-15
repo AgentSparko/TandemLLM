@@ -50,6 +50,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 from tools import eng413_baseline as B  # noqa: E402
 
 RECORD = os.path.join(HERE, "fixtures", "ext_trace.json")
@@ -84,7 +85,7 @@ def _monitor_ext() -> str:
 
 def _fake(port: int, ledger: str, config: str):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.path.dirname(ledger),
-           "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin",
+           "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p), "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin",
            "QSE_EXT": (_monitor_ext() or "server.ext_app") if config != "off" else _monitor_ext()}
     p = subprocess.Popen([sys.executable, "-c", LAUNCH, "--fake-engine", "--host", "127.0.0.1",
                           "--port", str(port), "--served-model", RAW_NAME, "--usage-ledger", ledger,

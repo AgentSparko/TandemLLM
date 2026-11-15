@@ -32,7 +32,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 # the box lock of the machine this runs on is not this test's: a hold there must not read as one
 os.environ["BOX_LOCK"] = os.path.join(tempfile.mkdtemp(prefix="dec-lock-"), "no-box.flock")
 
@@ -343,7 +343,7 @@ def test_8_off_means_not_imported():
             "if m.startswith('engine.decision')), 'threads': sorted(t.name for t in "
             "__import__('threading').enumerate())}))\n")
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ["HOME"],
-           "PYTHONPATH": ROOT, "CUDA_VISIBLE_DEVICES": "", "QWEN38_DECIDER_MODELS": ""}
+           "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p), "CUDA_VISIBLE_DEVICES": "", "QWEN38_DECIDER_MODELS": ""}
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True,
                        text=True, timeout=300)
     assert r.returncode == 0, r.stdout + r.stderr

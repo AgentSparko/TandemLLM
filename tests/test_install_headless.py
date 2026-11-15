@@ -66,6 +66,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 import test_fresh_install as F  # noqa: E402
 import test_install_control as I  # noqa: E402
 from ports import free_port  # noqa: E402
@@ -169,7 +170,7 @@ def wheel() -> str | None:
     """TandemApp's wheel, built once from its source with a stand-in page; None without a source."""
     if "wheel" in _ST:
         return _ST["wheel"]
-    src = os.environ.get("TANDEM_APP_SRC") or os.path.join(ROOT, "app")
+    src = os.environ.get("TANDEM_APP_SRC") or pairapp.APP
     if not os.path.isfile(os.path.join(src, "pyproject.toml")):
         _ST["wheel"] = None
         return None

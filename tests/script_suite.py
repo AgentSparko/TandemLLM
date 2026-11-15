@@ -10,8 +10,8 @@ N > 0, the last such line: a module that checks at import, tests/test_relax.py; 
 until 0.13 (SRV-661) sixteen files had no `__main__` entry, ran nothing on the box and were counted as passed
 (tests/scriptmode.py is their runner now); a file that runs none on purpose prints `skipped: <why>`
 and is listed as skipped. `--all` runs each file in a clean environment (no
-serve.env, no QWEN38_*, CUDA_VISIBLE_DEVICES empty), prints a line a file and a total, and exits 1
-when any file failed or ran nothing, or when this machine's own TandemNode claim or trust store
+serve.env, no QWEN38_*, CUDA_VISIBLE_DEVICES empty; TANDEMAPP_SRC passes, for the pair tests),
+prints a line a file and a total, and exits 1 when any file failed or ran nothing, or when this machine's own TandemNode claim or trust store
 (tests/realnode.py, SRV-745) hashes differently after the run. Standard library only.
 """
 
@@ -114,8 +114,9 @@ def run_all(args: list) -> int:
     files = [os.path.abspath(f) for f in files] or sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
     if out:
         os.makedirs(out, exist_ok=True)
+    # TANDEMAPP_SRC: the TandemApp checkout a pair test reads (tests/pairapp.py, tools/pair_suite.sh)
     env = {k: v for k, v in os.environ.items()
-           if k in ("HOME", "PATH", "LANG", "TMPDIR", "USER", realnode.OPT_IN)}
+           if k in ("HOME", "PATH", "LANG", "TMPDIR", "USER", realnode.OPT_IN, "TANDEMAPP_SRC")}
     env.update(PYTHONPATH=os.pathsep.join(p for p in (ROOT, os.environ.get("SUITE_PYTHONPATH")) if p),
                CUDA_VISIBLE_DEVICES="", TZ="Europe/Berlin", PYTHONDONTWRITEBYTECODE="1")
     bad, skipped, total = [], [], 0

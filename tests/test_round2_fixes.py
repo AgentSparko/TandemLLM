@@ -53,7 +53,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, HERE)
 
 from test_ui_states import TOOLS, _go, lines, opencode, serve  # noqa: E402  (first: the CPU environment)
@@ -480,19 +480,19 @@ def test_status_set_up_keeps_the_list():
 # ------------------------------------------------------------------ SRV-181
 
 def test_package_texts_round2():
-    sys.path.insert(0, os.path.join(ROOT, "app", "tools"))
+    sys.path.insert(0, os.path.join(pairapp.APP, "tools"))
     import packages_migrate as pm
-    with open(os.path.join(ROOT, "app", "packages", "inline", "testing.md")) as f:
+    with open(os.path.join(pairapp.APP, "packages", "inline", "testing.md")) as f:
         testing = f.read()
     assert "Order and budget" in testing and "First the deliverable" in testing
     assert "timeout 600 python3 -m http.server" in testing
     assert testing.count("Order and budget") == 1 and "never /tmp" in testing
-    with open(os.path.join(ROOT, "app", "packages", "inline", "laya-playtest.md")) as f:
+    with open(os.path.join(pairapp.APP, "packages", "inline", "laya-playtest.md")) as f:
         play = f.read()
     assert "A spot where only the bot fails is not a bug" in play
     assert 'before "done":' not in play
     for name in ("testing.md", "laya-playtest.md", "test-web.md"):
-        with open(os.path.join(ROOT, "app", "packages", "inline", name)) as f:
+        with open(os.path.join(pairapp.APP, "packages", "inline", name)) as f:
             text = f.read()
         assert pm.migrate_text(name, text) == (text, []), name       # idempotent
     # a box before edit 5 (edits 9-10 of 0.3.45 reword two of its lines: undone first)

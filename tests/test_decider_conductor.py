@@ -26,7 +26,7 @@ import threading
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-sys.path.insert(1, os.path.join(ROOT, "app"))  # SRV-747: TandemApp's packages, until ENG-413
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 sys.path.insert(0, HERE)
 os.environ["BOX_LOCK"] = os.path.join(tempfile.mkdtemp(prefix="dec-lock-"), "no-box.flock")
 os.environ["FAKE_MEM_AVAILABLE_GIB"] = "64"

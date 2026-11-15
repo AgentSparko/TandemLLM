@@ -49,6 +49,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
 
+import pairapp  # noqa: E402,F401  (a pair test: TandemApp from TANDEMAPP_SRC, ENG-413 WP14)
 #: the profiler: the first entry of each watched function, one line each, written as it happens
 TRACE_LAUNCH = r"""
 import os, sys, threading, runpy
@@ -141,7 +142,7 @@ def trace(mode: str) -> tuple:
             os.makedirs(config)
         port = free_port()
         assert port not in (8000, 8009), port
-        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": tmp, "PYTHONPATH": ROOT,
+        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": tmp, "PYTHONPATH": os.pathsep.join(p for p in (ROOT, os.environ.get("PYTHONPATH")) if p),
                "CUDA_VISIBLE_DEVICES": "", "TZ": "Europe/Berlin", "TRACE_OUT": out, "TMPDIR": tmp}
         if mode == "chat":
             env["QSE_EXT"] = "tandemapp.engine_ext"           # ENG-413 WP3a: chat mode's extension
