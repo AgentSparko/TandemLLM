@@ -13,6 +13,10 @@ The test matrix, the Gherkin of VIS-155 (the page's half is dashboard/tests/setu
      never shows its value                                         test_same_model_new_profile
   4  the job carries the list: its check step says the count, and job.changes is the list
                                                                    test_the_job_page_lists_the_changes
+  5  ENG-413 WP14b: the old guide's "Other backends" off value (QSE_BACKENDS='') is no change when
+     the rewrite drops it (above); an overlay of a setup with the tool on sets a config database:
+     the plan fails with backends_moved naming it and what to do, the job fails its check step
+     before any command runs, and the overlay is left as it was    test_an_overlay_with_the_old_backends_tool
 
 Run: python tests/test_setup_change_list.py
 """
@@ -45,7 +49,7 @@ QWEN38_NARRATOR_MODEL='qwen3.5-2b'
 QWEN38_NARRATOR_DIR="${HOME}/.qwen38-spark-engine/models/qwen3.5-2b"
 QWEN38_DECIDER_MODELS='laya-english,laya-multilingual,laya-typed-decisions'
 RESPONSE_CACHE='on'
-QSE_BACKENDS="${HOME}/.qwen38-spark-engine/backends/config.sqlite3"
+QSE_BACKENDS=''
 RESIDENT_GB='2.5'
 CACHE_GB='2'
 TEMPERATURE='0.1'
@@ -101,7 +105,8 @@ def test_switching_from_lfm25():
         with open(os.path.join(box.ops, "active-profile"), "w") as fh:
             fh.write("exl3-6.0\n")
         after = _effective(keys)
-        diff = {k for k in keys if before[k] != after[k]}
+        # an empty QSE_BACKENDS (the old tool's off) and an unset one are both off to start.sh
+        diff = {k for k in keys if before[k] != after[k]} - {"QSE_BACKENDS"}
         assert diff == set(by), (sorted(diff ^ set(by)))
         # the keys by name, not a count: since SRV-534 the narrator is off by default, so leaving
         # LFM2.5's setup (narrator on) also turns it off, which the list had not named when it said 16
@@ -111,8 +116,9 @@ def test_switching_from_lfm25():
         # barrier) for its 8 lanes, so the overlay's equal values are no change
         assert set(by) == {"QSE_PARALLEL", "MAX_LEN", "QSE_SIDE_MAX_LEN", "QSE_KV_POOL",
                            "QWEN38_SUFFIX_STORE", "QWEN38_NARRATOR_MODEL", "QWEN38_NARRATOR_DIR",
-                           "QWEN38_SHADOW_MODEL", "VISION", "RESPONSE_CACHE", "QSE_BACKENDS",
+                           "QWEN38_SHADOW_MODEL", "VISION", "RESPONSE_CACHE",
                            "TEMPERATURE", "TOP_K", "REP_PENALTY"}, sorted(by)
+        assert p["ok"], p["errors"]
         assert len(p["changes"]) == len(diff), len(diff)
 
 
@@ -146,11 +152,43 @@ def test_the_job_page_lists_the_changes():
         job = apply.read_job(jid)
         # the plan's list, the job's, and the count the check step says are one list
         want = T._plan(sel)["changes"]
-        # SRV-707: 14, the 27B's four side-slot keys are serve.env's own now
-        assert job["changes"] == want and len(want) == 14 and any(c["removed"] for c in job["changes"])
+        # SRV-707: 13, the 27B's four side-slot keys are serve.env's own now (WP14b: and the old
+        # tool's empty QSE_BACKENDS is no change)
+        assert job["changes"] == want and len(want) == 13 and any(c["removed"] for c in job["changes"])
         apply.Runner(jid, cmd=T.Recorder(), http=T._smoke_ok("exl3-6.0"), ops=box.ops).main()
         check = next(s for s in apply.read_job(jid)["steps"] if s["id"] == "check")
         assert check["detail"] == f"{len(want)} settings change", check
+
+
+def test_an_overlay_with_the_old_backends_tool():
+    with T.Box() as box:
+        _box_after_lfm25(box)
+        old = LFM25_OVERLAY.replace("QSE_BACKENDS=''",
+                                    'QSE_BACKENDS="${HOME}/.qwen38-spark-engine/backends/config.sqlite3"')
+        with open(apply.overlay_path(), "w") as fh:
+            fh.write(old)
+        sel = _qwen_sel()
+        p = T._plan(sel)
+        path = os.path.expanduser("~/.qwen38-spark-engine/backends/config.sqlite3")
+        assert not p["ok"] and "backends_moved" in p["error_codes"], p["errors"]
+        text = p["errors"][p["error_codes"].index("backends_moved")]
+        assert f"QSE_BACKENDS={path}" in text and f"tandem-app import-backends --from {path}" in text, text
+        assert "tandem doctor --retire-backends" in text and \
+            "docs/operations.md#other-backends-moved-to-tandemapp" in text, text
+        # the removal is listed too (the rewrite would drop a configured database)
+        assert any(c["key"] == "QSE_BACKENDS" and c["removed"] for c in p["changes"]), p["changes"]
+        # a job the API never starts on that plan; the runner's own check refuses it the same way
+        p["profile"]["current"] = "lfm25-exl3-2.5"
+        jid = apply.new_job(M, sel, p, setup_mode=False)["id"]
+        rec = T.Recorder()
+        apply.Runner(jid, cmd=rec, http=T._smoke_ok("exl3-6.0"), ops=box.ops).main()
+        job = apply.read_job(jid)
+        check = next(s for s in job["steps"] if s["id"] == "check")
+        assert check["state"] == "failed" and job.get("failed_step") == "check", (check, job)
+        assert f"QSE_BACKENDS={path}" in job["message"], job["message"]
+        assert not rec.calls, rec.calls
+        with open(apply.overlay_path()) as fh:
+            assert fh.read() == old
 
 
 if __name__ == "__main__":

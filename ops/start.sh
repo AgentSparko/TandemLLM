@@ -51,6 +51,19 @@ if [ "$SETUP" = "1" ]; then
 else
     stage_layer || exit 2
 fi
+# ENG-413 WP14b: the engine relays to no other backend since engine API 1.8. A QSE_BACKENDS left
+# from before (serve.env, run/setup.env, run/local.env) stops the start here, before anything
+# starts, with what to do; the backends' database is not touched. Setup mode passes no --backends.
+if [ "$SETUP" != "1" ]; then
+    case "${QSE_BACKENDS:-off}" in
+        off) ;;
+        *) echo "[start] REFUSING: QSE_BACKENDS=$QSE_BACKENDS: this engine relays to no other backend" \
+                "since engine API 1.8. Move the backends to TandemApp's controller (tandem-app" \
+                "import-backends --from $QSE_BACKENDS), then run tandem doctor --retire-backends;" \
+                "docs/operations.md#other-backends-moved-to-tandemapp. Nothing was started"
+           exit 2 ;;
+    esac
+fi
 LOGS="$REPO/logs"; mkdir -p "$LOGS"
 PIDFILE="$LOGS/engine.pid"
 LOG="$LOGS/engine-$(date +%Y%m%d-%H%M%S).log"

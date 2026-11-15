@@ -16,7 +16,7 @@
     {\ttfamily\scriptsize pip install '.[host]' \&\& tandem-app}\\[2pt]
     {\footnotesize\color{slate} TandemApp's manual}};
   \node[path, draw=signal, fill=signallight, text width=70mm, below=10mm of $(a.south)!0.5!(b.south)$] (c) {\textbf{Path C: several engines and cloud APIs behind one address}\\[2pt]
-    {\normalfont\footnotesize A or B, plus the backends. The engine's own server relays (\texttt{QSE\_BACKENDS}), or \texttt{tandem-app} lists the engine as one backend among others. TandemApp's manual}};
+    {\normalfont\footnotesize A or B, plus the backends: \texttt{tandem-app} lists the engine as one backend among others. TandemApp's manual}};
   \draw[flow] (spark) -- node[right, lbl, pos=.55] {yes} (others);
   \draw[flow] (spark) -- node[left, lbl, pos=.55] {no} (py);
   \draw[flow] (others) -- node[right, lbl] {no} (a);

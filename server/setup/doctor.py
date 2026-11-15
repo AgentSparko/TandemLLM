@@ -6,10 +6,12 @@ before every Setup Guide apply (the job's check step, server/setup/apply.py) and
 (bin/tandem, written by install.sh), and on request:
 
     python -m server.setup.doctor [--check] [--json] [--quiet] [--profile P] [--need-gb N]
-    bash ~/TandemLLM/bin/tandem doctor [--check]
+                                  [--retire-backends]
+    bash ~/TandemLLM/bin/tandem doctor [--check] [--retire-backends]
 
 THE CHECKS, and what is repaired (only file modes, the run/ops copies, pid files, the hold pause and
-the setup marker; secrets, weights and configuration are reported, never changed):
+the setup marker; secrets, weights and configuration are reported, never changed, but for the one
+QSE_BACKENDS repair that `--retire-backends` asks for):
 
     modes        every file of ops/executables.txt (git's 100755 list) is executable    chmod +x
     copies       an install's run/ops has every script install.sh copies (OPS-161)   a missing one
@@ -26,6 +28,11 @@ the setup marker; secrets, weights and configuration are reported, never changed
     marker       run/setup-pending names a HOST start.sh takes                rewritten 127.0.0.1
     disk         room for the chosen weights (--need-gb, or --profile's missing download) and the
                  60 GB margin use-profile.sh keeps
+    backends     QSE_BACKENDS is empty or off (ENG-413 WP14b): since engine API 1.8 the engine relays
+                 to no other backend and its start refuses any other value. Reported with what to
+                 do; only `--retire-backends` changes it: each line that sets it (serve.env,
+                 run/setup.env, an install's run/local.env) becomes a comment with a dated note.
+                 The backends' config database is never touched
 
 Each run appends what it found and did to logs/doctor.log. Exit status 0: nothing left to report.
 Standard library only, except --profile, which reads the model registry.
@@ -51,6 +58,23 @@ MANIFEST = os.path.join("ops", "executables.txt")
 PAUSE_MAX_S = 2400
 DISK_MARGIN_GB = 60
 HOST_OK = re.compile(r"^[0-9.:a-fA-F]+$")
+#: a line of a shell env file that sets QSE_BACKENDS (export or not, quoted or not)
+BACKENDS_LINE = re.compile(r"^\s*(?:export\s+)?QSE_BACKENDS=")
+BACKENDS_DOC = "docs/operations.md#other-backends-moved-to-tandemapp"
+
+
+def backends_on(value: str | None) -> bool:
+    """QSE_BACKENDS asks for the relay: anything but unset, empty or off (start.sh's default)."""
+    return (value or "off").strip() not in ("", "off")
+
+
+def backends_text(value: str) -> str:
+    """What to do about a QSE_BACKENDS the engine refuses, in one sentence (the doctor, the Setup
+    Guide's plan; ops/start.sh, server/app.py and install.sh say the same)."""
+    return (f"QSE_BACKENDS={value}: this engine relays to no other backend since engine API 1.8, so "
+            f"its start refuses. Move the backends to TandemApp's controller (tandem-app "
+            f"import-backends --from {value}), then run tandem doctor --retire-backends; "
+            f"{BACKENDS_DOC}")
 
 
 class Report:
@@ -332,6 +356,87 @@ def check_marker(lay: dict, rep: Report, repair: bool) -> None:
         rep.add("marker", "problem", f"run/setup-pending names the address {host!r}, which start.sh refuses")
 
 
+def backends_files(lay: dict) -> list[str]:
+    """The env files that can set QSE_BACKENDS, in the order serve.env reads them: serve.env, the
+    Setup Guide's run/setup.env (QSE_SETUP_ENV_FILE's default) and an install's run/local.env."""
+    out = [os.path.join(lay["ops"], "serve.env"), os.path.join(lay["root"], "run", "setup.env")]
+    if lay["install"]:
+        out.append(os.path.join(lay["install"], "run", "local.env"))
+    return out
+
+
+def _sets_backends(line: str) -> bool:
+    """`line` gives QSE_BACKENDS a value the engine refuses (not empty, not off)."""
+    m = BACKENDS_LINE.match(line)
+    return bool(m) and backends_on(line[m.end():].split(" #")[0].strip().strip("'\""))
+
+
+def _backends_lines(path: str) -> list[int]:
+    try:
+        with open(path, errors="replace") as fh:
+            return [i for i, ln in enumerate(fh.read().split("\n")) if _sets_backends(ln)]
+    except OSError:
+        return []
+
+
+def retire_backends(path: str, when: str | None = None) -> int:
+    """Each line of `path` that sets QSE_BACKENDS becomes a comment under a dated note; the file
+    keeps its mode, the rest of it its bytes. Returns how many lines changed."""
+    when = when or time.strftime("%Y-%m-%d", time.gmtime())
+    with open(path, errors="surrogateescape") as fh:
+        lines = fh.read().split("\n")
+    hits = [i for i, ln in enumerate(lines) if _sets_backends(ln)]
+    if not hits:
+        return 0
+    note = (f"# {when}, tandem doctor --retire-backends (ENG-413): the engine relays to no other "
+            f"backend since engine API 1.8; TandemApp's controller serves them ({BACKENDS_DOC}). "
+            f"The config database was left where it is. The line was:")
+    for i in reversed(hits):
+        lines[i:i + 1] = [note, "# " + lines[i]]
+    tmp = path + ".doctor-tmp"
+    with open(tmp, "w", errors="surrogateescape") as fh:
+        fh.write("\n".join(lines))
+    os.chmod(tmp, stat.S_IMODE(os.stat(path).st_mode))
+    os.replace(tmp, path)
+    return len(hits)
+
+
+def check_backends(lay: dict, rep: Report, env: dict, retire: bool) -> None:
+    """QSE_BACKENDS as serve.env resolves it (its overlays included): off, or what to do."""
+    value = env.get("QSE_BACKENDS")
+    if not backends_on(value):
+        rep.add("backends", "ok", "QSE_BACKENDS is off (other backends are TandemApp's)")
+        return
+    where = [p for p in backends_files(lay) if _backends_lines(p)]
+    names = ", ".join(_rel(lay, p) for p in where)
+    if not where:
+        rep.add("backends", "problem", f"{backends_text(value)} (set by a file serve.env reads that "
+                                       f"the doctor does not edit: change it there)")
+        return
+    if not retire:
+        rep.add("backends", "problem", f"{backends_text(value)} (set in {names})")
+        return
+    for p in where:
+        try:
+            n = retire_backends(p)
+        except OSError as exc:
+            rep.add("backends", "problem", f"{_rel(lay, p)}: cannot comment QSE_BACKENDS out "
+                                           f"({exc.strerror})")
+            return
+        rep.add("backends", "repaired", f"{_rel(lay, p)}: QSE_BACKENDS={value} commented out "
+                                        f"({n} line{'s' if n != 1 else ''}, dated); the backends' "
+                                        f"database stays where it was")
+    after, _ = serve_env(lay, ["QSE_BACKENDS"])
+    if backends_on(after.get("QSE_BACKENDS")):
+        rep.add("backends", "problem", f"QSE_BACKENDS is still {after['QSE_BACKENDS']} after the "
+                                       f"repair: another file sets it")
+
+
+def _rel(lay: dict, p: str) -> str:
+    base = lay["install"] or lay["root"]
+    return os.path.relpath(p, base) if p.startswith(base + os.sep) else p
+
+
 def free_gb(path: str) -> float:
     while not os.path.exists(path):
         path = os.path.dirname(path)
@@ -361,18 +466,20 @@ def profile_need_gb(profile: str) -> float:
     return 0.0
 
 
-def run(root: str = ROOT, *, repair: bool = True, need_gb: float | None = None, log: bool = True) -> dict:
+def run(root: str = ROOT, *, repair: bool = True, need_gb: float | None = None, log: bool = True,
+        retire_backends: bool = False) -> dict:
     lay = layout(root)
     rep = Report()
     check_modes(lay, rep, repair)
     check_copies(lay, rep, repair)
     env, err = serve_env(lay, ["PY", "QSE_SECRETS", "QSE_STATE_DIR", "QSE_CHATD", "CHATD_PY", "QSE_CHAT_DATA",
-                               "REPO"])
+                               "REPO", "QSE_BACKENDS"])
     check_config(lay, rep, env, err)
     check_secrets(rep, env, repair)
     check_python(rep, env)
     check_pids(lay, rep, env, repair)
     check_marker(lay, rep, repair)
+    check_backends(lay, rep, env, repair and retire_backends)
     check_disk(rep, need_gb, os.path.expanduser("~"))
     body = rep.body()
     if log:
@@ -396,6 +503,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--quiet", action="store_true", help="print only what was repaired and what is wrong")
     ap.add_argument("--profile", help="check the disk for this weight profile's download")
     ap.add_argument("--need-gb", type=float, help="check the disk for a download of this many GB")
+    ap.add_argument("--retire-backends", action="store_true",
+                    help="comment QSE_BACKENDS out where it is set, with a dated note, once the "
+                         "backends are on TandemApp's controller (ENG-413); never with --check")
     ap.add_argument("--root", default=ROOT, help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
     need = a.need_gb
@@ -404,7 +514,9 @@ def main(argv: list[str] | None = None) -> int:
             need = profile_need_gb(a.profile)
         except Exception as exc:                                  # noqa: BLE001
             print(f"[doctor] the registry did not load ({type(exc).__name__}): no disk check for {a.profile}")
-    body = run(a.root, repair=not a.check, need_gb=need)
+    if a.check and a.retire_backends:
+        ap.error("--retire-backends changes files; --check changes nothing")
+    body = run(a.root, repair=not a.check, need_gb=need, retire_backends=a.retire_backends)
     if a.json:
         print(json.dumps(body, indent=1))
     else:

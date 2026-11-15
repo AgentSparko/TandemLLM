@@ -112,7 +112,7 @@ def test_the_server_imports_without_tandemapp():
     try:
         got = _probe(tree)
         assert got["finder"] is False and got["loaded"] == [] and got["parts"] == [], got
-        # the setup registry: every model of models/ (the backends' docs link is the engine's README)
+        # the setup registry: every model of models/ (each docs link a file of the engine's)
         want = sorted(d for d in os.listdir(os.path.join(tree, "models"))
                       if os.path.isfile(os.path.join(tree, "models", d, "model.yaml")))
         assert want and len(got["models"]) == len(want) and got["registry_errors"] == [], (want, got)

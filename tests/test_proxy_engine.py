@@ -2,7 +2,8 @@
 
 What must hold: without `--backends` nothing of a proxy runs (TANDEM_* is ignored, /v1/config and
 /v1/responses answer 404, /v1/models lists the engine's model only); `--backends` with any value but
-off stops the start with one line naming tandem-app, before anything loads. TandemApp's controller
+off stops the start with one line naming tandem-app and what to do (the import, the doctor's
+repair, the doc; WP14b), before anything loads. TandemApp's controller
 serves other backends; its own tests hold the proxy.
 
 Run: python tests/test_proxy_engine.py   (CPU torch, as tests/test_fake_engine.py)
@@ -75,6 +76,11 @@ def test_backends_stops_the_start():
     out = proc.communicate(timeout=120)[0]
     assert proc.returncode != 0, out
     assert "--backends is not served by this engine: tandem-app serves other backends" in out, out
+    # ENG-413 WP14b: and what to do, in the same line
+    line = next(ln for ln in out.splitlines() if ln.startswith("[proxy] --backends"))
+    for want in (f"tandem-app import-backends --from {os.path.join(d, 'config.sqlite3')}",
+                 "tandem doctor --retire-backends", "docs/operations.md#other-backends-moved-to-tandemapp"):
+        assert want in line, (want, line)
     assert not os.path.exists(os.path.join(d, "config.sqlite3")), "no config database opened"
 
 

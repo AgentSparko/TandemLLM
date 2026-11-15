@@ -351,7 +351,6 @@ CLIENT_FACING = {
     "PORT": "clients, the reverse proxy and the watchdog must use the new port.",
     "SERVED_MODEL": "clients that ask for the old model name get an error until they use the new "
                     "one.",
-    "QSE_BACKENDS": "the model names routed to other servers or cloud APIs change with it.",
 }
 
 
@@ -432,8 +431,15 @@ def plan(m: dict, sel: dict, *, setup_mode: bool, password_set: bool,
     # VIS-155: the keys the run/setup.env on the box sets and the new one does not (the previous
     # model's own knobs) are compared too: the rewrite drops them
     gone = [k for k in overlay_keys(overlay_path()) if k not in keys]
-    current = resolve_env(keys + gone + ["REPO"])
+    current = resolve_env(keys + gone + ["REPO", "QSE_BACKENDS"])
     repo = current.pop("REPO", None)
+    # ENG-413 WP14b: a box that still sets QSE_BACKENDS would not start again after the install
+    # (the engine relays to no other backend since engine API 1.8); the job stops here, before
+    # anything changes, instead of rolling back after a failed start
+    from server.setup import doctor as doctor_mod
+    if doctor_mod.backends_on(current.get("QSE_BACKENDS")):
+        error("backends_moved", doctor_mod.backends_text(current["QSE_BACKENDS"]) +
+              ". Then plan again.")
     if repo and os.path.realpath(repo) != os.path.realpath(ROOT):
         error("repo_mismatch", f"ops/serve.env's REPO is {repo}, but this server runs from "
                                f"{ROOT}; the overlay would not be read.")
@@ -449,6 +455,10 @@ def plan(m: dict, sel: dict, *, setup_mode: bool, password_set: bool,
                  "removed": k in gone}
             if SECRET_KEY.search(k):
                 c.update(current=cur and "[redacted]", next=nxt and "[redacted]")
+            # WP14b: the old tool's off value ('') in an overlay from before is no change when the
+            # rewrite drops it: empty and unset are both off to start.sh
+            if k == "QSE_BACKENDS" and not doctor_mod.backends_on(cur):
+                continue
             changes.append(c)
     for c in changes:
         why = CLIENT_FACING.get(c["key"])

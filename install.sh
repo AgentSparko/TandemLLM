@@ -197,6 +197,7 @@ MODE_ARG=""
 RUNTIME_ONLY=0
 APP_WHEEL=""
 APP_SHA=""
+RETIRE_BACKENDS=0
 
 usage() {
     cat <<EOF
@@ -229,6 +230,9 @@ Usage: bash install.sh [options]
   --systemd         also install a systemd user unit, tandemllm.service (off by default)
   --runtime-only    the engine's source and Python environment only: no weights, no corpus, no
                     config, no start (what TandemApp's Add Spark wizard installs on a new node)
+  --retire-backends on a re-run whose config sets QSE_BACKENDS (the relay the engine had before
+                    engine API 1.8): once its backends are on TandemApp's controller, comment the
+                    line out (dated) and go on; the backends' database stays
   --yes, -y         non-interactive: answer yes to every question
   --dry-run         print every step and command, change nothing
   --uninstall       stop the engine, remove the unit and DIR (the weights stay in the HF cache)
@@ -267,6 +271,7 @@ while [ $# -gt 0 ]; do
         --force-setup) FORCE_SETUP=1; shift ;;
         --systemd) SYSTEMD=1; shift ;;
         --runtime-only) RUNTIME_ONLY=1; START=0; CORPUS_MODE=none; shift ;;
+        --retire-backends) RETIRE_BACKENDS=1; shift ;;
         --yes|-y) YES=1; shift ;;
         --dry-run) DRY=1; shift ;;
         --uninstall) UNINSTALL=1; shift ;;
@@ -609,6 +614,34 @@ fi
 if [ -n "$OLD_CHATD" ] && [ "$MODE_ARG" != engine ] && [ -z "$APP_WHEEL" ]; then
     fail "$DIR is an install from before engine API 1.7 in chat mode, and its own launchers run chatd (QSE_CHATD=${OLD_CHATD%%|*}). This release runs no chatd: re-run with --with-chat --app-wheel FILE (TandemApp's TandemNode takes chatd over) or with --engine-only (no chat). Nothing was changed; the install keeps working as it is"
 fi
+# ENG-413 WP14b: since engine API 1.8 the engine relays to no other backend, and ops/start.sh
+# refuses a QSE_BACKENDS. A config that sets one (run/ops/serve.env, run/local.env or the Setup
+# Guide's src/run/setup.env) stops the re-run here, before any code changes, unless
+# --retire-backends says its backends are on TandemApp's controller now: then each such line
+# becomes a dated comment (below, after the confirmation). The backends' database stays as it is.
+OLD_BACKENDS=""
+BACKENDS_FILES=()
+# backends_set FILE: FILE has a line that gives QSE_BACKENDS a value other than empty or off
+backends_set() {
+    awk '/^[[:space:]]*(export[[:space:]]+)?QSE_BACKENDS=/ { v = $0; sub(/^[^=]*=/, "", v)
+         sub(/[[:space:]]+#.*/, "", v); gsub(/["\047[:space:]]/, "", v); if (v != "" && v != "off") f = 1 }
+         END { exit !f }' "$1"
+}
+if [ -f "$RUN/ops/serve.env" ]; then
+    # shellcheck disable=SC2016  # the inner bash expands it
+    OLD_BACKENDS="$(bash -c 'set -a; . "$1" >/dev/null 2>&1; printf "%s" "${QSE_BACKENDS:-}"' - \
+        "$RUN/ops/serve.env" 2>/dev/null || true)"
+    [ "$OLD_BACKENDS" = off ] && OLD_BACKENDS=""
+    for f in "$RUN/ops/serve.env" "$RUN/local.env" "$SRC/run/setup.env"; do
+        if [ -f "$f" ] && backends_set "$f"; then BACKENDS_FILES+=("$f"); fi
+    done
+fi
+if [ -n "$OLD_BACKENDS" ] && [ "$RETIRE_BACKENDS" != 1 ]; then
+    fail "$DIR sets QSE_BACKENDS=$OLD_BACKENDS (in ${BACKENDS_FILES[*]:-a file its serve.env reads}): this release relays to no other backend, so the engine would not start. Move the backends to TandemApp's controller (tandem-app import-backends --from $OLD_BACKENDS), then re-run with --retire-backends, which comments the line out with a date (the database stays); docs/operations.md#other-backends-moved-to-tandemapp. Nothing was changed; the install keeps working as it is"
+fi
+if [ -n "$OLD_BACKENDS" ] && [ "${#BACKENDS_FILES[@]}" = 0 ]; then
+    fail "$DIR's serve.env resolves QSE_BACKENDS=$OLD_BACKENDS, but none of run/ops/serve.env, run/local.env or src/run/setup.env sets it: change it where it is set, then re-run. Nothing was changed"
+fi
 
 # Python 3.11, the served engine's: tests/test_grammar.py passes under 3.11 and fails under 3.12
 # (the structured-output grammar's empty-mask check). uv when it is on PATH, else a system
@@ -666,6 +699,20 @@ chat_note() {
     fi
 }
 if [ "$DRY" != 1 ]; then mkdir -p "$DIR" "$RUN/ops" "$DIR/bin" "$DIR/state"; touch "$MARK"; fi
+# --retire-backends (above): each line that sets QSE_BACKENDS becomes a dated comment, before the code
+if [ -n "$OLD_BACKENDS" ]; then
+    for f in ${BACKENDS_FILES[@]+"${BACKENDS_FILES[@]}"}; do
+        if [ "$DRY" = 1 ]; then note "comment QSE_BACKENDS out in $f (dated)"; continue; fi
+        awk -v when="$(date -u +%Y-%m-%d)" '/^[[:space:]]*(export[[:space:]]+)?QSE_BACKENDS=/ {
+                v = $0; sub(/^[^=]*=/, "", v); sub(/[[:space:]]+#.*/, "", v); gsub(/["\047[:space:]]/, "", v)
+                if (v != "" && v != "off") {
+                    print "# " when ", install.sh --retire-backends (ENG-413): the engine relays to no other backend since engine API 1.8; TandemApp'"'"'s controller serves them (docs/operations.md#other-backends-moved-to-tandemapp). The config database was left where it is. The line was:"
+                    print "# " $0; next } }
+            { print }' "$f" > "$f.tandem-tmp" && cat "$f.tandem-tmp" > "$f" && rm -f "$f.tandem-tmp" \
+            || die "cannot comment QSE_BACKENDS out in $f"
+        ok "QSE_BACKENDS=$OLD_BACKENDS commented out in $f; the backends' database stays"
+    done
+fi
 
 # ---------------------------------------------------------------------------------------------
 # 2. The engine

@@ -318,7 +318,7 @@ class OpsLauncher:
         base = Path(self.site["setup_env"]).read_text() if self.site.get("setup_env") else ""
         own = {"PORT": str(arm.port), **ARM_OVERRIDES,
                "QSE_CONDUCTOR_CONFIG": str(arm.home / "conductor"),
-               "QSE_BACKENDS": str(arm.home / "backends.sqlite3"),
+               "QSE_BACKENDS": "off",          # ENG-413 WP14b: the engine relays to no backend
                "QWEN38_PROBE_DIR": str(arm.home / "probe"),
                "QSE_SECRETS": str(arm.home / "secrets.env"),
                **arm.env}

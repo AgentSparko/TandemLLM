@@ -19,6 +19,13 @@ The test matrix, the Gherkin of OPS-171:
   7  the release's lists: ops/executables.txt is git's 100755 list, doctor's copy list install.sh's
                                                               test_the_lists_agree
   8  bin/tandem doctor on an installed box (Linux)             test_tandem_doctor_on_an_install
+  9  ENG-413 WP14b, QSE_BACKENDS (the relay the engine had until engine API 1.8): empty or off is ok;
+     a config database in serve.env is a problem that names the file, the import and the repair,
+     and neither --check nor the default repair changes it; --retire-backends comments each line
+     that sets it (serve.env, run/setup.env, an install's run/local.env) under a dated note, keeps
+     the old line, the rest of the file and its mode, and never touches the database; a value set
+     by a file the doctor does not edit is reported and left; --check --retire-backends is a usage
+     error                                                     test_qse_backends
 
 Run: python tests/test_doctor.py
 """
@@ -252,6 +259,84 @@ def test_tandem_doctor_on_an_install():
                        env=box["env"], capture_output=True, text=True, timeout=120)
     body = json.loads(r.stdout)
     assert body["repaired"] == [] and not any("execute bit" in p for p in body["problems"]), body
+
+
+def _env_with_overlays(r: str, extra: str = "", local: str | None = None) -> str:
+    """A serve.env that reads run/setup.env (and an install's local.env) as the release's does."""
+    text = (f"REPO={r}\nPY={sys.executable}\nQSE_CHATD=off\nQSE_SECRETS={r}/state/secrets.env\n"
+            f"QSE_BACKENDS=\n{extra}")
+    if local:
+        text += f'if [ -f {local} ]; then . {local}; fi\n'
+    return text + 'if [ -f "$REPO/run/setup.env" ]; then . "$REPO/run/setup.env"; fi\n'
+
+
+def test_qse_backends():
+    home = os.environ["HOME"]
+    db = _w(os.path.join(home, ".qwen38-spark-engine", "backends", "config.sqlite3"), "not a database\n", 0o600)
+    st_db = os.stat(db)
+    # off: empty (the release's line), and off in the overlay
+    r = _checkout()
+    _w(os.path.join(r, "ops", "serve.env"), _env_with_overlays(r))
+    rep = doctor.run(r)
+    assert _states(rep)["backends"] == ["ok"] and rep["ok"], rep
+    _w(os.path.join(r, "run", "setup.env"), "QSE_BACKENDS='off'\n")
+    assert _states(doctor.run(r))["backends"] == ["ok"]
+    # a config database in serve.env: reported, with what to do; --check and the default repair keep it
+    env_text = _env_with_overlays(r, 'QSE_BACKENDS="${HOME}/.qwen38-spark-engine/backends/config.sqlite3"  # relay\n')
+    envf = _w(os.path.join(r, "ops", "serve.env"), env_text, 0o640)
+    _w(os.path.join(r, "run", "setup.env"), "QSE_PARALLEL='4'\n")
+    out = subprocess.run([sys.executable, "-m", "server.setup.doctor", "--check", "--root", r], cwd=ROOT,
+                         capture_output=True, text=True, timeout=60)
+    assert out.returncode == 1, out.stdout
+    line = next(ln for ln in out.stdout.splitlines() if "QSE_BACKENDS=" in ln)
+    assert line.startswith(f"[doctor] problem: QSE_BACKENDS={db}: this engine relays to no other backend"), line
+    for want in (f"tandem-app import-backends --from {db}", "tandem doctor --retire-backends",
+                 "docs/operations.md#other-backends-moved-to-tandemapp", "(set in ops/serve.env)"):
+        assert want in line, (want, line)
+    rep = doctor.run(r)
+    assert any(p.startswith(f"QSE_BACKENDS={db}:") for p in rep["problems"]), rep
+    assert open(envf).read() == env_text
+    # --check --retire-backends: a usage error, nothing changed
+    out = subprocess.run([sys.executable, "-m", "server.setup.doctor", "--check", "--retire-backends", "--root", r],
+                         cwd=ROOT, capture_output=True, text=True, timeout=60)
+    assert out.returncode == 2 and open(envf).read() == env_text, (out.returncode, out.stderr)
+    # --retire-backends: the line becomes a comment under a dated note, the rest stays, the mode too
+    out = subprocess.run([sys.executable, "-m", "server.setup.doctor", "--retire-backends", "--root", r],
+                         cwd=ROOT, capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stdout
+    assert f"[doctor] repaired: ops/serve.env: QSE_BACKENDS={db} commented out (1 line, dated)" in out.stdout, out.stdout
+    after = open(envf).read().split("\n")
+    before = env_text.split("\n")
+    i = next(k for k, ln in enumerate(before) if ln.startswith('QSE_BACKENDS="'))
+    assert after[:i] + after[i + 2:] == before[:i] + before[i + 1:], after
+    assert re.match(r"# \d{4}-\d{2}-\d{2}, tandem doctor --retire-backends \(ENG-413\): ", after[i]), after[i]
+    assert after[i + 1] == "# " + before[i], after[i + 1]
+    assert _mode(envf) == 0o640
+    assert _states(doctor.run(r))["backends"] == ["ok"]
+    # an install: run/setup.env and run/local.env set it too; both are repaired, serve.env's empty line stays
+    d, src = _install()
+    local = os.path.join(d, "run", "local.env")
+    _w(os.path.join(d, "run", "ops", "serve.env"), _env_with_overlays(src, local=local))
+    _w(local, "QSE_MODE=engine\nexport QSE_BACKENDS=/srv/backends.sqlite3\n")
+    _w(os.path.join(src, "run", "setup.env"), f"QSE_BACKENDS='{db}'\n")
+    rep = doctor.run(src)
+    names = next(p for p in rep["problems"] if p.startswith("QSE_BACKENDS="))
+    assert names.endswith("(set in src/run/setup.env, run/local.env)"), names
+    rep = doctor.run(src, retire_backends=True)
+    assert sorted(t.split(":")[0] for t in rep["repaired"]) == ["run/local.env", "src/run/setup.env"], rep
+    assert rep["ok"], rep
+    assert open(os.path.join(d, "run", "ops", "serve.env")).read().count("\nQSE_BACKENDS=\n") == 1
+    assert "# export QSE_BACKENDS=/srv/backends.sqlite3" in open(local).read()
+    # a file the doctor does not edit: reported and left
+    r2 = _checkout()
+    other = _w(os.path.join(r2, "ops", "site.env"), f"QSE_BACKENDS={db}\n")
+    _w(os.path.join(r2, "ops", "serve.env"), _env_with_overlays(r2, f". {other}\n"))
+    rep = doctor.run(r2, retire_backends=True)
+    assert any("the doctor does not edit" in p for p in rep["problems"]) and not rep["repaired"], rep
+    assert open(other).read() == f"QSE_BACKENDS={db}\n"
+    # the database itself: never opened for writing, moved or removed
+    st = os.stat(db)
+    assert (st.st_size, st.st_mtime_ns, st.st_ino) == (st_db.st_size, st_db.st_mtime_ns, st_db.st_ino)
 
 
 if __name__ == "__main__":

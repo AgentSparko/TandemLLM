@@ -261,6 +261,7 @@ Without `--setup`, the installer sets up the NVFP4 profile with StairCut in one 
 | `--no-start` | install and configure, don't start |
 | `--with-chat`, `--engine-only` | the chat (beta) too (with `--app-wheel FILE`, TandemApp's wheel), or the engine alone (a new install's default); a re-run without either keeps the box's mode |
 | `--systemd` | also install a systemd user unit, `tandemllm.service` |
+| `--retire-backends` | on a re-run whose config still sets `QSE_BACKENDS` (the relay the engine had before engine API 1.8): once its backends are on TandemApp's controller, turn the line into a dated comment and go on ([docs/operations.md](docs/operations.md#other-backends-moved-to-tandemapp)) |
 | `--yes`, `--dry-run`, `--uninstall` | non-interactive, print the steps only, remove the install |
 
 Afterwards, `~/TandemLLM/bin/tandem start|stop|status|smoke|logs` controls the engine.

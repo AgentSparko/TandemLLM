@@ -65,7 +65,7 @@ Every line runs its script through `bash`, as the scripts call each other: a cop
 
 ## tandem doctor
 
-`bash ~/TandemLLM/bin/tandem doctor` checks an install and repairs what is safe to repair; `--check` only reports, `--json` prints the report (OPS-171). It runs by itself before every `tandem start` and in the check step of every Setup Guide install, which keeps its report on the job. On a checkout it is `python -m server.setup.doctor`. It repairs file modes (against `ops/executables.txt`, the release's executable files), a missing copy in `run/ops`, `bin/tandem`'s mode, stale pid files of the engine and chatd, a hold's pause left behind, a setup marker with an address `start.sh` refuses, and a secrets file readable by others (600). It reports, and never changes: a `run/ops` copy that differs from `src/ops` (run the installer again), a `serve.env` that does not load (the failing line), an interpreter that does not run, a secrets file where the engine does not read it, a fresh hold, and too little disk for a download (`--profile P` or `--need-gb N`). Each run appends to `logs/doctor.log`; the exit status is 0 when nothing is left to look at.
+`bash ~/TandemLLM/bin/tandem doctor` checks an install and repairs what is safe to repair; `--check` only reports, `--json` prints the report (OPS-171). It runs by itself before every `tandem start` and in the check step of every Setup Guide install, which keeps its report on the job. On a checkout it is `python -m server.setup.doctor`. It repairs file modes (against `ops/executables.txt`, the release's executable files), a missing copy in `run/ops`, `bin/tandem`'s mode, stale pid files of the engine and chatd, a hold's pause left behind, a setup marker with an address `start.sh` refuses, and a secrets file readable by others (600). It reports, and never changes: a `run/ops` copy that differs from `src/ops` (run the installer again), a `serve.env` that does not load (the failing line), an interpreter that does not run, a secrets file where the engine does not read it, a fresh hold, and too little disk for a download (`--profile P` or `--need-gb N`). A `QSE_BACKENDS` other than empty or off is reported with the file that sets it; only `--retire-backends` changes that ([Other backends moved to TandemApp](#other-backends-moved-to-tandemapp)). Each run appends to `logs/doctor.log`; the exit status is 0 when nothing is left to look at.
 
 `ops/qwen38-engine.service` is a systemd user unit for the same job. A user unit only survives logout with `loginctl enable-linger`, which needs root. Install one mechanism, never both: two supervisors for one port start the service twice.
 
@@ -235,6 +235,28 @@ Check the page by eye: the verdict, every invalid row and its reason, any number
 Run the gate and the client smoke set before step 1 ([measurement.md](measurement.md)). A deploy that fails step 4 goes back to the backup.
 
 On a box that `install.sh` set up, the installer is the deploy: `bash ~/TandemLLM/src/install.sh --yes --ref <new tag>` checks out the tag, installs the new lock and rewrites `run/ops/serve.env` from the release's template; `run/local.env` stays. A box installed with `--setup` and then switched to a profile counts as configured, and `--setup` alone refuses it. Run `install.sh --setup --force-setup --yes --ref <new tag>`, then `ops/use-profile.sh <profile>` again; the profile's files are on disk already.
+
+## Other backends moved to TandemApp
+
+Since engine API 1.8 the engine relays to no other backend (ENG-413). Up to 1.7, `QSE_BACKENDS` named a config database, for example `~/.qwen38-spark-engine/backends/config.sqlite3`, and the engine's port also served the vLLM, SGLang or cloud models in it, checked the users' keys and listed those models in `/v1/models`. TandemApp's controller, `tandem-app`, does all of that now, in front of the engine.
+
+A box that still sets `QSE_BACKENDS` would lose those models without a word, so every path stops instead and says what to do:
+
+| where | what happens |
+|-|-|
+| `ops/start.sh` | refuses with one line before anything starts, exit 2; setup mode still starts |
+| `server/app.py --backends PATH` | stops before the load with the same line |
+| `tandem doctor` | reports it with the file that sets it; `--retire-backends` repairs it |
+| the Setup Guide | the plan fails with `backends_moved` before anything changes, so no install rolls back |
+| `install.sh` on a re-run | stops before it changes any code; `--retire-backends` goes on |
+
+None of them opens, moves or deletes the config database. The move takes three steps:
+
+1. Copy the backends into the controller: `tandem-app import-backends --from ~/.qwen38-spark-engine/backends/config.sqlite3` shows what it would copy, and `--write` copies it ([TandemApp's proxy.md](https://github.com/TandemLLM/TandemApp/blob/main/docs/proxy.md#moving-from-the-engines-relay)). It copies the backends, their keys, models, prices and routing rules. The users' keys stay in the old file: `TANDEM_API_USERS_FROM=<that file>` in the controller's settings checks them there, read only.
+2. Send the clients' OpenAI routes through the controller (the data plane in TandemApp's proxy.md). The engine no longer checks those users' keys on its own port.
+3. Turn the setting off: `bash ~/TandemLLM/bin/tandem doctor --retire-backends`, or `python -m server.setup.doctor --retire-backends` in a checkout. Each line that sets `QSE_BACKENDS` in `serve.env`, `run/setup.env` or `run/local.env` becomes a comment under a dated note, so the old value is still there to read. Then start the engine. An install can do this step in its re-run instead: `install.sh --retire-backends`.
+
+To go back, run the release from before 1.8 and remove the `# ` in front of the old line.
 
 ## Monitoring
 

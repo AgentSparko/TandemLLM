@@ -13396,8 +13396,10 @@ def main() -> None:
                  f"{a.dashboard_login!r}")
     # ENG-413 WP14: the proxy left the engine; refused before anything loads
     if (a.backends or "off") != "off":
-        raise SystemExit("[proxy] --backends is not served by this engine: tandem-app serves other "
-                         "backends in front of it")
+        raise SystemExit(f"[proxy] --backends is not served by this engine: tandem-app serves other "
+                         f"backends in front of it. Move them to TandemApp's controller (tandem-app "
+                         f"import-backends --from {a.backends}), then run tandem doctor "
+                         f"--retire-backends; docs/operations.md#other-backends-moved-to-tandemapp")
     # the tokens come from the environment (ops/start.sh sources secrets.env); a token that
     # is too short stops the start here, before the minutes of loading
     STATE["auth"] = auth_mod.Auth.from_env(trust_loopback=a.trust_loopback,
