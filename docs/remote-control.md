@@ -23,7 +23,7 @@ By hand on the box, the same verbs: `bin/tandem remote status`.
 
 | verb | what |
 |-|-|
-| `status` | the engine's state (healthy, loading, draining, failed, down), its pid, port, version, `engine_api`, the configured and the running mode, the overlay version, the last job; answers with the engine down |
+| `status` | the engine's state (healthy, loading, draining, failed, down), its pid, port, release (`engine_version`), `engine_api`, the configured and the running mode, the overlay version, the last job; answers with the engine down |
 | `start`, `stop` | a job that starts the engine (an install's `bin/tandem start`, else `ops/start.sh`) or stops it (`ops/stop.sh`); a stop stays a stop: `ops/watchdog.sh` leaves the engine down until the next start |
 | `restart [--when now\|idle\|at=TIME] [--deadline S]` | stop, then start. `idle` waits until no request runs or waits (the Setup Guide's rule), at most `--deadline` seconds (600); past it the job fails with nothing changed. `at=2026-11-16T03:00:00Z` waits until then, then as idle. The default is now |
 | `mode get` | the mode serve.env resolves, its source, and whether it was inferred from an empty `QSE_MODE` |

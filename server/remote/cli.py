@@ -152,7 +152,8 @@ def v_status(tree: Tree, call) -> tuple[dict, int]:
                    "stopped_on_purpose": os.path.exists(tree.stopped)},
         "mode": env.get("QSE_MODE"),
         "profile": env.get("QSE_PROFILE_NAME") or None,
-        "version": version,
+        # the release; the envelope's `version` is this contract's (engine-ctl-v1 1.1)
+        "engine_version": version,
         "engine_api": engine_api.VERSION,
         "install": tree.install is not None,
         "overlay": overlay.manifest_brief(tree),

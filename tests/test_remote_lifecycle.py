@@ -68,7 +68,7 @@ def test_jobs_against_the_stub_engine():
         assert job["state"] == "done" and job["message"] == "healthy", job
         rc, st = R.call(b, "status")
         assert st["engine"]["state"] == "healthy" and st["engine"]["pid"] and st["overlay"]["good"] == 0, st
-        assert st["version"] == "0.0.0-test" and st["mode"] == "engine", st
+        assert st["engine_version"] == "0.0.0-test" and st["mode"] == "engine", st
         rc, lg = R.call(b, "logs", "--which", "launcher", "--lines", "50")
         assert any("[start] healthy" in x for x in lg["lines"]), lg
         rc, lg = R.call(b, "logs")

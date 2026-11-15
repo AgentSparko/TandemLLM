@@ -194,7 +194,8 @@ def test_bin_tandem_remote():
                                env=R.env(b, **env), timeout=60)
             return r.returncode, json.loads(r.stdout)
         rc, ans = run("status")
-        assert rc == 0 and ans["install"] is True and ans["hook"] is True and ans["version"] == "0.0.0-test", ans
+        assert rc == 0 and ans["install"] is True and ans["hook"] is True and ans["engine_version"] == "0.0.0-test", ans
+        assert ans["version"] == G.CTL_VERSION, "the envelope's version is the contract's"
         _ok("status", ans)
         rc, ans = run("settings", "get", "QUEUE_TIMEOUT")
         assert ans["keys"][0]["value"] == "17" and ans["keys"][0]["source"] == "local", ans

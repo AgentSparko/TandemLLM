@@ -5,6 +5,10 @@
    "const": "engine-ctl-v1"
   },
   "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "engine_version": {
    "type": [
     "string",
     "null"
@@ -175,6 +179,7 @@
   "verb",
   "ok",
   "engine",
+  "engine_version",
   "mode",
   "engine_api",
   "install",

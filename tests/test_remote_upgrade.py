@@ -244,7 +244,7 @@ def test_archive_upgrade():
         calls = open(os.path.join(b["install"], "installer.calls")).read().splitlines()
         assert calls == [f"A {new}"], calls
         rc, st = R.call(b, "status")
-        assert st["engine"]["state"] == "healthy" and st["version"] == "0.0.2-test", st
+        assert st["engine"]["state"] == "healthy" and st["engine_version"] == "0.0.2-test", st
         R.valid("status", st)
     finally:
         _cleanup(b)
@@ -279,7 +279,7 @@ def test_rollback():
             assert _git(b["root"], "rev-parse", "HEAD") == b["base"], kind
             assert _snapshot(b) == before, kind
             rc, st = R.call(b, "status")
-            assert st["engine"]["state"] == "healthy" and st["version"] == "0.0.0-test", (kind, st)
+            assert st["engine"]["state"] == "healthy" and st["engine_version"] == "0.0.0-test", (kind, st)
             R.valid("status", st)
             calls = open(os.path.join(b["install"], "installer.calls")).read().split()
             want = 2 if kind != "pins" else 4                     # the target's call, then the previous one's
