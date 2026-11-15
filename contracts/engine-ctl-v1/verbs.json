@@ -1,7 +1,7 @@
 {
  "ctl": "engine-ctl-v1",
- "version": "1.0",
- "about": "tandem remote: the engine's control verbs. One command line (SSH_ORIGINAL_COMMAND under a forced command, else the arguments), split without a shell; one JSON document on stdout (JSON lines for logs --follow); an exit status; a journal line a call. server/remote/grammar.py VERBS is this table; tests/test_remote_contract.py holds them equal.",
+ "version": "1.1",
+ "about": "tandem remote: the engine's control verbs (1.1 adds ext and upgrade). One command line (SSH_ORIGINAL_COMMAND under a forced command, else the arguments), split without a shell; one JSON document on stdout (JSON lines for logs --follow); an exit status; a journal line a call. server/remote/grammar.py VERBS is this table; tests/test_remote_contract.py holds them equal.",
  "line": {
   "max_chars": 8192,
   "max_tokens": 64,
@@ -19,14 +19,18 @@
   "when": "now, idle or at=<ISO 8601 time with a zone, at most 7 days ahead>",
   "key": "a settings key, repeatable",
   "confirm": "16 hex digits from a plan",
-  "module": "a dotted module name"
+  "module": "a dotted module name",
+  "sha256": "the 64 hex digits of a sha256",
+  "wheel": "a wheel's file name (name-version[-build]-python-abi-platform.whl)",
+  "ref": "a tag, a branch or a commit (no option, range or ..)"
  },
  "arguments": {
   "none": "no argument",
   "keys": "KEY ... (settings get: only these)",
   "changes": "KEY=VALUE ... (with --unset KEY: at least one)",
   "version": "one overlay version number",
-  "mode": "engine or chat"
+  "mode": "engine or chat",
+  "dist": "one distribution name (ext remove)"
  },
  "verbs": {
   "status": {
@@ -123,18 +127,78 @@
    "options": {},
    "arguments": "none",
    "answer": "unpair.schema.json"
+  },
+  "ext list": {
+   "options": {},
+   "arguments": "none",
+   "answer": "ext-list.schema.json",
+   "since": "1.1"
+  },
+  "ext install": {
+   "options": {
+    "--sha256": "sha256",
+    "--name": "wheel",
+    "--module": "module",
+    "--when": "when",
+    "--deadline": "int:10:86400"
+   },
+   "arguments": "none",
+   "answer": "ext-install.schema.json",
+   "since": "1.1",
+   "required": [
+    "--sha256",
+    "--name"
+   ],
+   "stdin": "the wheel's bytes (at most 256 MiB)"
+  },
+  "ext remove": {
+   "options": {
+    "--and-mode": "enum:engine",
+    "--when": "when",
+    "--deadline": "int:10:86400"
+   },
+   "arguments": "dist",
+   "answer": "ext-remove.schema.json",
+   "since": "1.1"
+  },
+  "upgrade plan": {
+   "options": {
+    "--ref": "ref",
+    "--sha256": "sha256"
+   },
+   "arguments": "none",
+   "answer": "upgrade-plan.schema.json",
+   "since": "1.1",
+   "required": [
+    "--ref or --sha256, one of them"
+   ],
+   "stdin": "with --sha256: the tree as a tar or tar.gz archive (at most 512 MiB)"
+  },
+  "upgrade apply": {
+   "options": {
+    "--ref": "ref",
+    "--sha256": "sha256",
+    "--confirm": "confirm",
+    "--when": "when",
+    "--deadline": "int:10:86400"
+   },
+   "arguments": "none",
+   "answer": "job.schema.json",
+   "since": "1.1",
+   "required": [
+    "--confirm",
+    "--ref or --sha256, one of them"
+   ]
   }
  },
  "planned": {
-  "ext": "a later minor of this contract; refused as unknown_verb until then",
-  "upgrade": "a later minor of this contract; refused as unknown_verb until then",
   "models": "a later minor of this contract; refused as unknown_verb until then",
   "token": "a later minor of this contract; refused as unknown_verb until then",
   "pair": "a later minor of this contract; refused as unknown_verb until then"
  },
  "exit": {
   "0": "ok",
-  "1": "answered, not ok (doctor found problems)",
+  "1": "answered, not ok (doctor found problems; ext install or remove: ops/venv-wheel.sh failed)",
   "2": "usage: the command does not parse",
   "3": "refused: the session, a path, a key, a missing confirm, the overlay hook",
   "4": "busy: a lifecycle job acts",
@@ -166,13 +230,30 @@
    "config_error",
    "unknown_version",
    "key_unknown",
-   "key_ambiguous"
+   "key_ambiguous",
+   "hash_mismatch",
+   "too_large",
+   "not_a_wheel",
+   "no_extension",
+   "not_an_install",
+   "not_installed",
+   "ext_in_use",
+   "bad_archive",
+   "target_unsupported",
+   "local_changes",
+   "fetch_failed",
+   "unknown_ref",
+   "not_planned"
   ],
   "busy": [
    "busy"
   ],
   "internal": [
    "internal"
+  ],
+  "not_ok": [
+   "install_failed",
+   "remove_failed"
   ]
  },
  "journal": {
@@ -188,9 +269,11 @@
    "key",
    "from",
    "error",
-   "job"
+   "job",
+   "checked"
   ],
-  "redacted": "the value of every secret-looking KEY=VALUE or --name VALUE"
+  "redacted": "the value of every secret-looking KEY=VALUE or --name VALUE",
+  "checked": "ext install and upgrade: the sha256 (and the size) of the bytes the call read and checked, refused ones too"
  },
  "files": {
   "run/managed.env": "the current overlay version, read by ops/serve.env after run/local.env",
@@ -198,7 +281,12 @@
   "run/managed.d/manifest.json": "current, good, versions",
   "run/remote/jobs/<id>/job.json": "a lifecycle job",
   "run/remote/stopped": "a stop on purpose; ops/watchdog.sh leaves the engine down",
-  "logs/launcher.log": "what the jobs' ops/start.sh and ops/stop.sh printed"
+  "logs/launcher.log": "what the jobs' ops/start.sh and ops/stop.sh printed",
+  "run/remote/extensions.json": "the extensions ext install put into the venv: distribution -> module, version, wheel, sha256",
+  "run/remote/wheels/": "a wheel while ext install installs it (removed after)",
+  "run/remote/upgrades/<sha256>.tar": "a planned upgrade's archive (the two newest are kept)",
+  "run/remote/upgrades/<job>/": "an upgrade job's previous run/ops, bin/tandem and install.sh (the three newest)",
+  "refs/tandem/previous, refs/tandem/upgrade/<sha256 prefix>": "in src's repository: the tree before the last upgrade, an archive's commit"
  },
  "key_line": "command=\"/bin/bash DIR/bin/tandem remote --key-id ID\",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding[,from=\"...\"] ssh-ed25519 AAAA... COMMENT"
 }

@@ -1,0 +1,143 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "ext list"
+  },
+  "ok": {
+   "const": true
+  },
+  "extensions": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "module": {
+      "type": "string"
+     },
+     "source": {
+      "enum": [
+       "remote",
+       "venv",
+       "config"
+      ]
+     },
+     "dist": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "dist_version": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "version": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "ext_api": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "imports": {
+      "type": "boolean"
+     },
+     "accepted": {
+      "type": "boolean"
+     },
+     "why": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "configured": {
+      "type": "boolean"
+     },
+     "wheel": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "sha256": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "installed_at": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "module",
+     "source",
+     "dist",
+     "dist_version",
+     "name",
+     "version",
+     "ext_api",
+     "imports",
+     "accepted",
+     "why",
+     "configured",
+     "wheel",
+     "sha256",
+     "installed_at"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "mode": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "configured": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "host_ext_api": {
+   "type": "string"
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "extensions",
+  "mode",
+  "configured",
+  "host_ext_api"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/ext-list"
+}

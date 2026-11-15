@@ -1,0 +1,71 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "ext remove"
+  },
+  "ok": {
+   "const": true
+  },
+  "removed": {
+   "type": "object",
+   "properties": {
+    "dist": {
+     "type": "string"
+    },
+    "version": {
+     "type": "string"
+    },
+    "module": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "in_use": {
+     "type": "boolean"
+    },
+    "registry": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "dist",
+    "version",
+    "module",
+    "in_use",
+    "registry"
+   ],
+   "additionalProperties": false
+  },
+  "restart_needed": {
+   "const": true
+  },
+  "job": {
+   "type": "object"
+  },
+  "follow": {
+   "type": "string"
+  },
+  "plan": {
+   "type": "object"
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "removed",
+  "restart_needed"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/ext-remove"
+}

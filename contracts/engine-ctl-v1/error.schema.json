@@ -153,6 +153,178 @@
     },
     "job": {
      "type": "object"
+    },
+    "sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    },
+    "checked": {
+     "type": "object",
+     "properties": {
+      "sha256": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{64}$"
+      },
+      "bytes": {
+       "type": "integer"
+      }
+     },
+     "required": [
+      "sha256"
+     ],
+     "additionalProperties": false
+    },
+    "module": {
+     "type": "string"
+    },
+    "upgrade": {
+     "type": "object",
+     "properties": {
+      "from": {
+       "type": "object",
+       "properties": {
+        "commit": {
+         "type": "string"
+        },
+        "version": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "engine_api": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "ctl": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "lock": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "venv_lock": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "required": [
+        "commit",
+        "version",
+        "engine_api",
+        "ctl",
+        "lock",
+        "venv_lock"
+       ],
+       "additionalProperties": false
+      },
+      "to": {
+       "type": "object",
+       "properties": {
+        "source": {
+         "enum": [
+          "ref",
+          "archive"
+         ]
+        },
+        "ref": {
+         "type": "string"
+        },
+        "commit": {
+         "type": "string"
+        },
+        "sha256": {
+         "type": "string"
+        },
+        "bytes": {
+         "type": "integer"
+        },
+        "version": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "engine_api": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "ctl": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "lock": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "required": [
+        "source",
+        "version",
+        "engine_api",
+        "ctl",
+        "lock"
+       ],
+       "additionalProperties": false
+      },
+      "venv": {
+       "enum": [
+        "kept",
+        "synced"
+       ]
+      },
+      "keeps": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "rollback": {
+       "type": "string"
+      },
+      "warnings": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "confirm": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{16}$"
+      }
+     },
+     "required": [
+      "from",
+      "to",
+      "venv",
+      "keeps",
+      "steps",
+      "rollback",
+      "warnings",
+      "confirm"
+     ],
+     "additionalProperties": false
     }
    },
    "required": [

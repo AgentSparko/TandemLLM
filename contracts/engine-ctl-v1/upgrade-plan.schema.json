@@ -1,0 +1,192 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "upgrade plan"
+  },
+  "ok": {
+   "const": true
+  },
+  "plan": {
+   "type": "object",
+   "properties": {
+    "from": {
+     "type": "object",
+     "properties": {
+      "commit": {
+       "type": "string"
+      },
+      "version": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "engine_api": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "ctl": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "lock": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "venv_lock": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "required": [
+      "commit",
+      "version",
+      "engine_api",
+      "ctl",
+      "lock",
+      "venv_lock"
+     ],
+     "additionalProperties": false
+    },
+    "to": {
+     "type": "object",
+     "properties": {
+      "source": {
+       "enum": [
+        "ref",
+        "archive"
+       ]
+      },
+      "ref": {
+       "type": "string"
+      },
+      "commit": {
+       "type": "string"
+      },
+      "sha256": {
+       "type": "string"
+      },
+      "bytes": {
+       "type": "integer"
+      },
+      "version": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "engine_api": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "ctl": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "lock": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "required": [
+      "source",
+      "version",
+      "engine_api",
+      "ctl",
+      "lock"
+     ],
+     "additionalProperties": false
+    },
+    "venv": {
+     "enum": [
+      "kept",
+      "synced"
+     ]
+    },
+    "keeps": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "steps": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "rollback": {
+     "type": "string"
+    },
+    "warnings": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "confirm": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{16}$"
+    }
+   },
+   "required": [
+    "from",
+    "to",
+    "venv",
+    "keeps",
+    "steps",
+    "rollback",
+    "warnings",
+    "confirm"
+   ],
+   "additionalProperties": false
+  },
+  "checked": {
+   "type": "object",
+   "properties": {
+    "sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    },
+    "bytes": {
+     "type": "integer"
+    }
+   },
+   "required": [
+    "sha256"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "plan"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/upgrade-plan"
+}

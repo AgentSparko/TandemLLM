@@ -26,7 +26,8 @@ sys.path.insert(0, HERE)
 
 from ports import free_port  # noqa: E402
 
-SCRIPTS = ("start.sh", "stop.sh", "engines.sh", "roles.sh", "engine_status.py", "watchdog.sh", "hold.sh")
+SCRIPTS = ("start.sh", "stop.sh", "engines.sh", "roles.sh", "engine_status.py", "watchdog.sh", "hold.sh",
+           "venv-wheel.sh")
 
 STUB = r'''
 import http.server, json, os, signal, sys, time
@@ -160,19 +161,30 @@ def env(b: dict, **extra) -> dict:
     return e
 
 
-def call(b: dict, *args, ssh: str | None = None, timeout: float = 120, **extra) -> tuple[int, dict | list]:
-    """`tandem remote` on the sandbox: the arguments by hand, or `ssh` as SSH_ORIGINAL_COMMAND."""
+def call(b: dict, *args, ssh: str | None = None, timeout: float = 120, stdin: bytes | None = None,
+         **extra) -> tuple[int, dict | list]:
+    """`tandem remote` on the sandbox: the arguments by hand, or `ssh` as SSH_ORIGINAL_COMMAND;
+    `stdin` the bytes it reads (a wheel, an archive), else nothing."""
     e = env(b, **extra)
     if ssh is not None:
         e["SSH_ORIGINAL_COMMAND"] = ssh
         e.setdefault("SSH_CONNECTION", "192.0.2.7 50000 192.0.2.1 22")
     code = ("import sys; from server.remote import cli; from server.remote.paths import Tree; "
             "sys.exit(cli.run(sys.argv[2:], tree=Tree(sys.argv[1])))")
-    r = subprocess.run([sys.executable, "-c", code, b["root"], *args], capture_output=True, text=True,
-                       env=e, cwd=ROOT, timeout=timeout)
-    lines = [json.loads(x) for x in r.stdout.splitlines() if x.strip()]
-    assert lines, (r.returncode, r.stdout, r.stderr)
+    r = subprocess.run([sys.executable, "-c", code, b["root"], *args], capture_output=True,
+                       input=stdin if stdin is not None else b"", env=e, cwd=ROOT, timeout=timeout)
+    out = r.stdout.decode("utf-8", "replace")
+    lines = [json.loads(x) for x in out.splitlines() if x.strip()]
+    assert lines, (r.returncode, out, r.stderr.decode("utf-8", "replace"))
     return r.returncode, (lines[0] if len(lines) == 1 else lines)
+
+
+def valid(name: str, doc) -> None:
+    """`doc` validates against contracts/engine-ctl-v1/<name>.schema.json."""
+    from server.api.validate import validate
+    with open(os.path.join(ROOT, "contracts", "engine-ctl-v1", f"{name}.schema.json")) as fh:
+        errs = validate(doc, json.load(fh))
+    assert not errs, (name, errs, doc)
 
 
 def journal(b: dict) -> list[dict]:

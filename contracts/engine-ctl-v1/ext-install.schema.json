@@ -1,0 +1,138 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "ext install"
+  },
+  "ok": {
+   "const": true
+  },
+  "installed": {
+   "type": "object",
+   "properties": {
+    "dist": {
+     "type": "string"
+    },
+    "version": {
+     "type": "string"
+    },
+    "module": {
+     "type": "string"
+    },
+    "wheel": {
+     "type": "string"
+    },
+    "sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    }
+   },
+   "required": [
+    "dist",
+    "version",
+    "module",
+    "wheel",
+    "sha256"
+   ],
+   "additionalProperties": false
+  },
+  "extension": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "version": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "ext_api": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "imports": {
+     "type": [
+      "boolean",
+      "null"
+     ]
+    },
+    "accepted": {
+     "type": [
+      "boolean",
+      "null"
+     ]
+    },
+    "why": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   },
+   "required": [
+    "name",
+    "version",
+    "ext_api",
+    "imports",
+    "accepted",
+    "why"
+   ],
+   "additionalProperties": false
+  },
+  "configured": {
+   "type": "boolean"
+  },
+  "restart_needed": {
+   "const": true
+  },
+  "checked": {
+   "type": "object",
+   "properties": {
+    "sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    },
+    "bytes": {
+     "type": "integer"
+    }
+   },
+   "required": [
+    "sha256"
+   ],
+   "additionalProperties": false
+  },
+  "job": {
+   "type": "object"
+  },
+  "follow": {
+   "type": "string"
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "installed",
+  "extension",
+  "configured",
+  "restart_needed",
+  "checked"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/ext-install"
+}

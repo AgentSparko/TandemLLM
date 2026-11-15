@@ -11,7 +11,12 @@ managed overlay:
     run/remote/journal.jsonl   one line a call (server/remote/journal.py)
     run/remote/jobs/<id>/      a lifecycle job: job.json and runner.out
     run/remote/stopped         a stop on purpose: ops/watchdog.sh leaves the engine down
+    run/remote/extensions.json the extensions `ext install` put into the venv (server/remote/ext.py)
+    run/remote/upgrades/       a planned upgrade's archive, and each upgrade job's previous files
     logs/launcher.log          what the jobs' ops/start.sh and ops/stop.sh printed
+
+An install's own files beside the tree: DIR/venv (its Python) and DIR/run/requirements.lock (the
+engine's pins, install.sh's).
 """
 
 from __future__ import annotations
@@ -95,3 +100,21 @@ class Tree:
     @property
     def pid_file(self) -> str:
         return os.path.join(self.logs, "engine.pid")
+
+    @property
+    def extensions(self) -> str:
+        return os.path.join(self.remote, "extensions.json")
+
+    @property
+    def upgrades(self) -> str:
+        return os.path.join(self.remote, "upgrades")
+
+    # an install's venv and its pins (None in a checkout)
+    @property
+    def venv_python(self) -> str | None:
+        return os.path.join(self.install, "venv", "bin", "python") if self.install else None
+
+    @property
+    def lock_file(self) -> str | None:
+        return os.path.join(self.install, "run", "requirements.lock") if self.install else None
+

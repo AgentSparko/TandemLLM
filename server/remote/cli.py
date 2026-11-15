@@ -9,6 +9,10 @@ answered with one JSON document on stdout (JSON lines for `logs --follow`) and a
 journaled (server/remote/journal.py). A session that holds a terminal, a forwarded agent or X11
 display, or asks for a shell, is refused before any verb runs.
 
+Two verbs read stdin: `ext install` (a wheel, server/remote/ext.py) and `upgrade plan --sha256` (an
+archive of the tree, server/remote/upgrade.py); each checks the bytes' sha256 and the journal line
+keeps the one it checked (`checked`).
+
 The contract is contracts/engine-ctl-v1 (its README, verbs.json and a schema per answer).
 """
 
@@ -20,7 +24,7 @@ import signal
 import sys
 import time
 
-from server.remote import grammar, journal, keys, lifecycle, overlay
+from server.remote import ext, grammar, journal, keys, lifecycle, overlay, upgrade
 from server.remote.grammar import (CTL, CTL_VERSION, EXIT_BUSY, EXIT_INTERNAL, EXIT_NOT_OK, EXIT_OK,
                                    EXIT_REFUSED, Refusal)
 from server.remote.paths import Tree
@@ -89,7 +93,7 @@ def session(env: dict, argv: list[str], info: dict) -> list[str]:
                       EXIT_REFUSED)
     if not args:
         raise Refusal("no_command", "no command: tandem remote status | start | stop | restart | mode | "
-                                    "settings | logs | doctor | unpair", EXIT_REFUSED)
+                                    "settings | ext | upgrade | logs | doctor | unpair", EXIT_REFUSED)
     return grammar.split(" ".join(_quote(a) for a in args))
 
 
@@ -164,10 +168,11 @@ def _job_answer(job: dict) -> tuple[dict, int]:
     return {"job": lifecycle.brief(job), "follow": "tandem remote status"}, EXIT_OK
 
 
-def _create(tree: Tree, kind: str, call, target: dict | None = None, note: str | None = None):
+def _create(tree: Tree, kind: str, call, target: dict | None = None, note: str | None = None,
+            extra: dict | None = None):
     try:
         return _job_answer(lifecycle.create(tree, kind, call.opts.get("--when"), call.opts.get("--deadline"),
-                                            target=target, note=note))
+                                            target=target, note=note, extra=extra))
     except lifecycle.Busy as b:
         raise Refusal("busy", "another lifecycle job is acting; tandem remote status shows it", EXIT_BUSY,
                       job=b.job) from None
@@ -205,6 +210,11 @@ def v_mode_get(tree, call):
     return {"mode": env.get("QSE_MODE"), "ext": env.get("QSE_EXT") or None,
             "source": rows["QSE_MODE"]["source"], "inferred": rows["QSE_MODE"]["source"] == "mode",
             **({"config_error": err} if err else {})}, EXIT_OK
+
+
+def _engine_mode(tree: Tree) -> dict:
+    """The current overlay with engine mode written down: QSE_MODE=engine, QSE_EXT empty."""
+    return dict(overlay.values_of(tree, overlay.manifest(tree)["current"]), QSE_MODE="engine", QSE_EXT="")
 
 
 def v_mode_set(tree, call):
@@ -279,6 +289,64 @@ def v_doctor(tree, call):
 def v_unpair(tree, call, info, env):
     control = tree.control or os.path.join(tree.base, "bin", "tandem")
     return keys.unpair(control, info.get("key"), env.get("SSH_USER_AUTH")), EXIT_OK
+
+
+# ------------------------------------------------------------------------------------- 1.1 (ENG-454)
+def v_ext_list(tree, call):
+    return ext.ext_list(tree), EXIT_OK
+
+
+def _not_busy(tree: Tree, call) -> None:
+    """A call that will start a job refuses before it changes anything while another job acts."""
+    if "--when" in call.opts:
+        cur = lifecycle.latest(tree)
+        if cur and cur["state"] == "acting":
+            raise Refusal("busy", "another lifecycle job is acting; tandem remote status shows it", EXIT_BUSY,
+                          job=lifecycle.brief(cur))
+
+
+def v_ext_install(tree, call):
+    _not_busy(tree, call)
+    body = ext.ext_install(tree, call.opts["--sha256"], call.opts["--name"], call.opts.get("--module"))
+    if "--when" in call.opts:
+        job, _ = _create(tree, "restart", call)
+        body.update(job)
+    return body, EXIT_OK
+
+
+def v_ext_remove(tree, call):
+    dist = call.opts["dist"]
+    _not_busy(tree, call)
+    info = ext.ext_remove(tree, dist, call.opts.get("--and-mode"))
+    body: dict = {"removed": info, "restart_needed": True}
+    if info["in_use"]:
+        # engine mode first, through the overlay as `mode set engine` writes it; a busy job refuses
+        # here, before anything is uninstalled
+        job, _ = _apply(tree, call, "mode", _engine_mode(tree), f"mode engine (ext remove {dist})",
+                        need_confirm=False)
+        body.update(job)
+    body["removed"].update(ext.uninstall(tree, dist))
+    if not info["in_use"] and "--when" in call.opts:
+        job, _ = _create(tree, "restart", call)
+        body.update(job)
+    return body, EXIT_OK
+
+
+def v_upgrade_plan(tree, call):
+    data = ext.read_stdin(upgrade.ARCHIVE_MAX) if "--sha256" in call.opts else None
+    body, checked = upgrade.plan(tree, call.opts, data)
+    return {"plan": body, **({"checked": checked} if checked else {})}, EXIT_OK
+
+
+def v_upgrade_apply(tree, call):
+    p, rec = upgrade.apply(tree, call.opts)
+    if "--when" not in call.opts:
+        call.opts["--when"] = {"mode": "idle"}
+    body, rc = _create(tree, "upgrade", call, extra={"upgrade": rec})
+    body["upgrade"] = p
+    if p["to"]["source"] == "archive":
+        body["checked"] = {"sha256": p["to"]["sha256"], "bytes": p["to"]["bytes"]}
+    return body, rc
 
 
 def _log_file(tree: Tree, which: str) -> str:
@@ -356,6 +424,8 @@ HANDLERS = {
     "settings get": v_settings_get, "settings plan": v_settings_plan, "settings apply": v_settings_apply,
     "settings versions": v_settings_versions, "settings restore": v_settings_restore,
     "logs": v_logs, "doctor": v_doctor,
+    "ext list": v_ext_list, "ext install": v_ext_install, "ext remove": v_ext_remove,
+    "upgrade plan": v_upgrade_plan, "upgrade apply": v_upgrade_apply,
 }
 
 
@@ -392,6 +462,8 @@ def run(argv: list[str], env: dict | None = None, tree: Tree | None = None) -> i
             body, rc = HANDLERS[name](tree, call)
         if body.get("job"):
             row["job"] = body["job"]["id"]
+        if body.get("checked"):
+            row["checked"] = body["checked"]
         doc = answer(name, body)
         if rc == EXIT_NOT_OK:
             doc["ok"] = False
@@ -401,6 +473,10 @@ def run(argv: list[str], env: dict | None = None, tree: Tree | None = None) -> i
         rc = ref.exit_code
         row.update(info)
         row["error"] = ref.code
+        if ref.extra.get("checked"):
+            row["checked"] = ref.extra["checked"]
+        elif ref.extra.get("sha256"):
+            row["checked"] = {"sha256": ref.extra["sha256"]}
         try:
             emit(error(name, ref))
         except BrokenPipeError:

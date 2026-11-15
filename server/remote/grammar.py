@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 CTL = "engine-ctl-v1"
-CTL_VERSION = "1.0"
+CTL_VERSION = "1.1"
 
 #: exit statuses (contracts/engine-ctl-v1/verbs.json `exit`)
 EXIT_OK, EXIT_NOT_OK, EXIT_USAGE, EXIT_REFUSED, EXIT_BUSY, EXIT_INTERNAL = 0, 1, 2, 3, 4, 5
@@ -28,6 +28,13 @@ TOKEN_RE = re.compile(r"^[\x21-\x7e]+$")
 KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 MODULE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}(\.[A-Za-z_][A-Za-z0-9_]{0,63}){0,7}$")
 KEY_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
+#: a wheel's file name (PEP 427: name-version[-build]-python-abi-platform.whl)
+WHEEL_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_.]{0,99})-[A-Za-z0-9_.!+]{1,64}(?:-[0-9][A-Za-z0-9_]{0,15})?"
+                      r"-[A-Za-z0-9_.]{1,64}-[A-Za-z0-9_.]{1,64}-[A-Za-z0-9_.]{1,128}\.whl$")
+#: a distribution's name (PEP 508)
+DIST_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$")
+#: a git ref: a tag, a branch or a commit, never an option or a range
+REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 #: a restart's wait for idle: at least, at most, by default (the Setup Guide's 600 s)
 DEADLINE_MIN_S, DEADLINE_MAX_S = 10, 86400
 #: `--when at=` at most this far ahead
@@ -65,8 +72,9 @@ class Call:
 
 # verb -> subcommand (None: the verb has none) -> (options: {name: kind}, positional spec)
 #   kinds: flag, int:<lo>:<hi>, enum:<a>|<b>, when, key (repeatable), confirm
+#          sha256 (64 hex digits), wheel (a wheel's file name), ref (a git ref), module
 #   positional: "none", "keys" (KEY ...), "changes" (KEY=VALUE ...), "version" (one integer),
-#               "mode" (engine|chat)
+#               "mode" (engine|chat), "dist" (one distribution name)
 _WHEN = {"--when": "when", "--deadline": f"int:{DEADLINE_MIN_S}:{DEADLINE_MAX_S}"}
 _CONFIRM = {"--confirm": "confirm", "--confirm-fingerprint": "confirm"}
 VERBS: dict = {
@@ -85,9 +93,17 @@ VERBS: dict = {
                      "--which": "enum:engine|launcher"}, "none")},
     "doctor": {None: ({}, "none")},
     "unpair": {None: ({}, "none")},
+    # 1.1 (ENG-454): extensions and the upgrade
+    "ext": {"list": ({}, "none"),
+            "install": ({"--sha256": "sha256", "--name": "wheel", "--module": "module", **_WHEN}, "none"),
+            "remove": ({"--and-mode": "enum:engine", **_WHEN}, "dist")},
+    "upgrade": {"plan": ({"--ref": "ref", "--sha256": "sha256"}, "none"),
+                "apply": ({"--ref": "ref", "--sha256": "sha256", "--confirm": "confirm", **_WHEN}, "none")},
 }
+#: options a subcommand cannot go without
+REQUIRED = {"ext install": ("--sha256", "--name"), "upgrade apply": ("--confirm",)}
 #: verbs of later work packages of the same contract: refused as unknown until they exist
-PLANNED = ("ext", "upgrade", "models", "token", "pair")
+PLANNED = ("models", "token", "pair")
 
 
 def split(line: str) -> list[str]:
@@ -161,6 +177,18 @@ def _value(kind: str, opt: str, raw: str, now=None):
         if not MODULE_RE.match(raw):
             raise Refusal("bad_value", f"{opt} takes a dotted module name")
         return raw
+    if kind == "sha256":
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", raw):
+            raise Refusal("bad_value", f"{opt} takes the 64 hex digits of a sha256")
+        return raw.lower()
+    if kind == "wheel":
+        if not WHEEL_RE.match(raw):
+            raise Refusal("bad_value", f"{opt} takes a wheel's file name (name-version-py3-none-any.whl)")
+        return raw
+    if kind == "ref":
+        if not REF_RE.match(raw) or ".." in raw or "//" in raw or raw.endswith((".lock", "/", ".")) or "@{" in raw:
+            raise Refusal("bad_value", f"{opt} takes a tag, a branch or a commit")
+        return raw
     raise AssertionError(kind)
 
 
@@ -214,6 +242,12 @@ def parse(tokens: list[str], now: datetime | None = None) -> Call:
         raise Refusal("bad_value", "--deadline is the wait for idle: it goes with --when idle or at=")
     if call.unsets and len(set(call.unsets)) != len(call.unsets):
         raise Refusal("duplicate_option", "a key is given to --unset twice")
+    for opt in REQUIRED.get(call.name, ()):
+        if opt not in call.opts:
+            raise Refusal("missing_argument", f"{call.name} needs {opt}")
+    if call.verb == "upgrade" and ("--ref" in call.opts) == ("--sha256" in call.opts):
+        raise Refusal("missing_argument" if "--ref" not in call.opts else "bad_value",
+                      f"{call.name} takes --ref REF or --sha256 HEX (an archive on stdin), one of them")
     return call
 
 
@@ -247,5 +281,10 @@ def _positional(call: Call, spec: str) -> None:
         if len(pos) != 1 or pos[0] not in ("engine", "chat"):
             raise Refusal("missing_argument" if not pos else "bad_value", "mode set takes engine or chat")
         call.opts["mode"] = pos[0]
+    elif spec == "dist":
+        if len(pos) != 1 or not DIST_RE.match(pos[0]):
+            raise Refusal("missing_argument" if not pos else "bad_value",
+                          f"{call.name} takes one distribution name (as ext list names it)")
+        call.opts["dist"] = pos[0]
     else:
         raise AssertionError(spec)

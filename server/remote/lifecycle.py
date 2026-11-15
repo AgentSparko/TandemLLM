@@ -16,7 +16,9 @@ refuses; run/remote/stopped tells ops/watchdog.sh the silence is on purpose; the
 starts (an install's bin/tandem start, else ops/start.sh) and must answer /health. An engine that
 exits before it answers fails the start at once. A start that does not reach /health puts the
 overlay version back that the engine last ran with, stops what is left and starts again; the job
-fails and says so. A stop leaves run/remote/stopped in place until the next start.
+fails and says so. A stop leaves run/remote/stopped in place until the next start. An `upgrade` job
+(engine-ctl-v1 1.1) acts through server/remote/upgrade.py: the previous tree kept, the stop, the
+target's install.sh --update, the start, and a rollback to the previous tree when one fails.
 """
 
 from __future__ import annotations
@@ -34,13 +36,13 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-from server.remote import overlay
+from server.remote import overlay, upgrade
 from server.remote.journal import utc
 from server.remote.paths import ROOT as CODE, Tree
 from server.setup.idle import IDLE_POLL_S, IDLE_WAIT_S, requests_in
 
 FINAL = ("done", "failed", "cancelled", "lost")
-KINDS = ("start", "stop", "restart", "settings", "mode", "restore")
+KINDS = ("start", "stop", "restart", "settings", "mode", "restore", "upgrade")
 STOP_GRACE_S = 60
 STOP_TIMEOUT_S = 300
 START_TIMEOUT_S = 2400
@@ -116,7 +118,7 @@ def brief(job: dict | None) -> dict | None:
     if not job:
         return None
     keys = ("id", "kind", "state", "phase", "when", "created_at", "ended_at", "message", "overlay",
-            "restored", "waiting_for")
+            "restored", "waiting_for", "upgrade", "rolled_back")
     return {k: job.get(k) for k in keys if job.get(k) is not None}
 
 
@@ -139,8 +141,9 @@ def _lock(tree: Tree) -> _Lock:
 
 
 def create(tree: Tree, kind: str, when: dict | None = None, deadline: int | None = None,
-           target: dict | None = None, note: str | None = None, spawn=True) -> dict:
-    """A new job, its runner started; cancels a job that still waits, Busy while one acts."""
+           target: dict | None = None, note: str | None = None, spawn=True, extra: dict | None = None) -> dict:
+    """A new job, its runner started; cancels a job that still waits, Busy while one acts. `extra`
+    goes into the job as it is (an upgrade's record)."""
     assert kind in KINDS
     when = dict(when or {"mode": "now"})
     if when["mode"] != "now":
@@ -159,6 +162,7 @@ def create(tree: Tree, kind: str, when: dict | None = None, deadline: int | None
         if target is not None:
             m = overlay.manifest(tree)
             job["overlay"] = {"from": m["current"], "values": target, "note": note or kind}
+        job.update(extra or {})
         os.makedirs(os.path.join(tree.jobs, jid), mode=0o700, exist_ok=True)
         write_job(tree, job)
         _prune(tree)
@@ -179,7 +183,7 @@ def _spawn(tree: Tree, jid: str) -> int:
     d = os.path.join(tree.jobs, jid)
     env = {k: v for k, v in os.environ.items()
            if k in ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "BOX_LOCK", "USER", "LOGNAME", "ENGINE_PROC",
-                    "STATUS_PY")}
+                    "STATUS_PY", "TANDEM_SKIP_MEMCHECK")}
     env["PYTHONPATH"] = CODE
     with open(os.path.join(d, "runner.out"), "ab") as out:
         p = subprocess.Popen([sys.executable, "-s", "-m", "server.remote.lifecycle", "run", d], cwd=tree.root,
@@ -430,6 +434,11 @@ class Runner:
 
     def act(self) -> int:
         kind = self.job["kind"]
+        if kind == "upgrade":
+            rc = upgrade.act(self)
+            if rc == 0:
+                overlay.mark_good(self.tree)
+            return rc
         if kind == "stop":
             self._mark(True, "tandem remote stop")
             if not self.stop():
