@@ -116,9 +116,8 @@ caches & \code{engine/cache.py}, \code{engine/disk_cache.py}, \code{engine/spill
 settings registry & \code{engine/settings.py} & \ref{ch:operations} \\
 the server & \code{server/app.py}, \code{server/stream.py}, \code{server/toolcall.py} & \ref{ch:serving} \\
 the conductor & \code{server/conductor/} & \ref{ch:conductor} \\
-live activity, metrics, ledger & \code{server/live.py}, \code{server/activity.py}, \code{server/metrics.py}, \code{server/ledger.py} & \ref{ch:dashboard} \\
-the dashboard & \code{dashboard/}, \code{docs/contract/dashboard-v1/} & \ref{ch:dashboard} \\
-the proxy and the collector & \code{proxy/} & \ref{ch:other-engines} \\
+live activity, metrics, ledger & \code{server/api/live.py}, \code{server/api/activity.py}, \code{server/api/metrics.py}, \code{server/api/ledger.py} & \ref{ch:ref-metrics} \\
+chat mode: the extension host & \code{server/ext.py}, \code{contracts/engine-ext-v1/} & \ref{ch:conductor} \\
 service scripts and the gate & \code{ops/} & \ref{ch:operations} \\
 measurement tools & \code{tools/row3.py}, \code{tools/block_ab.py}, \code{tools/verify_spec.py} & \ref{ch:measurement} \\
 \bottomrule
@@ -127,4 +126,4 @@ measurement tools & \code{tools/row3.py}, \code{tools/block_ab.py}, \code{tools/
 
 \section{One sequence, or several}
 
-The numbers in this part describe the loop of one sequence. The shipped profile runs 8 lanes since 0.15.0 (SRV-707). With \code{--parallel N} the engine holds N sequences over the one copy of the weights, and requests that decode at the same time verify their trees in one forward pass, so the weights are read once for all of them (Section~\ref{sec:parallel-requests}). With one sequence, requests wait for the engine's lock in a bounded queue, the side lane serves a short request inside the running one (Section~\ref{sec:side-lane}), and the proxy relays other backends' requests without touching the engine's lock (Chapter~\ref{ch:install-app}).
+The numbers in this part describe the loop of one sequence. The shipped profile runs 8 lanes since 0.15.0 (SRV-707). With \code{--parallel N} the engine holds N sequences over the one copy of the weights, and requests that decode at the same time verify their trees in one forward pass, so the weights are read once for all of them (Section~\ref{sec:parallel-requests}). With one sequence, requests wait for the engine's lock in a bounded queue, the side lane serves a short request inside the running one (Section~\ref{sec:side-lane}), and with \code{--backends} TandemApp's proxy relays other backends' requests without touching the engine's lock (TandemApp's manual).

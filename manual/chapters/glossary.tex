@@ -2,11 +2,9 @@
 
 \begin{description}[style=unboxed, leftmargin=0pt, itemsep=.5ex, font=\normalfont\bfseries]
 
-\item[adapter]\index{adapter} The proxy's code for one backend kind: how it relays a route, where it reads cached and reasoning tokens, how it switches thinking. \code{proxy/adapters/}.
+\item[adapter]\index{adapter} A model family's code behind the shared methods: its loader, forward and caches, declared once in \code{engine/models/adapter.py}'s terms (Chapter~\ref{ch:adding-model}). TandemApp's proxy has adapters of its own, one per backend kind (TandemApp's manual).
 
 \item[anchor]\index{anchor} A copy of the 48 recurrent states and their convolution tails at one position, 147~MiB. The resident prefix keeps one at every 1,024-token line of a prefill; the disk tier keeps them as files. A request resumes at the largest anchor its prompt shares.
-
-\item[backend]\index{backend} An engine or a cloud API behind the proxy: another TandemLLM, vLLM, SGLang, any OpenAI-compatible server, OpenAI or DeepSeek. Each has a kind, a URL, models, an optional key, and switches.
 
 \item[benchmark row]\index{benchmark row} \code{serve-single-i256-o256-v1}: one request at a time, 256 prompt tokens, 256 generated, thinking off, greedy, 50 requests after 3 warm-ups. Every speed in this book that says \enquote{the benchmark row} is this.
 
@@ -36,8 +34,6 @@
 
 \item[end anchor]\index{end anchor} An anchor at the end of the last generation, so the next turn that sends the answer back resumes there instead of re-reading it.
 
-\item[feature group]\index{feature group} One switchable part of the harness in front of a backend: class, effort, packages, side, loops, e1, tools, compaction, states, memory.
-
 \item[grid]\index{grid} The 1,024-token lines of a prefill. Anchors, chunk files and prefix snapshots are taken on the grid, and a resumed request forwards the rest of its prompt on the same grid, so its state equals a cold prefill's bit for bit.
 
 \item[guest]\index{guest} A short request between two turns of a longer resident conversation; the rows it can reach are stashed and put back. Also the short request the side lane serves inside a running turn, which gets its engine state back bit for bit.
@@ -46,11 +42,7 @@
 
 \item[hold]\index{hold} Taking the board for a measurement or a second model: \code{ops/hold.sh} stops the service, runs the command, and restores the service.
 
-\item[host collector]\index{host collector} The code that reads a machine's memory, CPU, GPUs, disks and the process behind each backend's port; \code{tandem-app hostcollect} on a remote machine.
-
 \item[journal]\index{journal} The conductor's record of every decision, acted on or not, in the usage ledger's file, kept 30 days.
-
-\item[L1, L2]\index{L1, L2} The two layers of engine figures behind the proxy: L1 is the engine's \code{/metrics} page, L2 the plugin's per-request numbers.
 
 \item[lookup drafter]\index{lookup drafter} The drafter that copies text: the longest match of the last tokens in the request, a corpus and the suffix store.
 
@@ -58,7 +50,7 @@
 
 \item[memory note]\index{memory note} One fact the model keeps as a file, written from a block in its answer or by the background writer, read back in later turns.
 
-\item[memory priority]\index{memory priority} A chat's place in the line for memory, \code{tandem.priority} in the request: \code{"high"}, \code{"normal"} or \code{"low"}. Set per chat in the Chat tab (Section~\ref{sec:chat-priority}).
+\item[memory priority]\index{memory priority} A chat's place in the line for memory, \code{tandem.priority} in the request: \code{"high"}, \code{"normal"} or \code{"low"}. TandemApp's Chat tab sets it per chat.
 
 \item[memory wait]\index{memory wait} A request that does not fit above the floor waits before its prefill and starts by itself once memory frees; \code{waiting_memory} on the dashboard, \code{X-Tandem-Wait: memory} on the response (Section~\ref{sec:memory-wait}).
 
@@ -78,11 +70,7 @@
 
 \item[pin]\index{pin} Copying the head of the resident prompt aside before a long unrelated request cuts it.
 
-\item[plugin]\index{plugin} A small package inside vLLM or SGLang that posts each request's own times to the proxy.
-
 \item[profile]\index{profile} Two things. A conductor profile is a document that sets what the harness does for a client (\code{coding}, \code{chat} and others). A serving profile is a \code{serve.env} file that sets the weights.
-
-\item[proxy]\index{proxy} The router of requests by model id to backends, with one ledger and one dashboard; in the engine's server with \code{--backends}, or standalone as \code{tandem-app}.
 
 \item[raw]\index{raw} The engine without the conductor: the release's raw path. \code{X-Tandem: raw} or the \code{raw} and \code{bench} profiles.
 
@@ -128,7 +116,7 @@
 
 \item[taint]\index{taint} The lowest row that a session resume wrote. Below it the caches are a cold prefill's bit for bit.
 
-\item[TandemApp]\index{TandemApp} The dashboard and the proxy without the engine, as one installable command, \code{tandem-app} (Chapter~\ref{ch:install-app}).
+\item[TandemApp]\index{TandemApp} The dashboard, the proxy, the Chat tab, the conductor and TandemNode: a separate project with its own manual, \code{tandem-app} its command. It talks to the engine over HTTP, and its conductor runs inside the engine in chat mode as the extension.
 
 \item[time to first token]\index{time to first token} The time from a request's arrival to its first streamed token: the prefill, plus any wait in the queue. TTFT in the tables.
 

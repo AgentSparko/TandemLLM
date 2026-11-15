@@ -8,15 +8,15 @@
   \node[q, below right=8mm and 6mm of spark] (others) {other engines or\\cloud APIs too?};
   \node[q, below left=8mm and 6mm of spark] (py) {Python 3.11 or newer,\\or docker?};
   \node[path, below=9mm of others] (a) {\textbf{Path A: the engine}\\[2pt]
-    {\normalfont\footnotesize the engine with its models, the conductor and the dashboard at \texttt{:8000}}\\[3pt]
+    {\normalfont\footnotesize the engine with its models at \texttt{:8000}, and the conductor in chat mode}\\[3pt]
     {\ttfamily\scriptsize curl -fsSL .../install.sh | bash}\\[2pt]
     {\footnotesize\color{slate} Chapter~\ref{ch:install-engine}}};
-  \node[path, below=9mm of py] (b) {\textbf{Path B: the dashboard and proxy}\\[2pt]
-    {\normalfont\footnotesize one address, one ledger and one dashboard for backends you already run; no GPU, no torch. In docker: \texttt{app/packaging/Dockerfile.app}}\\[3pt]
-    {\ttfamily\scriptsize pip install './app[host]' \&\& tandem-app}\\[2pt]
-    {\footnotesize\color{slate} Chapter~\ref{ch:install-app}}};
+  \node[path, below=9mm of py] (b) {\textbf{Path B: TandemApp, the dashboard and proxy}\\[2pt]
+    {\normalfont\footnotesize one address, one ledger and one dashboard for backends you already run; no GPU, no torch. In docker: TandemApp's \texttt{packaging/Dockerfile.app}}\\[3pt]
+    {\ttfamily\scriptsize pip install '.[host]' \&\& tandem-app}\\[2pt]
+    {\footnotesize\color{slate} TandemApp's manual}};
   \node[path, draw=signal, fill=signallight, text width=70mm, below=10mm of $(a.south)!0.5!(b.south)$] (c) {\textbf{Path C: several engines and cloud APIs behind one address}\\[2pt]
-    {\normalfont\footnotesize A or B, plus the backends. The engine's own server relays (\texttt{QSE\_BACKENDS}), or \texttt{tandem-app} lists the engine as one backend among others. Chapter~\ref{ch:other-engines}}};
+    {\normalfont\footnotesize A or B, plus the backends. The engine's own server relays (\texttt{QSE\_BACKENDS}), or \texttt{tandem-app} lists the engine as one backend among others. TandemApp's manual}};
   \draw[flow] (spark) -- node[right, lbl, pos=.55] {yes} (others);
   \draw[flow] (spark) -- node[left, lbl, pos=.55] {no} (py);
   \draw[flow] (others) -- node[right, lbl] {no} (a);

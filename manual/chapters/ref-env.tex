@@ -1,6 +1,6 @@
 \chapter{Environment and configuration reference}\label{ch:ref-env}
 
-TandemLLM reads four families of settings. Engine switches are \code{QWEN38_*} variables, read through one registry. Server settings are command-line flags (Chapter~\ref{ch:ref-cli}); \code{ops/start.sh}\index{ops/start.sh@\texttt{ops/start.sh}} builds them from \code{ops/serve.env}\index{ops/serve.env@\texttt{ops/serve.env}}, and a few \code{QSE_*} variables set flags' defaults or serve the scripts. The proxy, the collector and the plugins read \code{TANDEM_*} variables. And the conductor's behaviour lives in its versioned documents, which the dashboard edits.
+TandemLLM reads four families of settings. Engine switches are \code{QWEN38_*} variables, read through one registry. Server settings are command-line flags (Chapter~\ref{ch:ref-cli}); \code{ops/start.sh}\index{ops/start.sh@\texttt{ops/start.sh}} builds them from \code{ops/serve.env}\index{ops/serve.env@\texttt{ops/serve.env}}, and a few \code{QSE_*} variables set flags' defaults or serve the scripts. The installer and the service scripts read a few \code{TANDEM_*} variables. And the conductor's behaviour lives in its versioned documents, which the dashboard edits. The \code{QWEN38_*} knobs the extension reads, and the variables of TandemApp's proxy, collector and plugins, are in TandemApp's manual.
 
 \section{The served profile}\index{serve.env}
 
@@ -22,7 +22,7 @@ The most used: \code{QSE_CONDUCTOR_CONFIG}\index{qseconductorconfig@\texttt{QSE\
 
 The wait for memory (Section~\ref{sec:memory-wait}) reads these, with their code defaults: \code{QSE_MEM_WAIT_S} (10,800) is the longest wait in seconds of a streamed request, or of one that sends \code{wait_for_memory: true}; \code{QSE_PARALLEL_FLOOR_GB} (15) is the floor the admission keeps MemAvailable at, the same as \code{--parallel-floor-gb}; \code{QSE_KV_HARD_FLOOR_GB} (10) is the floor the KV pool's commits keep, the same as \code{--kv-hard-floor-gb}; \code{QSE_GUARD_MARGIN_GB} (5) is the margin each floor holds under the largest step the engine takes between two checks; \code{QSE_KV_ADMIT_ROWS} (8,192) is the part of \code{max_tokens} the admission reserves KV pages for, 0 for all of it; \code{QSE_KV_RECOMPUTE} (\code{on}) lets a lane the pool refuses give way and go on later; \code{QSE_PEAK_STRICT} (0) set to 1 makes a lone request that the memory gate refuses wait too.
 
-\section{Proxy, collector and plugin variables}\index{TANDEM variables}
+\section{TANDEM variables}\index{TANDEM variables}
 
 \input{generated/tandem-vars}
 

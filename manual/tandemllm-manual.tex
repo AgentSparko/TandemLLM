@@ -17,17 +17,15 @@
 \mainmatter
 
 \partintro{%
-Two chapters for every reader. Chapter~\ref{ch:intro} says what TandemLLM is, names the machine and the model every number in this book comes from, says what the repository contains and what runs today, and states the two rules every change has to pass. Chapter~\ref{ch:tour} follows one chat request through all of it, from the proxy to the stream going back, and names the chapter that explains each step.}
+Two chapters for every reader. Chapter~\ref{ch:intro} says what TandemLLM is, names the machine and the model every number in this book comes from, says what the repository contains and what runs today, and states the two rules every change has to pass. Chapter~\ref{ch:tour} follows one chat request through all of it, from the client to the stream going back, and names the chapter that explains each step.}
 \part{Introduction}
 \input{chapters/intro}
 \input{chapters/tour}
 
 \partintro{%
-How to install and run it. Chapter~\ref{ch:install-engine} starts with the setups that work today, then installs the engine with one command, says who can reach it, and adds the small models and other backends. Chapter~\ref{ch:install-app} installs the dashboard and proxy on any machine, Chapter~\ref{ch:other-engines} puts other engines and cloud APIs behind it, and Chapter~\ref{ch:operations} is the operator's chapter: the memory rules, the service scripts, the watchdog, how to hold the board for a measurement, where the logs are, and how to upgrade and roll back. Chapter~\ref{ch:community} runs weights other people published, and says how to list your own.}
+How to install and run it. Chapter~\ref{ch:install-engine} starts with the setups that work today, then installs the engine with one command, says who can reach it, and adds the small models and other backends. TandemApp's manual installs the dashboard and proxy on any machine and puts other engines and cloud APIs behind it. Chapter~\ref{ch:operations} is the operator's chapter: the memory rules, the service scripts, the watchdog, how to hold the board for a measurement, where the logs are, and how to upgrade and roll back. Chapter~\ref{ch:community} runs weights other people published, and says how to list your own.}
 \part{Installing and running}
 \input{chapters/install-engine}
-\input{chapters/install-app}
-\input{chapters/other-engines}
 \input{chapters/operations}
 \input{chapters/community}
 
@@ -58,13 +56,6 @@ The conductor: the layer in front of the model that plans each turn and watches 
 \input{chapters/lines}
 \input{chapters/memory}
 \input{chapters/harness-proxy}
-
-\partintro{%
-The dashboard, view by view (\ref{ch:dashboard}), its Chat tab (in beta) with the sandbox and the permission modes (\ref{ch:chat}), and how it watches several engines at once: the Parallel page, the engines' own metrics pages, the plugins inside vLLM and SGLang, and the host collector (\ref{ch:hosts}). Every figure on it is measured or null, never estimated.}
-\part{The dashboard}
-\input{chapters/dashboard}
-\input{chapters/chat}
-\input{chapters/hosts}
 
 \partintro{%
 The reference. Chapters~\ref{ch:ref-cli} to \ref{ch:ref-metrics} are generated from the code: every flag, variable, route, metric and ledger column, with the value the served profile sets. Then troubleshooting by symptom (\ref{ch:troubleshooting}), questions and answers (\ref{ch:faq}), the roadmap (\ref{ch:roadmap}) and the changelog (\ref{ch:changelog}). The glossary and the index follow.}

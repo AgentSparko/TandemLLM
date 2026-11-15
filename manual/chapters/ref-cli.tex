@@ -8,15 +8,9 @@ The tables in this part are generated from the code by \code{manual/tools/gen_re
 
 \input{generated/server-flags}
 
-\section{TandemApp: the dashboard and proxy}\index{tandem-app}
+\section{TandemApp}\index{tandem-app}
 
-\code{tandem-app serve} and \code{python -m proxy} take the same flags; \code{tandem-app check}, \code{secrets} and \code{backends} take them too and add their own action (Table~\ref{tab:tandem-app}).
-
-\input{generated/proxy-flags}
-
-\input{generated/launch-flags}
-
-\input{generated/hostcollect-flags}
+\code{tandem-app}, \code{tandem-app launch} and \code{tandem-app hostcollect} are TandemApp's commands: TandemApp's manual lists their flags.
 
 \section{The service scripts}
 
@@ -70,7 +64,6 @@ The \code{tools/} directory holds about 180 scripts: kernels, quantisers, probes
 \code{tools/conductor_policy.py} & the monitor's policy schema and its check \\
 \code{tools/shadow_ab.py}, \code{shadow_measure.py} & the shadow reader's cost and read rate \\
 \code{tools/voice_replay.py} & a recorded session's lines through the voice \\
-\code{tools/proxy_bench.py}, \code{proxy_gate.py} & the proxy's overhead and its decode check \\
 \code{tools/parallel_load.py} & agent-like sessions over several backends \\
 \code{tools/package_check.sh} & the wheel builds and installs without torch \\
 \code{manual/tools/gen_reference.py} & this part's tables \\

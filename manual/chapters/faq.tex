@@ -12,7 +12,7 @@
 
 \paragraph{Why are my speeds below the paper's?} Check four things: the raw path (\code{X-Tandem: raw}), the lookup corpus (the paper's is not published), the store view (a store with the benchmark's text inflates it, a clean one does not), and the board's lock (another engine on the board halves the bandwidth).
 
-\paragraph{Can I use the dashboard without the engine?} Yes. \code{pip install './app[host]'} and \code{tandem-app} run the dashboard and the proxy on any machine with Python 3.11, in front of vLLM, SGLang, llama.cpp, LM Studio, Ollama, OpenAI, DeepSeek or another TandemLLM (Chapter~\ref{ch:install-app}).
+\paragraph{Can I use the engine without the dashboard?} Yes. A new install serves the engine alone, under its own model name, with no page and no chat (Section~\ref{sec:mode}). The dashboard is TandemApp, which runs on any machine with Python 3.11, with or without this engine (TandemApp's manual).
 
 \paragraph{Does the proxy add latency?} 0.33~ms to the time to first token at the median against a fake backend on one machine, and a decode rate within 0.8~\% of the engine's own over the local network (\measured, the 0.4.0 series).
 

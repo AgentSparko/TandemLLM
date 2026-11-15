@@ -1,10 +1,10 @@
 \chapter{Installing TandemLLM}\label{ch:install-engine}
 
-TandemLLM has two parts to install. The engine runs the models and needs a CUDA GPU; its test board is the DGX Spark (Section~\ref{sec:test-env}). The dashboard and its proxy need only Python, run on any machine, and also run inside the engine's own server. Most setups use both. Find your setup in Table~\ref{tab:setups}, then follow the sections it names.
+This chapter installs the engine. It runs the models and needs a CUDA GPU; its test board is the DGX Spark (Section~\ref{sec:test-env}). The dashboard, the Chat tab and the proxy are TandemApp, a separate project with its own manual: it needs only Python, runs on any machine, and talks to the engine over HTTP. Find your setup in Table~\ref{tab:setups}, then follow the sections it names.
 
 \section{Setups, and which ones work}\label{sec:setups}\index{setups}
 
-The parts combine. One engine can sit behind one address together with other engines and cloud APIs, and one dashboard watches all of them. Table~\ref{tab:setups} says which combinations work today, and how far each one is tested.
+The engine runs alone, or behind TandemApp together with other engines and cloud APIs. Table~\ref{tab:setups} says which combinations work today, and how far each one is tested.
 
 \begin{table}[htbp]
 \centering\small
@@ -14,10 +14,9 @@ The parts combine. One engine can sit behind one address together with other eng
 \hd{setup} & \hd{how} & \hd{state} \\
 \midrule
 the engine alone & \code{install.sh} on the board (this chapter) & live \\
-the engine and cloud APIs, one address & \code{tandem-app} on the board or another machine, with the engine and the cloud API as backends (Chapter~\ref{ch:install-app}) & live, with DeepSeek \\
+the engine and cloud APIs, one address & \code{tandem-app} on the board or another machine, with the engine and the cloud API as backends (TandemApp's manual) & live, with DeepSeek \\
 the same, from the engine's own server & \code{QSE_BACKENDS}: the engine relays to the cloud API, and its conductor can run in front of it (Section~\ref{sec:engine-backends}) & built \\
-the engine and other engines on other machines & either of the two above, the other engines as \code{vllm}, \code{sglang} or \code{generic} backends (Chapter~\ref{ch:other-engines}) & built; vLLM and SGLang live behind the proxy on their own \\
-the dashboard and proxy alone & \code{pip install} or docker on any machine, in front of the backends you run (Chapter~\ref{ch:install-app}) & live \\
+the engine and other engines on other machines & either of the two above, the other engines as \code{vllm}, \code{sglang} or \code{generic} backends (TandemApp's manual) & built; vLLM and SGLang live behind the proxy on their own \\
 the engine and a second GPU engine on one larger machine & each engine on its own GPU, \code{tandem-app launch} for the second & built \\
 the engine and a second GPU engine on one DGX Spark & the engine plans its memory as if it owns the board (up to 77~GiB during a prefill, plus its small models); a board out of memory stops answering until it is power cycled & not supported \\
 \bottomrule
@@ -27,7 +26,7 @@ the engine and a second GPU engine on one DGX Spark & the engine plans its memor
 \begin{figure}[htbp]
 \centering
 \input{figures/install-paths}
-\caption[Which install path]{Which install path. A machine with the GPU gets the engine (path A); any other machine gets the dashboard and proxy (path B); either grows into path C by adding backends. The engine's own server can relay to other backends, and a standalone proxy can list the engine as one backend among others.}\label{fig:install-paths}
+\caption[Which install path]{Which install path. A machine with the GPU gets the engine (path A); any other machine gets TandemApp, the dashboard and proxy (path B, TandemApp's manual); either grows into path C by adding backends. The engine's own server can relay to other backends, and TandemApp can list the engine as one backend among others.}\label{fig:install-paths}
 \end{figure}
 
 \section{What the engine needs}\index{requirements}
@@ -161,11 +160,11 @@ The control script takes one command:
 
 \section{Engine only, or the chat (beta)}\label{sec:mode}\index{qsemode@\texttt{QSE\_MODE}}
 
-A new install serves the engine alone: the OpenAI API under the served model's own name, the dashboard and the caches. Nothing runs beside it: no conductor (no \code{TandemLLM} model, router, user memory, packages, library or session monitor), no decision models, narrator, shadow reader or roles, and no chatd; the Chat tab says the chat is off and how to turn it on. One setting decides it, \code{QSE_MODE} in \code{serve.env}: \code{engine} or \code{chat}.
+A new install serves the engine alone: the OpenAI API under the served model's own name, the dashboard reads under \code{/v1/dashboard/*} and the caches. Nothing runs beside it: no extension (no \code{TandemLLM} model, router, user memory, packages, library or session monitor), no decision models, narrator, shadow reader or roles. One setting decides it, \code{QSE_MODE} in \code{serve.env}: \code{engine} or \code{chat}.
 
-The chat (beta) is the Chat tab with chatd and the conductor, with the small models the weight profile names. Turn it on with \code{install.sh --with-chat} (a re-run works too), with the Setup Guide's \emph{Chat (beta)} switch, which writes \code{QSE_MODE=chat} to \code{run/setup.env} and turns on Laya's decision models with it, or with \code{QSE_MODE=chat} in \code{run/local.env} and \code{tandem restart}. \code{--engine-only} turns it off again, and the next start stops the chatd the install started. On a box set up in the Setup Guide its switch decides: \code{run/setup.env} is read after the installer's \code{QSE_MODE}, so the two flags there only warn. The last block of \code{ops/serve.env} applies the mode after the weight profile, \code{run/setup.env} and \code{run/local.env}; \code{ops/use-profile.sh} keeps it.
+In chat mode (beta) the engine loads TandemApp's conductor as its extension (\code{QSE_EXT}), with the small models the weight profile names; TandemApp's TandemNode runs chatd, the Chat tab's service, and the engine runs none. Turn it on with \code{install.sh --with-chat --app-wheel FILE}, TandemApp's wheel (a re-run works too), with the Setup Guide's \emph{Chat (beta)} switch, which writes \code{QSE_MODE=chat} to \code{run/setup.env} and turns on Laya's decision models with it, or with \code{QSE_MODE=chat} in \code{run/local.env} and \code{tandem restart}. \code{--engine-only} turns it off again, and TandemNode stops a running chatd once the engine comes up in engine mode. On a box set up in the Setup Guide its switch decides: \code{run/setup.env} is read after the installer's \code{QSE_MODE}, so the two flags there only warn. The last block of \code{ops/serve.env} applies the mode after the weight profile, \code{run/setup.env} and \code{run/local.env}; \code{ops/use-profile.sh} keeps it.
 
-An upgrade keeps each box's mode. Left empty, \code{QSE_MODE} is \code{chat} on a box whose conductor directory (\code{QSE_CONDUCTOR_CONFIG}, by default \code{~/.qwen38-spark-engine/conductor}) exists, so a box that ran the conductor stays a chat box with its documents, memory and sessions; \code{QSE_CONDUCTOR_CONFIG=off} set by hand stays engine only. \code{/health} and \code{/v1/models} say \code{"mode": "engine"} or \code{"chat"} and what is \code{loaded}: the conductor and its monitor's mode, the decision models, the narrator, the loaded roles, and whether chatd answers.
+An upgrade keeps each box's mode. Left empty, \code{QSE_MODE} is \code{chat} on a box whose conductor directory (\code{QSE_CONDUCTOR_CONFIG}, by default \code{~/.qwen38-spark-engine/conductor}) exists, so a box that ran the conductor stays a chat box with its documents, memory and sessions; \code{QSE_CONDUCTOR_CONFIG=off} set by hand stays engine only. \code{/health} and \code{/v1/models} say \code{"mode": "engine"} or \code{"chat"} and what is \code{loaded}: the conductor and its monitor's mode, the decision models, the narrator, the loaded roles, and whether chatd answers; \code{extensions} names the extension that runs.
 
 \section{The first request}
 
@@ -199,7 +198,7 @@ An engine-only box (Section~\ref{sec:mode}) has no profiles: every client gets t
 
 \screenshot{client-opencode}{opencode with \texttt{TandemLLM} as its provider: the end of a demo task on the test board in October 2026, under the \texttt{coding} profile. The model added a function, tested it, asked Laya for a verdict on the test log, removed its scratch files and reported what it did. The screenshot is from a build that sent the reasoning to opencode as text between \texttt{<think>} tags; every client but the Hermes agent now gets \texttt{reasoning\_content} by default (\texttt{QWEN38\_CLIENT\_REASONING}), which opencode shows as folded reasoning parts.}{fig:shot-opencode}
 
-The dashboard is at \code{http://<host>:8000/dashboard/}. It asks for no password; read Section~\ref{sec:access} before anyone else can reach the port.
+The engine asks for no password; read Section~\ref{sec:access} before anyone else can reach the port.
 
 \section{Access and sign-in}\label{sec:access}\label{sec:dash-login}\index{dashboard login}\index{admin password}\index{sign-in}
 
@@ -214,16 +213,15 @@ Table~\ref{tab:access} has the switches. Only \code{/metrics} has a token of its
 \toprule
 \hd{what} & \hd{by default} & \hd{with the switch} \\
 \midrule
-the engine's OpenAI routes & anyone who reaches the port & no switch on the engine's own port; behind the proxy, a user key from the first key on (Section~\ref{sec:users}) \\
+the engine's OpenAI routes & anyone who reaches the port & no switch on the engine's own port; behind TandemApp's proxy, a user key from the first key on \\
 the dashboard's reads & anyone & \code{--dashboard-login on} and a password: the token or a session \\
 admin routes: conductor writes, memory, decision models, configuration, caches, the full \code{/health} & anyone & \code{QSE_ADMIN_TOKEN} (\code{ops/make-secrets.sh --admin}): the token or a session, or a tool on the machine itself \\
 \code{/metrics} & anyone & \code{QSE_METRICS_TOKEN}: that token \\
-the standalone proxy & binds \code{127.0.0.1}; open & \code{TANDEM_ADMIN_TOKEN}, user keys \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-Setting a password has a cost in this release: the dashboard has no sign-in screen. Its read-only views keep working while the login is off, but its edits and the Memory screen show the server's 401 and a banner. Remove the line from \code{secrets.env} and restart to open it again. A request from the machine itself (loopback, without proxy headers) needs no token, because the watchdog and the measurement tools rely on that.
+With a password set, TandemApp's page has no sign-in screen in this release (TandemApp's manual). A request from the machine itself (loopback, without proxy headers) needs no token, because the watchdog and the measurement tools rely on that.
 
 TandemLLM serves one user. Every client that reaches the engine is that user, so a \enquote{remember that} from any client lands in the same memory notes. A request that must not touch them sends \code{X-Tandem-Memory: off}. Until sign-in and several users arrive, keep the port on loopback or a trusted network. To reach it from elsewhere, put a reverse proxy with its own sign-in, or a VPN, in front of it.
 
@@ -256,9 +254,9 @@ echo 'QSE_BACKENDS=$HOME/.tandemllm/config.sqlite3' >> ~/TandemLLM/run/local.env
 ~/TandemLLM/bin/tandem restart
 \end{shell}
 
-Then add the backends on the dashboard's Backends screen, or as \code{TANDEM_*} variables (Chapter~\ref{ch:other-engines}). The engine keeps serving \code{TandemLLM} as before, and a request for another model goes to its backend on the handler's own thread: it never takes the engine's lock or a place in its queue, so a slow cloud answer cannot hold up the engine. The engine's conductor can run in front of each backend (\code{harness.mode}, Chapter~\ref{ch:harness-proxy}), and one ledger and the Parallel view cover them all. On a DGX Spark the other backends are cloud APIs or engines on other machines; a second GPU engine on the same Spark is not supported (Table~\ref{tab:setups}). No live run of this in-process relay is recorded yet; the standalone proxy in front of the engine is the setup that ran live.
+Then add the backends on the dashboard's Backends screen, or as \code{TANDEM_*} variables (TandemApp's manual). This relay is TandemApp's proxy code inside the engine's process, while the engine carries TandemApp. The engine keeps serving \code{TandemLLM} as before, and a request for another model goes to its backend on the handler's own thread: it never takes the engine's lock or a place in its queue, so a slow cloud answer cannot hold up the engine. The conductor can run in front of each backend (\code{harness.mode}, Chapter~\ref{ch:harness-proxy}), and one ledger and the Parallel view cover them all. On a DGX Spark the other backends are cloud APIs or engines on other machines; a second GPU engine on the same Spark is not supported (Table~\ref{tab:setups}). No live run of this in-process relay is recorded yet; the standalone proxy in front of the engine is the setup that ran live.
 
-The other way round works too: \code{tandem-app} on a laptop or a small server, with the engine as a backend of kind \code{tandemllm} (Chapter~\ref{ch:install-app}).
+The other way round works too: \code{tandem-app} on a laptop or a small server, with the engine as a backend of kind \code{tandemllm} (TandemApp's manual).
 
 \section{Running from a checkout}
 
