@@ -1,9 +1,0 @@
-# The engine's contracts, copied whole from TandemEngine at one commit (ENG-427); never edited here.
-# Copy: git -C ENGINE archive COMMIT contracts/engine-api-v1 contracts/engine-ext-v1 | tar -x, then
-# these lines: the commit, each folder's version and git tree id (this file left out of the first).
-# tests/test_contract_pin.py hashes both folders from disk against them.
-engine_commit 7fdca9941ea398730c6db00a1a20a4d750dd4cc0
-engine_api 1.7
-engine-api-v1 ebf19bf9b28d2b0cc0509891cb4bb98e2dafcd15
-ext_api 3.1
-engine-ext-v1 8486335a3a6e036c761831fe7f9ed4dc35ef836e

@@ -5,12 +5,11 @@
 #   bash tools/release_box_gate.sh --version X.Y.Z [--py PYTHON] [--pythonpath P] [--jobs N]
 #        [--smoke-base URL] [--skip suite,setup,smoke,loose] [--out DIR]
 #
-#   suite  every tests/test_*.py on the CPU through tests/script_suite.py, one clean process a file
-#          (env -i, CUDA_VISIBLE_DEVICES empty), N files at a time, 900 s a file; a file that runs no
-#          test fails (SRV-661), one that says `skipped:` is listed apart; then every
-#          app/tests/test_*.py through app/tests/script_suite.py --all, one file a call, N at a time
-#          (env -i; the runner sets PYTHONPATH to app/), into OUT/app-suite. A failing file in
-#          either pass fails the step
+#   suite  the engine's suite on the CPU (tools/engine_tests.py: every tests/test_*.py but the pair
+#          tests, which need TandemApp beside the engine) through tests/script_suite.py, one clean
+#          process a file (env -i, CUDA_VISIBLE_DEVICES empty), N files at a time, 900 s a file; a
+#          file that runs no test fails (SRV-661), one that says `skipped:` is listed apart. A
+#          failing file fails the step. TandemApp's suite runs in its own repository
 #   setup  bash tools/release_gate_setup.sh --py PYTHON (OPS-177): a scratch install through the Setup
 #          Guide beside the live engine, on spare ports
 #   smoke  tools/client_smoke.py against --smoke-base on the conductor path, then the raw path
@@ -73,29 +72,13 @@ else
         echo "$r $n $(( $(date +%s) - s ))" >> "$OUT/suite/RESULT"
     }
     export -f one
-    ls tests/test_*.py | xargs -P "$JOBS" -I{} bash -c 'one "$1"' _ {}
+    "$PY" tools/engine_tests.py | xargs -P "$JOBS" -I{} bash -c 'one "$1"' _ {}
     files=$(wc -l < "$OUT/suite/RESULT"); ok=$(grep -c '^ok ' "$OUT/suite/RESULT")
     skip=$(grep -c '^skip ' "$OUT/suite/RESULT"); bad=$(grep -c '^FAIL ' "$OUT/suite/RESULT")
     if [ "$bad" = 0 ] && [ "$files" -gt 0 ]; then st=PASS; else st=FAIL; FAILS=$((FAILS + 1)); fi
     line "suite  $st files=$files ok=$ok skipped=$skip failed=$bad $(( $(date +%s) - start )) s ($OUT/suite)"
     grep '^FAIL ' "$OUT/suite/RESULT" | sed 's/^/       /' | tee -a "$OUT/SUMMARY"
     grep '^skip ' "$OUT/suite/RESULT" | sed 's/^/       /' | tee -a "$OUT/SUMMARY"
-
-    # SRV-748: TandemApp's tests through their own runner, each file in its own --all call
-    start=$(date +%s)
-    ls app/tests/test_*.py | env -i HOME="$HOME" PATH="$PATH" SUITE_PYTHONPATH="$PYP" OMP_NUM_THREADS=2 \
-        xargs -P "$JOBS" -n 1 nice -n 10 "$PY" -u app/tests/script_suite.py --all --timeout 900 \
-        --out "$OUT/app-suite" > "$OUT/app-suite.log" 2>&1
-    arc=$?
-    # each call ends with its own files= ok= fail= skipped= line: the sums are the pass's
-    read -r files ok bad skip <<EOF
-$(awk '/^files=/ { for (i = 1; i <= NF; i++) { split($i, kv, "="); t[kv[1]] += kv[2] } }
-    END { printf "%d %d %d %d\n", t["files"], t["ok"], t["fail"], t["skipped"] }' "$OUT/app-suite.log")
-EOF
-    if [ "$arc" = 0 ] && [ "$bad" = 0 ] && [ "$files" -gt 0 ]; then st=PASS; else st=FAIL; FAILS=$((FAILS + 1)); fi
-    line "suite  $st app/tests files=$files ok=$ok skipped=$skip failed=$bad $(( $(date +%s) - start )) s ($OUT/app-suite)"
-    grep -E '^tests/test_[^ ]+\.py .* (FAIL|SKIPPED)' "$OUT/app-suite.log" | sed 's/^/       app\//' | tee -a "$OUT/SUMMARY"
-    grep -F 'changed this machine' "$OUT/app-suite.log" | sed 's/^/       /' | tee -a "$OUT/SUMMARY"
 fi
 
 if skipped setup; then

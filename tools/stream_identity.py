@@ -16,8 +16,9 @@ stream must be identical. `--mode defaults` leaves the candidate's defaults as a
 profile stored before S1 get them (side requests on, the lines in the reasoning, progress on):
 only the title request may differ, and the tool says which ones did.
 
-Stdlib only in this process; each tree's own interpreter imports its own code. Exit 0 when every
-stream that must match does.
+Stdlib only in this process; each tree's own interpreter imports its own code. The conductor is
+TandemApp's: a pair tool, it finds TandemApp through tools/pair_app.py (TANDEMAPP_SRC, or the
+installed wheel) and both trees run that one. Exit 0 when every stream that must match does.
 """
 
 from __future__ import annotations
@@ -95,8 +96,12 @@ with open(sys.argv[3], "w") as f:
 
 
 def run(tree: str, mode: str, title: str, py: str) -> dict:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from tools import pair_app
+    app = pair_app.use()                      # TandemApp's folder, "" for an installed wheel
+    path = [tree] + ([app] if app else []) + ([os.environ["PYLIBS"]] if os.environ.get("PYLIBS") else [])
     env = {"HOME": os.environ.get("HOME", ""), "PATH": os.environ.get("PATH", ""),
-           "PYTHONPATH": tree + (":" + os.environ["PYLIBS"] if os.environ.get("PYLIBS") else ""),
+           "PYTHONPATH": ":".join(path), **({"TANDEMAPP_SRC": app} if app else {}),
            "CUDA_VISIBLE_DEVICES": "", "OMP_NUM_THREADS": "4", "TZ": "Europe/Berlin"}
     with tempfile.NamedTemporaryFile(suffix=".json") as out:
         p = subprocess.run([py, "-c", RUNNER, mode, title, out.name], cwd=tree, env=env,

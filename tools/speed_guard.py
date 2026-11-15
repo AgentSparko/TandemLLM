@@ -7,7 +7,9 @@ BASE and CAND are two `tools/row3.py` reports from the same hour: the release (t
 never-worse baseline) and the build. The report goes to the conductor's `evals/` directory as
 `speed-guard-<version>-<code_sha>.json`, and `GET /v1/conductor/evals` serves it beside the
 suite reports. The build is the one the server at `--server` serves (`/v1/conductor/evals`'s
-`engine`), or `--version` and `--code-sha` when the rows were taken before the deploy.
+`engine`), or `--version` and `--code-sha` when the rows were taken before the deploy. That route
+and the Conductor view are TandemApp's (ENG-413 WP14): `--server` is an engine in chat mode with
+TandemApp's extension; a headless engine answers it 404 not_on_engine.
 
 The verdict follows `tools/row3.py --compare`'s rule (`verdicts`): a statistic is RESOLVED when
 its difference is bigger than the run-to-run noise and the run ranges do not overlap.

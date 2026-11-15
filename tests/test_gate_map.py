@@ -34,8 +34,8 @@ def test_globs():
 
 
 def test_docs_and_dashboard_need_nothing():
-    r = need("docs/exactness.md", "README.md", "app/dashboard/src/views/usage.ts", "CHANGELOG.md",
-             "models/flint/community/x.json", "tests/test_cache.py", "app/chatd/agent.py")
+    r = need("docs/exactness.md", "README.md", "server/setup/registry.py", "CHANGELOG.md",
+             "models/flint/community/x.json", "tests/test_cache.py", "server/conductor/residency.py")
     assert r["level"] == "none" and r["suites"] == [] and r["kernels"] == [], r
     assert need("tools/gate/runner.py", "tools/row3.py", "tools/parallel_card.py")["level"] == "none"
 

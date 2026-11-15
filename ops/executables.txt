@@ -1,7 +1,6 @@
 # The release's executable files (git mode 100755), one a line. tandem doctor (server/setup/doctor.py)
 # gives each its execute bit back when a copy or a deploy lost it; tests/test_doctor.py keeps this
-# list equal to git's outside app/ (TandemApp's vendored tree keeps its own modes until it leaves,
-# ENG-413 WP14). The scripts never need the bit themselves: they call each other through bash.
+# list equal to git's. The scripts never need the bit themselves: they call each other through bash.
 install.sh
 ops/hold.sh
 ops/make-secrets.sh

@@ -2,20 +2,17 @@
 # The Setup Guide's release gate (OPS-177): a fresh scratch install runs the whole Setup Guide flow on
 # the box before every release, beside the live engine and never touching it.
 #
-#   bash tools/release_gate_setup.sh [--keep] [--no-browser] [--py PYTHON] [--load-s N]
+#   bash tools/release_gate_setup.sh [--keep] [--py PYTHON] [--load-s N]
 #
 # Runs, each on a scratch install of this checkout (install.sh --setup into a HOME of its own under
 # ~/gate-setup-<utc>, spare ports, QSE_CHATD=off, the CPU fake engine instead of a model, a few KB of
 # stand-in weights instead of a download):
 #
-#   A  install --setup, setup mode answers; the Setup Guide's apply through its API, followed by
-#      WebKit at 390 px in the Playwright container: the first try stops at the preflight (this script
-#      breaks run/ops/stop.sh and puts it back once the job failed), the failed screen says so in
-#      plain words and Copy diagnostics works; Retry runs again without a download; the restart card
-#      shows while the fake engine loads, the finished screen with Start chatting within 10 s of the
-#      engine answering; the weights step's Remove button removes a second profile's weights; then
-#      the job is done, /health names the profile, a chat answers, the re-download line is written,
-#      and removing the running profile is refused (screenshots of each screen)
+#   A  install --setup, setup mode answers; the Setup Guide's apply through its API; the job is done,
+#      /health names the profile, a chat answers, a second profile's weights are removed through the
+#      API, the re-download line is written, and removing the running profile is refused. The page's
+#      half (the browser at 390 px on TandemApp's Setup page) is TandemApp's gate since ENG-413 WP14:
+#      the engine serves no page
 #   B  the same install with the execute bit stripped from src/ops/start.sh, run/ops/start.sh,
 #      run/ops/stop.sh and run/ops/use-profile.sh first: the apply must still end done
 #
@@ -24,16 +21,15 @@
 # box's ops/engines.sh (python* executables running server/app.py) does not count, while the scratch's
 # own scripts see them through ENGINE_PROC, a process table this script keeps. Every process it
 # started is stopped at the end; --keep leaves the scratch folders for a look. The report, with every
-# command, its output and the screenshots, goes to results/gate-setup/<utc>/report.md (not under
+# command and its output, goes to results/gate-setup/<utc>/report.md (not under
 # version control). Exit 0 only when every run passes. docs/operations.md: mandatory before a release.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_TREE="$(cd "$HERE/.." && pwd)"
-KEEP=0; BROWSER=1; LOAD_S=20; BASEPY=""
+KEEP=0; LOAD_S=20; BASEPY=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --keep) KEEP=1; shift ;;
-        --no-browser) BROWSER=0; shift ;;
         --py) BASEPY="$2"; shift 2 ;;
         --load-s) LOAD_S="$2"; shift 2 ;;
         -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
@@ -109,7 +105,7 @@ listing() {
     fi
 }
 ( cd "$SRC_TREE" && listing \
-    | grep -vE '^(run|logs|train|results|app/dashboard/node_modules)/' | tar -cf - -T - ) | tar -xf - -C "$REL"
+    | grep -vE '^(run|logs|train|results)/' | tar -cf - -T - ) | tar -xf - -C "$REL"
 git -C "$REL" init -q && git -C "$REL" add -A && \
     git -C "$REL" -c user.name=gate -c user.email=gate@example.invalid commit -qm "release under test" || exit 2
 REF="$(git -C "$REL" rev-parse HEAD)"
@@ -274,58 +270,21 @@ verify_live() {
 }
 
 # ---------------------------------------------------------------- run A
-section "Run A: install, the Setup Guide apply in the browser at 390 px, verify, remove"
+section "Run A: install, the Setup Guide apply through its API, verify, remove"
 PORT="$(free_port)" || { say "no free port"; exit 1; }
 say "ports: engine $PORT, status responder $((PORT + 9)) (never 8000, 8009, 8016)"
 if install_box a "$PORT" && start_setup_mode; then
-    JOB=""
-    if [ "$BROWSER" = 1 ]; then
-        PW="$HOME/.cache/tandem-gate-pw"
-        mkdir -p "$PW" "$OUT/shots"
-        cp "$SRC_TREE/app/dashboard/e2e/setup-gate.spec.ts" "$SRC_TREE/app/dashboard/playwright.gate.config.ts" "$PW/"
-        # as this user, so every file it writes is this user's (the report, the cache), HOME a scratch
-        DU=(--user "$(id -u):$(id -g)" -e HOME=/tmp)
-        [ -d "$PW/node_modules/@playwright/test" ] || cmd docker run --rm "${DU[@]}" --network host -v "$PW:/work" -w /work \
-            mcr.microsoft.com/playwright:v1.63.0-noble npm install --no-save --no-audit --no-fund @playwright/test@1.63.0
-        # the first try must fail at the preflight: a stop.sh that does not parse (VIS-213); put back
-        # once the job says failed, which the spec waits for (shots/fixed.txt) before its Retry
-        cp -p "$DIR/run/ops/stop.sh" "$GATE/stop.sh.good"
-        printf '\nif then fi (\n' >> "$DIR/run/ops/stop.sh"
-        (
-            exec 0</dev/null >/dev/null 2>&1
-            for _ in $(seq 1 600); do
-                J="$(cat "$OUT/shots/first-job-id.txt" 2>/dev/null)"
-                if [ -n "$J" ] && [ "$(job_state "$J")" = failed ]; then
-                    cp -p "$GATE/stop.sh.good" "$DIR/run/ops/stop.sh" && echo fixed > "$OUT/shots/fixed.txt"
-                    exit 0
-                fi
-                sleep 1
-            done
-        ) &
-        PIDS_TO_STOP+=("$!")
-        cmd docker run --rm "${DU[@]}" --network host --ipc=host -v "$PW:/work" -v "$OUT/shots:/shots" -w /work \
-            -e GATE_URL="http://127.0.0.1:$PORT" -e GATE_SELECTION="$(selection)" -e GATE_SHOTS=/shots \
-            mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test -c playwright.gate.config.ts
-        PWRC=$?
-        check "the browser at 390 px: a failed try in plain words, Copy diagnostics, Retry without a download, the restart card, the finished screen within 10 s, Remove with its confirmation" test "$PWRC" = 0
-        JOB="$(cat "$OUT/shots/job-id.txt" 2>/dev/null)"
-        check "the first try failed at the preflight and nothing stopped" bash -c \
-            "curl -s -m 5 'http://127.0.0.1:$PORT/v1/setup/jobs/$(cat "$OUT/shots/first-job-id.txt" 2>/dev/null)?format=json' | grep -q '\"failed_step\": \"preflight\"'"
-    else
-        api POST /v1/setup/apply "{\"selection\": $(selection)}" > "$GATE/apply.json"
-        JOB="$("$GATEPY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["job"]["id"])' "$GATE/apply.json" 2>/dev/null)"
-        [ -n "$JOB" ] || say "the apply answered: $(head -c 600 "$GATE/apply.json")"
-    fi
+    api POST /v1/setup/apply "{\"selection\": $(selection)}" > "$GATE/apply.json"
+    JOB="$("$GATEPY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["job"]["id"])' "$GATE/apply.json" 2>/dev/null)"
+    [ -n "$JOB" ] || say "the apply answered: $(head -c 600 "$GATE/apply.json")"
     if [ -n "$JOB" ]; then
         STATE="$(wait_job "$JOB")"
         say "job $JOB: $STATE"
         verify_live "$STATE"
         api GET "/v1/setup/jobs/$JOB?format=json" >> "$REPORT"
-        # the other profile's weights: removed by the browser's Remove button, else through the API
-        if [ "$BROWSER" != 1 ]; then
-            R="$(api POST /v1/setup/remove '{"profiles": ["exl3-3.0"], "confirm": true}')"
-            echo "$R" >> "$REPORT"
-        fi
+        # the other profile's weights, through the API
+        R="$(api POST /v1/setup/remove '{"profiles": ["exl3-3.0"], "confirm": true}')"
+        echo "$R" >> "$REPORT"
         check "exl3-3.0 removed: its folder is gone" test ! -e "$H/exl3-quants/3.0"
         check "the re-download line is written" grep -q "exl3-3.0.*bash ops/use-profile.sh exl3-3.0 --fetch-only" "$DIR/src/run/weights-removed.txt"
         check "the running profile is refused" bash -c "curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \

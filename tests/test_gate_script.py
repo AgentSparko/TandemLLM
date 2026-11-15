@@ -7,9 +7,9 @@ the real `tools/row3.py`, `tools/rowlog.py`, `tools/gatecheck.py` are copied int
 beside a `serve.env` whose python is a fake that answers each tool the way the tool answers, logs
 every call, and writes row reports whose numbers the test chooses.
 
-  * the steps run in the protocol's order: suite (tests/, then app/tests/), GPU batteries,
-    identity, lossless gate, rows, compare -- and a failing step stops the script with a non-zero
-    exit before the next one; a failing file in either suite pass fails the suite step;
+  * the steps run in the protocol's order: suite (the engine's files, tools/engine_tests.py), GPU
+    batteries, identity, lossless gate, rows, compare -- and a failing step stops the script with a
+    non-zero exit before the next one; a failing file fails the suite step;
   * the exit code is the ship rule: `adopt` needs the mean resolved better against every base and
     nothing resolved worse; a resolved-worse statistic fails either mode;
   * the report under results/gate/<label>/ is dated and holds every command; nothing is written
@@ -46,11 +46,16 @@ if args[:1] == ["-c"]:
 if args[:1] == ["-"] or (args and args[0].endswith("gatecheck.py")):
     sys.exit(subprocess.call([{python!r}] + args))
 tool = os.path.basename(args[0])
-if tool == "script_suite.py":
-    # SRV-661: the suite's runner, each file a call of its own, the count line at the end;
-    # SRV-748: app/tests/script_suite.py runs app/tests/test_*.py
+if tool == "engine_tests.py":
+    # the engine's suite list (ENG-413 WP14): every tests/test_*.py of this tree
     import glob
-    files = sorted(glob.glob(os.path.join(os.path.dirname(args[0]), "test_*.py")))
+    print("\n".join(sorted(glob.glob("tests/test_*.py")))); sys.exit(0)
+if tool == "script_suite.py":
+    # SRV-661: the suite's runner, each file a call of its own, the count line at the end; the
+    # files it is given, else every test_*.py beside it
+    import glob
+    named = [a for a in args[1:] if a.endswith(".py")]
+    files = named or sorted(glob.glob(os.path.join(os.path.dirname(args[0]), "test_*.py")))
     bad = [f for f in files if "FAIL" in open(f).read()]
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "calls.log"), "a") as fh:
         fh.writelines(f + "\n" for f in files)
@@ -109,7 +114,7 @@ def _base_report(label: str, mean: float = 34.14) -> dict:
 def make_tree() -> str:
     d = tempfile.mkdtemp(prefix="gate-")
     repo = os.path.join(d, "p1")
-    for sub in ("ops", "tools", "tests/gpu", "results/row3", "engine", "app/tests"):
+    for sub in ("ops", "tools", "tests/gpu", "results/row3", "engine"):
         os.makedirs(os.path.join(repo, sub))
     shutil.copy(os.path.join(ROOT, "ops/gate.sh"), os.path.join(repo, "ops/gate.sh"))
     shutil.copy(os.path.join(ROOT, "ops/engines.sh"), os.path.join(repo, "ops/engines.sh"))
@@ -117,7 +122,7 @@ def make_tree() -> str:
     for t in ("row3.py", "rowlog.py", "gatecheck.py", "flagoff_identity.py"):
         shutil.copy(os.path.join(ROOT, "tools", t), os.path.join(repo, "tools", t))
     open(os.path.join(repo, "tools/__init__.py"), "w").close()
-    for t in ("tests/test_a.py", "tests/test_b.py", "app/tests/test_c.py", "tests/gpu/test_g.py"):
+    for t in ("tests/test_a.py", "tests/test_b.py", "tests/test_c.py", "tests/gpu/test_g.py"):
         open(os.path.join(repo, t), "w").write("pass\n")
     open(os.path.join(repo, "ops/serve.env"), "w").write(SERVE_ENV.format(repo=repo))
     json.dump(_base_report("rc4k-nostore"), open(os.path.join(repo, "results/row3/rc4k-nostore.json"), "w"))
@@ -163,7 +168,7 @@ def test_the_full_protocol_runs_in_order_and_passes():
     d = make_tree()
     rc, out, calls = gate(d, "cand", "--flags", "QWEN38_X=1")
     assert rc == 0, out
-    order = ["tests/test_a.py", "tests/test_b.py", "app/tests/test_c.py", "tests/gpu/test_g.py",
+    order = ["tests/test_a.py", "tests/test_b.py", "tests/test_c.py", "tests/gpu/test_g.py",
              "flagoff_identity_gate.py --from-env --dump", "flagoff_identity.py --from-env --dump",
              "flagoff_identity.py --compare", "verify_spec.py", "row3.py --label cand-nostore ",
              "gatecheck.py --mode adopt", "row3.py --label cand-nostore-r2",
@@ -190,12 +195,12 @@ def test_a_failing_step_stops_the_script():
     assert rc == 1, out
     assert not any("verify_spec" in c or "row3.py" in c or "flagoff" in c for c in calls), calls
     assert "ABORT at 1 suite" in out, out
-    # a failing TandemApp test fails the suite step too
+    # the last file of the list failing fails the suite step too
     d = make_tree()
-    open(os.path.join(d, "p1/app/tests/test_c.py"), "w").write("raise SystemExit('FAIL')\n")
+    open(os.path.join(d, "p1/tests/test_c.py"), "w").write("raise SystemExit('FAIL')\n")
     rc, out, calls = gate(d, "cand", "--flags", "QWEN38_X=1")
     assert rc == 1, out
-    assert "app/tests/test_c.py" in calls and "ABORT at 1 suite" in out, (calls, out)
+    assert "tests/test_c.py" in calls and "ABORT at 1 suite" in out, (calls, out)
     assert not any("gpu/test_g" in c or "verify_spec" in c or "row3.py" in c for c in calls), calls
     d = make_tree()
     rc, out, calls = gate(d, "cand", "--flags", "QWEN38_X=1", GATE_LOSSLESS="FAIL")

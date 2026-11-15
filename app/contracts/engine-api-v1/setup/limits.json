@@ -1,4 +1,0 @@
-{
-  "about": "The Setup Guide's limits that TandemApp's setup pages use without asking the engine. engine_max_slots is server/setup/registry.py ENGINE_MAX_SLOTS: the most parallel lanes the guide and apply take.",
-  "engine_max_slots": 64
-}

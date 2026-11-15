@@ -877,11 +877,6 @@ def test_the_watchdog_leaves_the_board_to_whoever_holds_the_box_lock():
         print("    (skipped: needs flock -- run it on the box)")
         return
     repo = _box(["watchdog.sh"])
-    # chatd's launcher, a stand-in that says it runs: a healthy minute has nothing to say about chatd
-    # either (with no launcher at all it says so once an hour: tests/test_chatd_lifecycle.py)
-    os.makedirs(os.path.join(repo, "app", "ops"))
-    with open(os.path.join(repo, "app", "ops", "chatd.sh"), "w") as fh:
-        fh.write("#!/bin/bash\nexit 0\n")
     lock = os.path.join(repo, "box.flock")
     holder = _hold_lock(lock)
     try:
