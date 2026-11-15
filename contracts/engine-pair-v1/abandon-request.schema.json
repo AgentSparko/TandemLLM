@@ -1,0 +1,13 @@
+{
+ "type": "object",
+ "properties": {
+  "session": {
+   "type": "string"
+  }
+ },
+ "required": [
+  "session"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-pair-v1/abandon-request"
+}

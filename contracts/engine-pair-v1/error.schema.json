@@ -1,0 +1,50 @@
+{
+ "type": "object",
+ "properties": {
+  "error": {
+   "type": "object",
+   "properties": {
+    "type": {
+     "enum": [
+      "bad_request",
+      "no_window",
+      "code_spent",
+      "wrong_code",
+      "rate_limited",
+      "local_only",
+      "window_key",
+      "no_pairing",
+      "no_install",
+      "no_host_key",
+      "key_present",
+      "key_id_taken",
+      "token_write",
+      "not_found",
+      "ssh_dir_link",
+      "ssh_dir_type",
+      "ssh_dir_owner",
+      "ssh_dir_mode",
+      "authorized_keys_link",
+      "authorized_keys_type",
+      "authorized_keys_owner",
+      "authorized_keys_mode",
+      "authorized_keys_open"
+     ]
+    },
+    "message": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "type",
+    "message"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "required": [
+  "error"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-pair-v1/error"
+}

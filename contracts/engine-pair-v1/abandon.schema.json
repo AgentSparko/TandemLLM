@@ -1,0 +1,25 @@
+{
+ "type": "object",
+ "properties": {
+  "pair": {
+   "const": "engine-pair-v1"
+  },
+  "abandoned": {
+   "type": "boolean"
+  },
+  "tries_left": {
+   "type": "integer"
+  },
+  "state": {
+   "type": "string"
+  }
+ },
+ "required": [
+  "pair",
+  "abandoned",
+  "tries_left",
+  "state"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-pair-v1/abandon"
+}

@@ -33,4 +33,5 @@
 \texttt{Retry-\allowbreak{}After} & out, both & with a 503 (queue full, memory gate, draining, a full backend), a 429, or a decision model that is loading \\
 \texttt{WWW-\allowbreak{}Authenticate} & out, both & Bearer, with a 401 \\
 \texttt{Set-\allowbreak{}Cookie} & out, both & \texttt{qse\_\allowbreak{}dash}, the dashboard session: HttpOnly, SameSite=Strict, Secure behind https \\
+\texttt{X-\allowbreak{}Tandem-\allowbreak{}Pair-\allowbreak{}Key} & in, engine & the pairing window key (run/remote/pair-local.key): tandem pair opens and closes a window with it, from the machine itself \\
 \end{reftable}

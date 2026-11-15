@@ -1,0 +1,39 @@
+{
+ "type": "object",
+ "properties": {
+  "pair": {
+   "const": "engine-pair-v1"
+  },
+  "open": {
+   "type": "boolean"
+  },
+  "state": {
+   "enum": [
+    "none",
+    "open",
+    "confirming",
+    "paired",
+    "expired",
+    "spent",
+    "closed"
+   ]
+  },
+  "expires_in": {
+   "type": "integer"
+  },
+  "tries_left": {
+   "type": "integer"
+  },
+  "fingerprint": {
+   "type": "string",
+   "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+  }
+ },
+ "required": [
+  "pair",
+  "open",
+  "state"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-pair-v1/status"
+}

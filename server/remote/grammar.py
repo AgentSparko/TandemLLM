@@ -104,7 +104,7 @@ VERBS: dict = {
 #: options a subcommand cannot go without
 REQUIRED = {"ext install": ("--sha256", "--name"), "upgrade apply": ("--confirm",)}
 #: verbs of later work packages of the same contract: refused as unknown until they exist
-PLANNED = ("models", "pair")
+PLANNED = ("models",)
 
 
 def split(line: str) -> list[str]:

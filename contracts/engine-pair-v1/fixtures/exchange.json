@@ -1,0 +1,50 @@
+{
+ "about": "one exchange: the code is shown on the engine host; x is TandemApp's secret, y the engine's",
+ "code": "246810",
+ "pair": "engine-pair-v1",
+ "plaintext": "{\"authorized_keys\":{\"added\":true,\"line\":\"command=\\\"/bin/bash /home/u/TandemLLM/bin/tandem remote --key-id tandemapp-1\\\",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFQiY+cE0BGn0Tybfol9wVqOaXWbLHXOU2HRzmtm987Y tandemapp-1\"},\"engine_version\":\"0.15.4\",\"host_key\":\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMUtwESpk07k/1IXUtscolkq9vDxB5qJGEVZ+dJc9mw5\",\"host_keys\":[\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMUtwESpk07k/1IXUtscolkq9vDxB5qJGEVZ+dJc9mw5\"],\"http_port\":8000,\"http_token\":\"fixture-token-AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"key_id\":\"tandemapp-1\",\"mode\":\"setup\",\"pair\":\"engine-pair-v1\",\"ssh_port\":22,\"ssh_user\":\"u\"}",
+ "step1": {
+  "answer": {
+   "cB": "3ff2fcd82be5d92ff555b5fbe0fd6a5cdc14a07fd64df228efe7a5497c68c6f3",
+   "expires_in": 300,
+   "fingerprint": "SHA256:WF96oNRItB8rn//MVIrYop0k8aw36KHOYQtnMvnZuNg",
+   "host_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMUtwESpk07k/1IXUtscolkq9vDxB5qJGEVZ+dJc9mw5",
+   "pB": "2aa3d8004bd9cc9db48997408522e647d7718fe56d8ba69a540a6ae39cd197a1ca5e464a0a8172beb45a3c3aac52a005684c0ba7fc9e6788ef224b8089e36e093040c78a8094102003b805d1c8f94fa6d7e96065e456258ebf56eb945771aa4620c441f03ee826c497655e4a008118b5aea2d2704821a88c4f6ad467a2c0284af9b0d89dafe0079b364ff4b52e48f15acacdfb5816c03ff9525c1f3d9c92206c875d00f4c4c14e49a5ecaca7ae37132d86e1bfa5bfafb387febff445dc71b737dffcb438a0fa6848c887c361d80bc0851bc4796f420978ab530b65526eff2b5429dd6a24dc97762295e6762f624c404e942abf36a04c5ad6f53d13c9eb37062",
+   "pair": "engine-pair-v1",
+   "session": "5e551000000000000000000000000000",
+   "tries_left": 4
+  },
+  "request": {
+   "key_id": "tandemapp-1",
+   "name": "TandemApp",
+   "pA": "f1b0163dfe08669ae75cb1492178982584ecae49f3710fddaf161ac89d6f68207143e9a1008ce55a2bd1fcce860e685d7140ef58737fdaa0272b9c18a6fb1aaf540a42d5b710df96b534d0824c37498a5326d7558edb23820a502e69b48e9eeacb2b6fbbb8018162a2601f0535bfc9a83214099b6be579b8e50e6adefc00de8796916d00affea41f9f3f2bc4d7663557061967d3a47d67ec719bfc8040f55161e6e0dfd4924536bb8652e0c13af8ea0df1d952c4710b2367772bd15a86b0cf22e499cbd9169eb3b011792851806d6786527e19adf9fec32c799398f1b9e955e67c351a592c0d7022264bd2a248b4bdb3c1c67906a39c01c9c3d1f68879f98efe",
+   "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFQiY+cE0BGn0Tybfol9wVqOaXWbLHXOU2HRzmtm987Y"
+  }
+ },
+ "step2": {
+  "answer": {
+   "pair": "engine-pair-v1",
+   "sealed": {
+    "box": "a54210154472d4783576d931e149d3127f0df368bb68bb3e8edb5a1834facd2854d708d1d6495f189bbf6c31fefa92028fe1dfd07f0ce733599fd5352c697f9106bb0331dccc2a9643d1e627611297bc9d73c73d8479c1562c6f84d53dac763120657e352f3687679a13296026df48cf1aa5451a613cd55849001a352a9a1595d9922f9a4eb0083346d84cd887774093a7e1ea45ad4c60edaa895a687ebe9c70d11a49cf4a83f9bafadf2e727f14ffa11832301fe7af4a4b36b205e788163100f711b659b48666691656e186c98b3528b0fc31aa32227de66e279b02a40801a129b30e69ae4964c2f5aff5333f506b74155ee094fb582d74935f3919393d11c8dbc783ee0b29fe10421d9ca770bd7db582e168a5e7ad887432dc61cbeb2504f6676fb8b97c23e76d5fcc25b59bde244bcee1de6d3d8334e55bcd0f3f84615b84978ca3d440d6066f0c736997a2bedbc04b6b51a375671fbc5c4c8a06f73ca24318d7d2a44344da52df0db5d4286059b4e53a9cbbc3f698d61b042ae3bf9d9dae1b961bb25435c215e96b96288ac647f9ceadf6a833429a86c15cc08f74595682d08a5b608e5c2103e8b4418ea6dac26f19411c6c2f67f961b2b2cfd18a47c070cbb2cc5e31d221e7b44789f83fb3c04638be7983efa0597b59d7aa32e2e2ac031d844da1c6900ac1a4fbc342e26117be8b0443482eb73d4ff8c9f42d04bdd67034a49b0869b67c137aae4b08f121901103a5b976d66fa1c6c1337f95d085a83e6a95cae115c0ebfdfb46232cd6bd006d538d82b5b41fd349a635ae281113828827fca83919c8a6940a6683a12640025c4d36915c9fad11b020e2e1779fbb152495ec7f7fab1d52d586f6610bf14f18ad863d3cecdcfefa451e3bfe9ee202efb19a7ab2d65be73c3cb7d6b3902aae9716e8f51d4956cf5c",
+    "nonce": "000102030405060708090a0b0c0d0e0f",
+    "tag": "e4d2d5fd74ff48738d0bee1bc2938c4c9bbe423f44e831bc553bad0f5a6c811c"
+   }
+  },
+  "request": {
+   "cA": "fa8b4439daea46fa261be36c3d9e84a6373f640f2533241c25ea9ae7c1fe8209",
+   "session": "5e551000000000000000000000000000"
+  }
+ },
+ "swapped_host_key": {
+  "host_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB952XSLZMg9ot32SYsLsOG3qjalw6Oi1eisiMqh+dVY",
+  "note": "the same step 1 answer with this host_key: TandemApp's check of cB fails"
+ },
+ "transcript": {
+  "Ke": "84f09676cb4e8d16cc14eefcf678076e",
+  "TT_sha256": "84f09676cb4e8d16cc14eefcf678076eaf2ed633d431e13bd38987a0351f1a91",
+  "ida": "tandemapp-key SHA256:1m4N5jfkmBC5h62RMKMP2eBP+dfQxbP3GTnJ90ga3WA tandemapp-1",
+  "idb": "tandemengine SHA256:WF96oNRItB8rn//MVIrYop0k8aw36KHOYQtnMvnZuNg"
+ },
+ "x": "384e38095728e6ac7122f80fc6aa40a193a8fe9f104a0e1cb77f630e1545df2980b078cb5299955831a806c6412942162ac08138ad88ea8618511d36b788498a105d9d52a080058963680aa5a62f62587be60e6ffd9c25cfc600dbb6e076696c8a9a2220c2de931682fd78fa4a1db491fdf6dae99db3de74cf6664116005f422ebe113ee48fdfcdf211fc58c58cc3a0c34598152e26645ba3dcf10674a371c05b24bc39ab7d817b2a6c6f05be2e4f882a9d0d80e2f19fb55971e734a999c6c87c67efc734b21a3aa8817238f615ad0741b2980ec9911f3205ceaa4170fcdb9d764ebb35ffad8ad76cf63f7f6bbc641fd17d1c6e54ecfb6df3066a26db0b7d3a8",
+ "y": "7459586a5e078829db3970aff6d829bad1f31f029de52788929143305a800f1955f490abc2acf9fee82d2a8c946c66b2026722c56354a467cc90e1744629f6b04c68bdb3a75ea706cd7e8345d65d4b71ba302ed38b373f3ba112bbd925b0995c5fde3a0132f1f7bd39829cc09d60d92dd59d7c76537f985683a6284eeea7a14927ec344f4fdc9e5c8b363e2c88fa232572a3a1b670015f2618e0f0898f714bf5878fdb7b27eb7c595d4c142236281d1e8177799ae4e5b5374b5e3788283e19ae028a1cd452004527f22d9c2f9188b98d5973a15026ad0c8c37fc84395507e9c73a2fcb406aec121d85e91bbd0f096698ef786872049b70c0e4a666ab3f5980ce"
+}

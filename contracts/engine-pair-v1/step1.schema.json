@@ -1,0 +1,45 @@
+{
+ "type": "object",
+ "properties": {
+  "pair": {
+   "const": "engine-pair-v1"
+  },
+  "session": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{32}$"
+  },
+  "pB": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{1,512}$"
+  },
+  "cB": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{64}$"
+  },
+  "host_key": {
+   "type": "string"
+  },
+  "fingerprint": {
+   "type": "string",
+   "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+  },
+  "tries_left": {
+   "type": "integer"
+  },
+  "expires_in": {
+   "type": "integer"
+  }
+ },
+ "required": [
+  "pair",
+  "session",
+  "pB",
+  "cB",
+  "host_key",
+  "fingerprint",
+  "tries_left",
+  "expires_in"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-pair-v1/step1"
+}

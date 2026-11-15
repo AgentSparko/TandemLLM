@@ -645,8 +645,8 @@ def test_additive_1_8():
 
 
 def test_additive_1_9():
-    """ENG-456: 1.9: GET and PATCH /v1/engine/settings, the HTTP token and the allow-from list;
-    every 1.8 route and answer stays."""
+    """ENG-456, SEC-10: 1.9: GET and PATCH /v1/engine/settings, the pairing routes, the HTTP token
+    and the allow-from list; every 1.8 route and answer stays."""
     from tools import contract_check
     from server import engine_routes
     from server.remote import overlay
@@ -657,10 +657,20 @@ def test_additive_1_9():
     assert {k: v for k, v in doc.items() if k not in ("version", "routes")} == \
         {k: v for k, v in old.items() if k not in ("version", "routes")}
     assert [(r["method"], r["path"], r["group"]) for r in new] == \
-        [("GET", "/v1/engine/settings", 9), ("PATCH", "/v1/engine/settings", 9)], new
+        [("GET", "/v1/engine/settings", 9), ("PATCH", "/v1/engine/settings", 9),
+         ("GET", "/v1/engine/pair", 9), ("POST", "/v1/engine/pair/1", 9), ("POST", "/v1/engine/pair/2", 9),
+         ("POST", "/v1/engine/pair/abandon", 9), ("POST", "/v1/engine/pair/open", 9),
+         ("POST", "/v1/engine/pair/close", 9)], new
     for r in new:
-        assert engine_routes._route(r["method"], ["settings"]) is not None, r
+        parts = r["path"][len(engine_routes.PREFIX):].split("/")
+        assert engine_routes._route(r["method"], parts) is not None, r
+        if r["path"].startswith("/v1/engine/pair"):
+            # SEC-10: the shapes are the pairing contract's, beside this one (engine-pair-v1)
+            assert "contracts/engine-pair-v1" in r["doc"] and "schema" not in r, r
+            assert r["live"] == (r["method"] == "GET"), r
+            continue
         assert os.path.isfile(os.path.join(CONTRACT, r["schema"])), r["schema"]
+    assert os.path.isfile(os.path.join(ROOT, "contracts", "engine-pair-v1", "README.md"))
     errs = contract_check.validate(_json("engine", "settings.example.json"),
                                    contract_check.load("engine/settings", CONTRACT), root=CONTRACT)
     assert not errs, errs
@@ -683,7 +693,7 @@ def test_additive_1_9():
     handler = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Handler")
     pr = next(n for n in handler.body if isinstance(n, ast.FunctionDef) and n.name == "parse_request")
     assert "gate.check(" in ast.get_source_segment(src, pr)
-    return f"{len(old['routes'])} 1.8 routes kept, 2 new in group 9, 1.8 examples valid, hot " \
+    return f"{len(old['routes'])} 1.8 routes kept, {len(new)} new in group 9, 1.8 examples valid, hot " \
            f"{', '.join(overlay.HOT)}"
 
 

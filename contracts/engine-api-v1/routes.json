@@ -880,6 +880,72 @@
       "consumer": "TandemApp's engine settings scope (planned)",
       "since": "1.9",
       "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/engine/pair",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "doc": "the pairing window's state, no code (contracts/engine-pair-v1 status); without the token while a window is open",
+      "consumer": "TandemApp's onboarding (planned, SRV-827)",
+      "since": "1.9",
+      "live": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/pair/1",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "doc": "pairing step 1 (contracts/engine-pair-v1): the engine's SPAKE2 message, its confirmation and its SSH host key; without the token while a window is open, rate-limited",
+      "consumer": "TandemApp's onboarding (planned, SRV-827)",
+      "since": "1.9",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/pair/2",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "doc": "pairing step 2 (contracts/engine-pair-v1): TandemApp's confirmation; its key installed with tandem remote forced, its HTTP token issued, the answer sealed",
+      "consumer": "TandemApp's onboarding (planned, SRV-827)",
+      "since": "1.9",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/pair/abandon",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "doc": "a pairing run TandemApp gave up (contracts/engine-pair-v1)",
+      "consumer": "TandemApp's onboarding (planned, SRV-827)",
+      "since": "1.9",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/pair/open",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "doc": "tandem pair: a new window and its code (contracts/engine-pair-v1); trusted-local with the window key only",
+      "consumer": "TandemApp's onboarding (planned, SRV-827)",
+      "since": "1.9",
+      "live": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/engine/pair/close",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "doc": "tandem pair --close (contracts/engine-pair-v1); trusted-local with the window key only",
+      "consumer": "TandemApp's onboarding (planned, SRV-827)",
+      "since": "1.9",
+      "live": false
     }
   ],
   "app_routes_via_engine": [

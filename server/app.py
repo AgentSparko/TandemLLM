@@ -86,6 +86,7 @@ from server.api import activity as activity_mod  # noqa: E402
 from server.api import logbuf  # noqa: E402
 from server.api import auth as auth_mod  # noqa: E402
 from server.api import access as access_mod  # noqa: E402  (ENG-456 the HTTP token, allow-from)
+from server.pairing import http as pair_http  # noqa: E402  (ENG-448/SEC-10 pairing, ENG-450 mDNS)
 from server import images as images_mod  # noqa: E402
 from server import memlimits  # noqa: E402
 from server import gpu_health  # noqa: E402
@@ -8539,6 +8540,10 @@ class Handler(BaseHTTPRequestHandler):
             self._gate_open = True
             return True
         status, kind, message = got
+        if status == 401 and pair_http.lan_open(STATE, self.command, self.path):
+            # SEC-10: the pairing routes take a caller without the token while a window is open
+            # (rate-limited there); the allow-from list above still applies
+            return True
         self.close_connection = True
         self._json(status, {"error": {"type": kind, "code": kind, "message": message}},
                    extra_headers=((("WWW-Authenticate", 'Bearer realm="TandemLLM"'),) if status == 401 else ())
@@ -13489,7 +13494,10 @@ def _serve_setup(a) -> None:
           f"on http://{a.host}:{a.port}; no served model loaded", flush=True)
     w = setup_api.wren_of(sys.modules[__name__])
     threading.Thread(target=w.load, name="wren-autoload", daemon=True).start()
-    serve_until_drained(EngineServer((a.host, a.port), SetupHandler))
+    httpd = EngineServer((a.host, a.port), SetupHandler)
+    # ENG-448/SEC-10, ENG-450: the pairing window's routes and the _tandem._tcp advertisement
+    pair_http.start(STATE, httpd.server_address[1], a.host, "setup")
+    serve_until_drained(httpd)
 
 
 def _ext_at_start(a) -> None:
@@ -14676,6 +14684,8 @@ def _serve(a, led) -> None:
     print(f"[server] listening on http://{a.host}:{a.port}  model {a.served_model}", flush=True)
     print(f"[server] queue max {a.max_queue} wait {a.queue_timeout:.0f}s "
           f"request timeout {a.request_timeout:.0f}s", flush=True)
+    # ENG-448/SEC-10, ENG-450: the pairing window's routes and the _tandem._tcp advertisement
+    pair_http.start(STATE, a.port, a.host, "engine")
     serve_until_drained(httpd)
 
 
@@ -14714,6 +14724,8 @@ class SetupHandler(Handler):
                 "engine_api": engine_api.VERSION})
         if path == "/v1/models":
             return self._json(200, {"object": "list", "data": []})
+        if pair_http.split(path) is not None:        # SEC-10: pairing in setup mode too
+            return engine_routes.serve(self, STATE, "GET", path, None)
         return self._setup_only(path)
 
     def do_POST(self):
@@ -14730,6 +14742,8 @@ class SetupHandler(Handler):
             return setup_api.handle(self, sys.modules[__name__], "POST", path, body)
         if path == "/v1/dashboard/session":
             return self._session("POST", body)
+        if pair_http.split(path) is not None:        # SEC-10: pairing in setup mode too
+            return engine_routes.serve(self, STATE, "POST", path, body)
         return self._setup_only(path)
 
     def do_PUT(self):
@@ -14866,6 +14880,7 @@ def serve_until_drained(httpd) -> None:
     try:
         httpd.serve_forever()
     finally:
+        pair_http.stop(STATE)                       # ENG-450: the advertisement's goodbye
         # `shutdown()` stops the LISTENER; the handler threads are ThreadingHTTPServer's, and
         # those are daemons. Returning from here used to end the interpreter under the stream the
         # drain had promised to finish -- every graceful stop, every hold's stop, every deploy

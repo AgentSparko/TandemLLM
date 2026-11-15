@@ -1,0 +1,37 @@
+{
+ "type": "object",
+ "properties": {
+  "pair": {
+   "const": "engine-pair-v1"
+  },
+  "sealed": {
+   "type": "object",
+   "properties": {
+    "nonce": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{32}$"
+    },
+    "box": {
+     "type": "string",
+     "pattern": "^[0-9a-f]*$"
+    },
+    "tag": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    }
+   },
+   "required": [
+    "nonce",
+    "box",
+    "tag"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "required": [
+  "pair",
+  "sealed"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-pair-v1/step2"
+}

@@ -13,6 +13,8 @@ Two verbs read stdin: `ext install` (a wheel, server/remote/ext.py) and `upgrade
 archive of the tree, server/remote/upgrade.py); each checks the bytes' sha256 and the journal line
 keeps the one it checked (`checked`). `token rotate` answers the engine's new HTTP token
 (server/api/access.py) on this channel only: it is never journaled, logged or written in clear.
+Over a key's channel (--key-id) it replaces that key's token only, and `unpair` removes it with the
+key's line, so each paired controller keeps its own (pairing, server/pairing).
 
 The contract is contracts/engine-ctl-v1 (its README, verbs.json and a schema per answer).
 """
@@ -292,7 +294,12 @@ def v_doctor(tree, call):
 
 def v_unpair(tree, call, info, env):
     control = tree.control or os.path.join(tree.base, "bin", "tandem")
-    return keys.unpair(control, info.get("key"), env.get("SSH_USER_AUTH")), EXIT_OK
+    body = keys.unpair(control, info.get("key"), env.get("SSH_USER_AUTH"))
+    if info.get("key"):
+        # SEC-10: the key's own HTTP token goes with its line (the last one leaves the lock)
+        from server.api import access
+        access.drop(tree.http_token, info["key"])
+    return body, EXIT_OK
 
 
 # ------------------------------------------------------------------------------------- 1.1 (ENG-454, ENG-456)
@@ -353,9 +360,10 @@ def v_upgrade_apply(tree, call):
     return body, rc
 
 
-def v_token_rotate(tree, call):
+def v_token_rotate(tree, call, info=None):
     from server.api import access
-    token, before = access.rotate(tree.http_token)
+    # SEC-10: over a key's channel only that key's token changes; by hand, the whole file
+    token, before = access.rotate(tree.http_token, (info or {}).get("key"))
     return {"token": token, "rotated": before, "file": os.path.relpath(tree.http_token, tree.base),
             "effective": "within a second, without a restart: callers that are not trusted-local need "
                          "Authorization: Bearer <token>"}, EXIT_OK
@@ -470,6 +478,8 @@ def run(argv: list[str], env: dict | None = None, tree: Tree | None = None) -> i
             return rc
         if name == "unpair":
             body, rc = v_unpair(tree, call, info, env)
+        elif name == "token rotate":
+            body, rc = v_token_rotate(tree, call, info)
         else:
             body, rc = HANDLERS[name](tree, call)
         if body.get("job"):

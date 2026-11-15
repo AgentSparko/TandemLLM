@@ -19,6 +19,8 @@ same bodies while they last (they leave with ENG-413 WP14):
     POST /v1/engine/shadow/ask
     GET, PATCH /v1/engine/settings             the hot settings (engine API 1.9, ENG-456;
                                                server/engine_settings.py, not handed to an extension)
+    GET  /v1/engine/pair                       the pairing window (engine API 1.9, SEC-10;
+    POST /v1/engine/pair/1|2|abandon|open|close  server/pairing/http.py, not handed to an extension)
 
 contracts/engine-api-v1/README.md (group 9) and engine/*.schema.json describe the bodies. An answer
 is the body as the screen showed it (no `contract_version`: that is the conductor contract's field,
@@ -269,6 +271,11 @@ def _route(method: str, parts: list):
     if head == "settings" and not rest and method in ("GET", "PATCH"):
         # engine API 1.9: server/engine_settings.py checks its own access (PATCH: settings_write)
         return "settings", (method,), "dashboard" if method == "GET" else "settings_write"
+    if head == "pair" and len(rest) <= 1:
+        # engine API 1.9 (SEC-10): server/pairing/http.py checks its own access (engine-pair-v1)
+        from server.pairing import http as pair_http
+        if pair_http.route(method, rest[0] if rest else ""):
+            return "pair", (method,), "pair"
     return None
 
 
@@ -284,6 +291,9 @@ def serve(handler, state, method: str, path: str, body) -> None:
     if name == "settings":
         from server import engine_settings
         return engine_settings.serve(handler, state, method, body)
+    if name == "pair":
+        from server.pairing import http as pair_http
+        return pair_http.serve(handler, state, method, path, body)
     if not handler._allowed(rule):
         return None
     body = body if isinstance(body, dict) else {}

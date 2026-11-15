@@ -198,8 +198,7 @@
   }
  },
  "planned": {
-  "models": "a later minor of this contract; refused as unknown_verb until then",
-  "pair": "a later minor of this contract; refused as unknown_verb until then"
+  "models": "a later minor of this contract; refused as unknown_verb until then"
  },
  "exit": {
   "0": "ok",
@@ -275,10 +274,17 @@
    "from",
    "error",
    "job",
-   "checked"
+   "checked",
+   "fingerprint",
+   "tries_left",
+   "state",
+   "reason",
+   "added",
+   "name"
   ],
   "redacted": "the value of every secret-looking KEY=VALUE or --name VALUE",
-  "checked": "ext install and upgrade: the sha256 (and the size) of the bytes the call read and checked, refused ones too"
+  "checked": "ext install and upgrade: the sha256 (and the size) of the bytes the call read and checked, refused ones too",
+  "pairing": "the pairing window's steps are lines of the same file, verb `pair open`, `pair try`, `pair abandoned`, `pair confirm`, `pair paired`, `pair expired` or `pair closed`, via http or local, with the key id and its fingerprint; never the code, a token, a key or a protocol message"
  },
  "files": {
   "run/managed.env": "the current overlay version, read by ops/serve.env after run/local.env",
@@ -292,7 +298,9 @@
   "run/remote/upgrades/<sha256>.tar": "a planned upgrade's archive (the two newest are kept)",
   "run/remote/upgrades/<job>/": "an upgrade job's previous run/ops, bin/tandem and install.sh (the three newest)",
   "refs/tandem/previous, refs/tandem/upgrade/<sha256 prefix>": "in src's repository: the tree before the last upgrade, an archive's commit",
-  "run/http-token": "the HTTP token's sha256 (sha256:<hex>, mode 600), written by token rotate; the engine reads it again within a second"
+  "run/http-token": "the HTTP tokens' sha256s, one line each (sha256:<hex>, `sha256:<hex> <key id>` for a key's own, `sha256:<hex> *` for the install's lock; mode 600): token rotate over a key's channel replaces that key's line, by hand the whole file; pairing adds a key's line and unpair removes it; the engine reads it again within a second",
+  "run/remote/pair-local.key": "the pairing window key (mode 600), new at every engine start: tandem pair sends it to open a window"
  },
- "key_line": "command=\"/bin/bash DIR/bin/tandem remote --key-id ID\",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding[,from=\"...\"] ssh-ed25519 AAAA... COMMENT"
+ "key_line": "command=\"/bin/bash DIR/bin/tandem remote --key-id ID\",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding[,from=\"...\"] ssh-ed25519 AAAA... COMMENT",
+ "pairing": "not a verb of this CLI: `tandem pair` on the engine host opens a pairing window in the engine process, whose exchange (contracts/engine-pair-v1) installs a controller's key with the key_line below and issues its HTTP token; a paired key cannot open one"
 }

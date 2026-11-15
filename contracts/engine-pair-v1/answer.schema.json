@@ -1,0 +1,77 @@
+{
+ "type": "object",
+ "properties": {
+  "pair": {
+   "const": "engine-pair-v1"
+  },
+  "key_id": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+  },
+  "ssh_user": {
+   "type": "string"
+  },
+  "ssh_port": {
+   "type": "integer"
+  },
+  "host_key": {
+   "type": "string"
+  },
+  "host_keys": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  },
+  "http_port": {
+   "type": "integer"
+  },
+  "http_token": {
+   "type": "string",
+   "minLength": 32
+  },
+  "engine_version": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "mode": {
+   "enum": [
+    "setup",
+    "engine"
+   ]
+  },
+  "authorized_keys": {
+   "type": "object",
+   "properties": {
+    "added": {
+     "type": "boolean"
+    },
+    "line": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "added",
+    "line"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "required": [
+  "pair",
+  "key_id",
+  "ssh_user",
+  "ssh_port",
+  "host_key",
+  "host_keys",
+  "http_port",
+  "http_token",
+  "engine_version",
+  "mode",
+  "authorized_keys"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-pair-v1/answer"
+}

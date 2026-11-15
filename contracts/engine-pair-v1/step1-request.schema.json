@@ -1,0 +1,28 @@
+{
+ "type": "object",
+ "properties": {
+  "pA": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{1,512}$"
+  },
+  "public_key": {
+   "type": "string",
+   "pattern": "^ssh-ed25519 [A-Za-z0-9+/]{68}$"
+  },
+  "key_id": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+  },
+  "name": {
+   "type": "string",
+   "maxLength": 80
+  }
+ },
+ "required": [
+  "pA",
+  "public_key",
+  "key_id"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-pair-v1/step1-request"
+}

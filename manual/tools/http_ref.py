@@ -209,6 +209,7 @@ HEADERS = [
     ("Retry-After", "out", "both", "with a 503 (queue full, memory gate, draining, a full backend), a 429, or a decision model that is loading"),
     ("WWW-Authenticate", "out", "both", "Bearer, with a 401"),
     ("Set-Cookie", "out", "both", "qse_dash, the dashboard session: HttpOnly, SameSite=Strict, Secure behind https"),
+    ("X-Tandem-Pair-Key", "in", "engine", "the pairing window key (run/remote/pair-local.key): tandem pair opens and closes a window with it, from the machine itself"),
 ]
 
 # --------------------------------------------------------------------------- errors
@@ -220,8 +221,10 @@ ERRORS = [
     ("400", ["stage_text_only"], "a request with images on the tail stage of a split model (--stage), as error.code beside invalid_request_error", False),
     ("400", ["confirm_required"], "a setup reset without the confirmation its level asks for (true, or the typed word)", False),
     ("401", ["unauthorized"], "a guarded route without the token or the session it needs, once an admin password is set; a wrong collect token", False),
+    ("403", ["local_only", "window_key"], "opening or closing a pairing window (POST /v1/engine/pair/open, /close) from another machine, or without the window key", False),
     ("404", ["not_found"], "no such route, or a route whose part is off on this server (the conductor, the proxy, the decision models)", False),
     ("404", ["not_on_engine"], "a route TandemApp serves (the conductor, its library, memory and Laya, the backends) on an engine where no extension serves it", False),
+    ("404", ["no_pairing"], "a pairing route on a process that serves no pairing", False),
     ("404", ["no_ui"], "the page, on every engine: TandemApp's controller serves it", False),
     ("404", ["model_not_found"], "a model id no backend serves, or one two backends serve (the message names the prefixed forms) (code model_not_found)", False),
     ("409", ["busy", "not_loaded", "role_off"],
@@ -231,8 +234,9 @@ ERRORS = [
      "a value the schema refuses: a config field (error.field), a field an environment variable locks (error.variable), a decision request's fields", False),
     ("429", ["server_busy"], "a request without a stream that waited --queue-timeout for the engine", True),
     ("429", ["too_many"], "a fifth log or live stream at once; a sixth failed sign-in in a minute", True),
-    ("429", ["rate_limited"], "/v1/tokenize past its 240 calls a minute from one address", True),
+    ("429", ["rate_limited"], "/v1/tokenize past its 240 calls a minute from one address; a pairing route past 20 a minute from one address", True),
     ("500", ["internal_error"], "a bug: the message is the exception's; the request is in the log", False),
+    ("500", ["internal"], "a PATCH /v1/engine/settings that raised: the message is the exception's; the call is journaled", False),
     ("500", ["extension_error"], "a route of the extension that raised: the extension's bug, in the engine's log", False),
     ("501", [], "OPTIONS on any path but the Laya routes", False),
     ("503", ["server_busy"], "the queue is full, the server is draining, or the memory gate or the admission by bytes cannot make room", True),

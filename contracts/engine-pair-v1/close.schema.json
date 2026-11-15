@@ -1,0 +1,17 @@
+{
+ "type": "object",
+ "properties": {
+  "pair": {
+   "const": "engine-pair-v1"
+  },
+  "closed": {
+   "type": "boolean"
+  }
+ },
+ "required": [
+  "pair",
+  "closed"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-pair-v1/close"
+}

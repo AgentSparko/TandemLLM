@@ -6,8 +6,10 @@
 \texttt{400} & \texttt{stage\_\allowbreak{}text\_\allowbreak{}only} & a request with images on the tail stage of a split model (\texttt{-{}-stage}), as error.code beside \texttt{invalid\_\allowbreak{}request\_\allowbreak{}error} \\
 \texttt{400} & \texttt{confirm\_\allowbreak{}required} & a setup reset without the confirmation its level asks for (true, or the typed word) \\
 \texttt{401} & \texttt{unauthorized} & a guarded route without the token or the session it needs, once an admin password is set; a wrong collect token \\
+\texttt{403} & \texttt{local\_\allowbreak{}only}, \texttt{window\_\allowbreak{}key} & opening or closing a pairing window (POST \texttt{/\allowbreak{}v1/\allowbreak{}engine/\allowbreak{}pair/\allowbreak{}open}, \texttt{/\allowbreak{}close}) from another machine, or without the window key \\
 \texttt{404} & \texttt{not\_\allowbreak{}found} & no such route, or a route whose part is off on this server (the conductor, the proxy, the decision models) \\
 \texttt{404} & \texttt{not\_\allowbreak{}on\_\allowbreak{}engine} & a route TandemApp serves (the conductor, its library, memory and Laya, the backends) on an engine where no extension serves it \\
+\texttt{404} & \texttt{no\_\allowbreak{}pairing} & a pairing route on a process that serves no pairing \\
 \texttt{404} & \texttt{no\_\allowbreak{}ui} & the page, on every engine: TandemApp's controller serves it \\
 \texttt{404} & \texttt{model\_\allowbreak{}not\_\allowbreak{}found} & a model id no backend serves, or one two backends serve (the message names the prefixed forms) (code \texttt{model\_\allowbreak{}not\_\allowbreak{}found}) \\
 \texttt{409} & \texttt{busy}, \texttt{not\_\allowbreak{}loaded}, \texttt{role\_\allowbreak{}off} & an action that needs a role or a decision model in another state, or a role the roles document switches off (\texttt{role\_\allowbreak{}off}) \\
@@ -15,8 +17,9 @@
 \texttt{422} & \texttt{invalid\_\allowbreak{}request\_\allowbreak{}error} & a value the schema refuses: a config field (error.field), a field an environment variable locks (error.variable), a decision request's fields \\
 \texttt{429}\newline with \texttt{Retry-After} & \texttt{server\_\allowbreak{}busy} & a request without a stream that waited \texttt{-{}-queue-\allowbreak{}timeout} for the engine \\
 \texttt{429}\newline with \texttt{Retry-After} & \texttt{too\_\allowbreak{}many} & a fifth log or live stream at once; a sixth failed sign-in in a minute \\
-\texttt{429}\newline with \texttt{Retry-After} & \texttt{rate\_\allowbreak{}limited} & \texttt{/\allowbreak{}v1/\allowbreak{}tokenize} past its 240 calls a minute from one address \\
+\texttt{429}\newline with \texttt{Retry-After} & \texttt{rate\_\allowbreak{}limited} & \texttt{/\allowbreak{}v1/\allowbreak{}tokenize} past its 240 calls a minute from one address; a pairing route past 20 a minute from one address \\
 \texttt{500} & \texttt{internal\_\allowbreak{}error} & a bug: the message is the exception's; the request is in the log \\
+\texttt{500} & \texttt{internal} & a PATCH \texttt{/\allowbreak{}v1/\allowbreak{}engine/\allowbreak{}settings} that raised: the message is the exception's; the call is journaled \\
 \texttt{500} & \texttt{extension\_\allowbreak{}error} & a route of the extension that raised: the extension's bug, in the engine's log \\
 \texttt{501} & none & OPTIONS on any path but the Laya routes \\
 \texttt{503}\newline with \texttt{Retry-After} & \texttt{server\_\allowbreak{}busy} & the queue is full, the server is draining, or the memory gate or the admission by bytes cannot make room \\
