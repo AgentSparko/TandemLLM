@@ -1,0 +1,36 @@
+% TandemApp's manual. Build: latexmk -lualatex tandemapp-manual.tex (or `make` in manual/).
+\documentclass[paper=a4,fontsize=11pt,DIV=11,twoside=false,open=any,parskip=half-,
+  toc=listof,toc=index,headings=standardclasses,numbers=noenddot]{scrbook}
+
+\input{preamble}
+
+\begin{document}
+
+\frontmatter
+\input{chapters/titlepage}
+
+{\hypersetup{linkcolor=ink}\tableofcontents\listoffigures\listoftables}
+
+\mainmatter
+
+\partintro{%
+TandemApp is the dashboard, the proxy in front of engines and cloud APIs, the Chat tab and TandemNode, its agent on each machine. It runs no model itself. Chapter~\ref{ch:install-app} installs it on any machine, Chapter~\ref{ch:other-engines} puts other engines and cloud APIs behind it, Chapter~\ref{ch:dashboard} goes through the page view by view, Chapter~\ref{ch:chat} is the Chat tab (in beta) with its sandbox and permission modes, and Chapter~\ref{ch:hosts} watches several engines at once. The engine and its own API are in the engine's manual.}
+\part{TandemApp}
+\input{chapters/install-app}
+\input{chapters/other-engines}
+\input{chapters/dashboard}
+\input{chapters/chat}
+\input{chapters/hosts}
+
+\partintro{%
+The reference. Chapter~\ref{ch:ref-app} is generated from TandemApp's code: every flag, variable, knob, route, header, error, metric and ledger column. Then troubleshooting by symptom (\ref{ch:troubleshooting}) and the changelog's TandemApp paragraphs (\ref{ch:changelog}). The glossary and the index follow.}
+\part{Reference}
+\input{chapters/ref-app}
+\input{chapters/troubleshooting}
+\input{chapters/changelog}
+
+\backmatter
+\input{chapters/glossary}
+\printindex
+
+\end{document}

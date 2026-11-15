@@ -1,0 +1,21 @@
+\chapter{Glossary}\label{ch:glossary}
+
+TandemApp's terms. The engine's (anchor, round, StairCut and the rest) are in \enginemanual{Glossary}.
+
+\begin{description}[style=unboxed, leftmargin=0pt, itemsep=.5ex, font=\normalfont\bfseries]
+
+\item[adapter]\index{adapter} The proxy's code for one backend kind: how it relays a route, where it reads cached and reasoning tokens, how it switches thinking. \code{proxy/adapters/}.
+
+\item[backend]\index{backend} An engine or a cloud API behind the proxy: another TandemLLM, vLLM, SGLang, any OpenAI-compatible server, OpenAI or DeepSeek. Each has a kind, a URL, models, an optional key, and switches.
+
+\item[feature group]\index{feature group} One switchable part of the harness in front of a backend: class, effort, packages, side, loops, e1, tools, compaction, states, memory.
+
+\item[host collector]\index{host collector} The code that reads a machine's memory, CPU, GPUs, disks and the process behind each backend's port; \code{tandem-app hostcollect} on a remote machine.
+
+\item[L1, L2]\index{L1, L2} The two layers of engine figures behind the proxy: L1 is the engine's \code{/metrics} page, L2 the plugin's per-request numbers.
+
+\item[plugin]\index{plugin} A small package inside vLLM or SGLang that posts each request's own times to the proxy.
+
+\item[proxy]\index{proxy} The router of requests by model id to backends, with one ledger and one dashboard; in the engine's server with \code{--backends}, or standalone as \code{tandem-app}.
+
+\end{description}

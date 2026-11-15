@@ -330,7 +330,7 @@ Two alerts are worth having before any dashboard: `rate(qse_errors_total[5m]) > 
 
 - **Batch size, KV utilisation, preemptions, swaps.** A batching scheduler has them. This engine
   holds one sequence and has none of those states.
-  [docs/roadmap.md](../../docs/roadmap.md) says what would have to be built first, and it adds the
+  [the engine's docs/roadmap.md](https://github.com/TandemLLM/TandemEngine/blob/main/docs/roadmap.md) says what would have to be built first, and it adds the
   metrics it would need.
 - **Per-model and per-user labels.** One process serves one model, and a user label on a counter
   is personal data on a monitoring endpoint. The label set here has a fixed, small cardinality:

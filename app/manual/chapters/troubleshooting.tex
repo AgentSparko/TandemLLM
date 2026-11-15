@@ -1,0 +1,49 @@
+\chapter{Troubleshooting}\label{ch:troubleshooting}
+
+Each entry is a symptom, what causes it, and what to do. The dashboard's Dev view shows the server log live. The engine's own entries (installing, the engine, memory notes) are in \enginemanual{Troubleshooting}.
+
+\section{The dashboard}
+
+\paragraph{The dashboard says an admin password is set, and edits fail with 401.} \code{QSE_ADMIN_TOKEN} is set in \code{secrets.env}, and the dashboard has no sign-in in this release. Remove the line (keep a copy of the file) and restart; API clients can keep sending the token as a bearer header.
+
+\section{The Chat tab}\label{sec:trouble-chat}
+
+The Chat tab is in beta (Chapter~\ref{ch:chat}).
+
+\paragraph{The Chat tab asks before every bash command.} The chat runs in Ask mode. The pill in the composer's options row names the mode; pick Auto there, and calls that stay inside the chat's sandbox run without a prompt from the next call on. The default for new chats is at the top of the Tools settings page. A chat from before 0.8.2 has no mode of its own and runs in the default (Section~\ref{sec:chat-modes}).
+
+\paragraph{Auto still asks.} The call leaves the sandbox: \texttt{web\_fetch} to a domain this chat has not fetched yet, an MCP tool its server does not mark read-only, an imported Open WebUI tool that imports a network or process module, or \texttt{rm} aimed at \texttt{/}, \texttt{/workspace} or a home directory. A tool set to \enquote{ask} in the tool settings asks in every mode, and a deny rule refuses in every mode, YOLO included.
+
+\paragraph{\enquote{Always allow} does not stop the prompt.} Before 0.8.2 it saved only the first word of a chained command, which never covered the whole command, so one chat saved \texttt{cd} 11 times. On 0.8.2 it saves a rule for every part and names them in the prompt. A command with \texttt{\$(...)} or backticks still matches no rule and offers no \enquote{Always}; Auto runs it without asking when it stays in the sandbox.
+
+\section{vLLM and SGLang behind the proxy}
+
+\paragraph{vLLM answers 400 to every request with tools.} vLLM refuses tools without a tool parser. Start it with \code{--enable-auto-tool-choice --tool-call-parser <parser>} (\code{qwen3_coder} for the Qwen3.5 and Qwen3.8 models). The memory writer sends the session's tools with \code{tool_choice: "none"}, so it needs the parser too.
+
+\paragraph{SGLang returns tool calls as text.} Start it with \code{--tool-call-parser <parser>}. SGLang does not hold the model to \code{tool_choice: "none"}; the memory writer cuts any call it writes.
+
+\paragraph{The SGLang card says the metrics page is off.} SGLang answers \code{/metrics} with 404 unless it runs with \code{--enable-metrics}, and the plugin's hooks need it too.
+
+\paragraph{Cached tokens read \enquote{not reported by this backend}.} vLLM needs \code{--enable-prompt-tokens-details}, SGLang \code{--enable-cache-report}. A generic server fills \code{prompt_tokens_details.cached_tokens} or not; the proxy never estimates.
+
+\paragraph{Reasoning tokens are null, or the reasoning shows inside the answer.} Start vLLM or SGLang with \code{--reasoning-parser <parser>} (\code{qwen3} for Qwen).
+
+\paragraph{The card says \enquote{L1 only}.} No batch from the plugin for 60~s. In the engine's own Python, check that the plugin is installed, that \code{TANDEM_COLLECT_URL} names this proxy and this backend's id and is reachable from the engine's machine, and that \code{TANDEM_COLLECT_TOKEN} is the proxy's token. The engine's log has one line when the plugin fails to load; the engine starts either way. \code{tandem-app launch ... --dry-run} prints the variables it would set.
+
+\paragraph{Rows say l2\_join: approximate.} The proxy could not tag the request (the Responses API, SGLang with \code{n} above 1) and matched it by time and token counts. A client that sends its own \code{X-Request-Id} (vLLM) or \code{rid} (SGLang) keeps it, and the join uses it.
+
+\section{The proxy}
+
+\paragraph{401: a proxy API key is needed.} Once one user key exists, every request from another machine needs \code{Authorization: Bearer tdm-...}. Make a key under Backends, Users, or set \code{TANDEM_API_KEYS}.
+
+\paragraph{A save in the Backends view answers 422 and names a variable.} A \code{TANDEM_*} variable sets that field, and the environment wins. Change the variable, or remove it and restart.
+
+\paragraph{A request fails with key\_unreadable.} The master key that encrypted the backend's key does not answer: \code{TANDEM_SECRETS_KEY} changed, the keychain entry or \code{secrets.key} is gone, or the database was copied without its key. \code{tandem-app secrets status} says which source answers now. Type the backend's key in again.
+
+\paragraph{The proxy refuses to start and names a variable.} An unknown \code{TANDEM_*} variable, an unknown backend id, or a value the schema refuses. \code{tandem-app check --env-file app.env} prints the same message without starting.
+
+\paragraph{404 model\_not\_found.} No rule, prefix or backend serves the id. When two backends serve one id, use \code{<backend>/<model>}, give one a public id, or add a routing rule.
+
+\paragraph{The cost column is empty.} The model has no price. Set one on the model's row, or with \code{TANDEM_PRICE_<n>}.
+
+\paragraph{The System view shows no processes for a backend.} The host setting is \code{exporter}, the process belongs to another user, or the proxy runs in docker without \code{--pid=host}. For a remote machine, run \code{tandem-app hostcollect} there with a token.
