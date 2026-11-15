@@ -154,12 +154,12 @@ def test_the_gate_and_the_lock():
         assert st == 401, "an open window opened more than the pairing routes"
         got = box.client(code).pair()
         token = got["plain"]["http_token"]
+        time.sleep(1.1)                                          # the gate reads the file again within a second
         st, doc = box.call("GET", "/v1/models", headers={"Authorization": f"Bearer {token}"})
         assert st == 200, (st, doc)
         lines = access.read_lines(box.tree.http_token)
         assert [o for _h, o in lines] == ["tandemapp-1"], lines
         assert open(box.auth_keys).read() == got["plain"]["authorized_keys"]["line"] + "\n"
-        time.sleep(1.1)                                          # the gate reads the file again
         for method, path, body in (("GET", "/v1/engine/pair", None), ("POST", "/v1/engine/pair/1", {})):
             st, doc = box.call(method, path, body=body)
             assert st == 401, (path, st, doc)
@@ -197,6 +197,7 @@ def test_setup_mode_pairs():
         assert st == 200 and doc["open"], doc
         plain = box.client(code).pair()["plain"]
         assert plain["mode"] == "setup" and plain["key_id"] == "tandemapp-1"
+        time.sleep(1.1)                                          # the gate reads the file again within a second
         st, doc = box.call("GET", "/v1/engine/disk", headers={"Authorization": f"Bearer {plain['http_token']}"})
         assert st == 503 and doc["error"]["type"] == "setup_mode", (st, doc)
         return "the exchange in setup mode; other routes 503 setup_mode"

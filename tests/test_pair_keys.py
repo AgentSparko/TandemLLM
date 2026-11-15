@@ -76,7 +76,7 @@ def test_authorized_keys():
         assert keys.install(CONTROL, "ctl-1", "ssh-ed25519", K1, path=path)["added"] is False
         assert open(path).read() == line1 + "\n"
         # every other line byte for byte, a file without a final newline
-        other = (b"# the operator's\r\nfrom=\"10.0.0.0/8\",no-agent-forwarding ssh-rsa AAAAB3Nza me@x\n\n"
+        other = (b"# the operator's\r\nfrom=\"203.0.113.0/24\",no-agent-forwarding ssh-rsa AAAAB3Nza me@x\n\n"
                  b'command="/bin/bash /other/bin/tandem remote --key-id ctl-2",no-pty ssh-ed25519 ' + K2.encode() +
                  b" else")
         with open(path, "wb") as fh:

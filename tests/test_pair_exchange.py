@@ -446,7 +446,7 @@ def test_the_rate_limit():
     t[0] = 61
     assert lim.take("192.0.2.1") == 0
     total = pair_http.Limit(per_peer=100, total=3, clock=lambda: t[0])
-    assert [total.take(f"10.0.0.{i}") == 0 for i in range(4)] == [True, True, True, False]
+    assert [total.take(f"203.0.113.{i}") == 0 for i in range(4)] == [True, True, True, False]
     box = Box()
     try:
         for _ in range(20):
