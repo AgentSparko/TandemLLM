@@ -237,8 +237,7 @@ def test_the_class_question_finds_its_turn_on_the_fake_engine():
                                 "--served-model", "qwen38-spark-engine",
                                 "--usage-ledger", os.path.join(d, "ledger.sqlite3"),
                                 "--fake-tps", "2000", "--parallel", "2", "--side-max-len", "8192",
-                                "--conductor-config", os.path.join(d, "conductor"),
-                                "--backends", os.path.join(d, "config.sqlite3")], cwd=ROOT, env=env,
+                                "--conductor-config", os.path.join(d, "conductor")], cwd=ROOT, env=env,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         try:
             port = _wait(None, srv)

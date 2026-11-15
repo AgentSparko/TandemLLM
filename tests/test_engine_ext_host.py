@@ -642,7 +642,9 @@ def test_chat_mode_through_the_adapter():
         st, _, s = _get(port, "/v1/conductor/settings")
         assert st == 200 and "default_profile" in json.dumps(s), (st, str(s)[:300])
         st, hd, page = _get(port, "/dashboard/", token=False, raw=True)
-        assert st == 200 and b"not built" in page, (st, page[:200])
+        # ENG-413 WP14: no engine serves the page, with the extension too
+        err = json.loads(page) if isinstance(page, (bytes, str)) else page
+        assert st == 404 and err["error"]["type"] == "no_ui", (st, page)
         st, _, b = _get(port, "/v1/library")
         assert b.get("error", {}).get("type") != "not_on_engine", b
         assert _metric(port, "qse_ext_errors_total") == {}
