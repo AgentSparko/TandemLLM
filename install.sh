@@ -15,13 +15,24 @@
 #   6. the config: DIR/run/ops/serve.env (the served profile with this machine's paths) and the
 #      control script DIR/bin/tandem (start | stop | status | smoke | logs)
 #   7. start, wait for /health, a smoke test; --no-start stops after step 6
+#   8. a pairing window for TandemApp (ENG-448, SEC-10): bin/tandem pair prints a 6-digit code, the
+#      SSH host key's fingerprint and the address as the last lines; --no-pair skips it
 #
 # With --setup (docs/setup.md) it installs the code and the venv, downloads only Wren's model
 # (Qwen3.5-2B, the setup guide's assistant), writes the config with no weights and the marker
 # src/run/setup-pending, and starts SETUP MODE: the Setup Guide's API (/v1/setup/*) and Wren, no
 # model of Qwen's. `bin/tandem setup` in a terminal, or TandemApp's Setup page pointed at the engine,
 # picks the weights, the tools and the parallelism and installs them; until then a start (and a
-# reboot) comes back in setup mode. It binds 127.0.0.1 unless --host says otherwise.
+# reboot) comes back in setup mode. It binds 127.0.0.1 unless --host says otherwise, or pairing
+# below chooses the network.
+#
+# PAIRING (docs/pairing.md). An install that starts the engine (or setup mode) ends in a pairing
+# window: TandemApp types the code and gets an SSH key line with `tandem remote` forced, the host
+# key and an HTTP token of its own. TandemApp reaches the engine over the network, so a new install
+# without --host binds 0.0.0.0, and before anything is paired it writes the HTTP token's lock line
+# (run/http-token: the hash of a token nobody holds): callers on other machines are refused until
+# pairing replaces it. A re-run keeps the address the install has. --no-pair: no window, no address
+# chosen, no lock: the installer as before.
 #
 # With --runtime-only it stops after step 3: the engine's source and its Python environment, no
 # weights, no corpus, no config, nothing started. TandemApp's Add Spark wizard installs a new
@@ -207,6 +218,9 @@ NO_FETCH=0
 APP_WHEEL=""
 APP_SHA=""
 RETIRE_BACKENDS=0
+PAIR=1
+PAIR_HOST=0
+PAIR_LOCK=0
 
 usage() {
     cat <<EOF
@@ -243,6 +257,8 @@ Usage: bash install.sh [options]
                     rendered again from the new release with this install's keys as they are; no
                     weights, no corpus, no start (tandem remote upgrade runs it)
   --no-fetch        take --ref from what DIR/src already has; no git fetch
+  --no-pair         no pairing window at the end; a new install then binds 127.0.0.1 and writes
+                    no HTTP token lock (bin/tandem pair opens a window later: docs/pairing.md)
   --retire-backends  on a re-run whose config sets QSE_BACKENDS (the relay the engine had before
                     engine API 1.8): once its backends are on TandemApp's controller, comment the
                     line out (dated) and go on; the backends' database stays
@@ -287,6 +303,7 @@ while [ $# -gt 0 ]; do
         --update) UPDATE=1; START=0; CORPUS_MODE=none; shift ;;
         --no-fetch) NO_FETCH=1; shift ;;
         --retire-backends) RETIRE_BACKENDS=1; shift ;;
+        --no-pair) PAIR=0; shift ;;
         --yes|-y) YES=1; shift ;;
         --dry-run) DRY=1; shift ;;
         --uninstall) UNINSTALL=1; shift ;;
@@ -342,6 +359,18 @@ APP_STATE="$DIR/state/tandemapp-wheel.json"
 HF_HUB_DIR="${HF_HUB_CACHE:-${HF_HOME:-$HOME/.cache/huggingface}/hub}"
 WREN_REPO="Qwen/Qwen3.5-2B"
 WREN_DIR="$HOME/.qwen38-spark-engine/models/qwen3.5-2b"
+# ENG-448/SEC-10: an install that starts something ends in pairing; TandemApp reaches the engine
+# over the network, so with no --host (and no TANDEM_HOST) a new install binds every address and
+# locks the network out until pairing (run/http-token's lock line, written before the start); a
+# re-run keeps the address its config has
+if [ "$PAIR" = 1 ] && [ "$START" = 1 ] && [ "$HOST_SET" = 0 ] && [ -z "${TANDEM_HOST:-}" ]; then
+    OLD_HOST=""
+    if [ -f "$RUN/ops/serve.env" ]; then
+        OLD_HOST="$(sed -n 's/^HOST=//p' "$RUN/ops/serve.env" | head -1 | tr -d "'\"")"
+    fi
+    if [ -n "$OLD_HOST" ]; then HOST="$OLD_HOST"; else HOST=0.0.0.0; PAIR_LOCK=1; fi
+    PAIR_HOST=1
+fi
 if [ "$SETUP" = 1 ]; then
     # the corpus needs the model's tokenizer, which the setup guide fetches later: here its Wikipedia
     # shards alone, so the build after the model's download needs no network (#97)
@@ -349,7 +378,7 @@ if [ "$SETUP" = 1 ]; then
     if [ -f "$RUN/ops/serve.env" ] && [ ! -f "$SRC/run/setup-pending" ] && [ "$FORCE_SETUP" != 1 ]; then
         die "$DIR already has a configured engine; --setup would stop it. Add --force-setup to set it up again in the browser"
     fi
-    if [ "$HOST_SET" = 0 ] && [ "$DRY" != 1 ] && [ "$YES" != 1 ] && { : </dev/tty; } 2>/dev/null; then
+    if [ "$HOST_SET" = 0 ] && [ "$PAIR_HOST" = 0 ] && [ "$DRY" != 1 ] && [ "$YES" != 1 ] && { : </dev/tty; } 2>/dev/null; then
         printf '    Open the setup page to your network (anyone who reaches port %s can run the setup)? [y/N] ' "$PORT"
         read -r ans </dev/tty || ans=""
         case "$ans" in y|Y|yes|YES) HOST=0.0.0.0 ;; *) HOST=127.0.0.1 ;; esac
@@ -1172,7 +1201,7 @@ else
     fi
 fi
 
-# DIR/bin/tandem: start | stop | restart | status | smoke | logs | env | doctor | setup | remote | node | chat
+# DIR/bin/tandem: start | stop | restart | status | smoke | logs | env | doctor | setup | pair | remote | node | chat
 write_control() {
     printf '#!/usr/bin/env bash\n# TandemLLM control script, written by install.sh.\nTANDEM_DIR=%q\n' "$DIR"
     cat <<'CTL'
@@ -1368,6 +1397,14 @@ case "${1:-}" in
     smoke) smoke ;;
     logs) tail -n "${2:-100}" -f "$REPO/logs/engine.log" ;;
     env) cat "$ENV_FILE" ;;
+    # ENG-448/SEC-10: a pairing window for TandemApp in the running engine (setup mode too): the
+    # code, the SSH host key's fingerprint and the address (python -m server.pairing --help)
+    pair)
+        shift
+        PAIR_PY="${PY:-}"; [ -x "$PAIR_PY" ] || PAIR_PY="$TANDEM_DIR/venv/bin/python"
+        [ -x "$PAIR_PY" ] || PAIR_PY=python3
+        cd "$REPO" || exit 1
+        PYTHONPATH="$REPO" exec "$PAIR_PY" -s -m server.pairing --port "$PORT" "$@" ;;
     # ENG-435: the Setup Guide in the terminal, over this engine's Setup API (/v1/setup/*) on
     # 127.0.0.1:$PORT; it writes no file itself (python -m server.setup.cli --help)
     setup)
@@ -1375,12 +1412,12 @@ case "${1:-}" in
         SETUP_PY="${PY:-}"; [ -x "$SETUP_PY" ] || SETUP_PY="$TANDEM_DIR/venv/bin/python"
         [ -x "$SETUP_PY" ] || SETUP_PY=python3
         PYTHONPATH="$REPO" exec "$SETUP_PY" -m server.setup.cli --tandem-dir "$TANDEM_DIR" "$@" ;;
-    *) echo "usage: $0 start | stop [grace-s] | restart | status | smoke | logs [n] | env | doctor [--check] | setup [command] | remote VERB | node [serve|check|unit] | chat start|stop|restart|status|logs" >&2; exit 2 ;;
+    *) echo "usage: $0 start | stop [grace-s] | restart | status | smoke | logs [n] | env | doctor [--check] | setup [command] | pair [--close|--status] | remote VERB | node [serve|check|unit] | chat start|stop|restart|status|logs" >&2; exit 2 ;;
 esac
 CTL
 }
 if [ "$DRY" = 1 ]; then
-    note "would write $DIR/bin/tandem (start | stop | restart | status | smoke | logs | env | setup | remote | chat | node)"
+    note "would write $DIR/bin/tandem (start | stop | restart | status | smoke | logs | env | setup | pair | remote | chat | node)"
 else
     write_control > "$DIR/bin/tandem.tmp" && chmod 755 "$DIR/bin/tandem.tmp" && mv "$DIR/bin/tandem.tmp" "$DIR/bin/tandem"
     ok "wrote $DIR/bin/tandem"
@@ -1448,6 +1485,30 @@ EOF
     fi
 fi
 
+# ENG-448/SEC-10: the HTTP token's lock line before a new install's engine opens to the network:
+# callers on other machines get 401 until pairing gives TandemApp a token of its own
+if [ "$PAIR_LOCK" = 1 ]; then
+    if [ "$DRY" = 1 ]; then
+        note "write $SRC/run/http-token: the lock line (the hash of a token nobody holds) until pairing"
+    elif [ ! -e "$SRC/run/http-token" ]; then
+        mkdir -p "$SRC/run"
+        (umask 077; printf 'sha256:%s *\n' "$(head -c 32 /dev/urandom | sha256sum | cut -d' ' -f1)" \
+            > "$SRC/run/http-token") || die "cannot write $SRC/run/http-token"
+        ok "the network is locked until pairing ($SRC/run/http-token; this machine needs no token)"
+    fi
+fi
+# the pairing window, the last lines of a run that started something (--no-pair: none)
+pair_end() {
+    [ "$PAIR" = 1 ] && [ "$START" = 1 ] || return 0
+    if [ "$DRY" = 1 ]; then
+        note "$DIR/bin/tandem pair   (a pairing window for TandemApp: the code, the SSH host key's fingerprint, the address)"
+        return 0
+    fi
+    printf '\n%sPair with TandemApp%s (docs/pairing.md; a new window later: %s/bin/tandem pair)\n' "$B" "$N" "$DIR"
+    bash "$DIR/bin/tandem" pair \
+        || warn "no pairing window was opened (the line above says why); open one later with: $DIR/bin/tandem pair"
+}
+
 # ---------------------------------------------------------------------------------------------
 # 7. Start, health, smoke test
 # ---------------------------------------------------------------------------------------------
@@ -1479,10 +1540,15 @@ if [ "$SETUP" = 1 ]; then
     else
         SETUP_ADDR="$HOST"; [ "$HOST" = 0.0.0.0 ] && SETUP_ADDR="$(hostname -I 2>/dev/null | awk '{print $1}')"
         printf '  From your network:      http://%s:%s\n' "${SETUP_ADDR:-<this box>}" "$PORT"
-        printf '\n%sWARNING:%s no admin password is set, so anyone who reaches port %s can run the setup.\n' "$Y" "$N" "$PORT"
-        printf '  Set one with: bash %s/ops/make-secrets.sh --admin   (then restart setup mode)\n' "$RUN"
+        if [ -e "$SRC/run/http-token" ]; then
+            printf '  Callers on other machines need the HTTP token: TandemApp gets its own by pairing (below).\n'
+        else
+            printf '\n%sWARNING:%s no admin password is set, so anyone who reaches port %s can run the setup.\n' "$Y" "$N" "$PORT"
+            printf '  Set one with: bash %s/ops/make-secrets.sh --admin   (then restart setup mode)\n' "$RUN"
+        fi
     fi
     chat_note
+    pair_end
     exit 0
 fi
 if [ "$START" != 1 ]; then
@@ -1501,6 +1567,12 @@ else
 fi
 
 API_HOST="$HOST"; [ "$HOST" = 0.0.0.0 ] && API_HOST="$(hostname -I 2>/dev/null | awk '{print $1}')"; API_HOST="${API_HOST:-127.0.0.1}"
+API_NOTE="(no password on the API: keep the port on a trusted network)"
+KEY_NOTE="no API key needed"
+if [ "$DRY" != 1 ] && [ -e "$SRC/run/http-token" ]; then
+    API_NOTE="(other machines need the HTTP token: TandemApp's by pairing, or tandem remote token rotate)"
+    KEY_NOTE="no API key needed on this machine"
+fi
 # OPS-260: the mode the config resolves to (run/setup.env and run/local.env included), and who
 # runs chatd (ENG-413 WP7: node or off)
 MODE_NOW="${MODE_ARG:-engine}"; CHATD_NOW=off
@@ -1538,16 +1610,16 @@ cat <<EOF
 
 ${B}Done.${N}  TandemLLM $TANDEM_REF in $DIR
 
-  Control:   $DIR/bin/tandem start | stop | restart | status | smoke | logs | doctor | setup | chat | node
+  Control:   $DIR/bin/tandem start | stop | restart | status | smoke | logs | doctor | setup | pair | chat | node
   Config:    $RUN/ops/serve.env   (your overrides: $RUN/local.env)
   Watchdog:  bash $RUN/ops/watchdog.sh   (optional, from cron every minute: docs/operations.md)
   Update:    re-run the installer (same --dir); downloads resume, finished steps are skipped
   Remove:    bash install.sh --dir $DIR --uninstall   (the weights stay in the HF cache)
   Health:    http://$API_HOST:$PORT/health   Metrics: http://$API_HOST:$PORT/metrics
-             (no password on the API: keep the port on a trusted network)
+             $API_NOTE
   $CHAT_LINE
 
-  OpenAI-compatible API at http://$API_HOST:$PORT/v1, model "$SERVED_MODEL", no API key needed:
+  OpenAI-compatible API at http://$API_HOST:$PORT/v1, model "$SERVED_MODEL", $KEY_NOTE:
 
     export OPENAI_BASE_URL=http://$API_HOST:$PORT/v1 OPENAI_API_KEY=none
     curl -s \$OPENAI_BASE_URL/chat/completions -H 'Content-Type: application/json' \\
@@ -1568,3 +1640,4 @@ ${B}Done.${N}  TandemLLM $TANDEM_REF in $DIR
     }
 EOF
 chat_note
+pair_end

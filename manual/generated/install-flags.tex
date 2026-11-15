@@ -19,6 +19,7 @@
 \texttt{-{}-runtime-\allowbreak{}only} & the engine's source and Python environment only: no weights, no corpus, no config, no start (what TandemApp's Add Spark wizard installs on a new node) \\
 \texttt{-{}-update} & an install with its config: the source at -\kern0pt-ref and the venv, then the config rendered again from the new release with this install's keys as they are; no weights, no corpus, no start (tandem remote upgrade runs it) \\
 \texttt{-{}-no-\allowbreak{}fetch} & take -\kern0pt-ref from what DIR/src already has; no git fetch \\
+\texttt{-{}-no-\allowbreak{}pair} & no pairing window at the end; a new install then binds 127.0.0.1 and writes no HTTP token lock (bin/tandem pair opens a window later: docs/pairing.md) \\
 \texttt{-{}-retire-\allowbreak{}backends} & on a re-run whose config sets QSE\_BACKENDS (the relay the engine had before engine API 1.8): once its backends are on TandemApp's controller, comment the line out (dated) and go on; the backends' database stays \\
 \texttt{-{}-yes,\allowbreak{} -\allowbreak{}y} & non-interactive: answer yes to every question \\
 \texttt{-{}-dry-\allowbreak{}run} & print every step and command, change nothing \\
