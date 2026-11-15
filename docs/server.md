@@ -17,6 +17,7 @@
 | `POST /v1/cache/peek`, `/v1/cache/prewarm` | the admin rule | a chat body's warm tokens and their tier before it is sent; the conversation read back from the NVMe while the engine is idle ([caches.md](caches.md#peek-and-prewarm)) |
 | `/v1/dashboard/*` | anyone by default; with a password set and `--dashboard-login on`, the admin token or a dashboard session | the engine's own reads: live activity, the system, the log, parallel requests, usage and the request rows ([the contract](../contracts/engine-api-v1/README.md#3-engine-dashboard-reads)) |
 | `/v1/engine/*` | the admin rule | the engine-only screens: the residency plan, the disk tier, the decision models, the narrator and the shadow reader ([the contract](../contracts/engine-api-v1/README.md#9-engine-only-screens-since-15-eng-413-wp5)) |
+| `GET`, `PATCH /v1/engine/settings` | reads as `/v1/dashboard/*`; a change from this box, with the HTTP token or the admin token | the settings a running engine changes without a restart, today `QSE_ALLOW_FROM`: a change is a new overlay version, applied at once (engine API 1.9) |
 | `POST /v1/systemone`, `/v1/predict` | the admin rule | typed decisions from the engine's own decision models (below); only with `QWEN38_DECIDER_MODELS` set |
 | `GET /readyz` | anyone | whether a decision model is loaded and warm; only with `QWEN38_DECIDER_MODELS` set |
 | `/v1/conductor/*`, `/v1/library*`, `/v1/laya*`, `/v1/memory*`, `/dashboard/` | reads as `/v1/dashboard/*`, writes and every memory route the admin rule, the library and Laya anyone | the extension's routes in chat mode ([below](#chat-mode-the-conductor-as-an-extension)); a headless engine answers 404 `not_on_engine`, and `/dashboard/` 404 `no_ui` |
@@ -27,6 +28,15 @@ The admin password is the admin token, `QSE_ADMIN_TOKEN` in `secrets.env` (mode 
 
 - With no password set, the default, every route in the table answers anyone who reaches the port: the dashboard reads, the engine-only screens, the disk tier, the decision models, both cache routes and the full `/health`, and in chat mode the extension's writes and memory. Keep the server on a trusted network: anyone on it can read and change the configuration and the memory. Only `/metrics` keeps its own token when `QSE_METRICS_TOKEN` is set, for Prometheus.
 - With a password set, the admin routes need the admin token as a bearer header or a dashboard session. `POST /v1/cache/clear` takes only the bearer header. Requests from the box itself (loopback, no proxy headers) need no token; the watchdog and the measurement tools depend on that. A bad password stops the start: it must be at least 32 characters.
+
+### The HTTP token and the allow-from list (engine API 1.9)
+
+Before any route, the server checks two things that are off by default ([server/api/access.py](../server/api/access.py)):
+
+- With the tree's `run/http-token` (made by `tandem remote token rotate`, which answers the token over SSH and keeps only its sha256 here), every caller that is not on this box needs `Authorization: Bearer <token>`, inference included. Calls from the box itself (loopback, no proxy headers) need none. `/health` gives its status without it; with it, the full body follows the admin rule as before; `/healthz`, `/v1/health`, `/readyz` and `/metrics/up` answer too. The admin token passes as well. A rotation counts within a second.
+- `QSE_ALLOW_FROM` (addresses and CIDRs): any other address gets 403 on every route; loopback always passes. It changes live through `PATCH /v1/engine/settings`.
+
+With neither, the server answers as before. [remote-control.md](remote-control.md#the-http-token) has the details.
 
 The dashboard login (`--dashboard-login`, from `QSE_DASHBOARD_LOGIN`, off by default) matters only with a password set: then `on` makes `/v1/dashboard/*` need the token or a session too. With no password it changes nothing. Failed logins are throttled per client: a fronting proxy's `X-Real-IP` is believed only when the TCP peer is loopback (a proxy on this box) or names itself in `TANDEM_TRUSTED_PROXY` — the LAN shape, where every real client shares the one peer; any other peer is keyed as itself (server/api/auth.py). The proxy must set `X-Real-IP` itself (`proxy_set_header X-Real-IP $remote_addr;` in nginx): a proxy that passes the client's own header on lets the client pick its bucket. TandemApp's [dashboard.md](https://github.com/TandemLLM/TandemApp/blob/main/docs/dashboard.md#access) says what the page shows.
 

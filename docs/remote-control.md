@@ -1,6 +1,6 @@
 # Remote control
 
-`tandem remote` is the engine's control CLI for a controller on another machine. The controller reaches the engine box over SSH with a key whose line in `authorized_keys` runs only `tandem remote`: the key can start, stop and restart the engine, switch its mode, change its settings, install extensions, upgrade the engine, read its logs and run its checks, and nothing else. No shell, no terminal, no port forward. No sudo is needed. The contract is [contracts/engine-ctl-v1](../contracts/engine-ctl-v1/README.md); the code is `server/remote/`.
+`tandem remote` is the engine's control CLI for a controller on another machine. The controller reaches the engine box over SSH with a key whose line in `authorized_keys` runs only `tandem remote`: the key can start, stop and restart the engine, switch its mode, change its settings, install extensions, upgrade the engine, set the HTTP token, read its logs and run its checks, and nothing else. No shell, no terminal, no port forward. No sudo is needed. The contract is [contracts/engine-ctl-v1](../contracts/engine-ctl-v1/README.md); the code is `server/remote/`.
 
 ## The key's line
 
@@ -40,6 +40,7 @@ By hand on the box, the same verbs: `bin/tandem remote status`.
 | `ext remove DIST [--and-mode engine] [--when ...]` | the distribution out of the venv; the one chat mode runs only with `--and-mode engine` (1.1) |
 | `upgrade plan --ref REF` or `upgrade plan --sha256 HEX` | the engine's tree at another release, from the origin or from an archive on stdin: what changes and a confirm token (1.1) |
 | `upgrade apply ... --confirm T [--when ...]` | the upgrade as a job (default `idle`), rolled back when it fails (1.1) |
+| `token rotate` | a new HTTP token, answered on this channel only (1.1) |
 
 Every answer is one JSON document with `ok`, and the exit status says the same: 0 ok, 1 not ok (doctor found something, or the venv's installer failed), 2 usage, 3 refused, 4 busy (a job acts), 5 internal. Lifecycle verbs answer at once with their job; `status` follows it. One job acts at a time; a new one replaces a job that still waits.
 
@@ -87,6 +88,16 @@ An extension is an engine-ext-v1 module the engine loads in chat mode (`QSE_EXT`
 - A failed install or a start that does not reach `/health` rolls back: the previous commit checked out, the venv synced back with the previous `install.sh --update` when the pins changed, `run/ops` and `bin/tandem` put back byte for byte, the engine started again. The job fails and says `rolled_back`.
 - The overlay, `run/local.env`, the weights, the logs and the engine's data are not touched.
 
+## The HTTP token
+
+`token rotate` makes a random token and answers it on this SSH channel, and nowhere else: it is in no log and no journal. The engine box keeps only its sha256, in the tree's `run/http-token` (mode 600). The engine reads the file again within a second, so a rotation needs no restart and the old token stops working.
+
+While the file exists, a caller that is not on the engine's host needs `Authorization: Bearer <token>` on every route, inference included, or it gets 401. A caller on this host (loopback, without `X-Forwarded-For` or `X-Real-IP`) needs none, so the watchdog, the status checks and a controller on the same box keep working. `/health`, `/healthz`, `/v1/health`, `/readyz` and `/metrics/up` answer without it: a probe or a controller can tell a down engine from one that refuses it. Without the token, `/health` gives only its status; with it, the full body follows the admin rule (docs/server.md).
+
+`QSE_ALLOW_FROM` (addresses and CIDRs, comma-separated; empty: every address) answers 403 to any other address on every route, the status included. Loopback always passes. It is a managed setting that changes live: `PATCH /v1/engine/settings` from this host, or with the token, or `settings apply` over SSH, which restarts. Engine API 1.9 has the details (`contracts/engine-api-v1`, "Access").
+
+The status responder (`ops/engine_status.py`), which answers while the engine restarts, takes no token. Set `QSE_STATUS_HOST=127.0.0.1` when nothing outside the host may read it.
+
 ## The journal
 
-Every call, refused ones included, is one line of `run/remote/journal.jsonl`: the UTC time, the verb, its arguments (the value of a secret-looking key cut out), the exit status, the duration, the key id and the address it came from. `ext install` and `upgrade` add the sha256 of the bytes they checked (`checked`). Past 4 MiB the file moves to `journal.jsonl.1`, up to three old files.
+Every call, refused ones included, is one line of `run/remote/journal.jsonl`: the UTC time, the verb, its arguments (the value of a secret-looking key cut out), the exit status, the duration, the key id and the address it came from. `ext install` and `upgrade` add the sha256 of the bytes they checked (`checked`), and a `PATCH /v1/engine/settings` is a line too (`via` http). Past 4 MiB the file moves to `journal.jsonl.1`, up to three old files.
