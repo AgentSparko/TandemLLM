@@ -134,7 +134,7 @@ WP2C = {"validate": ("tandemapp.conductor.schema", ("ID_RE", "_TYPES", "validate
         "redact": ("tandemapp.conductor.redact", ("PATTERNS", "KINDS", "redact", "merge")),
         "textindex": ("tandemapp.conductor.libsearch", ("K1", "B", "_WORD", "STOP", "words", "TextIndex")),
         "repository": ("tandemapp.conductor.transcripts", ("in_repository",)),
-        "chat_url": ("tandemapp.chat_forward", ("target",)),
+        "chat_url": ("tandemapp.chat_forward", ("_OWN", "target")),
         # ENG-413 WP5b
         "loopescape": ("tandemapp.conductor.loopescape", ("card_sampling", "Escapes")),
         "session_tokens": ("tandemapp.session_tokens", ("TTL_S", "MAX_SESSIONS", "TOKEN_RE", "PREFIX",

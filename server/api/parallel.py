@@ -147,7 +147,7 @@ class ParallelBoard:
     nothing in flight (the per-backend rows list every backend that ran in the window)."""
 
     def __init__(self, registry, *, engine_name=None, cost=None, peers=None, fetch=None,
-                 clock=time.time, perf=time.perf_counter):
+                 clock=time.time, perf=time.perf_counter, auth=None):
         self.reg = registry
         self.engine_name = engine_name or (lambda: None)
         self.cost = cost or (lambda rec, tokens: None)
@@ -167,6 +167,9 @@ class ParallelBoard:
         # TandemLLM backends behind this proxy: [(backend id, base url)], and their lanes
         self.peers = peers or (lambda: [])
         self.fetch = fetch or _fetch_json
+        # SRV-839: `auth(backend id)` -> the headers a peer's board read carries (the engine's
+        # bearer on another host), or None
+        self.auth = auth
         self._peer: dict[str, tuple[float, dict]] = {}       # backend -> (perf, {relay_id: lane})
         self._peer_off: dict[str, float] = {}               # backend -> perf it may be asked again
         self._peer_want: set = set()
@@ -219,7 +222,9 @@ class ParallelBoard:
                 if base.endswith("/v1"):
                     base = base[:-3]
                 t0 = self.perf()
-                doc = self.fetch(base + "/v1/dashboard/parallel?since=9999999999")
+                hdrs = self._auth(bid)
+                url = base + "/v1/dashboard/parallel?since=9999999999"
+                doc = self.fetch(url, hdrs) if hdrs else self.fetch(url)
                 self.peer_reads += 1
                 if not isinstance(doc, dict):
                     self._peer_off[bid] = t0 + PEER_BACKOFF_S
@@ -228,6 +233,14 @@ class ParallelBoard:
                 self._peer[bid] = (t0, {l["relay_id"]: l for l in doc.get("lanes") or []
                                         if isinstance(l, dict) and l.get("relay_id")})
             time.sleep(0.1)                  # the next read is a period away, never this one
+
+    def _auth(self, bid: str) -> dict | None:
+        if self.auth is None:
+            return None
+        try:
+            return self.auth(bid) or None
+        except Exception:                                          # noqa: BLE001
+            return None
 
     def _peer_start(self) -> None:
         if self._peer_thread is None:
@@ -688,12 +701,14 @@ class ParallelBoard:
                 "lanes": lanes, "recent": recent, "backends": order, "totals": totals}
 
 
-def _fetch_json(url: str, timeout: float = 0.8):
-    """GET a JSON document; None on anything but a 200 with JSON."""
+def _fetch_json(url: str, headers: dict | None = None, timeout: float = 0.8):
+    """GET a JSON document; None on anything but a 200 with JSON. `headers`: the engine's bearer
+    for an engine on another host (SRV-839)."""
     import urllib.error
     import urllib.request
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "tandem-proxy/parallel"})
+        req = urllib.request.Request(url, headers={"User-Agent": "tandem-proxy/parallel",
+                                                   **(headers or {})})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             if r.status != 200:
                 return None
