@@ -54,7 +54,7 @@ Most kernel changes are worth 0.5 to 3 ms of a round of about 93 ms, below what 
 
 `ops/gate.sh` is the whole protocol in one command, run on the box inside a hold ([operations.md](operations.md)). It stops at the first failing step:
 
-1. Every CPU test, `tests/test_*.py`, in a clean environment, then TandemApp's, `app/tests/test_*.py`, through `app/tests/script_suite.py`.
+1. The engine's CPU tests (`tools/engine_tests.py`), in a clean environment; TandemApp's run in its own repository.
 2. Every GPU test, `tests/gpu/test_*.py`.
 3. Identity: the served configuration with the new flags off must be bit-identical to the build it replaces (`tools/flagoff_identity.py`).
 4. Agreement: `tools/verify_spec.py` with the served flags and the candidate's, under the near-tie rule ([exactness.md](exactness.md)).

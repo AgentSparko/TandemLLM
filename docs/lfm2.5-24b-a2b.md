@@ -55,7 +55,7 @@ Switch: `ops/use-profile.sh lfm25-exl3-3.5`, or the Setup Guide (`#/setup`).
 
 ## Conductor
 
-The conductor (Laya's three decision models, the narrator, the session monitor) is on by default. The router's documents target Qwen3.8; LFM2.5's adapter declares how the router fits it (`Capabilities.conductor` in `engine/models/lfm2_moe/serving.py`, read by `app/tandemapp/conductor/modelfit.py`; [server.md](https://github.com/TandemLLM/TandemApp/blob/main/docs/chat-mode.md#the-model-fit)):
+The conductor (Laya's three decision models, the narrator, the session monitor) is on by default. The router's documents target Qwen3.8; LFM2.5's adapter declares how the router fits it (`Capabilities.conductor` in `engine/models/lfm2_moe/serving.py`, read by TandemApp's `tandemapp/conductor/modelfit.py`; [server.md](https://github.com/TandemLLM/TandemApp/blob/main/docs/chat-mode.md#the-model-fit)):
 
 | key | LFM2.5 | effect |
 |-|-|-|
@@ -172,7 +172,7 @@ Quality and speed against the exact cache: not measured.
 | verify rows against decode steps at every start | load-time self-check | 24 rows bit for bit |
 | pack reader, synthetic and real packs | `tests/test_lfm2_moe_pack.py`, `tests/test_lfm2_moe_packs_on_disk.py` | pass |
 | row kernels against torch twins; row invariance; one graph a decode step | `tests/test_lfm2_moe_kernels.py`, `tests/gpu/test_lfm2_moe_gpu.py` | pass |
-| Pythonic tool calls, parser and chat handler | `app/tests/test_toolcall_pythonic.py`, `tests/test_lfm25_api.py` | pass |
+| Pythonic tool calls, parser and chat handler | TandemApp's `tests/test_toolcall_pythonic.py`, `tests/test_lfm25_api.py` | pass |
 | half-integer rates against `LinearEXL3`; kernels against the reference | `tests/gpu/test_lfm2_moe_gpu.py` | bit for bit at 1.5 to 8 bits; kernels within 3e-3, rows invariant up to 32 |
 | shared kernels at whole rates against the previous tree | same random blocks through both trees | 51 of 51 outputs bit for bit |
 | a served profile over HTTP | `tools/lfm_live.py` | health, answer, reasoning, tool calls |

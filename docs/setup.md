@@ -11,15 +11,16 @@ curl -fsSLO https://raw.githubusercontent.com/0xBakeer/TandemLLM/v0.15.4/install
 bash install.sh --setup --yes
 ```
 
-`install.sh --setup` installs the code and the Python environment, downloads only Wren's model (Qwen3.5-2B, 4.3 GB) and the two Wikipedia shards of the lookup corpus (1.2 GB), writes the config with no weights, and starts setup mode. The corpus itself needs the model's tokenizer, so the install job builds it after the model's download ([speculative-decoding.md](speculative-decoding.md#the-corpus-of-each-tokenizer)). Then open the Setup Guide in a browser and pick a model:
+`install.sh --setup` installs the code and the Python environment, downloads only Wren's model (Qwen3.5-2B, 4.3 GB) and the two Wikipedia shards of the lookup corpus (1.2 GB), writes the config with no weights, and starts setup mode. The corpus itself needs the model's tokenizer, so the install job builds it after the model's download ([speculative-decoding.md](speculative-decoding.md#the-corpus-of-each-tokenizer)). Then pick a model with the Setup Guide. The engine serves its API, `/v1/setup/*`, and no page:
 
-- On the box itself: `http://127.0.0.1:8000/dashboard/#/setup`.
-- From another computer: setup mode listens on 127.0.0.1 only, so open an SSH tunnel first, `ssh -L 8000:127.0.0.1:8000 <user>@<box>`, and then open `http://127.0.0.1:8000/dashboard/#/setup` on that computer.
-- On your network: install with `--host 0.0.0.0` (`bash install.sh --setup --yes --host 0.0.0.0`) and open `http://<box>:8000/dashboard/#/setup` from any computer that reaches the box. Until an admin password is set, anyone who reaches the port can run the setup.
+- In a terminal on the box: `~/TandemLLM/bin/tandem setup`, the same guide, step by step.
+- In a browser: TandemApp's Setup page, pointed at the engine, `http://127.0.0.1:8000` on the box itself.
+- From another computer: setup mode listens on 127.0.0.1 only, so open an SSH tunnel first, `ssh -L 8000:127.0.0.1:8000 <user>@<box>`, and then use `http://127.0.0.1:8000` on that computer.
+- On your network: install with `--host 0.0.0.0` (`bash install.sh --setup --yes --host 0.0.0.0`) and use `http://<box>:8000` from any computer that reaches the box. Until an admin password is set, anyone who reaches the port can run the setup.
 
-The installer prints the addresses when it finishes, and the dashboard opens on the Setup Guide by itself while the box is in setup mode.
+The installer prints the addresses when it finishes. TandemApp's page opens on the Setup Guide by itself while the engine it points at is in setup mode.
 
-On a checkout, the same mode starts with `ops/start.sh --setup` (127.0.0.1 unless `--host` names another address). Setup mode runs `server/app.py --setup`: no served model, no caches, no state store, no drafters, no conductor and no ledger. It answers the Setup page, `/v1/setup/*`, `/health` (`"mode": "setup"`) and an empty `/v1/models`, loads Wren at the start, and gives every other route a 503 with the code `setup_mode`. The watchdog sees its `/health` answer 200 and leaves it alone.
+On a checkout, the same mode starts with `ops/start.sh --setup` (127.0.0.1 unless `--host` names another address). Setup mode runs `server/app.py --setup`: no served model, no caches, no state store, no drafters, no conductor and no ledger. It answers `/v1/setup/*`, `/health` (`"mode": "setup"`) and an empty `/v1/models`, the page's paths with 404 `no_ui`, loads Wren at the start, and gives every other route a 503 with the code `setup_mode`. The watchdog sees its `/health` answer 200 and leaves it alone.
 
 The installer writes the marker `run/setup-pending` (with the host to bind). While it exists, a plain `ops/start.sh` (the reboot's, the watchdog's) starts setup mode again. The install job removes it before it starts the configured engine, and puts it back if that engine does not come up. The engine runs no chatd in any mode, and TandemApp's TandemNode starts none while the box is in setup mode.
 
@@ -224,7 +225,7 @@ Levels 2 to 4 never touch the active profile's weights, the K3 drafters, the K4 
 
 ## The routes
 
-All of them are admin routes: open while no admin password is set, and the admin token, a dashboard session or a tool on the box itself once one is. Every POST must also be same-origin JSON: `Content-Type: application/json` (else 415 `json_only`), no `Sec-Fetch-Site: cross-site`, and an `Origin`, when sent, that names the server's `Host` or `X-Forwarded-Host` (else 403 `cross_site` / `cross_origin`). A page on another site cannot run apply or reset through a visitor's browser, even on an open box or through a tunnel's loopback. The shapes are `app/dashboard/src/api/types.ts`, contract 1.0.
+All of them are admin routes: open while no admin password is set, and the admin token, a dashboard session or a tool on the box itself once one is. Every POST must also be same-origin JSON: `Content-Type: application/json` (else 415 `json_only`), no `Sec-Fetch-Site: cross-site`, and an `Origin`, when sent, that names the server's `Host` or `X-Forwarded-Host` (else 403 `cross_site` / `cross_origin`). A page on another site cannot run apply or reset through a visitor's browser, even on an open box or through a tunnel's loopback. The shapes are TandemApp's `dashboard/src/api/types.ts`, contract 1.0.
 
 ```text
 GET  /v1/setup/models                  a tile per model

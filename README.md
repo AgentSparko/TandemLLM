@@ -225,10 +225,11 @@ curl -fsSLO https://raw.githubusercontent.com/0xBakeer/TandemLLM/v0.15.4/install
 bash install.sh --setup --yes
 ```
 
-Then open the Setup Guide in a browser and pick a model there. The guide shows each model with its weight packs, checks that your choice fits in memory, downloads it and starts the engine.
+Then pick a model with the Setup Guide. The guide shows each model with its weight packs, checks that your choice fits in memory, downloads it and starts the engine. The engine serves the guide's API, `/v1/setup/*`, and no web page of its own.
 
-- On the box itself, open `http://127.0.0.1:8000/dashboard/#/setup`.
-- From another computer, open an SSH tunnel to the box with `ssh -L 8000:127.0.0.1:8000 <user>@<box>` and open the same address on that computer. You can also install with `--host 0.0.0.0` and open `http://<box>:8000/dashboard/#/setup` from any computer on your network. Until you set an admin password, anyone who reaches the port can run the setup.
+- In a terminal on the box, run `~/TandemLLM/bin/tandem setup`: the same guide, step by step.
+- In a browser, use TandemApp's Setup page ([TandemApp](https://github.com/TandemLLM/TandemApp)) and point it at the engine: `http://127.0.0.1:8000` on the box itself.
+- From another computer, open an SSH tunnel to the box with `ssh -L 8000:127.0.0.1:8000 <user>@<box>` and use the same address on that computer. You can also install with `--host 0.0.0.0` and use `http://<box>:8000` from any computer on your network. Until you set an admin password, anyone who reaches the port can run the setup.
 
 The installer prints these addresses when it finishes.
 
@@ -337,7 +338,7 @@ All three run the same drafters and settings and are held to the same exactness 
 
 ## TandemApp
 
-The dashboard, the gateway in front of other engines and cloud APIs, Chat, the conductor and the fleet of machines are TandemApp, a separate project ([TandemApp](https://github.com/TandemLLM/TandemApp)). It needs no GPU and talks to this engine over HTTP, through the API in [contracts/engine-api-v1](contracts/engine-api-v1/README.md). This repository carries a copy of it under `app/` until the two are split.
+The dashboard, the gateway in front of other engines and cloud APIs, Chat, the conductor and the fleet of machines are TandemApp, a separate project ([TandemApp](https://github.com/TandemLLM/TandemApp)). It needs no GPU and talks to this engine over HTTP, through the API in [contracts/engine-api-v1](contracts/engine-api-v1/README.md). The engine needs none of it: it serves its API, `/health`, `/metrics`, the Setup Guide's API and `tandem doctor` alone, and in chat mode it loads TandemApp's extension when one is installed (`install.sh --with-chat --app-wheel`).
 
 ## Documentation
 

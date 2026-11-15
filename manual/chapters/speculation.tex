@@ -177,7 +177,7 @@ Greedy requests (temperature 0) take the path above. A sampled request stays exa
 
 \section{Reasoning}\index{reasoning budget}
 
-The model thinks inside \code{<think>} tags. A reasoning budget closes the block when it is spent: the engine appends the vendor's closing sentence and \code{</think>}, runs those tokens through the model at their real positions, and the model answers from there. This changes the answer, by design. The budget comes from the server's \code{--think-budget}, from the client in any of the shapes clients send (Section~\ref{sec:client-budgets}), or from the conductor's effort level. With the conductor on, the closing phrase is hidden from the client, which receives \code{</think>} and the answer; the conductor's loop guards close a reasoning block that goes in circles (Chapter~\ref{ch:monitor}).
+The model thinks inside \code{<think>} tags. A reasoning budget closes the block when it is spent: the engine appends the vendor's closing sentence and \code{</think>}, runs those tokens through the model at their real positions, and the model answers from there. This changes the answer, by design. The budget comes from the server's \code{--think-budget}, from the client in any of the shapes clients send (Section~\ref{sec:client-budgets}), or from the conductor's effort level. With the conductor on, the closing phrase is hidden from the client, which receives \code{</think>} and the answer; the conductor's loop guards close a reasoning block that goes in circles (TandemApp's manual, \enquote{The session monitor}).
 
 \section{The same method on Flash-Next}\label{sec:spec-flashnext}\index{MTP drafter}\index{StairCut!Flash-Next}
 

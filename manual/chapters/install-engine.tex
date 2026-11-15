@@ -15,8 +15,7 @@ The engine runs alone, or behind TandemApp together with other engines and cloud
 \midrule
 the engine alone & \code{install.sh} on the board (this chapter) & live \\
 the engine and cloud APIs, one address & \code{tandem-app} on the board or another machine, with the engine and the cloud API as backends (TandemApp's manual) & live, with DeepSeek \\
-the same, from the engine's own server & \code{QSE_BACKENDS}: the engine relays to the cloud API, and its conductor can run in front of it (Section~\ref{sec:engine-backends}) & built \\
-the engine and other engines on other machines & either of the two above, the other engines as \code{vllm}, \code{sglang} or \code{generic} backends (TandemApp's manual) & built; vLLM and SGLang live behind the proxy on their own \\
+the engine and other engines on other machines & \code{tandem-app} as above, the other engines as \code{vllm}, \code{sglang} or \code{generic} backends (TandemApp's manual) & built; vLLM and SGLang live behind the proxy on their own \\
 the engine and a second GPU engine on one larger machine & each engine on its own GPU, \code{tandem-app launch} for the second & built \\
 the engine and a second GPU engine on one DGX Spark & the engine plans its memory as if it owns the board (up to 77~GiB during a prefill, plus its small models); a board out of memory stops answering until it is power cycled & not supported \\
 \bottomrule
@@ -26,7 +25,7 @@ the engine and a second GPU engine on one DGX Spark & the engine plans its memor
 \begin{figure}[htbp]
 \centering
 \input{figures/install-paths}
-\caption[Which install path]{Which install path. A machine with the GPU gets the engine (path A); any other machine gets TandemApp, the dashboard and proxy (path B, TandemApp's manual); either grows into path C by adding backends. The engine's own server can relay to other backends, and TandemApp can list the engine as one backend among others.}\label{fig:install-paths}
+\caption[Which install path]{Which install path. A machine with the GPU gets the engine (path A); any other machine gets TandemApp, the dashboard and proxy (path B, TandemApp's manual); either grows into path C by adding backends behind TandemApp, which lists the engine as one backend among others (Section~\ref{sec:engine-backends}).}\label{fig:install-paths}
 \end{figure}
 
 \section{What the engine needs}\index{requirements}
@@ -48,17 +47,18 @@ curl -fsSLO https://raw.githubusercontent.com/0xBakeer/TandemLLM/v0.15.4/install
 bash install.sh --setup --yes
 \end{shell}
 
-The first line fetches the installer from the release tag. With \code{--setup} the installer puts the code and the Python environment in place and downloads only Wren's model (Qwen3.5-2B, 4.3~GB), the setup guide's assistant, and the two Wikipedia shards of the lookup corpus (1.2~GB). The corpus itself needs the model's tokenizer, so \code{ops/use-profile.sh} builds it once the model is on the disk. It writes the configuration with no weights and starts setup mode on \code{127.0.0.1:8000}: the dashboard and its \texttt{\#/setup} page, Wren, and no model loaded.
+The first line fetches the installer from the release tag. With \code{--setup} the installer puts the code and the Python environment in place and downloads only Wren's model (Qwen3.5-2B, 4.3~GB), the setup guide's assistant, and the two Wikipedia shards of the lookup corpus (1.2~GB). The corpus itself needs the model's tokenizer, so \code{ops/use-profile.sh} builds it once the model is on the disk. It writes the configuration with no weights and starts setup mode on \code{127.0.0.1:8000}: the Setup Guide's API (\code{/v1/setup/*}), Wren, and no model loaded. The engine serves no page.
 
-Then open the Setup Guide in a browser and pick a model. The guide shows each model with its weight packs, checks that the choice fits in memory, downloads it and starts the engine; a new browser opens its simple form, three pages: the model, its weights, and one page of folded settings. The switch at the top brings back all eight steps, through the model, the weights, the tools and the parallel slots. \code{docs/setup.md} describes the page.
+Then pick a model with the Setup Guide. The guide shows each model with its weight packs, checks that the choice fits in memory, downloads it and starts the engine; a new browser opens its simple form, three pages: the model, its weights, and one page of folded settings. The switch at the top brings back all eight steps, through the model, the weights, the tools and the parallel slots. \code{docs/setup.md} describes the page.
 
 \begin{itemize}
-\item On the box itself, open \texttt{http://127.0.0.1:8000/dashboard/\#/setup}.
-\item From another computer, open an SSH tunnel to the box first, \code{ssh -L 8000:127.0.0.1:8000 <user>@<box>}, and open the same address on that computer.
-\item On your network, install with \code{--host 0.0.0.0} and open \texttt{http://<box>:8000/dashboard/\#/setup} from any computer that reaches the box. Until an admin password is set, anyone who reaches the port can run the setup.
+\item In a terminal on the box, run \code{~/TandemLLM/bin/tandem setup}: the same guide, step by step.
+\item In a browser, use TandemApp's Setup page and point it at the engine, \texttt{http://127.0.0.1:8000} on the box itself.
+\item From another computer, open an SSH tunnel to the box first, \code{ssh -L 8000:127.0.0.1:8000 <user>@<box>}, and use the same address on that computer.
+\item On your network, install with \code{--host 0.0.0.0} and use \texttt{http://<box>:8000} from any computer that reaches the box. Until an admin password is set, anyone who reaches the port can run the setup.
 \end{itemize}
 
-The installer prints the addresses when it finishes, and while the box is in setup mode the dashboard opens on the Setup Guide by itself.
+The installer prints the addresses when it finishes, and while the engine is in setup mode TandemApp's page opens on the Setup Guide by itself.
 
 \subsection{Advanced: from the command line}\label{sec:new-box-cli}
 
@@ -186,13 +186,13 @@ Point other clients at the same address:
 \midrule
 an OpenAI SDK & \code{OPENAI_BASE_URL=http://<host>:8000/v1} and any key \\
 opencode & an OpenAI-compatible provider with that base URL and the model \code{TandemLLM}; with the chat (beta) on it gets the \code{coding} profile by itself \\
-Open WebUI & an OpenAI connection to that base URL, with the connection header \code{X-OpenWebUI-Chat-Id: {{CHAT_ID}}} so each chat is its own conductor session with the chat (beta) on (Section~\ref{sec:router-session}); it gets the \code{chat} profile \\
+Open WebUI & an OpenAI connection to that base URL, with the connection header \code{X-OpenWebUI-Chat-Id: {{CHAT_ID}}} so each chat is its own conductor session with the chat (beta) on (TandemApp's manual, \enquote{Profiles and the router}); it gets the \code{chat} profile \\
 \code{curl}, a script & as above; with the chat (beta) on it gets the \code{general} profile \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-An engine-only box (Section~\ref{sec:mode}) has no profiles: every client gets the raw path under the served model's own name, so opencode and Open WebUI name that model instead of \code{TandemLLM}. With the chat (beta) on, the header \code{X-Tandem: raw}\index{X-Tandem header} gives the engine without the conductor for one request. That is the release's raw path, the one the benchmarks and the paper measure. Chapter~\ref{ch:conductor} explains the profiles.
+An engine-only box (Section~\ref{sec:mode}) has no profiles: every client gets the raw path under the served model's own name, so opencode and Open WebUI name that model instead of \code{TandemLLM}. With the chat (beta) on, the header \code{X-Tandem: raw}\index{X-Tandem header} gives the engine without the conductor for one request. That is the release's raw path, the one the benchmarks and the paper measure. TandemApp's manual explains the profiles (\enquote{Profiles and the router}).
 
 \screenshot[trim=0 640 0 0, clip]{client-open-webui}{Open WebUI with \texttt{TandemLLM} as its model: a demo request on the test board in October 2026, served under the \texttt{chat} profile, with the reasoning folded into \enquote{Thought for 1 seconds}. Only the message pane is shown.}{fig:shot-open-webui}
 
@@ -247,16 +247,7 @@ Download a model with \code{hf download <repo> --local-dir <dir>}. The small mod
 
 \section{Other engines and cloud APIs beside the engine}\label{sec:engine-backends}
 
-The engine's own server can be the one address for everything. Point \code{QSE_BACKENDS}\index{qsebackends@\texttt{QSE\_BACKENDS}} in \code{local.env} at a config database and restart:
-
-\begin{shell}
-echo 'QSE_BACKENDS=$HOME/.tandemllm/config.sqlite3' >> ~/TandemLLM/run/local.env
-~/TandemLLM/bin/tandem restart
-\end{shell}
-
-Then add the backends on the dashboard's Backends screen, or as \code{TANDEM_*} variables (TandemApp's manual). This relay is TandemApp's proxy code inside the engine's process, while the engine carries TandemApp. The engine keeps serving \code{TandemLLM} as before, and a request for another model goes to its backend on the handler's own thread: it never takes the engine's lock or a place in its queue, so a slow cloud answer cannot hold up the engine. The conductor can run in front of each backend (\code{harness.mode}, Chapter~\ref{ch:harness-proxy}), and one ledger and the Parallel view cover them all. On a DGX Spark the other backends are cloud APIs or engines on other machines; a second GPU engine on the same Spark is not supported (Table~\ref{tab:setups}). No live run of this in-process relay is recorded yet; the standalone proxy in front of the engine is the setup that ran live.
-
-The other way round works too: \code{tandem-app} on a laptop or a small server, with the engine as a backend of kind \code{tandemllm} (TandemApp's manual).
+The engine serves its own model only. Other engines and cloud APIs sit behind TandemApp's controller, \code{tandem-app}, on the board or another machine, with the engine as a backend of kind \code{tandemllm} (TandemApp's manual). Since engine API 1.8 the engine takes \code{--backends}\index{backends@\texttt{-\kern0pt-backends}} (\code{QSE_BACKENDS}\index{qsebackends@\texttt{QSE\_BACKENDS}} in \code{serve.env}) only as \code{off}: any other value stops the start with one line that names \code{tandem-app}, before anything loads. On a DGX Spark the other backends are cloud APIs or engines on other machines; a second GPU engine on the same Spark is not supported (Table~\ref{tab:setups}).
 
 \section{Running from a checkout}
 

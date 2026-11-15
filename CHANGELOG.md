@@ -4,6 +4,16 @@ Releases of TandemLLM. Speed numbers are the benchmark row `serve-single-i256-o2
 
 ## Unreleased
 
+### The engine without TandemApp
+
+- No TandemApp is left in the engine's tree (ENG-413). `app/` and `app.pin` are gone with their vendor tool, and so is the import finder in `server/__init__.py`. No engine module imports TandemApp's packages. Chat mode loads TandemApp's extension by name (`QSE_EXT`), from a wheel installed beside the engine; `tests/test_app_hook.py` holds this.
+- Engine API 1.8: `/dashboard*` answers 404 `no_ui` on every engine, setup mode included, and `/v1/chat-app*`, `/v1/config*` and `/v1/collect/*` answer 404 `not_on_engine`. `/v1/dashboard/system` has no `hosts`; its `proxy.mode` is always `off`. `--backends` takes only `off`, and any other value stops the start with one line before anything loads. The page's sign-in, `/v1/dashboard/session`, is still served and leaves in a later minor. `--dashboard-dir` and `--host-collector` are gone.
+- In the contract, `POST /v1/embeddings` and `POST /v1/responses` say `relay_only`. The engine never answered them itself: only the `--backends` relay did.
+- Setup mode serves the Setup Guide's API and Wren, and its 503 names `tandem setup`. Wren reads only the engine's own texts. The models' "Other backends" tool links the README's TandemApp section.
+- One CI job runs the CPU suite, `tools/engine_suite.sh`, with no TandemApp anywhere (OPS-250). The 157 pair tests listed in `tests/test-ledger.json` run the engine with TandemApp's extension. They need a TandemApp checkout whose `PIN` names this engine's contracts (`tools/pair_suite.sh`, `TANDEMAPP_SRC`); without one, each prints `skipped:`.
+- `contracts/engine-api-v1/reverse-deps.json` is gone. A pair test now checks the copies both trees keep equal (`tests/test_pair_copies.py`).
+- TandemApp's manual took the conductor part: profiles and the router, packages, the session monitor, status lines, memory notes, and the conductor in front of other backends. Four tools that call TandemApp's own routes moved to its `tools/`: `argloop_live.py`, `library_install.py`, `memory_replay.py`, `playtest_install.py`.
+
 ### Server
 
 - `GET /v1/replica/identity` names what two engines must share to serve one model as replicas: the code, the model, the weights, drafters, rows and tokenizer by content, and the decode settings (SRV-741). The fake engine answers it from its flags. [docs/server.md](docs/server.md#routes) lists it.
@@ -31,7 +41,7 @@ Releases of TandemLLM. Speed numbers are the benchmark row `serve-single-i256-o2
 ### Docs
 
 - The docs and the manual cover the engine (ENG-413). The pages and chapters on the dashboard, the Chat tab, the conductor, its packages and memory notes moved to TandemApp. The engine's pages say what it serves: the HTTP API, `/health`, `/metrics`, the engine-only screens under `/v1/engine/*` and chat mode, the extension it loads ([docs/server.md](docs/server.md#chat-mode-the-conductor-as-an-extension)). The manual's reference tables read the engine's code and the knobs the extension reads (`contracts/engine-ext-v1/knobs.json`); TandemApp's rows moved to TandemApp's manual.
-- The docs say what the CI runs since the app jobs left it (OPS-250): the engine's suite, the suite in a tree without `app/`, the gate, the manual and the labeler.
+- The docs say what the CI runs since the app jobs left it (OPS-250): the engine's suite, the gate, the manual and the labeler.
 
 ## 0.15.4, 2026-11-10
 

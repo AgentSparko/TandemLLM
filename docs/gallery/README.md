@@ -1,6 +1,6 @@
 # Gallery
 
-The dashboard at 1440×900 and on a 390×844 phone, dark theme. `app/dashboard/e2e/readme-shots.spec.ts` renders the pictures from the dashboard's mock, and `app/dashboard/scripts/readme-shots.sh` converts them to WebP. The Setup Guide speeds come from the measured rows in `models/*/model.yaml`. All other numbers come from the mock.
+The dashboard at 1440×900 and on a 390×844 phone, dark theme. TandemApp's `dashboard/e2e/readme-shots.spec.ts` renders the pictures from the dashboard's mock, and its `dashboard/scripts/readme-shots.sh` converts them to WebP. The Setup Guide speeds come from the measured rows in `models/*/model.yaml`. All other numbers come from the mock.
 
 ## Chat
 
