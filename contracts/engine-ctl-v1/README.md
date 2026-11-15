@@ -14,6 +14,7 @@
 | `unpair.schema.json` | `unpair` |
 | `ext-list.schema.json`, `ext-install.schema.json`, `ext-remove.schema.json` | `ext list`, `install`, `remove` (1.1) |
 | `upgrade-plan.schema.json` | `upgrade plan`; `upgrade apply` answers `job.schema.json` with the plan under `upgrade` (1.1) |
+| `token-rotate.schema.json` | `token rotate` (1.1) |
 | `error.schema.json` | every refusal and error: `{ok: false, error: {code, message}}` |
 
 `tests/test_remote_contract.py` holds the CLI's answers to these schemas and `verbs.json` to the grammar.
@@ -29,7 +30,8 @@
 - One lifecycle job acts at a time. A new one cancels a job that still waits; while one acts, a call answers `busy` (exit 4).
 - Since 1.1, two verbs read stdin: `ext install` (a wheel) and `upgrade plan --sha256` (an archive of the tree). Each checks the bytes' sha256 against `--sha256` before it writes anything, and the journal line keeps the sha256 it got (`checked`), a refused call's too.
 - `upgrade apply` takes the plan's `confirm` token, bound to the tree's commit and the target, and its job rolls back to the previous tree when the install or the start fails.
+- `token rotate` answers the engine's new HTTP token on its channel only; the box keeps its sha256 (`run/http-token`), never the token.
 
 ## The version
 
-MINOR adds a verb, an option or an optional field; MAJOR removes or renames one, or changes a meaning. `verbs.json` `planned` names the verbs of later minors (`models`, `token`, `pair`); until then they are refused as `unknown_verb`. 1.1 (ENG-454) adds `ext` and `upgrade`, the exit status 1 for an install that failed, and `job`'s kind `upgrade` with `upgrade` and `rolled_back`; every 1.0 answer is still valid.
+MINOR adds a verb, an option or an optional field; MAJOR removes or renames one, or changes a meaning. `verbs.json` `planned` names the verbs of later minors (`models`, `pair`); until then they are refused as `unknown_verb`. 1.1 (ENG-454, ENG-456) adds `ext`, `upgrade` and `token`, the exit status 1 for an install that failed, `status`'s optional `http`, `job`'s kind `upgrade` with `upgrade` and `rolled_back`, and the type `cidrs` of `settings get`; every 1.0 answer is still valid.

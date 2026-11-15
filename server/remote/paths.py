@@ -13,6 +13,7 @@ managed overlay:
     run/remote/stopped         a stop on purpose: ops/watchdog.sh leaves the engine down
     run/remote/extensions.json the extensions `ext install` put into the venv (server/remote/ext.py)
     run/remote/upgrades/       a planned upgrade's archive, and each upgrade job's previous files
+    run/http-token             the HTTP token's sha256 (`token rotate`; server/api/access.py)
     logs/launcher.log          what the jobs' ops/start.sh and ops/stop.sh printed
 
 An install's own files beside the tree: DIR/venv (its Python) and DIR/run/requirements.lock (the
@@ -108,6 +109,10 @@ class Tree:
     @property
     def upgrades(self) -> str:
         return os.path.join(self.remote, "upgrades")
+
+    @property
+    def http_token(self) -> str:
+        return os.path.join(self.run, "http-token")
 
     # an install's venv and its pins (None in a checkout)
     @property

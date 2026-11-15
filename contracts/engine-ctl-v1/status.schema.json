@@ -148,6 +148,25 @@
   },
   "config_error": {
    "type": "string"
+  },
+  "http": {
+   "type": "object",
+   "properties": {
+    "token": {
+     "type": "boolean"
+    },
+    "allow_from": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   },
+   "required": [
+    "token",
+    "allow_from"
+   ],
+   "additionalProperties": false
   }
  },
  "required": [

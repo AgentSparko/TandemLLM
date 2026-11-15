@@ -93,17 +93,18 @@ VERBS: dict = {
                      "--which": "enum:engine|launcher"}, "none")},
     "doctor": {None: ({}, "none")},
     "unpair": {None: ({}, "none")},
-    # 1.1 (ENG-454): extensions and the upgrade
+    # 1.1 (ENG-454, ENG-456): extensions, the upgrade, the HTTP token
     "ext": {"list": ({}, "none"),
             "install": ({"--sha256": "sha256", "--name": "wheel", "--module": "module", **_WHEN}, "none"),
             "remove": ({"--and-mode": "enum:engine", **_WHEN}, "dist")},
     "upgrade": {"plan": ({"--ref": "ref", "--sha256": "sha256"}, "none"),
                 "apply": ({"--ref": "ref", "--sha256": "sha256", "--confirm": "confirm", **_WHEN}, "none")},
+    "token": {"rotate": ({}, "none")},
 }
 #: options a subcommand cannot go without
 REQUIRED = {"ext install": ("--sha256", "--name"), "upgrade apply": ("--confirm",)}
 #: verbs of later work packages of the same contract: refused as unknown until they exist
-PLANNED = ("models", "token", "pair")
+PLANNED = ("models", "pair")
 
 
 def split(line: str) -> list[str]:

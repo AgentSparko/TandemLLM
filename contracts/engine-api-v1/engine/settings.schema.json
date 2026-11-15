@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "engine hot settings",
+  "type": "object",
+  "description": "GET /v1/engine/settings (ENG-456, engine API 1.9): the settings a running engine changes without a restart, the managed overlay's keys whose restart class is hot (QSE_ALLOW_FROM). Each key: `live`, the value the server runs with now (empty: every address), and `value`, `set`, `source`, the value the configuration gives and its layer (serve.env, the install, the profile, run/setup.env, run/local.env, the managed overlay, the mode block); the overlay's versions; `hook`: the serve.env in use reads the overlay. The dashboard's rule.",
+  "required": [
+    "hot",
+    "keys",
+    "overlay",
+    "hook"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "hot": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "keys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "live",
+          "value",
+          "set",
+          "source",
+          "type"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "live": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "set": {
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "default",
+              "install",
+              "profile",
+              "setup",
+              "local",
+              "managed",
+              "mode"
+            ]
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "overlay": {
+      "type": "object",
+      "required": [
+        "current",
+        "good",
+        "versions",
+        "file"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "current": {
+          "type": "integer"
+        },
+        "good": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "versions": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "boolean"
+        }
+      }
+    },
+    "hook": {
+      "type": "boolean"
+    }
+  }
+}

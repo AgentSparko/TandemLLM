@@ -85,6 +85,7 @@ from server.api import parallel as parallel_mod  # noqa: E402
 from server.api import activity as activity_mod  # noqa: E402
 from server.api import logbuf  # noqa: E402
 from server.api import auth as auth_mod  # noqa: E402
+from server.api import access as access_mod  # noqa: E402  (ENG-456 the HTTP token, allow-from)
 from server import images as images_mod  # noqa: E402
 from server import memlimits  # noqa: E402
 from server import gpu_health  # noqa: E402
@@ -8516,6 +8517,34 @@ class Handler(BaseHTTPRequestHandler):
     def _peer(self) -> str:
         return (self.client_address or ("",))[0]
 
+    def _auth_policy(self) -> "auth_mod.Auth":
+        return _auth()
+
+    _gate_open = False               # passed the gate without the token it wants: open paths only
+
+    def parse_request(self):
+        """ENG-456 (engine API 1.9): the gate (server/api/access.py) before any route: the
+        allow-from list, then the HTTP token for a caller that is not trusted-local. A refusal
+        is answered here and the connection closes (its body is never read)."""
+        if not BaseHTTPRequestHandler.parse_request(self):
+            return False
+        self._gate_open = False
+        gate = STATE.get("gate")
+        if gate is None:
+            return True
+        got = gate.check(self._peer(), self.headers, self.command, self.path.split("?")[0], _auth())
+        if got is None:
+            return True
+        if got == "open":
+            self._gate_open = True
+            return True
+        status, kind, message = got
+        self.close_connection = True
+        self._json(status, {"error": {"type": kind, "code": kind, "message": message}},
+                   extra_headers=((("WWW-Authenticate", 'Bearer realm="TandemLLM"'),) if status == 401 else ())
+                   + (("Connection", "close"),))
+        return False
+
     def _allowed(self, route: str) -> bool:
         """The route's policy (server/api/auth.py); on a refusal the answer is already written."""
         verdict = _auth().decide(route, self._peer(), self.headers)
@@ -9463,7 +9492,7 @@ class Handler(BaseHTTPRequestHandler):
                 code, status = 500, "failed"
             stage = stage_mod.health(STATE, status)         # ENG-307: the stage, `degraded` while its link is down
             status = stage.pop("status", status)
-            if _auth().decide("health_full", self._peer(), self.headers) != "ok":
+            if self._gate_open or _auth().decide("health_full", self._peer(), self.headers) != "ok":
                 # through the proxy, the status and nothing about the configuration (a page there
                 # reaches the status responder through the same proxy, OPS-175)
                 return self._json(code, {"status": status, **failed})
@@ -9602,6 +9631,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_PATCH(self):
         if self._chat("PATCH"):
             return
+        path = self.path.split("?")[0].rstrip("/")
+        if path.startswith(engine_routes.PREFIX):
+            # ENG-456 (engine API 1.9): PATCH /v1/engine/settings, the hot settings
+            try:
+                body = self._read()
+            except BodyError as exc:
+                return self._body_error(exc)
+            except Exception as exc:                              # noqa: BLE001
+                return self._json(400, {"error": {"message": f"bad json: {exc}",
+                                                  "type": "invalid_request_error"}})
+            return engine_routes.serve(self, STATE, "PATCH", path, body)
         return self._conductor_write("PATCH")       # VIS-48: a session's keep
 
     def _config(self, method: str, path: str, body) -> None:
@@ -13404,6 +13444,9 @@ def main() -> None:
     # is too short stops the start here, before the minutes of loading
     STATE["auth"] = auth_mod.Auth.from_env(trust_loopback=a.trust_loopback,
                                            login=a.dashboard_login == "on")
+    # ENG-456 (engine API 1.9): the HTTP token (run/http-token) and the allow-from list
+    # (QSE_ALLOW_FROM), checked before every route; a bad list stops the start here
+    STATE["gate"] = access_mod.Gate.from_env(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     # every line from here on also reaches /v1/dashboard/logs; the log file is unchanged
     logbuf.install()
     logbuf.CONFIG["log_content"] = bool(a.log_content)
@@ -13440,6 +13483,8 @@ def _serve_setup(a) -> None:
     STATE.update(setup_mode=True, started=time.time(), args=vars(a), port=a.port,
                  model="setup")
     print(f"[server] {STATE['auth'].describe()}", flush=True)
+    if STATE["gate"].active():
+        print(f"[server] {STATE['gate'].describe()}", flush=True)
     print(f"[setup] setup mode {STATE['version']}: the Setup Guide's API /v1/setup/* and Wren "
           f"on http://{a.host}:{a.port}; no served model loaded", flush=True)
     w = setup_api.wren_of(sys.modules[__name__])
@@ -14494,6 +14539,8 @@ def _serve(a, led) -> None:
                                    f"{STATE['lane'].new_max} out, thinking off, raw or a side "
                                    f"request" if STATE["lane"] is not None else ""), flush=True)
     print(f"[server] {STATE['auth'].describe()}", flush=True)
+    if STATE["gate"].active():
+        print(f"[server] {STATE['gate'].describe()}", flush=True)
     STATE["log_request_keys"] = bool(a.log_request_keys)
     # the fake engine's writer applies no logit processor, so it cannot honour a constraint
     STATE["structured_outputs"] = bool(getattr(a, "structured_outputs", True)) and not a.fake_engine
@@ -14655,6 +14702,9 @@ class SetupHandler(Handler):
         if path == "/v1/dashboard/session":
             return self._session("GET")
         if path in ("/health", "/healthz", "/v1/health"):
+            if self._gate_open:                      # ENG-456: no token, the status only
+                return self._json(503 if STATE.get("draining") else 200,
+                                  {"status": "draining" if STATE.get("draining") else "ok"})
             w = STATE.get("wren")
             return self._json(503 if STATE.get("draining") else 200, {
                 "status": "draining" if STATE.get("draining") else "ok", "mode": "setup",

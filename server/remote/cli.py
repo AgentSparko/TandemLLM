@@ -11,7 +11,8 @@ display, or asks for a shell, is refused before any verb runs.
 
 Two verbs read stdin: `ext install` (a wheel, server/remote/ext.py) and `upgrade plan --sha256` (an
 archive of the tree, server/remote/upgrade.py); each checks the bytes' sha256 and the journal line
-keeps the one it checked (`checked`).
+keeps the one it checked (`checked`). `token rotate` answers the engine's new HTTP token
+(server/api/access.py) on this channel only: it is never journaled, logged or written in clear.
 
 The contract is contracts/engine-ctl-v1 (its README, verbs.json and a schema per answer).
 """
@@ -93,7 +94,7 @@ def session(env: dict, argv: list[str], info: dict) -> list[str]:
                       EXIT_REFUSED)
     if not args:
         raise Refusal("no_command", "no command: tandem remote status | start | stop | restart | mode | "
-                                    "settings | ext | upgrade | logs | doctor | unpair", EXIT_REFUSED)
+                                    "settings | ext | upgrade | token | logs | doctor | unpair", EXIT_REFUSED)
     return grammar.split(" ".join(_quote(a) for a in args))
 
 
@@ -114,7 +115,8 @@ def _pid(tree: Tree) -> int | None:
 
 def v_status(tree: Tree, call) -> tuple[dict, int]:
     from server import engine_api
-    env, err = overlay.resolve(tree, ["PORT", "QSE_MODE", "QSE_EXT", "QSE_PROFILE_NAME", "SERVED_MODEL"])
+    env, err = overlay.resolve(tree, ["PORT", "QSE_MODE", "QSE_EXT", "QSE_PROFILE_NAME", "SERVED_MODEL",
+                                      "QSE_ALLOW_FROM"])
     port = int(env.get("PORT") or 8000)
     code, h = lifecycle._http(f"http://127.0.0.1:{port}/health", timeout=3.0)
     pid = _pid(tree)
@@ -156,6 +158,7 @@ def v_status(tree: Tree, call) -> tuple[dict, int]:
         "overlay": overlay.manifest_brief(tree),
         "hook": overlay.hook_present(tree),
         "job": lifecycle.brief(lifecycle.latest(tree)),
+        "http": {"token": os.path.exists(tree.http_token), "allow_from": env.get("QSE_ALLOW_FROM") or None},
     }
     if status_file:
         body["status_file"] = status_file
@@ -291,7 +294,7 @@ def v_unpair(tree, call, info, env):
     return keys.unpair(control, info.get("key"), env.get("SSH_USER_AUTH")), EXIT_OK
 
 
-# ------------------------------------------------------------------------------------- 1.1 (ENG-454)
+# ------------------------------------------------------------------------------------- 1.1 (ENG-454, ENG-456)
 def v_ext_list(tree, call):
     return ext.ext_list(tree), EXIT_OK
 
@@ -347,6 +350,14 @@ def v_upgrade_apply(tree, call):
     if p["to"]["source"] == "archive":
         body["checked"] = {"sha256": p["to"]["sha256"], "bytes": p["to"]["bytes"]}
     return body, rc
+
+
+def v_token_rotate(tree, call):
+    from server.api import access
+    token, before = access.rotate(tree.http_token)
+    return {"token": token, "rotated": before, "file": os.path.relpath(tree.http_token, tree.base),
+            "effective": "within a second, without a restart: callers that are not trusted-local need "
+                         "Authorization: Bearer <token>"}, EXIT_OK
 
 
 def _log_file(tree: Tree, which: str) -> str:
@@ -425,7 +436,7 @@ HANDLERS = {
     "settings versions": v_settings_versions, "settings restore": v_settings_restore,
     "logs": v_logs, "doctor": v_doctor,
     "ext list": v_ext_list, "ext install": v_ext_install, "ext remove": v_ext_remove,
-    "upgrade plan": v_upgrade_plan, "upgrade apply": v_upgrade_apply,
+    "upgrade plan": v_upgrade_plan, "upgrade apply": v_upgrade_apply, "token rotate": v_token_rotate,
 }
 
 

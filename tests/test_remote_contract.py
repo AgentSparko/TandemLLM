@@ -5,9 +5,9 @@ The test matrix:
 
   1  every verb's answer on a sandbox tree validates against its schema (contracts/engine-ctl-v1):
      status, mode get, settings get, plan and versions, logs, a line of logs --follow, doctor, the job
-     of start, restart, mode set, settings apply and restore, unpair, ext list (1.1; ext install
-     and remove: tests/test_remote_ext.py, upgrade: tests/test_remote_upgrade.py); and every
-     refusal against error.schema.json                          test_the_answers_validate
+     of start, restart, mode set, settings apply and restore, unpair, ext list, token rotate (1.1;
+     ext install and remove: tests/test_remote_ext.py, upgrade: tests/test_remote_upgrade.py); and
+     every refusal against error.schema.json                    test_the_answers_validate
   2  verbs.json lists exactly the grammar's verbs, subcommands, options and arguments, every one with
      an answer schema that exists; the exit statuses are grammar's; every error code the code raises
      is listed                                                  test_verbs_json_is_the_grammar
@@ -65,7 +65,7 @@ def test_the_answers_validate():
                              (["settings", "plan", "MAX_QUEUE=4", "QWEN38_DEEP=16"], "settings-plan"),
                              (["settings", "versions"], "settings-versions"), (["logs"], "logs"),
                              (["logs", "--which", "launcher", "--lines", "3"], "logs"),
-                             (["ext", "list"], "ext-list")):
+                             (["ext", "list"], "ext-list"), (["token", "rotate"], "token-rotate")):
             rc, ans = R.call(b, *args)
             assert rc == 0, ans
             _ok(schema, ans)

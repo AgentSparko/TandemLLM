@@ -4,7 +4,7 @@ The test matrix:
 
   1  the schema is ops/serve.env's: every key it assigns or documents, no other; the install's, the
      weight profile's, the computed ones, QSE_BACKENDS and a secret-looking name are not managed;
-     types come from the defaults                                        test_the_schema_is_serve_envs
+     types come from the defaults; QSE_ALLOW_FROM alone is hot (1.9)     test_the_schema_is_serve_envs
   2  the fingerprint flag is server/diskcache.py's rule: its `_NOT_ROWS` prefixes and `_ROW_FILES`
      read from its source, and the arguments ops/start.sh builds from NV, HEAD, CKPT8, CKPT16,
      QSE_ENGINE_FLAGS, NARROW_ARM and FUSE_PROJ (each found in start.sh)  test_the_fingerprint_flag
@@ -72,7 +72,9 @@ def test_the_schema_is_serve_envs():
     assert sch["QSE_DISK_CACHE"]["type"] == "path" and sch["QSE_MODE"]["values"] == ["engine", "chat"]
     assert sch["QSE_EXT"]["mode_block"] and not sch["MAX_QUEUE"]["mode_block"]
     assert sch["REP_PENALTY"]["default"] is None and sch["REP_PENALTY"]["documented"] == "1.05"
-    assert all(e["restart"] == "engine" for e in sch.values())                 # no hot key before 1.9
+    # 1.9 (ENG-456): the hot keys are the server's live ones, every other key needs a restart
+    assert {k for k, e in sch.items() if e["restart"] == "hot"} == set(O.HOT) == {"QSE_ALLOW_FROM"}
+    assert sch["QSE_ALLOW_FROM"]["type"] == "cidrs" and sch["QSE_ALLOW_FROM"]["managed"]
     assert "tandem" + "app" not in json.dumps({k: {x: y for x, y in e.items() if x not in ("default", "documented")}
                                           for k, e in sch.items()}).lower()
     return f"{len(sch)} keys, {len(sch) - len(unmanaged)} managed"

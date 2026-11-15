@@ -57,11 +57,17 @@ tests/test_engine_api_live.py; the tool-call fixtures are tests/test_contract_to
      launchers have no chatd launcher and serve.env reads on as node, unset as off (the behaviour:
      tests/test_chatd_lifecycle.py, tests/test_install_headless.py)
                                                                   test_additive_1_7
- 15  1.8 (ENG-413 WP14): every 1.7 route is here unchanged; the 1.7 examples validate and the 1.8
-     ones equal them but for engine_api; the Chat tab forward 1.7 planned is an answer, the
-     sign-in stays planned; the other leaving app routes and the screens' old paths are out;
-     dashboard/ has session, error and gap; server/app.py imports no TandemApp module and has no
-     --dashboard-dir or --host-collector flag                    test_additive_1_8
+ 15  1.8 (ENG-413 WP14): every 1.7 route is in 1.8 (compat/1.8/) unchanged; the 1.7 examples
+     validate and the 1.8 ones equal them but for engine_api; the Chat tab forward 1.7 planned is
+     an answer, the sign-in stays planned; the other leaving app routes and the screens' old paths
+     are out; dashboard/ has session, error and gap; server/app.py imports no TandemApp module and
+     has no --dashboard-dir or --host-collector flag              test_additive_1_8
+ 16  1.9 (ENG-456) is additive: every 1.8 route is here unchanged, and the rest of routes.json;
+     the two new routes are GET and PATCH /v1/engine/settings in group 9, with schemas and an
+     example that validates; the 1.8 examples validate and the 1.9 ones equal them but for
+     engine_api; the hot keys are settings keys of ops/serve.env, documented there and assigned
+     nowhere (an engine with no overlay sees no new variable); the gate runs before every route
+                                                                  test_additive_1_9
 
 CPU only, no torch, standard library only. Run: python tests/test_engine_api_contract.py
 """
@@ -587,7 +593,7 @@ def test_additive_1_8():
     """ENG-413 WP14: 1.8: the page, its sign-in, the Chat tab forward and --backends left the
     engine; every 1.7 route stays, the 1.7 examples validate, what 1.7 planned is an answer."""
     from tools import contract_check
-    old, doc = _json("compat", "1.7", "routes.json"), _routes()
+    old, doc = _json("compat", "1.7", "routes.json"), _json("compat", "1.8", "routes.json")   # 1.8 as it was
     assert (old["version"], doc["version"]) == ("1.7", "1.8")
     # no route goes; the two the engine never answered itself say so (`relay_only`)
     relay = [r["path"] for r in doc["routes"] if r.get("relay_only")]
@@ -597,7 +603,7 @@ def test_additive_1_8():
     assert doc["app_families"][:len(old["app_families"])] == old["app_families"]
     health = contract_check.load("health", CONTRACT)
     for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
-        a, b = _json(name), _json("compat", "1.7", name)
+        a, b = _json("compat", "1.8", name), _json("compat", "1.7", name)
         assert not contract_check.validate(b, health, root=CONTRACT), name    # a 1.7 engine's answer
         assert {k: v for k, v in a.items() if k != "engine_api"} == \
             {k: v for k, v in b.items() if k != "engine_api"}, name
@@ -636,6 +642,49 @@ def test_additive_1_8():
         assert gone not in src, gone
     return f"{len(old['routes'])} 1.7 routes kept, 1.7 examples valid, {len(left)} app routes " \
            f"left, {len(replaced)} old screen paths out, the sign-in planned"
+
+
+def test_additive_1_9():
+    """ENG-456: 1.9: GET and PATCH /v1/engine/settings, the HTTP token and the allow-from list;
+    every 1.8 route and answer stays."""
+    from tools import contract_check
+    from server import engine_routes
+    from server.remote import overlay
+    old, doc = _json("compat", "1.8", "routes.json"), _routes()
+    assert (old["version"], doc["version"]) == ("1.8", "1.9")
+    new = [r for r in doc["routes"] if r.get("since") == "1.9"]
+    assert [r for r in doc["routes"] if r.get("since") != "1.9"] == old["routes"]
+    assert {k: v for k, v in doc.items() if k not in ("version", "routes")} == \
+        {k: v for k, v in old.items() if k not in ("version", "routes")}
+    assert [(r["method"], r["path"], r["group"]) for r in new] == \
+        [("GET", "/v1/engine/settings", 9), ("PATCH", "/v1/engine/settings", 9)], new
+    for r in new:
+        assert engine_routes._route(r["method"], ["settings"]) is not None, r
+        assert os.path.isfile(os.path.join(CONTRACT, r["schema"])), r["schema"]
+    errs = contract_check.validate(_json("engine", "settings.example.json"),
+                                   contract_check.load("engine/settings", CONTRACT), root=CONTRACT)
+    assert not errs, errs
+    health = contract_check.load("health", CONTRACT)
+    for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
+        a, b = _json(name), _json("compat", "1.8", name)
+        assert not contract_check.validate(b, health, root=CONTRACT), name    # a 1.8 engine's answer
+        assert {k: v for k, v in a.items() if k != "engine_api"} == \
+            {k: v for k, v in b.items() if k != "engine_api"}, name
+        assert a.get("engine_api") in (None, "1.9"), name
+    # the hot keys: settings keys serve.env documents and assigns nowhere
+    with open(os.path.join(ROOT, "ops", "serve.env")) as f:
+        env = f.read()
+    for k in overlay.HOT:
+        assert re.search(rf"^#{k}=", env, re.M) and not re.search(rf"^\s*(export\s+)?{k}=", env, re.M), k
+    # the gate runs before any route: in parse_request, ahead of every do_*
+    with open(os.path.join(ROOT, "server", "app.py")) as f:
+        src = f.read()
+    tree = ast.parse(src)
+    handler = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Handler")
+    pr = next(n for n in handler.body if isinstance(n, ast.FunctionDef) and n.name == "parse_request")
+    assert "gate.check(" in ast.get_source_segment(src, pr)
+    return f"{len(old['routes'])} 1.8 routes kept, 2 new in group 9, 1.8 examples valid, hot " \
+           f"{', '.join(overlay.HOT)}"
 
 
 if __name__ == "__main__":

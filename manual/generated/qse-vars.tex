@@ -2,13 +2,14 @@
 
 \begin{reftabletwo}{QSE\_* variables: the server's settings from the environment or serve.env}{tab:ref-qse}{\hd{Variable} & \hd{Read in}}
 \texttt{QSE\_\allowbreak{}ADMIN\_\allowbreak{}TOKEN} & \texttt{ops/\allowbreak{}make-\allowbreak{}secrets.sh,\allowbreak{} ops/\allowbreak{}serve.env,\allowbreak{} ops/\allowbreak{}start.sh and 5 more} \\
+\texttt{QSE\_\allowbreak{}ALLOW\_\allowbreak{}FROM} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}api/\allowbreak{}access.py,\allowbreak{} server/\allowbreak{}app.py and 4 more} \\
 \texttt{QSE\_\allowbreak{}ANSWER\_\allowbreak{}RESERVE} & \texttt{server/\allowbreak{}app.py} \\
 \texttt{QSE\_\allowbreak{}ASSETS} & \texttt{engine/\allowbreak{}models/\allowbreak{}qwen3\_\allowbreak{}5/\allowbreak{}community.py,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flashnext.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flint.env and 16 more} \\
-\texttt{QSE\_\allowbreak{}BACKENDS} & \texttt{ops/\allowbreak{}engines.sh,\allowbreak{} ops/\allowbreak{}serve.env,\allowbreak{} ops/\allowbreak{}start.sh and 2 more} \\
+\texttt{QSE\_\allowbreak{}BACKENDS} & \texttt{install.sh,\allowbreak{} ops/\allowbreak{}engines.sh,\allowbreak{} ops/\allowbreak{}serve.env and 5 more} \\
 \texttt{QSE\_\allowbreak{}BARRIER\_\allowbreak{}IDLE\_\allowbreak{}OWNER} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}slots.py} \\
 \texttt{QSE\_\allowbreak{}CAPTURE\_\allowbreak{}GUARD\_\allowbreak{}DEBUG} & \texttt{engine/\allowbreak{}capture\_\allowbreak{}lock.py} \\
-\texttt{QSE\_\allowbreak{}CHATD} & \texttt{install.sh,\allowbreak{} ops/\allowbreak{}engines.sh,\allowbreak{} ops/\allowbreak{}serve.env and 4 more} \\
-\texttt{QSE\_\allowbreak{}CHATD\_\allowbreak{}ASKED} & \texttt{install.sh,\allowbreak{} ops/\allowbreak{}serve.env,\allowbreak{} ops/\allowbreak{}start.sh} \\
+\texttt{QSE\_\allowbreak{}CHATD} & \texttt{install.sh,\allowbreak{} ops/\allowbreak{}engines.sh,\allowbreak{} ops/\allowbreak{}serve.env and 5 more} \\
+\texttt{QSE\_\allowbreak{}CHATD\_\allowbreak{}ASKED} & \texttt{install.sh,\allowbreak{} ops/\allowbreak{}serve.env,\allowbreak{} ops/\allowbreak{}start.sh and 1 more} \\
 \texttt{QSE\_\allowbreak{}CHATD\_\allowbreak{}ENV} & \texttt{install.sh} \\
 \texttt{QSE\_\allowbreak{}CHAT\_\allowbreak{}DATA} & \texttt{install.sh,\allowbreak{} server/\allowbreak{}setup/\allowbreak{}doctor.py} \\
 \texttt{QSE\_\allowbreak{}CHAT\_\allowbreak{}FORWARD\_\allowbreak{}KEY} & \texttt{ops/\allowbreak{}make-\allowbreak{}secrets.sh} \\
@@ -31,10 +32,10 @@
 \texttt{QSE\_\allowbreak{}DISK\_\allowbreak{}ADOPT\_\allowbreak{}FROM} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}diskcache.py} \\
 \texttt{QSE\_\allowbreak{}DISK\_\allowbreak{}CACHE} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}community.py,\allowbreak{} engine/\allowbreak{}models/\allowbreak{}qwen3\_\allowbreak{}5/\allowbreak{}community.py,\allowbreak{} ops/\allowbreak{}engines.sh and 11 more} \\
 \texttt{QSE\_\allowbreak{}ENGINE\_\allowbreak{}ALLOC\_\allowbreak{}CONF} & \texttt{engine/\allowbreak{}cache.py,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flashnext.env,\allowbreak{} ops/\allowbreak{}start.sh} \\
-\texttt{QSE\_\allowbreak{}ENGINE\_\allowbreak{}FLAGS} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}community.py,\allowbreak{} engine/\allowbreak{}models/\allowbreak{}qwen3\_\allowbreak{}5/\allowbreak{}community.py,\allowbreak{} ops/\allowbreak{}engines.sh and 9 more} \\
+\texttt{QSE\_\allowbreak{}ENGINE\_\allowbreak{}FLAGS} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}community.py,\allowbreak{} engine/\allowbreak{}models/\allowbreak{}qwen3\_\allowbreak{}5/\allowbreak{}community.py,\allowbreak{} ops/\allowbreak{}engines.sh and 10 more} \\
 \texttt{QSE\_\allowbreak{}ENGINE\_\allowbreak{}PORT} & \texttt{ops/\allowbreak{}engine\_\allowbreak{}status.py} \\
 \texttt{QSE\_\allowbreak{}EXL3\_\allowbreak{}BPW} & \texttt{ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}exl3.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}exl3-\allowbreak{}2.5.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}exl3-\allowbreak{}3.0.env and 4 more} \\
-\texttt{QSE\_\allowbreak{}EXT} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}\_\allowbreak{}\_\allowbreak{}init\_\allowbreak{}\_\allowbreak{}.py,\allowbreak{} server/\allowbreak{}app.py and 3 more} \\
+\texttt{QSE\_\allowbreak{}EXT} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}\_\allowbreak{}\_\allowbreak{}init\_\allowbreak{}\_\allowbreak{}.py,\allowbreak{} server/\allowbreak{}app.py and 6 more} \\
 \texttt{QSE\_\allowbreak{}EXT\_\allowbreak{}ARGS} & \texttt{server/\allowbreak{}app.py,\allowbreak{} server/\allowbreak{}ext.py} \\
 \texttt{QSE\_\allowbreak{}FAKE\_\allowbreak{}CAPTURE\_\allowbreak{}HOLD\_\allowbreak{}S} & \texttt{server/\allowbreak{}fake\_\allowbreak{}engine.py} \\
 \texttt{QSE\_\allowbreak{}FAKE\_\allowbreak{}CAPTURE\_\allowbreak{}MARK} & \texttt{server/\allowbreak{}fake\_\allowbreak{}engine.py} \\
@@ -67,12 +68,13 @@
 \texttt{QSE\_\allowbreak{}LIVE\_\allowbreak{}MOSTLY\_\allowbreak{}CACHED\_\allowbreak{}TOKENS} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}api/\allowbreak{}live.py} \\
 \texttt{QSE\_\allowbreak{}LIVE\_\allowbreak{}NOW\_\allowbreak{}WINDOW\_\allowbreak{}S} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}api/\allowbreak{}live.py} \\
 \texttt{QSE\_\allowbreak{}LIVE\_\allowbreak{}PREFILL\_\allowbreak{}WARMUP\_\allowbreak{}CHUNKS} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}api/\allowbreak{}live.py} \\
+\texttt{QSE\_\allowbreak{}MANAGED\_\allowbreak{}ENV} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}remote/\allowbreak{}overlay.py} \\
 \texttt{QSE\_\allowbreak{}MAX\_\allowbreak{}BODY\_\allowbreak{}MB} & \texttt{server/\allowbreak{}api/\allowbreak{}http\_\allowbreak{}body.py,\allowbreak{} server/\allowbreak{}app.py} \\
 \texttt{QSE\_\allowbreak{}MEMINFO} & \texttt{ops/\allowbreak{}engines.sh} \\
 \texttt{QSE\_\allowbreak{}MEM\_\allowbreak{}NEED\_\allowbreak{}GIB} & \texttt{ops/\allowbreak{}profiles/\allowbreak{}flashnext-\allowbreak{}2.05.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}flashnext-\allowbreak{}3.05.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}flashnext-\allowbreak{}4.05.env and 27 more} \\
 \texttt{QSE\_\allowbreak{}MEM\_\allowbreak{}WAIT\_\allowbreak{}S} & \texttt{server/\allowbreak{}app.py} \\
 \texttt{QSE\_\allowbreak{}METRICS\_\allowbreak{}TOKEN} & \texttt{ops/\allowbreak{}make-\allowbreak{}secrets.sh,\allowbreak{} ops/\allowbreak{}start.sh,\allowbreak{} server/\allowbreak{}api/\allowbreak{}auth.py} \\
-\texttt{QSE\_\allowbreak{}MODE} & \texttt{install.sh,\allowbreak{} ops/\allowbreak{}engines.sh,\allowbreak{} ops/\allowbreak{}serve.env and 2 more} \\
+\texttt{QSE\_\allowbreak{}MODE} & \texttt{install.sh,\allowbreak{} ops/\allowbreak{}engines.sh,\allowbreak{} ops/\allowbreak{}serve.env and 5 more} \\
 \texttt{QSE\_\allowbreak{}NH\_\allowbreak{}DENSE\_\allowbreak{}ROWS} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}engine.py} \\
 \texttt{QSE\_\allowbreak{}NH\_\allowbreak{}DIR} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}community.py,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}nemotron.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}nemotron-\allowbreak{}super-\allowbreak{}vl-\allowbreak{}exl3-\allowbreak{}2.0.env and 2 more} \\
 \texttt{QSE\_\allowbreak{}NH\_\allowbreak{}GGUF} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}load.py,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}nemotron-\allowbreak{}bolt-\allowbreak{}iq2.env,\allowbreak{} server/\allowbreak{}diskcache.py} \\
@@ -90,9 +92,9 @@
 \texttt{QSE\_\allowbreak{}ORN\_\allowbreak{}DRAFTER} & \texttt{ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}ornith.env} \\
 \texttt{QSE\_\allowbreak{}ORN\_\allowbreak{}HEAD} & \texttt{ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}ornith.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}ornith-\allowbreak{}1.5-\allowbreak{}122b-\allowbreak{}exl3-\allowbreak{}4.0.env} \\
 \texttt{QSE\_\allowbreak{}ORN\_\allowbreak{}VARIANT} & \texttt{ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}ornith.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}ornith-\allowbreak{}1.5-\allowbreak{}122b-\allowbreak{}exl3-\allowbreak{}4.0.env} \\
-\texttt{QSE\_\allowbreak{}PACK\_\allowbreak{}VISION} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}community.py,\allowbreak{} engine/\allowbreak{}models/\allowbreak{}qwen3\_\allowbreak{}5/\allowbreak{}community.py,\allowbreak{} ops/\allowbreak{}serve.env and 1 more} \\
-\texttt{QSE\_\allowbreak{}PAGE\_\allowbreak{}CACHE\_\allowbreak{}DROP} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}community.py,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flashnext.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flint.env and 5 more} \\
-\texttt{QSE\_\allowbreak{}PAGE\_\allowbreak{}CACHE\_\allowbreak{}KEEP} & \texttt{ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flashnext.env,\allowbreak{} ops/\allowbreak{}serve.env} \\
+\texttt{QSE\_\allowbreak{}PACK\_\allowbreak{}VISION} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}community.py,\allowbreak{} engine/\allowbreak{}models/\allowbreak{}qwen3\_\allowbreak{}5/\allowbreak{}community.py,\allowbreak{} ops/\allowbreak{}serve.env and 2 more} \\
+\texttt{QSE\_\allowbreak{}PAGE\_\allowbreak{}CACHE\_\allowbreak{}DROP} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}community.py,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flashnext.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flint.env and 6 more} \\
+\texttt{QSE\_\allowbreak{}PAGE\_\allowbreak{}CACHE\_\allowbreak{}KEEP} & \texttt{ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flashnext.env,\allowbreak{} ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}remote/\allowbreak{}overlay.py} \\
 \texttt{QSE\_\allowbreak{}PARALLEL} & \texttt{ops/\allowbreak{}engines.sh,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flashnext.env,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flint.env and 6 more} \\
 \texttt{QSE\_\allowbreak{}PARALLEL\_\allowbreak{}AUTO\_\allowbreak{}N} & \texttt{server/\allowbreak{}app.py,\allowbreak{} server/\allowbreak{}slots.py} \\
 \texttt{QSE\_\allowbreak{}PARALLEL\_\allowbreak{}BATCH} & \texttt{server/\allowbreak{}app.py} \\
@@ -119,7 +121,7 @@
 \texttt{QSE\_\allowbreak{}PREFILL\_\allowbreak{}BURST\_\allowbreak{}ASKING} & \texttt{server/\allowbreak{}app.py} \\
 \texttt{QSE\_\allowbreak{}PREFILL\_\allowbreak{}BURST\_\allowbreak{}WAIT\_\allowbreak{}S} & \texttt{server/\allowbreak{}app.py} \\
 \texttt{QSE\_\allowbreak{}PRICE\_\allowbreak{}TABLE} & \texttt{server/\allowbreak{}app.py} \\
-\texttt{QSE\_\allowbreak{}PROFILE\_\allowbreak{}NAME} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} ops/\allowbreak{}start.sh} \\
+\texttt{QSE\_\allowbreak{}PROFILE\_\allowbreak{}NAME} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} ops/\allowbreak{}start.sh,\allowbreak{} server/\allowbreak{}remote/\allowbreak{}cli.py and 1 more} \\
 \texttt{QSE\_\allowbreak{}PROFILE\_\allowbreak{}OVERRIDE} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} ops/\allowbreak{}use-\allowbreak{}profile.sh,\allowbreak{} server/\allowbreak{}setup/\allowbreak{}apply.py and 1 more} \\
 \texttt{QSE\_\allowbreak{}RECLAIM\_\allowbreak{}GRAPHS} & \texttt{server/\allowbreak{}app.py} \\
 \texttt{QSE\_\allowbreak{}REQ\_\allowbreak{}PEAK} & \texttt{server/\allowbreak{}app.py} \\
@@ -155,7 +157,7 @@
 \texttt{QSE\_\allowbreak{}SECRETS} & \texttt{install.sh,\allowbreak{} ops/\allowbreak{}make-\allowbreak{}secrets.sh,\allowbreak{} ops/\allowbreak{}start.sh and 3 more} \\
 \texttt{QSE\_\allowbreak{}SESSION\_\allowbreak{}S} & \texttt{server/\allowbreak{}api/\allowbreak{}auth.py} \\
 \texttt{QSE\_\allowbreak{}SETUP\_\allowbreak{}ENV} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}setup/\allowbreak{}apply.py} \\
-\texttt{QSE\_\allowbreak{}SETUP\_\allowbreak{}ENV\_\allowbreak{}FILE} & \texttt{ops/\allowbreak{}serve.env} \\
+\texttt{QSE\_\allowbreak{}SETUP\_\allowbreak{}ENV\_\allowbreak{}FILE} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}remote/\allowbreak{}overlay.py,\allowbreak{} server/\allowbreak{}setup/\allowbreak{}doctor.py} \\
 \texttt{QSE\_\allowbreak{}SETUP\_\allowbreak{}MODE} & \texttt{ops/\allowbreak{}start.sh} \\
 \texttt{QSE\_\allowbreak{}SIDE\_\allowbreak{}GRAPHS} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}app.py} \\
 \texttt{QSE\_\allowbreak{}SIDE\_\allowbreak{}MAX\_\allowbreak{}LEN} & \texttt{ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flashnext.env,\allowbreak{} ops/\allowbreak{}serve.env,\allowbreak{} server/\allowbreak{}app.py and 2 more} \\
@@ -173,7 +175,7 @@
 \texttt{QSE\_\allowbreak{}USAGE\_\allowbreak{}CONTEXT} & \texttt{server/\allowbreak{}app.py} \\
 \texttt{QSE\_\allowbreak{}USAGE\_\allowbreak{}DEFAULT} & \texttt{server/\allowbreak{}app.py} \\
 \texttt{QSE\_\allowbreak{}USAGE\_\allowbreak{}LEDGER} & \texttt{install.sh,\allowbreak{} ops/\allowbreak{}engines.sh,\allowbreak{} ops/\allowbreak{}serve.env and 4 more} \\
-\texttt{QSE\_\allowbreak{}VISION\_\allowbreak{}ASKED} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} ops/\allowbreak{}start.sh} \\
+\texttt{QSE\_\allowbreak{}VISION\_\allowbreak{}ASKED} & \texttt{ops/\allowbreak{}serve.env,\allowbreak{} ops/\allowbreak{}start.sh,\allowbreak{} server/\allowbreak{}remote/\allowbreak{}overlay.py} \\
 \texttt{QSE\_\allowbreak{}WEIGHTS} & \texttt{engine/\allowbreak{}models/\allowbreak{}flashnext/\allowbreak{}corrector.py,\allowbreak{} engine/\allowbreak{}models/\allowbreak{}flashnext/\allowbreak{}coupled.py,\allowbreak{} engine/\allowbreak{}models/\allowbreak{}flashnext/\allowbreak{}serving.py and 20 more} \\
 \texttt{QSE\_\allowbreak{}WEIGHTS\_\allowbreak{}ALSO} & \texttt{ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}flashnext.env,\allowbreak{} ops/\allowbreak{}use-\allowbreak{}profile.sh} \\
 \texttt{QSE\_\allowbreak{}WEIGHTS\_\allowbreak{}DIR} & \texttt{engine/\allowbreak{}models/\allowbreak{}nemotron\_\allowbreak{}h/\allowbreak{}community.py,\allowbreak{} engine/\allowbreak{}models/\allowbreak{}qwen3\_\allowbreak{}5/\allowbreak{}community.py,\allowbreak{} ops/\allowbreak{}profiles/\allowbreak{}\_\allowbreak{}exl3.env and 12 more} \\

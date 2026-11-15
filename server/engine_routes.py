@@ -17,6 +17,8 @@ same bodies while they last (they leave with ENG-413 WP14):
     POST /v1/engine/narrator/try|load|unload
     GET  /v1/engine/shadow/status              the shadow reader (SR1)
     POST /v1/engine/shadow/ask
+    GET, PATCH /v1/engine/settings             the hot settings (engine API 1.9, ENG-456;
+                                               server/engine_settings.py, not handed to an extension)
 
 contracts/engine-api-v1/README.md (group 9) and engine/*.schema.json describe the bodies. An answer
 is the body as the screen showed it (no `contract_version`: that is the conductor contract's field,
@@ -264,6 +266,9 @@ def _route(method: str, parts: list):
         return "deciders", (method, rest), "dashboard" if read else "conductor_write"
     if head in ("narrator", "shadow") and len(rest) == 1:
         return head, (method, rest[0]), "dashboard" if method == "GET" else "conductor_write"
+    if head == "settings" and not rest and method in ("GET", "PATCH"):
+        # engine API 1.9: server/engine_settings.py checks its own access (PATCH: settings_write)
+        return "settings", (method,), "dashboard" if method == "GET" else "settings_write"
     return None
 
 
@@ -276,6 +281,9 @@ def serve(handler, state, method: str, path: str, body) -> None:
         return handler._json(404, {"error": {"type": "not_found",
                                              "message": f"no route {method} {path}"}})
     name, args, rule = got
+    if name == "settings":
+        from server import engine_settings
+        return engine_settings.serve(handler, state, method, body)
     if not handler._allowed(rule):
         return None
     body = body if isinstance(body, dict) else {}

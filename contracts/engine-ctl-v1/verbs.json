@@ -1,7 +1,7 @@
 {
  "ctl": "engine-ctl-v1",
  "version": "1.1",
- "about": "tandem remote: the engine's control verbs (1.1 adds ext and upgrade). One command line (SSH_ORIGINAL_COMMAND under a forced command, else the arguments), split without a shell; one JSON document on stdout (JSON lines for logs --follow); an exit status; a journal line a call. server/remote/grammar.py VERBS is this table; tests/test_remote_contract.py holds them equal.",
+ "about": "tandem remote: the engine's control verbs (1.1 adds ext, upgrade and token). One command line (SSH_ORIGINAL_COMMAND under a forced command, else the arguments), split without a shell; one JSON document on stdout (JSON lines for logs --follow); an exit status; a journal line a call. server/remote/grammar.py VERBS is this table; tests/test_remote_contract.py holds them equal.",
  "line": {
   "max_chars": 8192,
   "max_tokens": 64,
@@ -189,11 +189,16 @@
     "--confirm",
     "--ref or --sha256, one of them"
    ]
+  },
+  "token rotate": {
+   "options": {},
+   "arguments": "none",
+   "answer": "token-rotate.schema.json",
+   "since": "1.1"
   }
  },
  "planned": {
   "models": "a later minor of this contract; refused as unknown_verb until then",
-  "token": "a later minor of this contract; refused as unknown_verb until then",
   "pair": "a later minor of this contract; refused as unknown_verb until then"
  },
  "exit": {
@@ -286,7 +291,8 @@
   "run/remote/wheels/": "a wheel while ext install installs it (removed after)",
   "run/remote/upgrades/<sha256>.tar": "a planned upgrade's archive (the two newest are kept)",
   "run/remote/upgrades/<job>/": "an upgrade job's previous run/ops, bin/tandem and install.sh (the three newest)",
-  "refs/tandem/previous, refs/tandem/upgrade/<sha256 prefix>": "in src's repository: the tree before the last upgrade, an archive's commit"
+  "refs/tandem/previous, refs/tandem/upgrade/<sha256 prefix>": "in src's repository: the tree before the last upgrade, an archive's commit",
+  "run/http-token": "the HTTP token's sha256 (sha256:<hex>, mode 600), written by token rotate; the engine reads it again within a second"
  },
  "key_line": "command=\"/bin/bash DIR/bin/tandem remote --key-id ID\",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding[,from=\"...\"] ssh-ed25519 AAAA... COMMENT"
 }

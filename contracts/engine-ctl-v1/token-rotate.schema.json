@@ -1,0 +1,43 @@
+{
+ "type": "object",
+ "properties": {
+  "ctl": {
+   "const": "engine-ctl-v1"
+  },
+  "version": {
+   "type": "string",
+   "pattern": "^1\\.[0-9]+$"
+  },
+  "verb": {
+   "const": "token rotate"
+  },
+  "ok": {
+   "const": true
+  },
+  "token": {
+   "type": "string",
+   "minLength": 32
+  },
+  "rotated": {
+   "type": "boolean"
+  },
+  "file": {
+   "type": "string"
+  },
+  "effective": {
+   "type": "string"
+  }
+ },
+ "required": [
+  "ctl",
+  "version",
+  "verb",
+  "ok",
+  "token",
+  "rotated",
+  "file",
+  "effective"
+ ],
+ "additionalProperties": false,
+ "$id": "engine-ctl-v1/token-rotate"
+}

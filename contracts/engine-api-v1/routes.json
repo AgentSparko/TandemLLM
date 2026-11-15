@@ -1,5 +1,5 @@
 {
-  "version": "1.8",
+  "version": "1.9",
   "routes": [
     {
       "method": "POST",
@@ -855,6 +855,30 @@
       "consumer": "a tool's check; the extension in process (host.engine)",
       "replaces": "/v1/conductor/shadow/*",
       "since": "1.5",
+      "live": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/engine/settings",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "schema": "engine/settings.schema.json",
+      "doc": "the settings a running engine changes without a restart (the hot keys: QSE_ALLOW_FROM), each with its live and its configured value; the dashboard's rule",
+      "consumer": "TandemApp's engine settings scope (planned); tandem remote settings for the rest",
+      "since": "1.9",
+      "live": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/engine/settings",
+      "aliases": [],
+      "group": 9,
+      "used_by": [],
+      "schema": "engine/settings-patch.schema.json",
+      "doc": "hot keys only: a new overlay version, current at once, applied live, journaled; plan answers without writing; trusted-local, the HTTP token or the admin token",
+      "consumer": "TandemApp's engine settings scope (planned)",
+      "since": "1.9",
       "live": false
     }
   ],

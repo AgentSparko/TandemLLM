@@ -1,0 +1,22 @@
+{
+  "hot": [
+    "QSE_ALLOW_FROM"
+  ],
+  "keys": [
+    {
+      "key": "QSE_ALLOW_FROM",
+      "live": "192.0.2.0/24",
+      "value": "192.0.2.0/24",
+      "set": true,
+      "source": "managed",
+      "type": "cidrs"
+    }
+  ],
+  "overlay": {
+    "current": 1,
+    "good": 1,
+    "versions": 1,
+    "file": true
+  },
+  "hook": true
+}

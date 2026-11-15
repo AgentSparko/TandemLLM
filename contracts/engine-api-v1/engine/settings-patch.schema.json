@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "engine hot settings change",
+  "type": "object",
+  "description": "PATCH /v1/engine/settings (ENG-456, engine API 1.9). The request: {set: {KEY: VALUE}, unset: [KEY], plan: false, base: N}, hot keys only, the values checked as `tandem remote settings plan` checks them. The answer: the plan (engine-ctl-v1's settings plan: the overlay's change, its effect on what serve.env resolves, a confirm token that this route does not ask for), `applied`; once applied the new overlay version, current at once, and each hot key's live value. Errors ({error: {type, message}}): 400 bad_value, unknown_key, missing_argument, duplicate_option; 401 unauthorized (PATCH needs a trusted-local caller, the HTTP token or the admin token); 403 cross_site or cross_origin, 415 json_only; 409 restart_needed (a key read at the start), locks_out (an allow-from list without the caller's address), base_moved, busy (a lifecycle job with an overlay change), no_change, hook_missing, config_error.",
+  "required": [
+    "plan",
+    "applied"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "plan": {
+      "type": "object",
+      "required": [
+        "base",
+        "overlay",
+        "effect",
+        "restart_needed",
+        "confirm"
+      ]
+    },
+    "applied": {
+      "type": "boolean"
+    },
+    "version": {
+      "type": "integer"
+    },
+    "live": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

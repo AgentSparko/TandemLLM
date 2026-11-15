@@ -64,9 +64,10 @@ DERIVED = ("QSE_PROFILE_NAME", "QSE_PACK_VISION", "QSE_SETUP_ENV_FILE", "QSE_VIS
 FIXED = ("QSE_BACKENDS",)
 #: values the mode block itself checks
 ENUMS = {"QSE_MODE": ("engine", "chat"), "QSE_CHATD": ("node", "off"), "CONDUCTOR": ("raw", "shadow", "on")}
-TYPES = {"QSE_EXT": "module"}
-#: a change of these keys needs no engine restart (the hot settings route of engine API 1.9 adds them)
-HOT: tuple = ()
+TYPES = {"QSE_EXT": "module", "QSE_ALLOW_FROM": "cidrs"}
+#: a change of these keys needs no engine restart: the server applies a new value live (engine API
+#: 1.9's PATCH /v1/engine/settings, server/engine_settings.py). Every other key is read at the start
+HOT: tuple = ("QSE_ALLOW_FROM",)
 #: ops/start.sh's sources of fingerprint_extra's arguments and of QWEN38_FUSE_PROJ
 START_ARGS = {"NV": "--nvfp4", "HEAD": "--fp8-head", "CKPT8": "--dflash2-ckpt", "CKPT16": "--dflash2-ckpt16",
               "QSE_ENGINE_FLAGS": "--model, --drafter, --prefix-chunk", "NARROW_ARM": "--narrow-arm",
@@ -194,6 +195,13 @@ def check_value(tree: Tree, key: str, value: str, spec: dict) -> None:
         raise Refusal("bad_value", f"{key} takes a number")
     if t == "module" and value and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*", value):
         raise Refusal("bad_value", f"{key} takes a dotted module name")
+    if t == "cidrs":
+        from server.api.access import parse_allow
+        try:
+            parse_allow(value)
+        except ValueError as exc:
+            raise Refusal("bad_value", f"{key}: {exc} (addresses and CIDRs, comma-separated)") from None
+        return
     if t == "path" or value.startswith(("/", "~", "$")) or "${" in value:
         for part in value.split(":") if t == "path" else [value]:
             check_path(tree, key, part)

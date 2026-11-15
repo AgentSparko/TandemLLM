@@ -19,8 +19,11 @@ read as node, unset as off), and install.sh --with-chat --app-wheel installs Tan
 TandemNode with chatd (ENG-413 WP7, OPS-272); no route or answer changes. 1.8: the engine serves
 no page, no Chat tab forward and no other backends: /v1/chat-app*, /v1/config* and /v1/collect/*
 answer 404 not_on_engine and /dashboard* 404 no_ui on every engine, with or without an extension
-(ENG-413 WP14). Standard library only, nothing
+(ENG-413 WP14). 1.9 adds GET and PATCH /v1/engine/settings, the settings a running engine changes
+without a restart, and the engine's HTTP token and allow-from list: with run/http-token a caller that
+is not trusted-local needs the bearer token on every route but the status, and QSE_ALLOW_FROM answers
+403 to other addresses (ENG-456); with neither, no answer changes. Standard library only, nothing
 imported.
 """
 
-VERSION = "1.8"
+VERSION = "1.9"
