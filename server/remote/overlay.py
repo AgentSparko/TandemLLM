@@ -63,8 +63,9 @@ DERIVED = ("QSE_PROFILE_NAME", "QSE_PACK_VISION", "QSE_SETUP_ENV_FILE", "QSE_VIS
 #: the engine relays to no other backend: only off, which is the default
 FIXED = ("QSE_BACKENDS",)
 #: values the mode block itself checks
-ENUMS = {"QSE_MODE": ("engine", "chat"), "QSE_CHATD": ("node", "off"), "CONDUCTOR": ("raw", "shadow", "on")}
-TYPES = {"QSE_EXT": "module", "QSE_ALLOW_FROM": "cidrs"}
+ENUMS = {"QSE_MODE": ("engine", "chat"), "QSE_CHATD": ("node", "off"), "CONDUCTOR": ("raw", "shadow", "on"),
+         "QSE_ADVERTISE": ("on", "off")}
+TYPES = {"QSE_EXT": "module", "QSE_ALLOW_FROM": "cidrs", "QSE_SSH_PORT": "integer"}
 #: a change of these keys needs no engine restart: the server applies a new value live (engine API
 #: 1.9's PATCH /v1/engine/settings, server/engine_settings.py). Every other key is read at the start
 HOT: tuple = ("QSE_ALLOW_FROM",)
