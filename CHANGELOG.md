@@ -17,6 +17,12 @@ Releases of TandemLLM. Speed numbers are the benchmark row `serve-single-i256-o2
 - `contracts/engine-api-v1/reverse-deps.json` is gone. A pair test now checks the copies both trees keep equal (`tests/test_pair_copies.py`).
 - TandemApp's manual took the conductor part: profiles and the router, packages, the session monitor, status lines, memory notes, and the conductor in front of other backends. Four tools that call TandemApp's own routes moved to its `tools/`: `argloop_live.py`, `library_install.py`, `memory_replay.py`, `playtest_install.py`.
 
+### Remote control
+
+- `tandem remote` (ENG-452, SEC-12): the engine's control verbs for a controller that reaches the box over SSH, with a key whose `authorized_keys` line runs only `bin/tandem remote` (no shell, terminal or forward). Verbs: `status`, `start`, `stop`, `restart --when now|idle|at=TIME`, `mode get|set`, `settings get|plan|apply|versions|restore`, `logs [--follow]`, `doctor`, `unpair`. One JSON answer a call, an exit status, a journal line in `run/remote/journal.jsonl`. The contract is `contracts/engine-ctl-v1`; [docs/remote-control.md](docs/remote-control.md) has the key's line.
+- The managed overlay, `run/managed.env`, read by `ops/serve.env` after `run/local.env`: versioned under `run/managed.d`, applied by an idle-gated restart, and put back when a start with a new version does not reach `/health`. A key that feeds the disk cache's fingerprint needs a second confirm. With no overlay the engine starts with the same command line and environment as before.
+- `ops/watchdog.sh` leaves an engine down after `tandem remote stop` (`run/remote/stopped`) until it answers again.
+
 ### Server
 
 - `GET /v1/replica/identity` names what two engines must share to serve one model as replicas: the code, the model, the weights, drafters, rows and tokenizer by content, and the decode settings (SRV-741). The fake engine answers it from its flags. [docs/server.md](docs/server.md#routes) lists it.

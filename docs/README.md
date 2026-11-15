@@ -22,6 +22,7 @@ TandemLLM is an inference engine, and we measure its speed on raw `/v1/completio
 | [lfm2.5-24b-a2b.md](lfm2.5-24b-a2b.md) | LiquidAI's LFM2.5-24B-A2B: the model, its profiles, its tool-call format, how the engine runs it |
 | [flint.md](flint.md) | Recursive's Flint: the model, its EXL3 and BF16 profiles, reasoning and tools, the lookup at long context, how the engine runs it |
 | [nemotron-h.md](nemotron-h.md) | NVIDIA's NemotronH (Nemotron 3.5 Bolt, Super VL, Lightning): the models, the EXL3, GGUF and NVFP4 profiles, LiLiCorr, how the engine runs them |
+| [remote-control.md](remote-control.md) | `tandem remote`: the control verbs over an SSH key that runs nothing else, the settings overlay and its versions, the journal |
 | [setup.md](setup.md) | a new box from the command line, setup mode and the Setup API behind the Setup Guide, the model registry, and Wren |
 | [community-weights.md](community-weights.md) | packs other people published: running one, adding yours with one JSON file, how a maintainer verifies it |
 | [shadow-reader.md](shadow-reader.md) | the small model that follows each session and answers questions about it |
@@ -29,7 +30,7 @@ TandemLLM is an inference engine, and we measure its speed on raw `/v1/completio
 | [roadmap.md](roadmap.md) | what Flash-Next still lacks, parallel requests, other GPUs |
 | [labels.md](labels.md) | the GitHub labels of issues and pull requests, by group |
 
-Two more references live next to the code. [contracts/engine-api-v1](../contracts/engine-api-v1/README.md) is the engine's API: every route, the shapes of its reads and [every Prometheus metric](../contracts/engine-api-v1/metrics.md). [contracts/engine-ext-v1](../contracts/engine-ext-v1/README.md) is the interface of the extension the engine loads in chat mode.
+Three more references live next to the code. [contracts/engine-api-v1](../contracts/engine-api-v1/README.md) is the engine's API: every route, the shapes of its reads and [every Prometheus metric](../contracts/engine-api-v1/metrics.md). [contracts/engine-ext-v1](../contracts/engine-ext-v1/README.md) is the interface of the extension the engine loads in chat mode, and [contracts/engine-ctl-v1](../contracts/engine-ctl-v1/README.md) the control verbs of `tandem remote`.
 
 The dashboard, the Chat tab, the conductor, its packages and memory notes are TandemApp's, a separate project with its own docs: [TandemApp's documentation](https://github.com/TandemLLM/TandemApp/blob/main/docs/README.md).
 
