@@ -56,7 +56,7 @@ def test_every_generated_table_is_balanced():
     import gen_reference
     files = gen_reference.build(ROOT)
     tex = {os.path.relpath(p, ROOT): t for p, t in files.items() if p.endswith(".tex")}
-    assert len(tex) >= 15, sorted(tex)
+    assert len(tex) >= 12, sorted(tex)          # ENG-413 WP11: TandemApp's five tables left with its code
     bad = {p: why for p, t in tex.items() if (why := unbalanced(t))}
     assert not bad, bad
     return f"{len(tex)} tables built from the code"
@@ -64,7 +64,7 @@ def test_every_generated_table_is_balanced():
 
 def test_every_committed_table_is_balanced():
     paths = sorted(glob.glob(os.path.join(ROOT, "manual", "generated", "*.tex")))
-    assert len(paths) >= 15, paths
+    assert len(paths) >= 12, paths
     bad = {os.path.basename(p): why for p in paths if (why := unbalanced(open(p, encoding="utf-8").read()))}
     assert not bad, f"run manual/tools/gen_reference.py: {bad}"
     return f"{len(paths)} files in manual/generated"

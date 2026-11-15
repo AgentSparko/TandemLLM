@@ -9,9 +9,11 @@
 \texttt{-{}-hf-\allowbreak{}token TOKEN} & a Hugging Face token (or set HF\_TOKEN; a stored 'hf auth login' works too) \\
 \texttt{-{}-no-\allowbreak{}corpus} & skip the lookup corpus (the lookup drafter then copies from the conversation only) \\
 \texttt{-{}-no-\allowbreak{}start} & install and configure, but do not start the engine \\
-\texttt{-{}-with-\allowbreak{}chat} & the chat (beta) too: the conductor (router, user memory, packages), its small models and chatd, the Chat tab's service. Without it a new install serves the engine alone and a re-run keeps the box's mode \\
+\texttt{-{}-with-\allowbreak{}chat} & the chat (beta) too: the conductor (router, user memory, packages), its small models, and TandemApp's TandemNode with chatd, the Chat tab's service; needs -\kern0pt-app-wheel (a re-run keeps the TandemApp it installed). Without it a new install serves the engine alone (no page, no chat) and a re-run keeps the mode \\
+\texttt{-{}-app-\allowbreak{}wheel FILE} & with -\kern0pt-with-chat: TandemApp's wheel, a local file (tandemapp-*.whl), into this install's venv (the engine's pins held) \\
+\texttt{-{}-app-\allowbreak{}wheel-\allowbreak{}sha256 HEX} & the wheel's sha256, checked before it is installed \\
 \texttt{-{}-engine-\allowbreak{}only} & the engine alone, a new install's default; on a re-run it turns the chat off \\
-\texttt{-{}-setup} & set up in the browser instead: install the code and Wren's model only, then start setup mode (the dashboard's \#/setup page; docs/setup.md); 127.0.0.1 unless -\kern0pt-host says otherwise \\
+\texttt{-{}-setup} & set up instead of a model now: install the code and Wren's model only, then start setup mode (the Setup API, /v1/setup/*, for TandemApp's Setup page; docs/setup.md); 127.0.0.1 unless -\kern0pt-host says otherwise \\
 \texttt{-{}-force-\allowbreak{}setup} & with -\kern0pt-setup, on a directory that already has a configured engine \\
 \texttt{-{}-systemd} & also install a systemd user unit, tandemllm.service (off by default) \\
 \texttt{-{}-runtime-\allowbreak{}only} & the engine's source and Python environment only: no weights, no corpus, no config, no start (what TandemApp's Add Spark wizard installs on a new node) \\

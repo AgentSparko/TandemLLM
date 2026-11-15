@@ -59,18 +59,6 @@
   "engine/settings.py": [
    "app/tandemapp"
   ],
-  "manual/tools/gen_reference.py": [
-   "app/",
-   "app/ops",
-   "app/packaging",
-   "app/plugins",
-   "app/proxy",
-   "app/tandemapp"
-  ],
-  "manual/tools/http_ref.py": [
-   "app/proxy",
-   "app/tandemapp"
-  ],
   "server/__init__.py": [
    "app/"
   ],
@@ -1383,20 +1371,6 @@
     "app/docs/proxy.md"
    ],
    "why": "TandemApp's copies of models/*/model.yaml as the Setup Guide answers them; tests/test_setup_registry.py holds them to the registry"
-  },
-  {
-   "files": [
-    "manual/generated/engine-knobs.tex",
-    "manual/generated/qse-vars.tex",
-    "manual/generated/tandem-vars.tex"
-   ],
-   "names": [
-    "app/"
-   ],
-   "marks": [
-    "texttt{app/"
-   ],
-   "why": "tables manual/tools/gen_reference.py and http_ref.py write from the app sources (the flag, route, header and error tables too, without a path in their text)"
   },
   {
    "files": [

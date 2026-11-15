@@ -12,6 +12,10 @@ check: `scan()` reads the code and `problems()` names
 
 `gen_reference.py` writes the tables and fails (`--check` too) while any problem is open, so a
 change to the API cannot ship without the book.
+
+The engine's own API only (ENG-413): the code it reads is server/. TandemApp's routes, headers and
+errors (the controller, chatd's forward, the routes its extension serves inside the engine) are in
+TandemApp's manual, checked against TandemApp's code by its copy of this file.
 """
 
 from __future__ import annotations
@@ -87,9 +91,9 @@ ENGINE_ROUTES = [
      "Gives back memory the engine holds idle, cheapest first: free allocator blocks and caches while slot 0 is idle, the small models, idle side conversations, slot 0's idle conversation (to the NVMe first). chatd asks it before a sandbox waits (SRV-483).",
      "{bytes}", "what each step gave back and the total"),
     ("GET", "/dashboard/", "open",
-     "The dashboard's static files. They hold no data.", "", "the page"),
+     "The page, from the extension in chat mode while the engine carries TandemApp; a headless engine answers 404 no_ui (TandemApp's controller serves the page).", "", "the page, or 404 no_ui"),
     ("GET", "/v1/dashboard/summary?from=&to=&tz=&model=&client=&backend=&user=&internal=", "dash",
-     "The Usage view's totals for a range.", "", "summary.schema.json in app/contracts/dashboard-v1"),
+     "The Usage view's totals for a range.", "", "summary.schema.json in contracts/engine-api-v1/dashboard"),
     ("GET", "/v1/dashboard/usage?bucket=hour|day&from=&to=&tz=&model=&client=&backend=&user=&internal=", "dash",
      "Tokens, requests and cost per hour or day.", "", "usage.schema.json"),
     ("GET", "/v1/dashboard/requests?limit=&before=&finish=&model=&client=&backend=&user=&internal=", "dash",
@@ -116,13 +120,13 @@ ENGINE_ROUTES = [
     ("DELETE", "/v1/dashboard/session", "open",
      "Signs this session out.", "", "the session, signed out"),
     ("*", "/v1/conductor/*", "admin",
-     "The conductor's documents, journal, sessions and memory (Table tab:ref-conductor-routes). Reads follow the dashboard rule, writes and every memory route the admin rule. 404 without --conductor-config.",
+     "The conductor's documents, journal, sessions and memory, served by the extension in chat mode (TandemApp's manual lists them). Reads follow the dashboard rule, writes and every memory route the admin rule. 404 not_on_engine on a headless engine.",
      "", ""),
     ("*", "/v1/setup/*", "admin",
-     "The setup guide (docs/setup.md): the model registry, the box, the memory estimate, the review plan, the apply and reset jobs and Wren. Every POST must also be same-origin JSON: 415 for another content type, 403 for another origin. In setup mode (--setup) these, the dashboard and /health are the only routes that answer.",
+     "The Setup Guide's API (docs/setup.md): the model registry, the box, the memory estimate, the review plan, the apply and reset jobs and Wren. Every POST must also be same-origin JSON: 415 for another content type, 403 for another origin. In setup mode (--setup) these, the page and /health are the only routes that answer.",
      "", ""),
     ("*", "/v1/config/*", "admin",
-     "The Backends and Setup screens (Table tab:ref-config-routes). Reads follow the dashboard rule, writes the admin rule. 404 without --backends.",
+     "The Backends and Setup screens of TandemApp's proxy inside the engine (TandemApp's manual lists them). Reads follow the dashboard rule, writes the admin rule. 404 without --backends.",
      "", ""),
     ("POST", "/v1/collect/{backend}", "collect",
      "A batch from the vLLM or SGLang plugin, joined to the ledger rows; only with --backends.",
@@ -135,7 +139,7 @@ ENGINE_ROUTES = [
     ("GET", "/readyz", "open",
      "Whether a decision model is loaded and warm.", "", "200, or 503 with the reason"),
     ("GET", "/v1/laya", "open",
-     "What the Laya route takes and answers, its limits, and whether it is on.", "", "a description of the route"),
+     "What the Laya route takes and answers, its limits, and whether it is on. The Laya, library and session memory routes below are the extension's in chat mode (TandemApp's manual has their shapes); a headless engine answers them 404 not_on_engine.", "", "a description of the route"),
     ("POST", "/v1/laya/ask", "open",
      "A typed answer from Laya on one text or many, for the model's own scripts; rate-limited.",
      "{question, choices | scale | neither, text | texts, threshold?, model?, deadline_ms?}",
@@ -145,7 +149,7 @@ ENGINE_ROUTES = [
     ("GET", "/v1/laya/kit/{file}", "open",
      "A file of the playtest kit the model copies into a project.", "", "the file"),
     ("OPTIONS", "/v1/laya/*", "open",
-     "A browser's CORS preflight for the Laya routes. Every other path answers OPTIONS with 501.", "", "204 with the CORS headers"),
+     "A browser's CORS preflight for the Laya routes, which the engine asks the extension for. Every other path answers OPTIONS with 501.", "", "204 with the extension's CORS headers"),
     ("GET", "/v1/library", "open",
      "The package library: every enabled skill's name, description and classes.", "", "the list and the two routes below"),
     ("GET", "/v1/library/search?q=&k=&class=", "open",
@@ -164,47 +168,8 @@ ENGINE_ROUTES = [
      "{op, scope, kind, title, tags, body, id, reason}", "{op, id, title, ...}, or 422 with the reason as the type"),
 ]
 
-# --------------------------------------------------------------------------- the standalone proxy's routes
-PROXY_ROUTES = [
-    ("POST", "/v1/chat/completions", "key",
-     "Relayed to the backend the model id routes to (Section sec:routing); the answer's bytes go back unchanged. The same for /v1/completions, /v1/embeddings and /v1/responses.",
-     "the client's body", "the backend's answer, with X-Tandem-Backend"),
-    ("POST", "/v1/completions", "key", "As /v1/chat/completions.", "", ""),
-    ("POST", "/v1/embeddings", "key", "As /v1/chat/completions; not for deepseek backends.", "", ""),
-    ("POST", "/v1/responses", "key", "As /v1/chat/completions; openai backends only.", "", ""),
-    ("GET", "/v1/models", "key",
-     "Every backend's models under their real ids, owned_by the backend.", "", "{object: list, data: [... with a tandem block]}"),
-    ("GET", "/v1/models/{id}", "key", "One model's card.", "", "the card, or 404 model_not_found"),
-    ("GET", "/", "open", "Redirects to the dashboard.", "", "302 to /dashboard/"),
-    ("GET", "/dashboard/", "open", "The dashboard's static files.", "", "the page"),
-    ("GET", "/v1/dashboard/{view}", "dash",
-     "summary, usage, requests, system, live, logs, metrics, parallel and session, as on the engine; the engine-only panels answer 404.",
-     "", "as on the engine"),
-    ("POST", "/v1/dashboard/session", "open", "As on the engine.", "{token}", "the session"),
-    ("*", "/v1/config/*", "admin", "The Backends and Setup screens (Table tab:ref-config-routes).", "", ""),
-    ("GET", "/v1/fleet/*", "dash",
-     "TandemApp's fleet (Section sec:fleet): nodes, links, topology, deployments, per-node metrics, memory, logs, events, alerts, rules and a page's window layout, as app/contracts/fleet-v1 says.",
-     "", "the contract's JSON"),
-    ("*", "/v1/fleet/*", "admin",
-     "The fleet's writes: PATCH /v1/fleet/nodes/{id} (alias, colour, icon, tags), PUT /v1/fleet/layouts/{page}, POST /v1/fleet/alerts/{id}/ack.",
-     "the contract's body", "the node, the layout as saved, or the alert"),
-    ("POST", "/v1/collect/{backend}", "collect", "A plugin's batch (as on the engine).", "", ""),
-    ("GET", "/metrics", "metrics", "The proxy's own Prometheus families.", "", "Prometheus text format"),
-    ("GET", "/health", "open",
-     "The proxy's health, for a container's check; the full body for the admin or the machine. Also /healthz and /v1/health.",
-     "", "{status}"),
-    ("*", "/v1/conductor/*", "admin",
-     "The conductor in front of the backends, with --conductor-config; the engine-only screens answer 404.", "", ""),
-    ("GET", "/v1/library", "open", "The package library, as on the engine, also under /v1/library/*.", "", ""),
-    ("GET", "/v1/laya", "open", "Laya, when the decider role names an endpoint.", "", ""),
-    ("POST", "/v1/laya/ask", "open", "As on the engine, relayed to the decider role's endpoint.", "", ""),
-]
-
-# The two small servers beside them.
+# The status responder beside the engine (TandemApp's host collector is in its manual).
 SIDE_ROUTES = [
-    ("tandem-app hostcollect", "GET", "/host?watch=", "the machine's sample as JSON (the bearer token when --token is set)"),
-    ("tandem-app hostcollect", "GET", "/metrics", "the same sample in the Prometheus text format"),
-    ("tandem-app hostcollect", "GET", "/health", "{status: ok}, no token"),
     ("ops/engine_status.py", "GET", "/v1/models", "200 with the engine's last model list and its state, while the engine is away"),
     ("ops/engine_status.py", "GET", "/dashboard/", "503 with a page that says why the engine is away and opens the dashboard when it is back"),
     ("ops/engine_status.py", "*", "any other path", "503 provider_unavailable with Retry-After and the state as engine_<state>"),
@@ -212,7 +177,7 @@ SIDE_ROUTES = [
 
 # --------------------------------------------------------------------------- headers
 # (name, direction, where, meaning). direction: in (the server reads it), out (it writes it),
-# both. where: engine, proxy, both.
+# both. where: engine, or both (TandemApp's controller reads or writes it too).
 HEADERS = [
     ("X-Tandem", "both", "both",
      "raw, shadow or on: lowers the conductor's mode for one request; the response says which mode ran"),
@@ -226,19 +191,12 @@ HEADERS = [
     ("X-Tandem-Parent-Session", "in", "engine", "a worker's parent session (the chat's): for 600 s after the worker's last request the parent's rows go to the NVMe rather than away, and its return tries slot 0 first"),
     ("X-Tandem-Regenerate", "in", "engine", "1 serves the request as a regenerate (sampled, a fresh seed); 0 turns the detection off for it"),
     ("X-Tandem-Images-Left-Out", "out", "engine", "how many earlier images were left out of the prompt"),
-    ("X-Tandem-Forward", "out", "engine", "to chatd on a /v1/chat-app request: the forward key, the only proof chatd accepts"),
-    ("X-Tandem-Principal", "out", "engine", "to chatd: who the request is for (owner)"),
-    ("X-Tandem-Password-Set", "out", "engine", "to chatd: 1 when an admin password is set"),
-    ("X-Tandem-Signed-In", "out", "engine", "to chatd: 1 when the request passed the dashboard's rule"),
     ("X-Tandem-Wait", "out", "engine", "memory, on a response that waited for memory before its prefill; its stream says so every 15 s"),
     ("X-Tandem-Wait-For-Memory", "in", "engine", "1: a request not streamed waits for memory up to QSE_MEM_WAIT_S, as wait_for_memory: true in the body does, instead of a 503 after the queue timeout"),
-    ("X-Tandem-Backend", "out", "proxy", "the id of the backend that answered a relayed request"),
-    ("X-Tandem-Cost", "in", "proxy", "1 on a streamed relayed request: one SSE comment before data: [DONE] carries the request's cost (: tandem-cost {\"cost_micros\": N, \"backend\": id}); without it the stream is the backend's"),
     ("X-Engine-Stop", "out", "engine", "pattern-stop(<label>) on a response without a stream that a stop pattern ended"),
     ("x-session-id", "in", "both", "opencode's session id: the router's session and the caches' session key"),
     ("X-Conversation-Id", "in", "both", "a conversation id for clients that send no session field; read after the body's own ids"),
     ("X-OpenWebUI-Chat-Id", "in", "both", "Open WebUI's chat id (a connection header with {{CHAT_ID}}): the router's session for that chat"),
-    ("X-Request-Id", "both", "proxy", "sent to a vllm backend as px-<hex>, which the plugin reports back for the join; a client's own id is kept"),
     ("X-QSE-Client", "in", "engine", "dashboard marks the dashboard's own requests (client kind dashboard)"),
     ("X-Real-IP", "in", "both", "set by a reverse proxy; a request that carries it is never trusted as local; the sign-in's rate limit counts per address"),
     ("X-Forwarded-For", "in", "both", "as X-Real-IP: a request that carries it is never trusted as local"),
@@ -248,18 +206,12 @@ HEADERS = [
     ("X-Decider-Window", "in", "engine", "in_decode is refused: decisions run in the idle window only"),
     ("X-Accel-Buffering", "out", "both", "no, on every stream, so nginx sends each event at once"),
     ("X-Content-Type-Options", "out", "both", "nosniff on the dashboard's static files"),
-    ("x-ratelimit-*", "out", "proxy", "a cloud backend's rate-limit headers, passed on to the client"),
-    ("OpenAI-Beta", "both", "proxy", "a client's OpenAI-Beta header, passed on to an openai backend"),
     ("Authorization", "in", "both", "Bearer: the admin token, the metrics token, the collect token or a proxy user key, by route; the engine's OpenAI routes ignore it and file the request under a hash of it"),
     ("User-Agent", "in", "both", "the client kind in the ledger: open-webui, opencode, openai-sdk, curl, other (a Hermes-shaped body: hermes)"),
     ("Last-Event-ID", "in", "both", "resumes the log stream after that line"),
     ("Retry-After", "out", "both", "with a 503 (queue full, memory gate, draining, a full backend), a 429, or a decision model that is loading"),
     ("WWW-Authenticate", "out", "both", "Bearer, with a 401"),
     ("Set-Cookie", "out", "both", "qse_dash, the dashboard session: HttpOnly, SameSite=Strict, Secure behind https"),
-    ("Access-Control-Allow-Origin", "out", "engine", "* on the library and Laya routes, so a page the model builds can call them; with Access-Control-Allow-Methods, -Headers and -Max-Age on the preflight"),
-    ("Access-Control-Allow-Methods", "out", "engine", "on the Laya preflight"),
-    ("Access-Control-Allow-Headers", "out", "engine", "on the Laya preflight"),
-    ("Access-Control-Max-Age", "out", "engine", "on the Laya preflight"),
 ]
 
 # --------------------------------------------------------------------------- errors
@@ -271,36 +223,29 @@ ERRORS = [
     ("400", ["stage_text_only"], "a request with images on the tail stage of a split model (--stage), as error.code beside invalid_request_error", False),
     ("400", ["confirm_required"], "a setup reset without the confirmation its level asks for (true, or the typed word)", False),
     ("401", ["unauthorized"], "a guarded route without the token or the session it needs, once an admin password is set; a wrong collect token", False),
-    ("401", ["invalid_api_key"], "the proxy, once a user key exists: no key, or a key it does not know (code invalid_api_key)", False),
-    ("403", ["forbidden"], "a memory route outside a known session address", False),
     ("404", ["not_found"], "no such route, or a route whose part is off on this server (the conductor, the proxy, the decision models)", False),
-    ("404", ["unsupported_route"], "the proxy: a route the backend's kind does not serve, such as embeddings on deepseek (code unsupported_route)", False),
+    ("404", ["not_on_engine"], "a route TandemApp serves (the conductor, its library, memory and Laya, the backends) on an engine where no extension serves it", False),
+    ("404", ["no_ui"], "the page on an engine without TandemApp: TandemApp's controller serves it", False),
     ("404", ["model_not_found"], "a model id no backend serves, or one two backends serve (the message names the prefixed forms) (code model_not_found)", False),
-    ("409", ["busy", "not_loaded", "not_running", "closed", "stale", "role_off"],
-     "a conductor action that needs a role or a decision model in another state, or a role the roles document switches off (role_off); a package proposal already closed, or whose base text changed since", False),
+    ("409", ["busy", "not_loaded", "role_off"],
+     "an action that needs a role or a decision model in another state, or a role the roles document switches off (role_off)", False),
     ("409", ["stage_front"], "any route but /health on the front stage of a split model (--stage): requests go to the tail stage", False),
-    ("422", ["invalid_request_error", "invalid_report"],
-     "a value the schema refuses: a config field (error.field), a field an environment variable locks (error.variable), a Laya, library or memory call's fields, an eval report", False),
-    ("422", ["schema", "secret", "cap", "user", "unknown_id", "unknown_package", "rule_from_tool", "no_session", "no_user",
-             "refused_root", "no_proposals", "propose"],
-     "a memory note or a package proposal refused, with the reason as the type: a field (schema), a secret, a cap, an unknown note or package", False),
+    ("422", ["invalid_request_error"],
+     "a value the schema refuses: a config field (error.field), a field an environment variable locks (error.variable), a decision request's fields", False),
     ("429", ["server_busy"], "a request without a stream that waited --queue-timeout for the engine", True),
     ("429", ["too_many"], "a fifth log or live stream at once; a sixth failed sign-in in a minute", True),
-    ("429", ["rate_limited"], "the library, Laya or memory routes past their calls a minute", True),
-    ("500", ["internal_error", "error"], "a bug: the message is the exception's; the request is in the log", False),
+    ("429", ["rate_limited"], "/v1/tokenize past its 240 calls a minute from one address", True),
+    ("500", ["internal_error"], "a bug: the message is the exception's; the request is in the log", False),
+    ("500", ["extension_error"], "a route of the extension that raised: the extension's bug, in the engine's log", False),
     ("501", [], "OPTIONS on any path but the Laya routes", False),
-    ("502", ["connect_error", "upstream_error", "key_unreadable"], "the proxy could not reach the backend or read its stored key, after its retries", False),
-    ("200", ["upstream_closed", "upstream_error"], "a stream that already began: the backend failed or closed early; the client gets an error event, then [DONE]", False),
     ("503", ["server_busy"], "the queue is full, the server is draining, or the memory gate or the admission by bytes cannot make room", True),
     ("503", ["memory_wait_timeout"], "a request that waited for memory to its bound: --queue-timeout without a stream, QSE_MEM_WAIT_S streamed or with wait_for_memory; a stream that opened while it waited ends with it as an error event (type server_busy, Retry-After: 30)", True),
     ("503", ["setup_mode"], "any route but the dashboard, /health, /v1/models and /v1/setup/* on a box in setup mode (Retry-After: 60)", True),
-    ("503", ["max_inflight"], "every backend for the model is at the max_inflight you set (Retry-After: 1)", True),
     ("503", ["warming", "loading", "refused", "failed", "not_loaded", "busy_decoding"], "a decision request while the model loads, was refused memory, failed, or the engine kept decoding past the deadline", True),
     ("503", ["identity_pending"], "the replica identity while the engine computes it, once after the start (Retry-After: 1)", True),
     ("503", ["stage_down"], "a completion on the tail stage of a split model while its link to the front stage is down (Retry-After: 5); a request in flight when the link fails ends with 500 and the same word in its message", True),
     ("503", ["engine_failed"], "a completion after the engine's CUDA context was lost: the sentence says so, the watchdog restarts the engine (Retry-After: 60)", True),
     ("503", ["provider_unavailable"], "the status responder while the engine is stopped, starting or held (code engine_<state>)", True),
-    ("504", ["upstream_timeout", "timeout"], "a backend that sent no first byte in time; a Laya call past its deadline", False),
     ("529", ["overloaded_error"], "a decision request the runtime could not take", False),
 ]
 
@@ -308,16 +253,15 @@ ERRORS = [
 HANDLERS = {
     "server/app.py": ("do_GET", "do_POST", "do_PUT", "do_PATCH", "do_DELETE", "do_OPTIONS",
                       "_dashboard_get", "_conductor_write", "_strip_session"),
-    "app/proxy/app.py": ("do_GET", "do_POST", "do_PUT", "do_PATCH", "do_DELETE", "do_OPTIONS",
-                         "_dashboard_get", "_strip_session"),
 }
-# the engine's server/ and TandemApp's app/proxy and app/tandemapp (which held part of server/ before
-# the move; scanned by path until the split, ENG-413)
-HEADER_DIRS = ("server", "app/proxy", "app/tandemapp")
+# the engine's server/ only; TandemApp's code is checked by TandemApp's copy of this file (ENG-413)
+HEADER_DIRS = ("server",)
 _HEADER = re.compile(r"^(?:[Xx]-[A-Za-z0-9-]+|Retry-After|WWW-Authenticate|Set-Cookie|Last-Event-ID"
                      r"|OpenAI-[A-Za-z-]+|Access-Control-[A-Za-z-]+)$")
-# code that is not part of the served API: test doubles, and the kit the model copies into a project
+# code that is not part of the served API: test doubles, the kit the model copies into a project, and
+# bin/tandem setup's terminal client (server/setup/cli.py), whose error codes it prints itself
 _SKIP = ("fake", "laya_kit")
+_SKIP_FILES = ("server/setup/cli.py",)
 
 
 def _parse(root: str, rel: str):
@@ -352,13 +296,6 @@ def handler_paths(root: str) -> dict:
                                     and c.value.startswith("/") and " " not in c.value):
                                 found.add(c.value.rstrip("/") or "/")
         out[rel] = found
-    # the proxy's completion routes are a constant of app/proxy/service.py
-    tree = _parse(root, "app/proxy/service.py")
-    if tree is not None:
-        for node in ast.walk(tree):
-            if (isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "PROXY_PATHS" for t in node.targets)
-                    and isinstance(node.value, ast.Tuple)):
-                out["app/proxy/app.py"] |= {e.value for e in node.value.elts if isinstance(e, ast.Constant)}
     return out
 
 
@@ -368,12 +305,13 @@ def _py_files(root: str, dirs: tuple):
             if any(s in os.path.relpath(dp, root) for s in _SKIP):
                 continue
             for f in sorted(fs):
-                if f.endswith(".py") and not f.startswith(_SKIP):
-                    yield os.path.relpath(os.path.join(dp, f), root)
+                rel = os.path.relpath(os.path.join(dp, f), root)
+                if f.endswith(".py") and not f.startswith(_SKIP) and rel not in _SKIP_FILES:
+                    yield rel
 
 
 def header_names(root: str) -> set:
-    """Lower-cased header names the server and the proxy read or write."""
+    """Lower-cased header names the server reads or writes."""
     out = set()
     for rel in _py_files(root, HEADER_DIRS):
         tree = _parse(root, rel)
@@ -386,7 +324,7 @@ def header_names(root: str) -> set:
 
 
 def error_types(root: str) -> set:
-    """The error.type and error.code values the server and the proxy put in an error body."""
+    """The error.type and error.code values the server puts in an error body."""
     out = set()
     for rel in _py_files(root, HEADER_DIRS):
         tree = _parse(root, rel)
@@ -444,7 +382,7 @@ ALIASES = {"/healthz": "/health", "/v1/health": "/health", "/dashboard": "/dashb
 def problems(root: str) -> list:
     out = []
     lits = handler_paths(root)
-    for rel, rows in (("server/app.py", ENGINE_ROUTES), ("app/proxy/app.py", PROXY_ROUTES)):
+    for rel, rows in (("server/app.py", ENGINE_ROUTES),):
         docs = [r[1] for r in rows]
         found = lits.get(rel, set())
         for lit in sorted(found):
@@ -481,7 +419,7 @@ def problems(root: str) -> list:
         out.append(f"undocumented error type: {t}")
     for t in sorted(doc_e - code_e):
         if t in ("warming", "loading", "refused", "failed", "not_loaded", "busy_decoding",
-                 "provider_unavailable", "overloaded_error", "invalid_api_key"):
+                 "provider_unavailable", "overloaded_error"):
             continue                      # built from a variable (the runtime's state, an f-string)
         out.append(f"documented error type not in the code: {t}")
     return out
@@ -540,14 +478,7 @@ def gen_engine_routes_tex(header: str, code, tex) -> str:
     out = [header, r"\begin{httptable}{The engine server's routes}{tab:ref-engine-routes}"]
     out += _route_rows(ENGINE_ROUTES, code, tex)
     out.append(r"\end{httptable}")
-    return "\n".join(out) + "\n"
-
-
-def gen_proxy_routes_tex(header: str, code, tex) -> str:
-    out = [header, r"\begin{httptable}{The standalone proxy's routes (\texttt{tandem-app})}{tab:ref-proxy-routes}"]
-    out += _route_rows(PROXY_ROUTES, code, tex)
-    out.append(r"\end{httptable}")
-    out.append(r"\begin{reftable}{The two small servers beside them}{tab:ref-side-routes}{\hd{server} & \hd{route} & \hd{answer}}")
+    out.append(r"\begin{reftable}{The status responder beside the engine}{tab:ref-side-routes}{\hd{server} & \hd{route} & \hd{answer}}")
     for server, method, path, what in SIDE_ROUTES:
         out.append(code(server) + " & " + code(method) + " " + code(path) + " & " + fmt(what, code, tex) + r" \\")
     out.append(r"\end{reftable}")
@@ -555,7 +486,7 @@ def gen_proxy_routes_tex(header: str, code, tex) -> str:
 
 
 def gen_headers_tex(header: str, code, tex) -> str:
-    out = [header, r"\begin{reftable}{Every header the engine and the proxy read or write}{tab:ref-headers}{\hd{header} & \hd{direction, where} & \hd{meaning}}"]
+    out = [header, r"\begin{reftable}{Every header the engine reads or writes (both: TandemApp's controller too)}{tab:ref-headers}{\hd{header} & \hd{direction, where} & \hd{meaning}}"]
     for name, direction, where, meaning in HEADERS:
         out.append(code(name) + " & " + tex(direction + ", " + where) + " & " + fmt(meaning, code, tex) + r" \\")
     out.append(r"\end{reftable}")

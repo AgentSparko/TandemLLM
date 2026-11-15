@@ -11,9 +11,13 @@ against the code: a path a handler tests, a header name or an error type the cod
 reference lacks, or a row the code no longer has, is printed, and the run exits 2 (1 with --check).
 
 It never imports the project: every table comes from parsing the source with `ast` (the server's
-and the proxy's argument parsers, the engine's settings registry, the metric registrations, the
-usage ledger's schema) or from plain text (install.sh's usage text, ops/serve.env, the verify
-price tables). Standard library only, Python 3.9 or newer.
+argument parser, the engine's settings registry, the metric registrations, the usage ledger's
+schema) or from plain text (install.sh's usage text, ops/serve.env, the verify price tables).
+
+The engine's code only (ENG-413): nothing here reads app/. The QWEN38_* knobs the engine extension
+reads (contracts/engine-ext-v1/knobs.json) are TandemApp's rows, and so are the proxy's flags, the
+TANDEM_* variables TandemApp documents, its metrics and its routes: TandemApp's manual has them,
+from its own copy of this tool. Standard library only, Python 3.9 or newer.
 """
 
 from __future__ import annotations
@@ -135,18 +139,12 @@ def module_constants(root: str, rel: str) -> dict:
     return out
 
 
-# TandemApp's top-level packages: their files are under app/ until the split, ENG-413
-APP_PACKAGES = ("tandemapp", "proxy", "chatd")
-
-
 def import_map(tree: ast.Module) -> dict:
     """alias -> module file, for `from pkg import mod as alias` lines."""
     out = {}
     for node in tree.body:
         if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
             base = node.module.replace(".", "/")
-            if node.module.split(".")[0] in APP_PACKAGES:
-                base = "app/" + base
             for a in node.names:
                 out[a.asname or a.name] = base + "/" + a.name + ".py"
     return out
@@ -381,33 +379,6 @@ def gen_server_flags(root: str, knobs: dict) -> str:
                        "tab:ref-server-flags", served=served_flags(root))
 
 
-def gen_proxy_flags(root: str) -> str:
-    rows = argparse_rows(root, "app/proxy/__main__.py", "parser")
-    return flags_table(rows, "tandem-app serve and python -m proxy", "tab:ref-proxy-flags")
-
-
-def gen_launch_flags(root: str) -> str:
-    rows = argparse_rows(root, "app/proxy/launch.py", "parser")
-    for r in rows:
-        if r["flag"] == "engine":
-            r["flag"] = "ENGINE"
-            r["help"] = "the engine to start: vllm or sglang"
-            r["choices"] = ""
-    return flags_table(rows, "tandem-app launch", "tab:ref-launch-flags",
-                       {"--port": "the engine's port", "--host": "the engine's bind address",
-                        "--model": "the model id or path the engine serves",
-                        "--config-db": "the proxy's config database the backend is registered in",
-                        "--collect-url": "the proxy address the plugin posts to; default: this machine's proxy on its port"})
-
-
-def gen_hostcollect_flags(root: str) -> str:
-    rows = argparse_rows(root, "app/proxy/hostcollect.py", None)
-    return flags_table(rows, "tandem-app hostcollect", "tab:ref-hostcollect-flags",
-                       {"--host": "the address to bind; beyond loopback it needs a token",
-                        "--port": "the collector's port",
-                        "--token-file": "a file whose first line is the bearer token; else TANDEM_COLLECTOR_TOKEN"})
-
-
 def gen_install_flags(root: str) -> str:
     with open(os.path.join(root, "install.sh"), encoding="utf-8") as fh:
         src = fh.read()
@@ -469,9 +440,21 @@ def read_serve_env(root: str) -> list:
     return out
 
 
+EXT_KNOBS = os.path.join("contracts", "engine-ext-v1", "knobs.json")
+
+
+def ext_knobs(root: str) -> set:
+    """The QWEN38_* names the engine extension reads (engine-ext-v1 knobs.json): TandemApp's rows."""
+    with open(os.path.join(root, EXT_KNOBS), encoding="utf-8") as fh:
+        return set(json.load(fh)["knobs"])
+
+
 def gen_engine_knobs(root: str, knobs: dict, served: dict) -> str:
-    lines = [HEADER, r"\begin{reftable}{Every QWEN38\_* switch in engine/settings.py, with the value ops/serve.env sets}{tab:ref-knobs}{\hd{Variable} & \hd{Code default} & \hd{Served value \textbullet{} read in}}"]
+    lines = [HEADER, r"\begin{reftable}{Every QWEN38\_* switch the engine reads in engine/settings.py, with the value ops/serve.env sets (the extension's, in contracts/engine-ext-v1/knobs.json, are in TandemApp's manual)}{tab:ref-knobs}{\hd{Variable} & \hd{Code default} & \hd{Served value \textbullet{} read in}}"]
+    ext = ext_knobs(root)
     for name in sorted(knobs):
+        if name in ext:
+            continue
         default, mod = knobs[name][0], knobs[name][1]
         d = "none" if default in (None, "") else str(default)
         sv = served.get("QWEN38_" + name, "")
@@ -498,12 +481,10 @@ def gen_serve_env(root: str, knobs: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-# The code the variable tables scan: the engine's and TandemApp's, which keeps its own tree under
-# app/ (proxy/, plugins/ and the parts of server/ and ops/ it took along) until the split, ENG-413
-QSE_DIRS = ("server", "ops", "install.sh", "engine", "app/proxy", "app/tandemapp", "app/ops",
-            "app/packaging")
-TANDEM_DIRS = ("app/proxy", "app/plugins", "server", "app/tandemapp", "ops", "app/ops", "app/packaging",
-               "install.sh")
+# The code the variable tables scan: the engine's own (ENG-413: TandemApp's tree under app/ is
+# TandemApp's manual's)
+QSE_DIRS = ("server", "ops", "install.sh", "engine")
+TANDEM_DIRS = ("server", "ops", "install.sh")
 
 
 def scan_vars(root: str, prefix: str, dirs: tuple) -> dict:
@@ -542,30 +523,11 @@ def gen_qse_vars(root: str) -> str:
 
 
 def gen_tandem_vars(root: str) -> str:
-    """TANDEM_* variables: the proxy's documented list first, then every other one the code reads."""
-    with open(os.path.join(root, "app/proxy/config.py"), encoding="utf-8") as fh:
-        doc = ast.get_docstring(ast.parse(fh.read())) or ""
-    documented = []
-    cur = None
-    for line in doc.splitlines():
-        m = re.match(r"^\s{4}(TANDEM_[A-Z0-9_<>n]+)=(\S*)\s*(.*)$", line)
-        if m:
-            cur = [m.group(1), m.group(2), m.group(3)]
-            documented.append(cur)
-        elif cur and re.match(r"^\s{40,}\S", line):
-            cur[2] = (cur[2] + " " + line.strip()).strip()
-        else:
-            cur = None
+    """TANDEM_* variables the engine's code reads (TandemApp's own list is in its manual)."""
     found = scan_vars(root, "TANDEM", TANDEM_DIRS)
-    seen = {d[0] for d in documented}
-    lines = [HEADER, r"\begin{reftable}{TANDEM\_* variables: the proxy, the collector, the plugins and the installer}{tab:ref-tandem}{\hd{Variable} & \hd{Example} & \hd{What it sets}}"]
-    for name, example, desc in documented:
-        ex = "(a key)" if re.search(r"\b(?:s[k]|tdm)-", example) else example
-        if ex.startswith("http") and not ex.startswith("https://api."):
-            ex = "(a URL)"
-        lines.append(code(name) + " & " + code(ex.strip('"')) + " & " + tex(clean(desc, 200)) + r" \\")
+    lines = [HEADER, r"\begin{reftable}{TANDEM\_* variables the engine's code reads: the installer, the service scripts and the server}{tab:ref-tandem}{\hd{Variable} & \hd{Example} & \hd{What it sets}}"]
     for name in sorted(found):
-        if name in seen or "<" in name:
+        if "<" in name:
             continue
         files = sorted(found[name])
         lines.append(code(name) + " & & read in " + code(", ".join(files[:2])) + r" \\")
@@ -574,9 +536,11 @@ def gen_tandem_vars(root: str) -> str:
 
 
 def gen_metrics(root: str) -> str:
+    # the families the contract marks "owner": "ext" are the extension's: TandemApp's manual has them
+    with open(os.path.join(root, "contracts", "engine-api-v1", "metrics-families.json"), encoding="utf-8") as fh:
+        owner = {f["name"]: f["owner"] for f in json.load(fh)["families"]}
     rows = []
-    for rel in ("app/tandemapp/metrics.py", "app/proxy/service.py", "app/proxy/engines.py",
-                "app/proxy/hostcollect.py"):
+    for rel in ("server/api/metrics.py",):
         try:
             tree = parse(root, rel)
         except (OSError, SyntaxError):
@@ -590,6 +554,8 @@ def gen_metrics(root: str) -> str:
             name = lit(node.args[0])
             if not isinstance(name, str) or not name.startswith(("qse_", "tandem_")):
                 continue
+            if owner.get(name) == "ext":
+                continue
             helps = help_text(node.args[1]) if len(node.args) > 1 else ""
             labels = lit(node.args[2]) if len(node.args) > 2 else lit(kw(node, "labels"), ())
             if not isinstance(labels, (list, tuple)):
@@ -600,7 +566,7 @@ def gen_metrics(root: str) -> str:
         if r[0] not in seen:
             seen.add(r[0])
             uniq.append(r)
-    lines = [HEADER, r"\begin{reftable}{Prometheus families registered in the code}{tab:ref-metrics}{\hd{Metric} & \hd{Type, labels} & \hd{What it counts}}"]
+    lines = [HEADER, r"\begin{reftable}{Prometheus families the engine registers (the extension's are in TandemApp's manual)}{tab:ref-metrics}{\hd{Metric} & \hd{Type, labels} & \hd{What it counts}}"]
     for name, kind, labels, helps, rel in uniq:
         lab = kind + ((", " + labels) if labels else "")
         lines.append(code(name) + " & " + code(lab) + " & " + mono_inline(clean(helps, 200)) + r" \\")
@@ -669,7 +635,7 @@ LEDGER_NOTES = {
 
 def gen_ledger(root: str) -> str:
     consts = {}
-    tree = parse(root, "app/tandemapp/ledger.py")
+    tree = parse(root, "server/api/ledger.py")
     for node in tree.body:
         if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
             try:
@@ -749,59 +715,6 @@ def gen_verify_csv(root: str) -> str:
     return "% source: ops/stair-tables-nvfp4.json (measured verify plus commit, ms, published NVFP4 set)\n".replace("% ", "# ") + "\n".join(out) + "\n"
 
 
-def doc_routes(root: str, rel: str) -> list:
-    """(method, path, what) lines of a module docstring's route table."""
-    try:
-        with open(os.path.join(root, rel), encoding="utf-8") as fh:
-            doc = ast.get_docstring(ast.parse(fh.read())) or ""
-    except (OSError, SyntaxError):
-        return []
-    rows, cur = [], None
-    pat = re.compile(r"^\s{2,6}((?:GET|POST|PUT|PATCH|DELETE)(?:\|(?:GET|POST|PUT|PATCH|DELETE))*)\s+(\S+)\s*(.*)$")
-    for line in doc.splitlines():
-        m = pat.match(line)
-        if m:
-            cur = [m.group(1), m.group(2), m.group(3).strip()]
-            rows.append(cur)
-        elif cur and re.match(r"^\s{20,}\S", line):
-            cur[2] = (cur[2] + " " + line.strip()).strip()
-        elif not line.strip():
-            cur = None
-    return rows
-
-
-ROUTE_NOTES = {".../versions": "a document's versions, one version, and the diff between two"}
-
-
-def gen_routes(root: str) -> str:
-    groups = [
-        ("app/tandemapp/conductor/routes.py", "The conductor's routes, \\texttt{/v1/conductor/*}",
-         "tab:ref-conductor-routes"),
-        ("app/proxy/config_api.py", "The proxy's configuration routes, \\texttt{/v1/config/*}",
-         "tab:ref-config-routes"),
-    ]
-    out = [HEADER]
-    for rel, caption, label in groups:
-        rows = doc_routes(root, rel)
-        if not rows:
-            continue
-        out.append(r"\begin{reftable}{" + caption + "}{" + label + r"}{\hd{Method} & \hd{Path} & \hd{What}}")
-        prefix = ""
-        for method, path, what in rows:
-            if path.startswith("/"):
-                prefix = path.rsplit("/", 1)[0] if path.count("/") > 3 else path
-            if what.startswith("..."):
-                path, what = path + "   " + what, ROUTE_NOTES.get(path, "")
-            desc = clean(what, 170)
-            # a bare JSON body in the description is set in monospace
-            if desc.startswith("{"):
-                body, _, rest = desc.partition("}")
-                desc = "`" + body + "}`" + rest
-            out.append(code(method) + " & " + code(path) + " & " + mono_inline(desc) + r" \\")
-        out.append(r"\end{reftable}")
-    return "\n".join(out) + "\n"
-
-
 # --------------------------------------------------------------------------- main
 
 def build(root: str) -> dict:
@@ -810,9 +723,6 @@ def build(root: str) -> dict:
     served = dict(read_serve_env(root))
     return {
         os.path.join(OUT, "server-flags.tex"): gen_server_flags(root, knobs),
-        os.path.join(OUT, "proxy-flags.tex"): gen_proxy_flags(root),
-        os.path.join(OUT, "launch-flags.tex"): gen_launch_flags(root),
-        os.path.join(OUT, "hostcollect-flags.tex"): gen_hostcollect_flags(root),
         os.path.join(OUT, "install-flags.tex"): gen_install_flags(root),
         os.path.join(OUT, "engine-knobs.tex"): gen_engine_knobs(root, knobs, served),
         os.path.join(OUT, "serve-env.tex"): gen_serve_env(root, knobs),
@@ -820,10 +730,8 @@ def build(root: str) -> dict:
         os.path.join(OUT, "tandem-vars.tex"): gen_tandem_vars(root),
         os.path.join(OUT, "metrics.tex"): gen_metrics(root),
         os.path.join(OUT, "ledger.tex"): gen_ledger(root),
-        os.path.join(OUT, "routes.tex"): gen_routes(root),
         os.path.join(OUT, "http-who.tex"): http_ref.gen_who_tex(HEADER, code, tex),
         os.path.join(OUT, "http-engine-routes.tex"): http_ref.gen_engine_routes_tex(HEADER, code, tex),
-        os.path.join(OUT, "http-proxy-routes.tex"): http_ref.gen_proxy_routes_tex(HEADER, code, tex),
         os.path.join(OUT, "http-headers.tex"): http_ref.gen_headers_tex(HEADER, code, tex),
         os.path.join(OUT, "http-errors.tex"): http_ref.gen_errors_tex(HEADER, code, tex),
         os.path.join(DATA, "verify-cost.csv"): gen_verify_csv(root),
