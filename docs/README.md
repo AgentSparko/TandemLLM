@@ -1,6 +1,6 @@
 # Documentation
 
-TandemLLM is an inference engine, and we measure its speed on raw `/v1/completions` ([measurement.md](measurement.md), the rows in [CHANGELOG.md](../CHANGELOG.md)). The built-in chat (the Chat tab, chatd and the conductor's chat profiles) is in beta. Each page covers one part of TandemLLM and names the files that implement it. Start with the architecture page, a one-page tour that links to all the others. To install, start with [setup.md](setup.md). The manual, [`tandemllm-manual.pdf`](../manual/tandemllm-manual.pdf), puts these pages and the reference tables in one book.
+TandemLLM is an inference engine, and we measure its speed on raw `/v1/completions` ([measurement.md](measurement.md), the rows in [CHANGELOG.md](../CHANGELOG.md)). Each page covers one part of TandemLLM and names the files that implement it. Start with the architecture page, a one-page tour that links to all the others. To install, start with [setup.md](setup.md). The manual, [`tandemllm-manual.pdf`](../manual/tandemllm-manual.pdf), puts these pages and the reference tables in one book.
 
 | page | what it covers |
 |-|-|
@@ -10,11 +10,8 @@ TandemLLM is an inference engine, and we measure its speed on raw `/v1/completio
 | [speculative-decoding.md](speculative-decoding.md) | the block drafter, the lookup drafter, StairCut, the older length router, tree verify through recurrent layers, Flash-Next's MTP drafter |
 | [exactness.md](exactness.md) | the promise about the text, the near-tie exception, and the checks behind it |
 | [caches.md](caches.md) | the resident prefix, the state store, the persistent suffix store, the swap of long chats to the SSD (session spill) |
-| [server.md](server.md) | the OpenAI API, tool calls, structured outputs, streaming, admission |
-| [conductor.md](conductor.md) | the conductor in one page (its chat profiles in beta): modes and headers, profiles, the router, effort, packages, the note, side requests, sessions, the monitor and loop guards, the journal, raw mode, measured effect |
+| [server.md](server.md) | the OpenAI API, tool calls, structured outputs, streaming, admission, chat mode and the extension it loads |
 | [parallel-requests.md](parallel-requests.md) | serving several requests at once (`--parallel N`): switching it on, waiting for memory and chat priority, speed, the text, Flash-Next |
-| [dashboard.md](dashboard.md) | the Live activity view, the lanes, a request held for memory, the log export, the other views, the API contract |
-| [packages.md](packages.md) | the packages the conductor attaches by class: their shape, the first packages, how each is measured |
 | [operations.md](operations.md) | running a profile, memory rules, holds, deploys, troubleshooting |
 | [measurement.md](measurement.md) | the benchmark row, the teacher-forced bench, noise, the release gate |
 | [benchmark-report.md](benchmark-report.md) | the benchmark report of a running server, on your GPU: how to run it, how long it takes, what each section measures |
@@ -25,17 +22,16 @@ TandemLLM is an inference engine, and we measure its speed on raw `/v1/completio
 | [lfm2.5-24b-a2b.md](lfm2.5-24b-a2b.md) | LiquidAI's LFM2.5-24B-A2B: the model, its profiles, its tool-call format, how the engine runs it |
 | [flint.md](flint.md) | Recursive's Flint: the model, its EXL3 and BF16 profiles, reasoning and tools, the lookup at long context, how the engine runs it |
 | [nemotron-h.md](nemotron-h.md) | NVIDIA's NemotronH (Nemotron 3.5 Bolt, Super VL, Lightning): the models, the EXL3, GGUF and NVFP4 profiles, LiLiCorr, how the engine runs them |
-| [setup.md](setup.md) | a new box from the command line, the dashboard's setup guide, the model registry behind it, and Wren |
-| [chat.md](chat.md) | the Chat tab (in beta) and chatd, the service behind it: the sandbox, the permission modes, the known limitations |
+| [setup.md](setup.md) | a new box from the command line, setup mode and the Setup API behind the Setup Guide, the model registry, and Wren |
 | [community-weights.md](community-weights.md) | packs other people published: running one, adding yours with one JSON file, how a maintainer verifies it |
-| [memory.md](memory.md) | memory notes: what the model keeps about the user and the work |
 | [shadow-reader.md](shadow-reader.md) | the small model that follows each session and answers questions about it |
-| [app/docs/proxy.md](../app/docs/proxy.md) | the dashboard as a proxy in front of other engines and cloud APIs |
 | [threat-model.md](threat-model.md) | where untrusted input enters, the parts that matter most for security |
 | [roadmap.md](roadmap.md) | what Flash-Next still lacks, parallel requests, other GPUs |
 | [labels.md](labels.md) | the GitHub labels of issues and pull requests, by group |
 
-Two more references live next to the code. [app/tandemapp/METRICS.md](../app/tandemapp/METRICS.md) lists every Prometheus metric, and [app/contracts/dashboard-v1/](../app/contracts/dashboard-v1/README.md) holds the dashboard API's schemas.
+Two more references live next to the code. [contracts/engine-api-v1](../contracts/engine-api-v1/README.md) is the engine's API: every route, the shapes of its reads and [every Prometheus metric](../contracts/engine-api-v1/metrics.md). [contracts/engine-ext-v1](../contracts/engine-ext-v1/README.md) is the interface of the extension the engine loads in chat mode.
+
+The dashboard, the Chat tab, the conductor, its packages and memory notes are TandemApp's, a separate project with its own docs: [TandemApp's documentation](https://github.com/TandemLLM/TandemApp/blob/main/docs/README.md).
 
 Every number on these pages was measured on one DGX Spark, unless the page calls it arithmetic or an estimate. [measurement.md](measurement.md) says how.
 

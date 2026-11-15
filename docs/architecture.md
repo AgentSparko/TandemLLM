@@ -95,7 +95,7 @@ flowchart TB
     subgraph M[methods, written once]
         SPEC[StairCut, PriceModel, the MTP drafter, the walk]
         CACHE[every cache tier, the KV pool]
-        SRV[server, memory governor, conductor, dashboard, setup guide]
+        SRV[server, memory governor, extension host, setup guide]
     end
     subgraph A[model adapters, one per architecture]
         Q35[qwen3_5: the 27B]
@@ -222,7 +222,7 @@ flowchart TB
     subgraph server[server/]
         API[OpenAI API, streaming, tool calls, structured outputs]
         LIVE[Live activity, metrics, usage ledger]
-        DASH[Dashboard files and API]
+        DASH[Dashboard reads and the extension host]
     end
     subgraph engine[engine/]
         LOOP[Decode loop and sampling]
@@ -269,8 +269,8 @@ flowchart TB
 | caches | `engine/cache.py`, `engine/disk_cache.py`, `engine/spill.py`, `engine/kvpool.py` | [caches.md](caches.md) |
 | settings registry | `engine/settings.py` | [operations.md](operations.md) |
 | the server | `server/app.py`, `server/stream.py`, `server/api/toolcall.py` | [server.md](server.md) |
-| live activity, metrics, usage | `server/api/live.py`, `server/api/activity.py`, `server/api/metrics.py`, `server/api/ledger.py` | [dashboard.md](dashboard.md) |
-| the dashboard | `app/dashboard/`, `app/contracts/dashboard-v1/` | [dashboard.md](dashboard.md) |
+| live activity, metrics, usage | `server/api/live.py`, `server/api/activity.py`, `server/api/metrics.py`, `server/api/ledger.py` | [the API contract](../contracts/engine-api-v1/README.md) |
+| chat mode: the extension host | `server/ext.py` | [server.md](server.md#chat-mode-the-conductor-as-an-extension) |
 | service scripts and gate | `ops/` | [operations.md](operations.md) |
 | measurement tools | `tools/row3.py`, `tools/block_ab.py`, `tools/verify_spec.py`; Flash-Next `tools/fn_*.py` | [measurement.md](measurement.md) |
 

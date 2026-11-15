@@ -4,64 +4,55 @@ This page is for security researchers and for reviewers of a change. It says whe
 
 ## What runs and where input enters
 
-TandemLLM is a personal AI environment that runs on one machine on a home or office LAN. It has five parts:
+The engine runs on one machine on a home or office LAN. This page covers what the engine's repository serves:
 
 | part | what it does | code |
 |-|-|-|
-| engine server, port 8000 | OpenAI-compatible API on the standard library's `ThreadingHTTPServer`, plus the dashboard API, the conductor, the memory routes and the setup API | `server/`, `engine/` |
-| proxy | the same API in front of other OpenAI-compatible backends and cloud APIs | `app/proxy/` |
-| chatd, 127.0.0.1:8016 | the Chat tab (beta): conversations, agent runs, tools, MCP, uploads; the engine server forwards `/v1/chat-app/*` to it | `app/chatd/`, `app/tandemapp/chat_forward.py` |
-| chat sandbox | one Docker or Podman container per chat, `--network none`; its only way out is chatd's egress proxy | `app/chatd/sandbox.py`, `app/chatd/egress.py` |
-| dashboard | the web UI, served by the engine server | `app/dashboard/` |
-| TandemNode, 7700 | the agent TandemApp's controller reads a node through; mTLS with pinned certificates after pairing, a pairing window on 7701 while a code is shown | `app/proxy/nodeagent.py`, `app/proxy/pairing.py` |
+| engine server, port 8000 | OpenAI-compatible API on the standard library's `ThreadingHTTPServer`, plus the engine's dashboard reads, the engine-only screens and the setup API; in chat mode also the routes of its extension | `server/`, `engine/` |
+| status responder, `QSE_STATUS_PORT` | what the reverse proxy shows while the engine is stopped, starting or held | `ops/engine_status.py` |
 
-The supported deployment, from [server.md](server.md#the-admin-rule) and `server/api/auth.py` (AU1): the server listens on the LAN, sometimes behind nginx or a tunnel. The admin password (`QSE_ADMIN_TOKEN`, at least 32 characters) is optional and off by default. With no password, every route answers anyone who reaches the port. With one, the admin routes and every chat route need the bearer token or the `qse_dash` session cookie. One exemption, trusted-local, lets a request in without a token: its TCP peer is loopback and it carries neither `X-Forwarded-For` nor `X-Real-IP`. The chat API (`/v1/chat/completions`, `/v1/completions`, `/v1/models`) is open in both modes. chatd trusts only requests that carry the forward key (`X-Tandem-Forward`).
+TandemApp (the dashboard, the controller, chatd and its chat sandbox, TandemNode) is a separate project with its own threat model: [TandemApp's threat-model.md](https://github.com/TandemLLM/TandemApp/blob/main/docs/threat-model.md).
 
-One more listener exists only when one model is split across two engine processes ([architecture.md](architecture.md#stages-one-model-in-two-processes)): the stage link, one TCP connection between the two stage processes of one engine (`engine/methods/link.py`). Its handshake is a challenge keyed with a shared secret of at least 32 characters, which the server reads from a file of mode 0600 (`--link-key-file`, `server/stage.py`; `serve.env` names only the file's path, `TANDEM_LINK_KEY`) and puts in no log line, message or route, and the identity frames that follow carry a MAC under the same key. Data frames are neither signed nor encrypted. A frame is capped at 64 KiB until the peer has proved the key and at 256 MiB after it, and its length is checked before any payload is allocated. The listener binds one explicit IP literal and refuses a wildcard address. Run the link only on a direct cable or a network segment you trust, and treat the key as a secret: anyone who can change bytes on that path can change the model's answers.
+The supported deployment, from [server.md](server.md#the-admin-rule) and `server/api/auth.py` (AU1): the server listens on the LAN, sometimes behind nginx or a tunnel. The admin password (`QSE_ADMIN_TOKEN`, at least 32 characters) is optional and off by default. With no password, every route answers anyone who reaches the port. With one, the admin routes need the bearer token or the `qse_dash` session cookie. One exemption, trusted-local, lets a request in without a token: its TCP peer is loopback and it carries neither `X-Forwarded-For` nor `X-Real-IP`. The chat API (`/v1/chat/completions`, `/v1/completions`, `/v1/models`) is open in both modes.
+
+In chat mode the engine imports the module `QSE_EXT` names into its own process ([server.md](server.md#chat-mode-the-conductor-as-an-extension)). That module runs with the engine's rights, so whoever can write `serve.env`, the install's `local.env` or the venv runs code in the engine; treat those files as the engine's code.
+
+One more listener exists only when one model is split across two engine processes ([architecture.md](architecture.md#stages-one-model-in-two-processes)): the stage link, one TCP connection between the two stage processes of one engine (`engine/methods/link.py`). Its handshake is a challenge keyed with a shared secret of at least 32 characters, which the server reads from a file of mode 0600 (`--link-key-file`, `server/stage.py`; `serve.env` names only the file's path, `TANDEM_LINK_KEY`) and never writes it to a log or an answer, and the identity frames that follow carry a MAC under the same key. Data frames are neither signed nor encrypted. A frame is capped at 64 KiB until the peer has proved the key and at 256 MiB after it, and its length is checked before any payload is allocated. The listener binds one explicit IP literal and refuses a wildcard address. Run the link only on a direct cable or a network segment you trust, and treat the key as a secret: anyone who can change bytes on that path can change the model's answers.
 
 Treat each of these as attacker-controlled:
 
-- every HTTP request that reaches port 8000, chatd's front on 4180, or the proxy: method, path, headers, body, chunked framing, WebSocket upgrades;
-- chat messages and their attachments: text files, images (decoded with Pillow in `server/images.py`), PDFs and HTML that the dashboard shows in a pane;
-- answers from MCP servers, `web_search` results and pages that `web_fetch` reads;
-- the model's output. It picks the tool calls, and those run bash, write files and start servers inside the sandbox. A prompt injection in a fetched page can steer it;
-- whatever runs inside a sandbox: it owns `/workspace` and its home, and can swap a file for a symlink or a FIFO while chatd reads it;
+- every HTTP request that reaches port 8000 or the status responder: method, path, headers, body, chunked framing;
+- chat messages and their images (decoded with Pillow in `server/images.py`), and image URLs the server fetches for a client;
+- the model's output: the tool calls it writes are parsed and typed by the engine (`server/api/toolcall.py`), and a client may run them;
 - every byte that reaches the stage link's port before the handshake has passed;
 - weight files and their headers downloaded from the Hugging Face Hub: safetensors, EXL3 packs, GGUF; and the community index of weight packs (`server/setup/community.py`);
-- config files the setup API and the dashboard write: profiles, `model.yaml`, conductor config versions.
+- config files the setup API writes: the profile it switches to, and the overlay `setup.env` that `ops/serve.env` reads last.
 
 ## Parts that matter most
 
 In this order:
 
-1. Auth in `server/api/auth.py` (TandemApp's controller: its own copy, `app/tandemapp/auth.py`), `app/tandemapp/chat_forward.py` and `app/chatd/http.py`: any way past the admin rule with a password set, a forged trusted-local, a forged forward key or `X-Tandem-*` header, a session cookie that outlives its token, a CSRF on `/v1/setup/*` (the `same_origin_json` check in `server/setup_api.py`).
-2. The sandbox boundary: a container setting that lets a chat reach the host, and egress bypasses in `app/chatd/egress.py` such as DNS rebinding, IPv4-mapped IPv6, redirects or CONNECT tricks that reach the LAN, the box or port 8000. `app/ops/sandbox/relay.py`, which runs inside the container, is part of this.
-3. Path handling on the host for a chat's files: `app/chatd/workspace.py` (`SandboxDir`, O_NOFOLLOW walks), uploads (`app/chatd/attach.py`), snapshots, the files pane, the Open WebUI tool runner (`app/chatd/owui.py`). Traversal, symlink races and writes outside `<data>/workspaces/<id>/` are in scope.
-4. Script from a sandbox page that runs on the dashboard's origin. Previews must stay in an opaque-origin iframe; the CSPs live in `app/chatd/panes.py` and `app/chatd/preview.py`, and the port proxy in chatd.
-5. HTTP handling we wrote: the chunked reader and keep-alive pool in `app/proxy/http1.py`, the byte forward and WebSocket splice in `app/tandemapp/chat_forward.py`, the egress proxy's request parsing. Request smuggling, header injection and unbounded reads count.
-6. Parsers for untrusted files: GGUF headers (`engine/models/nemotron_h/gguf.py`), safetensors and EXL3 headers (`engine/loader.py`, `engine/models/*/load.py`), images (`server/images.py`). Integer overflow in sizes and offsets, allocations of many GB and out-of-range reads count.
-7. The setup API: it downloads, applies and removes weights and runs install steps. A crafted request or community pack that deletes files outside the weight folders, or runs a command, is in scope.
-8. Node trust (app/docs/proxy.md, "Node trust"): a way to get a certificate pinned on a node or a controller without the code or SSH access, to beat the 5 tries of a pairing code, to reach a node's routes with an unpinned certificate or plain HTTP beyond loopback, or a password or key from SSH once that reaches a log, a file or an answer, or a password or pasted key from the Add Spark wizard (app/docs/proxy.md, "Add Spark") that outlives its 30 minutes in the controller's memory, reaches the config database or the session's JSON; or an SSH login to the controller's own machine that pins anything in its agent's trust store.
+1. Auth in `server/api/auth.py` (TandemApp keeps its own copy): any way past the admin rule with a password set, a forged trusted-local, a forged `X-Tandem-*` header, a session cookie that outlives its token, a CSRF on `/v1/setup/*` (the `same_origin_json` check in `server/setup_api.py`).
+2. The fetch of an image URL for a client (`server/images.py`): a way to reach loopback, the LAN or the box through it.
+3. Parsers for untrusted files: GGUF headers (`engine/models/nemotron_h/gguf.py`), safetensors and EXL3 headers (`engine/loader.py`, `engine/models/*/load.py`), images (`server/images.py`). Integer overflow in sizes and offsets, allocations of many GB and out-of-range reads count.
+4. The setup API: it downloads, applies and removes weights and runs install steps. A crafted request or community pack that deletes files outside the weight folders, or runs a command, is in scope.
 
-These matter less and stay in scope: the dashboard's own XSS from server data, the conductor and memory routes, the metrics route.
+These matter less and stay in scope: the dashboard reads, the engine-only screens, the metrics route.
 
 Out of scope: `bench/`, the scripts under `tools/` (measurement, quantising, training; nothing serves them), `docs/`, `manual/`, the GPU kernels in `engine/`, and `tests/`.
 
 ## Where to test
 
-Every CPU test is a standalone script: `python tests/test_<name>.py`, or `python app/tests/test_<name>.py` for TandemApp's, exit 0 is a pass. They need the Python packages of install.sh's lock, with a CPU build of torch, and no GPU or Docker. `tests/gpu/` needs a DGX Spark, and `app/tests/test_sandbox_box.py` needs Docker with the sandbox image.
+Every CPU test is a standalone script: `python tests/test_<name>.py`, exit 0 is a pass. They need the Python packages of install.sh's lock, with a CPU build of torch, and no GPU or Docker. `tests/gpu/` needs a DGX Spark.
 
 | area | run it | tests |
 |-|-|-|
 | server, auth, admin rule | `python server/app.py --fake-engine --port 8000 --served-model qwen38-spark-engine --usage-ledger /tmp/l.sqlite3`; set `QSE_ADMIN_TOKEN` to turn the rule on | `test_auth.py`, `test_fake_engine.py`, `test_server_model_card_auth.py` |
-| chat forward and chatd | `cd app && python -m chatd --port 8016 --data /tmp/chat`; the key is in `/tmp/chat/forward.key` | `app/tests/test_chat_forward.py`, `app/tests/test_chatd.py`, `app/tests/test_chatd_agent.py` |
-| sandbox and egress without Docker | `FakeBoxes` in `app/tests/chatd_util.py`, `RelayBoxes` in `app/tests/test_chatd_agent.py` | `app/tests/test_chatd_sandbox_scope.py`, `app/tests/test_chatd_sandbox_lifecycle.py`, `app/tests/test_sandbox_relay_fd.py`, `app/tests/test_chatd_websearch.py` |
-| workspace paths and uploads | chatd as above | `app/tests/test_chatd_symlinks.py`, `app/tests/test_chatd_attach.py`, `app/tests/test_chatd_preview.py` |
-| proxy and relay | `cd app && python -m proxy --help`; `app/tests/fake_backend.py` is a backend | `app/tests/test_proxy_relay.py`, `app/tests/test_proxy_http1_tls_fd.py`, `app/tests/test_proxy_model_card_auth.py` |
 | setup API | the fake engine above | `test_setup_api.py`, `test_setup_remove.py`, `test_setup_apply.py` |
 | stage link | no server needed; `tools/linkrelay.py` cuts and stalls a link | `test_link.py`, `test_stages.py`, `test_stage_server.py` |
 | loaders and images | no server needed | `test_nemotron_h_gguf.py`, `test_exl3_standalone.py`, `test_images.py` |
-| dashboard | `cd app/dashboard && npm test` | `app/dashboard/tests/*.test.ts` |
+
+TandemApp's tests (chatd, the sandbox, the controller, the dashboard) are in its own repository, and its threat model names them.
 
 ## Not in scope
 

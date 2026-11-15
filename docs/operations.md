@@ -38,7 +38,7 @@ The FP8 profile needs about 27.5 GiB of weights on the device instead of 16.4. T
 | `ops/make-secrets.sh` | creates `secrets.env` with the metrics token (mode 600), once; `--admin` adds the admin password (`QSE_ADMIN_TOKEN`), which turns the admin rule on; `--rotate` replaces what is there |
 | `ops/start.sh [--setup [--host ADDR]]` | starts the engine on the port from `serve.env` and waits for `/health`; refuses if an engine is alive or the port is held. `--setup`, or the marker `run/setup-pending`, starts setup mode instead ([setup.md](setup.md)) |
 | `ops/stop.sh [seconds]` | sends SIGTERM, waits for the drain (60 s by default), and kills only after that |
-| `ops/watchdog.sh` | one health check, for cron every minute; restarts after 3 failures in a row; starts a dead chatd (at most 3 times an hour) |
+| `ops/watchdog.sh` | one health check, for cron every minute; restarts after 3 failures in a row |
 | `ops/hold.sh <minutes> <command>` | runs a command with the board to itself, then restores the service |
 | `ops/gate.sh <label>` | the release gate ([measurement.md](measurement.md)) |
 | `ops/roles.sh load ROLE \| up \| down \| settle` | loads the roles beside the engine one at a time through the residency planner; `up` is what `start.sh` runs after `/health` |
@@ -47,7 +47,7 @@ The FP8 profile needs about 27.5 GiB of weights on the device instead of 16.4. T
 
 The watchdog restarts only what it is sure about. A healthy server is left alone, and so is a draining one, because killing a graceful stop halfway is worse than a slow stop. A loading engine is left alone for up to 900 s. Only a server that fails three checks in a row is restarted, so one slow check during a long verify does not bounce a working server. A server whose `/health` answers 500 with `status: failed` (SRV-671: its CUDA context failed, after a device-side assert every CUDA call of the process fails) is restarted after two checks, with no loading grace, and the status page's reason says why while it stops and loads again.
 
-chatd, the Chat tab's service (beta), is its own process ([chat.md](chat.md)): `ops/start.sh` starts it once the engine answers, `ops/stop.sh` and the watchdog's restart leave it running, `tandem stop` stops it. When the engine answers and chatd does not, the watchdog starts chatd, at most 3 times an hour (one line each in `logs/watchdog.log`), and never restarts the engine for it.
+The engine runs no chatd (engine API 1.7): `ops/start.sh`, `ops/watchdog.sh` and `bin/tandem` never start or stop it, and `bin/tandem chat` runs TandemApp's `tandem-node chat` ([TandemApp's chat.md](https://github.com/TandemLLM/TandemApp/blob/main/docs/chat.md#starting-and-stopping)).
 
 At boot, two cron lines bring the service up:
 
@@ -71,7 +71,7 @@ Every line runs its script through `bash`, as the scripts call each other: a cop
 
 ## Setup mode and the setup guide
 
-The dashboard's `#/setup` page installs a configuration from the browser ([setup.md](setup.md)). On a new box, `install.sh --setup` or `ops/start.sh --setup` starts setup mode: `server/app.py --setup` with the dashboard and Wren, the guide's small assistant, and no served model. It binds 127.0.0.1 unless `--host` says otherwise, and `/health` answers `"mode": "setup"`, which the watchdog takes as healthy. While `run/setup-pending` exists, every start, the reboot's included, comes back in setup mode.
+The Setup Guide installs a configuration through the engine's Setup API, `/v1/setup/*` ([setup.md](setup.md)), from TandemApp's Setup page (`#/setup`) or from `bin/tandem setup` in a terminal. On a new box, `install.sh --setup` or `ops/start.sh --setup` starts setup mode: `server/app.py --setup` with the Setup API and Wren, the guide's small assistant, and no served model. It binds 127.0.0.1 unless `--host` says otherwise, and `/health` answers `"mode": "setup"`, which the watchdog takes as healthy. While `run/setup-pending` exists, every start, the reboot's included, comes back in setup mode.
 
 The guide's install writes `run/setup.env`, which `ops/serve.env` reads last (after the weight profile), and switches through `ops/use-profile.sh`. It never edits `ops/serve.env`. A box whose `serve.env` was copied before the setup guide needs the overlay's last lines from the repository's `ops/serve.env`, or the guide refuses to install (`no_overlay_hook`). Reset level 2 removes the overlay; the other reset levels remove caches, weights or history ([setup.md](setup.md), "Reset").
 
@@ -171,7 +171,7 @@ location @engine_away_fixed {
 
 The engine's own 503s (a drain, a full queue) pass through unchanged: nginx only replaces an answer it did not get (`proxy_intercept_errors` stays off).
 
-A browser that opened the dashboard before keeps working through a restart without the proxy's help (OPS-131): its service worker (`app/dashboard/pwa/sw.js`) answers a page load that gets 502, 503 or 504, or no answer, with the cached shell. The page then asks the worker (`./sw-away`), says the engine is restarting, polls `/health` every 3 s and reloads when it answers. API calls (`/v1/`) never go through the worker. A first visit has no worker yet and gets the proxy's answer.
+A browser that has TandemApp's page open keeps working through a restart, through the page's own service worker ([TandemApp's dashboard.md](https://github.com/TandemLLM/TandemApp/blob/main/docs/dashboard.md#while-the-engine-restarts)).
 
 ## Roles beside the engine (residency)
 
@@ -240,7 +240,7 @@ On a box that `install.sh` set up, the installer is the deploy: `bash ~/TandemLL
 
 `/health` returns the status, the queue counters (running, waiting, served, refused, errors, timeouts, abandoned), the cache report and the allocator's memory figures. On this board `nvidia-smi` reports no used memory, so `torch.cuda.memory_allocated` and `memory_reserved` are the numbers to watch. Allocated memory that climbs across requests is a leak. Reserved memory that climbs while allocated memory stays flat is fragmentation.
 
-`/metrics` serves Prometheus metrics, listed in [app/tandemapp/METRICS.md](../app/tandemapp/METRICS.md). `ops/monitoring/` has a scrape config, alert rules with their tests, and a Grafana dashboard generated by `tools/grafana_dashboard.py`.
+`/metrics` serves Prometheus metrics, listed in [metrics.md](../contracts/engine-api-v1/metrics.md). `ops/monitoring/` has a scrape config, alert rules with their tests, and a Grafana dashboard generated by `tools/grafana_dashboard.py`.
 
 ## When something is wrong
 

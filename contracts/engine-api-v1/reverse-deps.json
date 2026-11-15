@@ -163,12 +163,6 @@
     "app/"
    ]
   },
-  "tests/test_chatd_docs.py": {
-   "imports": [],
-   "reads": [
-    "app/ops"
-   ]
-  },
   "tests/test_chatd_lifecycle.py": {
    "imports": [],
    "reads": [

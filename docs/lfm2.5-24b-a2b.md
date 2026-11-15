@@ -55,7 +55,7 @@ Switch: `ops/use-profile.sh lfm25-exl3-3.5`, or the Setup Guide (`#/setup`).
 
 ## Conductor
 
-The conductor (Laya's three decision models, the narrator, the session monitor) is on by default. The router's documents target Qwen3.8; LFM2.5's adapter declares how the router fits it (`Capabilities.conductor` in `engine/models/lfm2_moe/serving.py`, read by `app/tandemapp/conductor/modelfit.py`; [server.md](server.md#the-model-fit)):
+The conductor (Laya's three decision models, the narrator, the session monitor) is on by default. The router's documents target Qwen3.8; LFM2.5's adapter declares how the router fits it (`Capabilities.conductor` in `engine/models/lfm2_moe/serving.py`, read by `app/tandemapp/conductor/modelfit.py`; [server.md](https://github.com/TandemLLM/TandemApp/blob/main/docs/chat-mode.md#the-model-fit)):
 
 | key | LFM2.5 | effect |
 |-|-|-|

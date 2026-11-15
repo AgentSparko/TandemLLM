@@ -9,9 +9,9 @@
   "engine_ids": 4357,
   "engine_files": 510,
   "to": {
-   "engine": 3207,
+   "engine": 3203,
    "pair": 1123,
-   "tandemapp": 29,
+   "tandemapp": 33,
    "dropped": 0
   },
   "to_note": "destinations: an id of a split file with two homes counts in both",
@@ -1352,15 +1352,27 @@
    ]
   },
   "tests/test_chatd_docs.py": {
-   "home": "engine",
-   "why": "reads app/ only as a fixture path or guard: the docs say where chatd.sh lives (WP14 changes the read)",
-   "ids": [
-    "test_the_normal_path",
-    "test_the_down_state",
-    "test_paths_match_the_installer",
-    "test_the_manual_follows",
-    "test_the_patch_entry"
-   ]
+   "home": "split",
+   "in_place": true,
+   "loads_app_at_import": false,
+   "why": "ENG-413 WP11: the Chat tab's docs and manual chapter moved to TandemApp, and their checks with them; the 0.11.2 changelog entry stays the engine's",
+   "ids": {
+    "test_the_normal_path": [
+     "tandemapp:tests/test_chatd_docs.py"
+    ],
+    "test_the_down_state": [
+     "tandemapp:tests/test_chatd_docs.py"
+    ],
+    "test_paths_match_the_installer": [
+     "tandemapp:tests/test_chatd_docs.py"
+    ],
+    "test_the_manual_follows": [
+     "tandemapp:tests/test_chatd_docs.py"
+    ],
+    "test_the_patch_entry": [
+     "engine"
+    ]
+   }
   },
   "tests/test_chatd_lifecycle.py": {
    "home": "split",
