@@ -14,6 +14,14 @@ meets an engine. Standard library only; imports neither tree.
 Since 2.0: CALLS, SUP_OPTIONAL and SUP_FIELDS hold the headless value of each optional call, each
 optional supervisor method and each supervisor field (ext.json extension.calls,
 supervisor.optional_methods, supervisor.fields).
+
+Since 3.2: SET_CONSTRAINT at SP4 (ext.json supervisor.act.constraint). `constraint_of` is the
+shape (a wrong one detaches the supervisor), `check_constraint` the refusals the engine makes
+before its grammar compiles anything (kinds, scopes, limits, precedence, the vocabulary); the
+compile itself is the engine's (`FakeHost(compile_regex=...)` stands in for it, Python's `re` by
+default). `serve` records each act's outcome in `record["constraints"]`, hands the outcomes to the
+supervisor's `constraint_outcomes` and answers a strict act's refusal as the engine does (400,
+param SET_CONSTRAINT; the extension's `finish` is still asked).
 """
 
 from __future__ import annotations
@@ -91,6 +99,8 @@ SUP_OPTIONAL = {
     "release_block": lambda inner: None,
     "note_repairs": lambda renamed: None,
     "argloop_stopped": lambda verdict, name: None,
+    # since 3.2
+    "constraint_outcomes": lambda outcomes: None,
 }
 #: since 2.0: the supervisor's fields (ext.json supervisor.fields), the value a supervisor that keeps
 #: one answers
@@ -105,6 +115,113 @@ SUP_FIELDS = {
     "held_events": lambda: None, "resume_ms": list, "forwarding": lambda: None,
     "forwarded_at": lambda: None, "can_ask": lambda: False,
 }
+
+
+#: since 3.2: SET_CONSTRAINT (ext.json supervisor.act.constraint)
+CONSTRAINT = SPEC["supervisor"]["act"]["constraint"]
+CONSTRAINT_KINDS = ("regex", "choice", "json_schema", "logit_bias")
+CONSTRAINT_SCOPES = ("answer", "tool_args")
+LIMITS = CONSTRAINT["limits"]
+
+
+def _field(obj, name):
+    return obj.get(name) if isinstance(obj, dict) else getattr(obj, name, None)
+
+
+def constraint_of(act) -> dict:
+    """A SET_CONSTRAINT act's constraint as {kind, value, scope, strict}; ValueError on a wrong
+    shape (failure.constraint: the supervisor is detached)."""
+    c = _field(act, "constraint")
+    if c is None:
+        raise ValueError("SET_CONSTRAINT without its constraint")
+    kind, scope, strict = _field(c, "kind"), _field(c, "scope"), _field(c, "strict")
+    if kind not in CONSTRAINT_KINDS:
+        raise ValueError(f"SET_CONSTRAINT kind {kind!r}")
+    if scope is not None and scope not in CONSTRAINT_SCOPES:
+        raise ValueError(f"SET_CONSTRAINT scope {scope!r}")
+    if strict is not None and not isinstance(strict, bool):
+        raise ValueError("SET_CONSTRAINT strict is not a bool")
+    return {"kind": kind, "value": _field(c, "value"), "scope": scope, "strict": bool(strict)}
+
+
+def _offered(body: dict) -> list:
+    return [t["function"]["name"] for t in body.get("tools") or []
+            if isinstance(t, dict) and isinstance(t.get("function"), dict)
+            and isinstance(t["function"].get("name"), str)]
+
+
+def _own(body: dict) -> str | None:
+    """The request's own constraint's field (precedence), or None."""
+    rf = body.get("response_format")
+    if isinstance(rf, dict) and rf.get("type") in ("json_object", "json_schema"):
+        return "response_format"
+    if body.get("structured_outputs") is not None:
+        return "structured_outputs"
+    tc = body.get("tool_choice")
+    if body.get("tools") and (tc == "required" or isinstance(tc, dict)):
+        return "tool_choice"
+    return None
+
+
+def check_constraint(c: dict, body: dict, vocab: int, taken=(), structured: bool = True,
+                     compile_regex=None):
+    """None when the engine carries the constraint out, else (why, counted): `counted` false when
+    it gave way (precedence, the engine's switch). The reference of server/compat.py
+    `act_constraint`, standard library only: the engine's grammar may still refuse a regex or a
+    schema it cannot compile (counted)."""
+    kind, value, scope = c["kind"], c["value"], c["scope"]
+    family = "bias" if kind == "logit_bias" else "grammar"
+    if family in taken:
+        return "one of a family a request", True
+    if kind == "logit_bias":
+        if scope is not None:
+            return "logit_bias takes no scope", True
+        if not isinstance(value, dict) or len(value) > LIMITS["bias_ids"]:
+            return "logit_bias maps at most bias_ids token ids to numbers", True
+        if body.get("logit_bias"):
+            return "the request has its own logit_bias, which wins", False
+        for k, v in value.items():
+            try:
+                tid = int(k)
+            except (TypeError, ValueError):
+                return f"logit_bias key {k!r} is not a token id", True
+            if not 0 <= tid < vocab:
+                return f"logit_bias token id {tid} is outside the vocabulary", True
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not -100 <= v <= 100:
+                return f"logit_bias value for {tid} must be in [-100, 100]", True
+        return None
+    if not structured:
+        return "structured outputs are off on this engine", False
+    if _own(body) is not None:
+        return f"the request has its own constraint ({_own(body)}), which wins", False
+    if scope == "tool_args":
+        if kind != "choice":
+            return "scope tool_args takes kind choice", True
+        if not body.get("tools"):
+            return "scope tool_args needs a chat request that offers tools", True
+        if body.get("tool_choice") == "none":
+            return "the request's tool_choice is none, which wins", False
+        offered = _offered(body)
+        if not isinstance(value, list) or not value or not all(isinstance(x, str) and x in offered
+                                                                for x in value):
+            return "scope tool_args takes a list of the offered functions", True
+        return None
+    if kind == "regex":
+        if not isinstance(value, str) or len(value) > LIMITS["regex_chars"]:
+            return "regex is a string of at most regex_chars characters", True
+        try:
+            (compile_regex or re.compile)(value)
+        except Exception as exc:                                   # noqa: BLE001
+            return f"the regex does not compile: {exc}", True
+    elif kind == "choice":
+        if not isinstance(value, list) or not value or not all(isinstance(x, str) for x in value):
+            return "choice is a non-empty list of strings", True
+        if len(value) > LIMITS["choices"] or max(map(len, value)) > LIMITS["choice_chars"]:
+            return "choice holds at most choices strings of at most choice_chars characters", True
+    elif kind == "json_schema":
+        if not isinstance(value, dict) or len(json.dumps(value).encode()) > LIMITS["schema_bytes"]:
+            return "json_schema is an object of at most schema_bytes bytes as JSON", True
+    return None
 
 
 class Refused(Exception):
@@ -179,7 +296,8 @@ class FakeHost:
     """ext.json's host attributes, a log of every hook call and the failure counters."""
 
     def __init__(self, mode: str = "chat", args: dict | None = None, ext_dir: str | None = None,
-                 state: dict | None = None):
+                 state: dict | None = None, vocab: int = 256, structured: bool = True,
+                 compile_regex=None):
         self.ext_api = EXT_API
         self.engine_api = "1.5"
         self.mode = mode
@@ -205,6 +323,9 @@ class FakeHost:
         self.shipped_guard = None                     # since 3.0
         self.lines: list[str] = []
         self.errors: dict[str, int] = {}
+        # since 3.2: what SET_CONSTRAINT is checked against (the served vocabulary's size, the
+        # engine's --no-structured-outputs, the engine's regex compile)
+        self.vocab, self.structured, self.compile_regex = vocab, structured, compile_regex
 
     def log(self, line: str) -> None:
         self.lines.append(line)
@@ -259,8 +380,45 @@ class FakeHost:
             kind = a.get("kind") if isinstance(a, dict) else None
             if point in ALLOWED and kind not in ALLOWED[point]:
                 return self._sup_failed(rec, name, ValueError(f"act {kind} at {point}"))
+            if kind == "SET_CONSTRAINT":
+                try:
+                    constraint_of(a)                       # since 3.2: the shape
+                except ValueError as exc:
+                    return self._sup_failed(rec, name, exc)
         rec["acts"] += [(point, a["kind"]) for a in acts]
         return out
+
+    def constrain(self, rec: dict, sup, acts: list, body: dict):
+        """Since 3.2: SP4's SET_CONSTRAINT acts, in order: each outcome into rec["constraints"]
+        and to the supervisor's constraint_outcomes (open); a refusal counted as an error of
+        at_request when the constraint is wrong in itself. Answers a strict act's refusal, or None."""
+        taken, outcomes, strict = set(), [], None
+        for a in acts:
+            if a.get("kind") != "SET_CONSTRAINT":
+                continue
+            c = constraint_of(a)
+            got = check_constraint(c, body, self.vocab, taken, self.structured, self.compile_regex)
+            if got is None:
+                taken.add("bias" if c["kind"] == "logit_bias" else "grammar")
+            else:
+                why, counted = got
+                if counted:
+                    self.errors["at_request"] = self.errors.get("at_request", 0) + 1
+                    rec["errors"].append(f"at_request: SET_CONSTRAINT {why}")
+                self.log(f"[ext] SET_CONSTRAINT {c['kind']} refused, the request runs without it: {why}")
+                if c["strict"] and strict is None:
+                    strict = why
+            outcomes.append({"kind": c["kind"], "scope": None if c["kind"] == "logit_bias"
+                             else c["scope"] or "answer", "strict": c["strict"],
+                             "applied": got is None, "why": None if got is None else got[0]})
+        rec["constraints"] = outcomes
+        fn = getattr(sup, "constraint_outcomes", None)
+        if outcomes and callable(fn):
+            try:
+                fn(outcomes)
+            except Exception as exc:                               # noqa: BLE001
+                self._sup_failed(rec, "constraint_outcomes", exc)
+        return strict
 
     def _sup_failed(self, rec: dict, name: str, exc: Exception):
         self.errors[name] = self.errors.get(name, 0) + 1
@@ -298,7 +456,15 @@ class FakeHost:
                   thinking_off=False, model=sc.body.get("model"), tool_choice="auto", max_tokens=64,
                   client="test", constrained=False, profile="", cls="", tool_format="")
         sup = self._call(rec, ext, "supervisor", plan, ev)
-        self._ask(rec, sup, "at_request", ev)
+        acts = self._ask(rec, sup, "at_request", ev) or []
+        strict = self.constrain(rec, sup, acts, sc.body)
+        if strict is not None:
+            # a strict act's refusal is the client's 400; the engine still asks finish
+            rec["status"] = 400
+            rec["refusal"] = {"type": "invalid_request_error", "param": "SET_CONSTRAINT",
+                              "message": strict}
+            self._call(rec, ext, "finish", plan, {"request_id": "r1"})
+            return rec
         self._call(rec, ext, "extras", plan, "start", {}, fallback=[], check=lambda v: isinstance(v, list))
         blocks, rounds = sc.blocks, 0
         while True:

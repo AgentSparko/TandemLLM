@@ -33,6 +33,7 @@ Releases of TandemLLM. Speed numbers are the benchmark row `serve-single-i256-o2
 
 ### Server
 
+- Engine extension interface 3.2 (ENG-458): an extension's `at_request` may answer `SET_CONSTRAINT` with a regex, a choice list, a JSON schema or a logit bias. The engine carries it out with its own grammar, as the request field it is the same as (`structured_outputs`, `logit_bias`), so the tokens are that field's. The request's own constraint wins. A constraint the engine cannot carry out leaves the request unconstrained and says why, or answers 400 when the extension marked it strict. A request without the act is served as before, and a 3.1 extension starts as before.
 - `GET /v1/replica/identity` names what two engines must share to serve one model as replicas: the code, the model, the weights, drafters, rows and tokenizer by content, and the decode settings (SRV-741). The fake engine answers it from its flags. [docs/server.md](docs/server.md#routes) lists it.
 
 ### Engine

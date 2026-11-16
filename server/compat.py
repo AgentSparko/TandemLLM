@@ -410,7 +410,7 @@ def constraint_field(body: dict) -> str:
     return "structured_outputs" if body.get("structured_outputs") is not None else "response_format"
 
 
-def tool_constraint(body: dict, fmt=None) -> tuple[str, dict] | None:
+def tool_constraint(body: dict, fmt=None, allowed: list | None = None) -> tuple[str, dict] | None:
     """`tool_choice` required or a named function, enforced -- the answer (after the
     reasoning) as tool calls only, in the model's own format: an allowed function (the named one,
     or any tool for required), the schema's parameters with the required ones present, and typed
@@ -418,12 +418,16 @@ def tool_constraint(body: dict, fmt=None) -> tuple[str, dict] | None:
     when it meant to answer in words otherwise opens call after call (37 in the run).
     Returns (regex, the parameters written as JSON literals per function), or None for auto and
     none. `fmt`: the model's own form (a `ToolFormat` or its name, server/api/toolformats; the default
-    form for None), whose constraint this is (SRV-689)."""
+    form for None), whose constraint this is (SRV-689). `allowed`: the functions the calls may name
+    in place of the request's `tool_choice` (engine-ext-v1 3.2, SET_CONSTRAINT scope tool_args)."""
     from engine import grammar
-    mode, name = tool_choice(body)
-    if mode not in ("required", "named") or not body.get("tools"):
-        return None
-    allowed = [name] if mode == "named" else tool_names(body)
+    if allowed is None:
+        mode, name = tool_choice(body)
+        if mode not in ("required", "named") or not body.get("tools"):
+            return None
+        allowed = [name] if mode == "named" else tool_names(body)
+    else:
+        mode = "SET_CONSTRAINT tool_args"
     try:
         from server.api import toolformats
         return toolformats.resolve(fmt).forced_regex(body["tools"], allowed,
@@ -487,3 +491,139 @@ def answer_constraint(body: dict, chat: bool = True, xml_calls: bool = True,
     return Answer(grammar.calls_or_document(calls, doc), "response_format", typed or None, True,
                   (calls, doc), markers=grammar.CALL_MARKERS)
 
+
+
+# ------------------------------------------------------- engine-ext-v1 3.2: the SET_CONSTRAINT act
+
+#: the field a refusal of the extension's constraint names (a strict act's 400)
+ACT_PARAM = "SET_CONSTRAINT"
+#: the act's limits (ENG-458). SP4 asks with the engine's turn taken, so the act's constraint is
+#: compiled there, where a client's is compiled before the queue; the automaton's own bound
+#: (engine/grammar.py, 20,000 states) holds as well. `bias_ids` is OpenAI's own limit.
+ACT_LIMITS = {"regex_chars": 8192, "choices": 256, "choice_chars": 1024, "schema_bytes": 65536,
+              "bias_ids": 300}
+
+
+class ActRefused(Refusal):
+    """A SET_CONSTRAINT act the engine does not carry out, and why. `counted`: the constraint is
+    wrong in itself (an error of the extension's at_request); false when it gave way to the
+    request's own constraint or to the engine's switch."""
+
+    def __init__(self, message: str, counted: bool = True):
+        super().__init__(ACT_PARAM, message)
+        self.counted = counted
+
+
+class ActConstraint(NamedTuple):
+    """A SET_CONSTRAINT the engine carries out: the answer's constraint (`answer`, and `grammar`
+    once compiled) or the logit bias (`bias`, None when every value is 0), and `same_as`: the
+    request fields that ask the engine for the same constraint."""
+    kind: str
+    scope: str | None
+    answer: Answer | None
+    grammar: object
+    bias: dict | None
+    same_as: dict
+
+
+def act_constraint(c: dict, body: dict, chat: bool, vocab: int, fmt=None, structured: bool = True,
+                   own: str | None = None, taken=(), compile=None) -> ActConstraint:
+    """SET_CONSTRAINT (`c`: kind, value, scope, strict, the act's shape checked by server/ext.py)
+    through the request path's own functions, as if the request had sent `same_as`: a regex, a
+    choice list or a JSON schema is `structured_outputs` (`answer_constraint`, the calls beside it
+    under tools offered, SRV-619), scope `tool_args` the forced calls of `tool_choice` to the
+    functions named (`tool_constraint`), a logit bias `logit_bias`. `own`: the field of the
+    request's own constraint (response_format, structured_outputs, tool_choice), which wins; a
+    logit_bias of the request's own wins over the act's. `taken`: the families ("grammar",
+    "bias") an earlier act of this request set. `compile(answer)` builds the grammar (a
+    GrammarError is a refusal). Raises ActRefused."""
+    from engine import grammar
+    kind, value, scope = c.get("kind"), c.get("value"), c.get("scope")
+    family = "bias" if kind == "logit_bias" else "grammar"
+    if family in taken:
+        raise ActRefused(f"one {'logit bias' if family == 'bias' else 'grammar'} a request: an "
+                         f"earlier SET_CONSTRAINT set it")
+    lim = ACT_LIMITS
+    if kind == "logit_bias":
+        if scope is not None:
+            raise ActRefused("logit_bias takes no scope: it acts on every token, as the "
+                             "request's logit_bias does")
+        if not isinstance(value, dict):
+            raise ActRefused("logit_bias maps token ids to numbers")
+        if len(value) > lim["bias_ids"]:
+            raise ActRefused(f"logit_bias names {len(value)} token ids; the limit is "
+                             f"{lim['bias_ids']}")
+        if logit_bias(body, vocab) is not None:
+            raise ActRefused("the request has its own logit_bias, which wins", counted=False)
+        try:
+            bias = logit_bias({"logit_bias": value}, vocab)
+        except Refusal as exc:
+            raise ActRefused(str(exc)) from None
+        return ActConstraint(kind, None, None, None, bias, {"logit_bias": value})
+    if not structured:
+        raise ActRefused("structured outputs are off on this engine (--no-structured-outputs)",
+                         counted=False)
+    if own is not None:
+        raise ActRefused(f"the request has its own constraint ({own}), which wins", counted=False)
+    from server.api import toolformats
+    form = toolformats.resolve(fmt)
+    try:
+        if scope == "tool_args":
+            if kind != "choice":
+                raise ActRefused("scope tool_args takes kind choice: the functions the answer "
+                                 "calls")
+            if not chat or not body.get("tools"):
+                raise ActRefused("scope tool_args needs a chat request that offers tools")
+            if tool_choice(body)[0] == "none":
+                raise ActRefused("the request's tool_choice is none, which wins", counted=False)
+            offered = tool_names(body)
+            if not isinstance(value, list) or not value or not all(
+                    isinstance(x, str) and x in offered for x in value):
+                raise ActRefused(f"scope tool_args takes a list of the offered functions "
+                                 f"({', '.join(offered)})")
+            names = list(dict.fromkeys(value))
+            forced = tool_constraint(body, form, allowed=names)
+            answer = Answer(forced[0], "tool_choice", forced[1] or None, bool(form.markers),
+                            markers=tuple(form.markers))
+            same = ({"tool_choice": {"type": "function", "function": {"name": names[0]}}}
+                    if len(names) == 1 else {"tool_choice": "required"}
+                    if set(names) == set(offered) else {})
+        else:
+            if kind == "regex":
+                if not isinstance(value, str):
+                    raise ActRefused("regex is a string")
+                if len(value) > lim["regex_chars"]:
+                    raise ActRefused(f"the regex has {len(value)} characters; the limit is "
+                                     f"{lim['regex_chars']}")
+                so = {"regex": value}
+            elif kind == "choice":
+                if not isinstance(value, list) or not value or not all(isinstance(x, str)
+                                                                       for x in value):
+                    raise ActRefused("choice is a non-empty list of strings")
+                if len(value) > lim["choices"] or max(map(len, value)) > lim["choice_chars"]:
+                    raise ActRefused(f"choice holds at most {lim['choices']} strings of at most "
+                                     f"{lim['choice_chars']} characters")
+                so = {"choice": value}
+            elif kind == "json_schema":
+                if not isinstance(value, dict):
+                    raise ActRefused("json_schema is a JSON schema (an object)")
+                import json
+                size = len(json.dumps(value).encode())
+                if size > lim["schema_bytes"]:
+                    raise ActRefused(f"the schema is {size} bytes as JSON; the limit is "
+                                     f"{lim['schema_bytes']}")
+                so = {"json": value}
+            else:
+                raise ActRefused(f"kind {kind!r} is not one of regex, choice, json_schema, "
+                                 f"logit_bias")
+            same = {"structured_outputs": so}
+            answer = answer_constraint(dict(body, **same), chat, xml_calls=form.joins_documents,
+                                       fmt=form)
+        gram = compile(answer) if compile is not None else None
+    except ActRefused:
+        raise
+    except Refusal as exc:
+        raise ActRefused(str(exc)) from None
+    except grammar.GrammarError as exc:
+        raise ActRefused(str(exc)) from None
+    return ActConstraint(kind, scope or "answer", answer, gram, None, same)

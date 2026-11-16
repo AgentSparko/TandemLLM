@@ -137,6 +137,8 @@ With `tools` offered and `tool_choice` auto, a document (`json_schema`, `json_ob
 
 Each mask applies to every verified row of a draft tree, not only to one row per step. Constrained output under speculation is therefore the text plain constrained decoding writes, with the same near-tie exception as any greedy text ([exactness.md](exactness.md)). JSON schemas with recursion (`$ref` cycles) are refused, and `json_object` allows a fixed nesting depth.
 
+An extension can ask for the same constraints (engine-ext-v1 3.2, `SET_CONSTRAINT` at the request's safe point): a regex, a choice list, a JSON schema or a logit bias, carried out by this grammar as the request field it is the same as (`structured_outputs` or `logit_bias`), so the act's answer is that field's answer token for token, under speculation too. The request's own constraint wins over the extension's. A constraint the engine cannot carry out leaves the request unconstrained, unless the extension marked it strict: then the client gets a 400 that names `SET_CONSTRAINT`. [contracts/engine-ext-v1](../contracts/engine-ext-v1/README.md#set_constraint-since-32) has the rules.
+
 ## Streaming
 
 A streamed response sends one chunk per token, carries `usage` on the last chunk when the client asks for it (`stream_options.include_usage`, and by default with `--usage-default on`), then a chunk with `finish_reason` and `data: [DONE]`. A verify round accepts several tokens at once, so they reach the socket together. Half the gaps between tokens are therefore microseconds, and the other half a whole round.

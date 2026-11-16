@@ -1,7 +1,7 @@
 {
   "name": "engine-ext-v1",
-  "version": "3.1",
-  "about": "The in-process extension interface of a TandemLLM engine (ENG-429); version 2.0 since ENG-413 WP4 (changed_from_1), 3.0 since WP5 (changed_from_2, since_3_0). Python, not HTTP. The engine owns it; TandemApp's conductor is its first extension. README.md says it in prose; fake_host.py is the reference host and fake_ext.py the smallest extension. A minor step adds a hook, an argument with a default, a host attribute, an event field or an act kind; a major step removes or renames one or changes a meaning.",
+  "version": "3.2",
+  "about": "The in-process extension interface of a TandemLLM engine (ENG-429); version 2.0 since ENG-413 WP4 (changed_from_1), 3.0 since WP5 (changed_from_2, since_3_0), 3.2 adds SET_CONSTRAINT (since_3_2). Python, not HTTP. The engine owns it; TandemApp's conductor is its first extension. README.md says it in prose; fake_host.py is the reference host and fake_ext.py the smallest extension. A minor step adds a hook, an argument with a default, a host attribute, an event field or an act kind; a major step removes or renames one or changes a meaning.",
   "discovery": {
     "env": "QSE_EXT",
     "default": "",
@@ -167,7 +167,8 @@
       {"name": "release_call", "args": ["call"], "returns": "call", "headless": "the call without its keys that start with _", "point": "SP3", "about": "a held call released to the client"},
       {"name": "release_block", "args": ["inner"], "returns": "None", "headless": "None", "point": "SP3", "about": "a held block that does not parse released"},
       {"name": "note_repairs", "args": ["renamed"], "returns": "None", "headless": "None", "point": "SP3", "about": "the engine's repairs of a call's argument keys, for the journal"},
-      {"name": "argloop_stopped", "args": ["verdict", "name"], "returns": "None", "headless": "None", "point": "SP3", "about": "the argument loop guard stopped a call of the tool name (verdict), for the journal"}
+      {"name": "argloop_stopped", "args": ["verdict", "name"], "returns": "None", "headless": "None", "point": "SP3", "about": "the argument loop guard stopped a call of the tool name (verdict), for the journal"},
+      {"name": "constraint_outcomes", "args": ["outcomes"], "returns": "None", "headless": "None", "point": "SP4", "since": "3.2", "about": "what became of SP4's SET_CONSTRAINT acts, for the journal: one {kind, scope, strict, applied, why} each, in the order given (why: null when applied, else the refusal's reason)"}
     ],
     "fields": {
       "mode": {"type": "str", "headless": "on", "about": "read: shadow or on"},
@@ -196,13 +197,35 @@
       "SP1": {"at": "block", "acts": ["CLOSE_REASONING", "GIVE_UP"]},
       "SP2": {"at": "finish", "acts": ["CONTINUE_HIDDEN", "GIVE_UP", "REGENERATE_CALL"]},
       "SP3": {"at": "tool_call", "acts": ["REPAIR_CALL", "REGENERATE_CALL", "GIVE_UP"]},
-      "SP4": {"at": "request", "acts": ["PROMPT_TAIL_NOTE", "SET_THINK_BUDGET"]}
+      "SP4": {"at": "request", "acts": ["PROMPT_TAIL_NOTE", "SET_THINK_BUDGET", "SET_CONSTRAINT"]}
     },
     "act": {
-      "fields": ["kind", "task", "text", "ids", "visible", "budget", "detail"],
-      "kinds": ["CLOSE_REASONING", "CONTINUE_HIDDEN", "REPAIR_CALL", "REGENERATE_CALL", "PROMPT_TAIL_NOTE", "SET_THINK_BUDGET", "GIVE_UP"],
+      "fields": ["kind", "task", "text", "ids", "visible", "budget", "detail", "constraint"],
+      "kinds": ["CLOSE_REASONING", "CONTINUE_HIDDEN", "REPAIR_CALL", "REGENERATE_CALL", "PROMPT_TAIL_NOTE", "SET_THINK_BUDGET", "GIVE_UP", "SET_CONSTRAINT"],
       "executed_by": "the engine, in the decode loop; ids are forwarded, visible (a suffix of ids) reaches the client",
-      "shape": "a mapping with those keys, or (since 1.2) an object with them as attributes"
+      "shape": "a mapping with those keys, or (since 1.2) an object with them as attributes",
+      "constraint": {
+        "since": "3.2",
+        "act": "SET_CONSTRAINT, at SP4 only; its field constraint (the other fields are not read)",
+        "fields": {
+          "kind": "regex | choice | json_schema | logit_bias",
+          "value": "regex: a string in the engine's regex dialect, the whole answer matched (implicit anchors); choice: a non-empty list of strings (scope answer) or of offered function names (scope tool_args); json_schema: a JSON schema of the subset the engine's grammar compiles (engine/grammar.py schema_regex); logit_bias: {token id: number in [-100, 100]}, ids in the served vocabulary",
+          "scope": "answer (the default): the answer after the reasoning, as structured outputs constrain it; tool_args: the answer as calls to the functions value names, their arguments typed by the offered schemas (kind choice only); logit_bias takes no scope",
+          "strict": "false (the default): a constraint the engine does not carry out leaves the request unconstrained (open); true: the request answers 400 invalid_request_error, param SET_CONSTRAINT, with the reason"
+        },
+        "same_as": {
+          "regex": "the request field structured_outputs {\"regex\": value}",
+          "choice": "structured_outputs {\"choice\": value}",
+          "json_schema": "structured_outputs {\"json\": value}",
+          "logit_bias": "logit_bias value",
+          "tool_args": "the forced calls of tool_choice to those functions (one name: tool_choice that function; every offered one: required), without the sentence tool_choice adds to the prompt's system turn (SP4 comes after the prompt is built)"
+        },
+        "executed_by": "the engine's own grammar and penalty path, the request path's functions (server/compat.py act_constraint): the same automaton, masks, speculative rows and response-cache key as the request field it is the same as; under tools offered with tool_choice auto, scope answer is the calls or the document (SRV-619) as with the field",
+        "precedence": "the request's own constraint wins: response_format json_object or json_schema, structured_outputs, or tool_choice required or a named function (the grammar kinds); the request's own logit_bias (kind logit_bias); tool_choice none (scope tool_args). The act gives way, refused with why. One grammar and one logit bias a request: a second act of a family is refused. The engine's --no-structured-outputs refuses the grammar kinds",
+        "limits": {"regex_chars": 8192, "choices": 256, "choice_chars": 1024, "schema_bytes": 65536, "bias_ids": 300, "automaton_states": 20000},
+        "apply_request": "the engine takes SET_CONSTRAINT out of the acts it hands to the supervisor's apply_request (the splice of PROMPT_TAIL_NOTE and SET_THINK_BUDGET); a list of SET_CONSTRAINT alone splices nothing and the prompt is the request's",
+        "outcomes": "each act's outcome {kind, scope, strict, applied, why}: the supervisor's optional constraint_outcomes(outcomes), the routing row's extra set_constraint (a plan with routing), one log line each"
+      }
     }
   },
   "since_1_2": {
@@ -270,6 +293,12 @@
     "state": "state_keys session_tokens, and the methods of escapes: the engine's objects the extension uses",
     "laya": "/v1/laya* is the extension's route over the engine's decision models (deciders(registry), since 3.0): with decision models the engine dispatches GET /v1/laya, GET /v1/laya/kit/<file>, POST /v1/laya/ask, POST /v1/laya/drive/end and their preflights to it, any other path under /v1/laya stays no route; without decision models 404 not_on_engine as since 1.4. An extension that serves none of them answers 404 not_on_engine there (the engine served Laya itself until 3.0)"
   },
+  "since_3_2": {
+    "why": "ENG-458 (work package A3 of the hooks plan): a hook steers the answer's form without a per-token callback, which would sit in the speculative decode path and cost speed and bit-equality",
+    "act": "SET_CONSTRAINT at SP4 (supervisor.act.constraint): regex, choice, JSON schema or logit bias, carried out by the engine's own grammar as the request field it is the same as",
+    "supervisor": "the optional method constraint_outcomes(outcomes)",
+    "additive": "a 3.1 extension starts on a 3.2 host and is served as before: it answers no SET_CONSTRAINT, and its supervisor's apply_request gets the acts it got (compat/3.1/ext.json holds 3.1 as it was)"
+  },
   "kept_interim": [
     {"what": "state['conductor'] and state['monitor'].policy handed to the --backends proxy", "where": "server/app.py start_proxy", "why": "the --backends proxy in the engine's process is TandemApp's own code (proxy.service, imported by the engine) and runs TandemApp's conductor as its harness; it leaves the engine with ENG-413 WP14 (routes and paths marked to leave go then, the owner's decision of 2026-11-13), so it does not become part of the interface", "until": "ENG-413 WP14"}
   ],
@@ -289,6 +318,7 @@
     "request": "a hook that raises or returns a value of the wrong shape: the engine logs it, counts it (qse_ext_errors_total{hook}: the hook's or the supervisor method's name; models, route and stop too) and serves the rest of that request as a headless engine would: plan -> raw, prompt -> the ids as built, supervisor -> none from then on, extras -> none, follow_ups and finish -> skipped. Acts already carried out stay; the next request asks the extension again",
     "refusal": "plan may raise the host's Refusal(status, type, message): the client gets that error; it is an answer, not a failure",
     "act_out_of_place": "an act whose kind the safe point does not allow is dropped and counted, as an error of that hook",
+    "constraint": "since 3.2: a SET_CONSTRAINT whose constraint has the wrong shape (no constraint, a kind or scope it does not list, a strict that is not a bool) is a wrong shape: the supervisor is detached as above. One of the right shape that the engine does not carry out (a regex that does not compile, a schema outside the subset or over a limit, a token id outside the vocabulary, a bias out of bounds, a scope its kind does not take) is refused and counted as an error of at_request, and one that gives way (precedence) is refused uncounted; either way the request runs without it, the other acts of the list are carried out, the supervisor stays attached, and the outcome says why. A strict act's refusal is the client's 400 instead. A constraint that leaves no legal token while decoding ends the request as the request field's would (400, or the stream's error), the param SET_CONSTRAINT",
     "route": "a handler of the extension's own route that raises: 500 extension_error for that request, counted as hook route; there is no headless answer for a path only the extension serves"
   }
 }

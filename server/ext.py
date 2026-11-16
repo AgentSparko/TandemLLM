@@ -30,7 +30,11 @@ memory writer's object, are optional calls too (the 3.0 rows of CALLS); the engi
 the engine's `/v1/engine/*` routes, handed to the extension in process as `host.engine`. ENG-413
 WP5b (engine-ext-v1 3.1): the router's question for the shadow reader is a call (`shadow_question`),
 Laya's routes are the extension's (a route may name OPTIONS for the preflight), and the session
-addresses' registry and the loop escape's counts are the engine's objects in the state.
+addresses' registry and the loop escape's counts are the engine's objects in the state. ENG-458
+(engine-ext-v1 3.2): SP4 may answer SET_CONSTRAINT, a constraint the engine's own grammar carries
+out as if the request had sent it (server/compat.py `act_constraint`); its shape is checked here
+(`constraint_of`), its value by the engine, and the supervisor may hear what became of it
+(`constraint_outcomes`).
 
 The failure rule (ext.json `failure`): closed at start, open per request. `discover` and `start`
 raise Refused, a SystemExit whose text is the one line `[ext] REFUSING: <why>`: a module that does
@@ -51,7 +55,7 @@ import re
 import threading
 
 #: the engine-ext-v1 version this host speaks (contracts/engine-ext-v1/ext.json `version`)
-EXT_API = "3.1"
+EXT_API = "3.2"
 #: the module attributes discovery reads (ext.json discovery.module)
 MODULE_ATTRS = ("EXT_API", "NAME", "VERSION", "start")
 #: since 3.0, optional module functions asked before the start (ext.json discovery.module_optional):
@@ -74,7 +78,7 @@ SUPERVISOR = {"at_request": (["event"], "SP4"), "at_block": (["event", "room"], 
 #: the acts each safe point allows (ext.json supervisor.safe_points)
 SAFE_POINTS = {"SP1": ("CLOSE_REASONING", "GIVE_UP"), "SP2": ("CONTINUE_HIDDEN", "GIVE_UP", "REGENERATE_CALL"),
                "SP3": ("REPAIR_CALL", "REGENERATE_CALL", "GIVE_UP"),
-               "SP4": ("PROMPT_TAIL_NOTE", "SET_THINK_BUDGET")}
+               "SP4": ("PROMPT_TAIL_NOTE", "SET_THINK_BUDGET", "SET_CONSTRAINT")}
 #: the request fields `plan` gets (ext.json request.fields)
 REQUEST_FIELDS = ("body", "headers", "client_kind", "request_id", "chat", "user", "count_tokens")
 #: paths the engine serves itself; an extension that claims one is refused at start (the same list
@@ -564,8 +568,12 @@ REGENERATE_CALL = "REGENERATE_CALL"
 PROMPT_TAIL_NOTE = "PROMPT_TAIL_NOTE"
 SET_THINK_BUDGET = "SET_THINK_BUDGET"
 GIVE_UP = "GIVE_UP"
+SET_CONSTRAINT = "SET_CONSTRAINT"                   # since 3.2 (ENG-458)
 ACT_KINDS = (CLOSE_REASONING, CONTINUE_HIDDEN, REPAIR_CALL, REGENERATE_CALL, PROMPT_TAIL_NOTE,
-             SET_THINK_BUDGET, GIVE_UP)
+             SET_THINK_BUDGET, GIVE_UP, SET_CONSTRAINT)
+#: since 3.2: SET_CONSTRAINT's `constraint` field (ext.json supervisor.act.constraint)
+CONSTRAINT_KINDS = ("regex", "choice", "json_schema", "logit_bias")
+CONSTRAINT_SCOPES = ("answer", "tool_args")
 
 
 def act_kind(act):
@@ -573,6 +581,33 @@ def act_kind(act):
     if isinstance(act, dict):
         return act.get("kind")
     return getattr(act, "kind", None)
+
+
+def act_field(act, name: str):
+    """One field of an act, a mapping's key or an object's attribute (None when it has none)."""
+    if isinstance(act, dict):
+        return act.get(name)
+    return getattr(act, name, None)
+
+
+def constraint_of(act) -> dict:
+    """Since 3.2: a SET_CONSTRAINT act's `constraint` as {kind, value, scope, strict}, the shape
+    alone (a mapping or an object with those fields; kind one of CONSTRAINT_KINDS; scope absent
+    or one of CONSTRAINT_SCOPES; strict absent or a bool). A wrong shape raises ValueError: the
+    failure rule's wrong shape (the supervisor is detached). The value is the engine's to check
+    (server/compat.py `act_constraint`): a constraint it cannot carry out is refused, open."""
+    c = act_field(act, "constraint")
+    if c is None:
+        raise ValueError("SET_CONSTRAINT without its constraint")
+    get = (lambda k: c.get(k)) if isinstance(c, dict) else (lambda k: getattr(c, k, None))
+    kind, scope, strict = get("kind"), get("scope"), get("strict")
+    if kind not in CONSTRAINT_KINDS:
+        raise ValueError(f"SET_CONSTRAINT kind {kind!r} is not one of {', '.join(CONSTRAINT_KINDS)}")
+    if scope is not None and scope not in CONSTRAINT_SCOPES:
+        raise ValueError(f"SET_CONSTRAINT scope {scope!r} is not one of {', '.join(CONSTRAINT_SCOPES)}")
+    if strict is not None and not isinstance(strict, bool):
+        raise ValueError(f"SET_CONSTRAINT strict is {type(strict).__name__}, not a bool")
+    return {"kind": kind, "value": get("value"), "scope": scope, "strict": bool(strict)}
 
 
 class Event(dict):
@@ -649,6 +684,12 @@ class Supervision:
             if act_kind(a) not in SAFE_POINTS.get(point, ()):
                 self._failed(method, ValueError(f"act {act_kind(a)} at {point}"))
                 return fallback
+            if act_kind(a) == SET_CONSTRAINT:
+                try:
+                    constraint_of(a)               # since 3.2: the shape; the value is the engine's
+                except ValueError as exc:
+                    self._failed(method, exc)
+                    return fallback
         self._taken.extend((point, act_kind(a)) for a in acts)
         return out
 
@@ -737,6 +778,8 @@ SUP_OPTIONAL = {
     "release_block": lambda inner: None,
     "note_repairs": lambda renamed: None,
     "argloop_stopped": lambda verdict, name: None,
+    # since 3.2: what became of SP4's SET_CONSTRAINT acts, for the journal
+    "constraint_outcomes": lambda outcomes: None,
 }
 
 

@@ -1,7 +1,8 @@
 """The smallest engine-ext-v1 extension (ENG-429, QA ENG-430): every hook, no behaviour of its own.
 
-Written against 3.0 (first 1.0); its prompt takes `info` (a default) and its supervisor has
-`check_answer`, so it fits the interface's signatures.
+Written against 3.2 (first 1.0); its prompt takes `info` (a default) and its supervisor has
+`check_answer`, so it fits the interface's signatures; since 3.2 it may answer SET_CONSTRAINT at
+SP4 and hears what became of it (`constraint_outcomes`).
 
 A host's tests load it (QSE_EXT=fake_ext with this folder on the path, or the module object) and
 drive requests through it. `host.args` steers it, so one module covers the failure cases:
@@ -9,6 +10,10 @@ drive requests through it. `host.args` steers it, so one module covers the failu
     fail: a hook or supervisor method name that raises (open per request; `start` is closed)
     bad:  a hook that returns a value of the wrong shape
     act:  {method: kind}: the supervisor acts once at that method (CONTINUE_HIDDEN at at_finish, ...)
+    constraint: since 3.2, a list of SET_CONSTRAINT constraints ({kind, value, scope, strict}) the
+          supervisor answers at at_request (after the `act` of at_request, if any)
+    constraint_field: since 3.2, the request body's field that holds those constraints for one
+          request (in place of `constraint`; tools/set_constraint_check.py sends them so)
     route: a prefix it claims (an engine path is refused at start)
     raw:  plan returns None (the request is served as a headless engine would)
     refuse: plan raises the host's Refusal
@@ -18,15 +23,16 @@ Standard library only; imports neither tree.
 
 from __future__ import annotations
 
-EXT_API = "3.0"
+EXT_API = "3.2"
 NAME = "fake-ext"
 VERSION = "0"
 
 
 class _Supervisor:
-    def __init__(self, ext):
+    def __init__(self, ext, constraints=None):
         self.ext = ext
         self.acted: set = set()
+        self.constraints = constraints if constraints is not None else ext.args.get("constraint")
 
     def _step(self, name: str):
         self.ext.calls.append(f"supervisor.{name}")
@@ -41,7 +47,15 @@ class _Supervisor:
 
     def at_request(self, event):
         act = self._step("at_request")
-        return [act] if act else []
+        sets = [{"kind": "SET_CONSTRAINT", "task": "T0", "text": None, "ids": [], "visible": [],
+                 "budget": None, "detail": {}, "constraint": c}
+                for c in (self.constraints or [])]
+        return ([act] if act else []) + sets
+
+    def constraint_outcomes(self, outcomes):
+        """Since 3.2 (optional): what became of the SET_CONSTRAINT acts."""
+        self.ext.calls.append("supervisor.constraint_outcomes")
+        self.ext.outcomes.append(list(outcomes))
 
     def at_block(self, event, room):
         return self._step("at_block")
@@ -64,6 +78,7 @@ class FakeExt:
         self.host = host
         self.args = dict(getattr(host, "args", {}) or {})
         self.calls: list[str] = []
+        self.outcomes: list = []
         self.routes = [{"method": "GET", "prefix": self.args.get("route", "/v1/fake/"),
                         "handler": lambda request: (200, {}, b"{}")}]
         self.models = [{"id": "TandemLLM", "object": "model", "owned_by": NAME}]
@@ -87,13 +102,18 @@ class FakeExt:
                 raise from_host(400, "invalid_request_error", "refused on purpose")
         if self.args.get("raw"):
             return self._hook("plan", None)
-        return self._hook("plan", {"active": True, "body": None})
+        plan = {"active": True, "body": None}
+        field = self.args.get("constraint_field")
+        if field:
+            plan["constraint"] = (request.get("body") or {}).get(field) or []
+        return self._hook("plan", plan)
 
     def prompt(self, plan, ids, info=None):
         return self._hook("prompt", list(ids))
 
     def supervisor(self, plan, event):
-        return self._hook("supervisor", _Supervisor(self))
+        own = plan.get("constraint") if isinstance(plan, dict) else None
+        return self._hook("supervisor", _Supervisor(self, own))
 
     def extras(self, plan, point, info):
         return self._hook("extras", [])

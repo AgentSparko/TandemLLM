@@ -8087,6 +8087,54 @@ def _grammar_vocab(markers: tuple = ()) -> "grammar_mod.Vocab":
     return v
 
 
+def _set_constraints(sets: list, body: dict, chat: bool, own, structured: bool, req_x, plan,
+                     sup, cid: str) -> tuple:
+    """engine-ext-v1 3.2 (ENG-458): SP4's SET_CONSTRAINT acts, carried out by the engine's own
+    grammar as the request's own fields would be (server/compat.py `act_constraint`): `(the
+    grammar's ActConstraint or None, the logit bias's or None, a strict act's refusal or None)`.
+    `own`: the request's own constraint (an Answer), which wins. A constraint the engine does not
+    carry out is refused open: the request runs without it, the refusal is logged and, when the
+    constraint is wrong in itself, counted as an error of at_request (qse_ext_errors_total); a
+    strict act's refusal is the client's 400. What became of each act goes to the routing row's
+    extra (`set_constraint`) and to the supervisor's `constraint_outcomes`."""
+    own_field = None if own is None else (compat.constraint_field(body)
+                                          if own.kind == "response_format" else "tool_choice")
+    got: dict = {"grammar": None, "bias": None}
+    outcomes, strict = [], None
+    for act in sets:
+        c = ext_mod.constraint_of(act)
+        try:
+            k = compat.act_constraint(
+                c, body, chat, STATE["engine"].cfg.vocab_size, fmt=_tool_format(),
+                structured=structured, own=own_field,
+                taken=tuple(f for f, v in got.items() if v is not None),
+                compile=lambda a: grammar_mod.grammar_for(a.pattern, _grammar_vocab(a.markers),
+                                                          parts=a.parts))
+        except compat.ActRefused as exc:
+            outcomes.append({"kind": c["kind"], "scope": None if c["kind"] == "logit_bias"
+                             else c["scope"] or "answer", "strict": c["strict"],
+                             "applied": False, "why": str(exc)})
+            if exc.counted and req_x.ext is not None:
+                req_x.ext.failed("at_request", exc, f"{cid}: SET_CONSTRAINT {c['kind']} refused, "
+                                                    f"the request runs without it")
+            else:
+                print(f"[ext] {cid}: SET_CONSTRAINT {c['kind']} gave way: {exc}", flush=True)
+            if c["strict"] and strict is None:
+                strict = exc
+            continue
+        got["bias" if k.kind == "logit_bias" else "grammar"] = k
+        outcomes.append({"kind": k.kind, "scope": k.scope, "strict": c["strict"],
+                         "applied": True, "why": None})
+        print(f"[ext] {cid}: SET_CONSTRAINT {k.kind} (scope {k.scope or '-'}) carried out as "
+              f"{','.join(sorted(k.same_as)) or 'the forced calls'}", flush=True)
+    row = getattr(plan, "row", None) if plan is not None else None
+    if isinstance(row, dict):
+        row.setdefault("extra", {})["set_constraint"] = outcomes
+    if sup is not None:
+        sup.constraint_outcomes(outcomes)
+    return got["grammar"], got["bias"], strict
+
+
 def _auth() -> "auth_mod.Auth":
     """The access policy: from the environment at startup; tests set their own."""
     a = STATE.get("auth")
@@ -8392,6 +8440,7 @@ class Handler(BaseHTTPRequestHandler):
     # stream instead: an `error` beside `finish_reason: "error"`, then `[DONE]`, and the ledger
     # keeps the refusal's status.
     _early: dict | None = None
+    _constraint_param: str | None = None   # ENG-458: the grammar came from SET_CONSTRAINT
     _early_body = False                # the generation's own stream has taken it over
     _bar = None                        # SRV-237: the request's Open WebUI status line, if any
 
@@ -9948,6 +9997,7 @@ class Handler(BaseHTTPRequestHandler):
         return "owner"
 
     def _complete_logged(self, body: dict, path: str) -> None:
+        self._constraint_param = None      # ENG-458: SET_CONSTRAINT's grammar names itself
         try:
             return self._complete(body, chat=path.endswith("chat/completions"))
         except (BrokenPipeError, ConnectionResetError):
@@ -9978,7 +10028,8 @@ class Handler(BaseHTTPRequestHandler):
                                             extra_headers=(("Retry-After", str(MEMORY_FULL_RETRY_S)),))
                 if isinstance(exc, grammar_mod.GrammarError):
                     # the constraint left no legal token -- the request's own doing
-                    return self._json(400, compat.Refusal(compat.constraint_field(body),
+                    return self._json(400, compat.Refusal(self._constraint_param
+                                                          or compat.constraint_field(body),
                                                           str(exc)).body())
                 return self._json(500, {"error": {"message": str(exc),
                                                   "type": "internal_error"}})
@@ -11068,6 +11119,32 @@ class Handler(BaseHTTPRequestHandler):
                 sup = rec.sup = req_x.supervise(req_ev)
             if sup is not None:
                 acts = sup.at_request(req_ev)
+                if acts and any(ext_mod.act_kind(a) == ext_mod.SET_CONSTRAINT for a in acts):
+                    # engine-ext-v1 3.2 (ENG-458): the extension's constraint, carried out by the
+                    # engine's own grammar as the request's own field would be; apply_request
+                    # splices the other acts
+                    a_gram, a_bias, refused = _set_constraints(
+                        [a for a in acts if ext_mod.act_kind(a) == ext_mod.SET_CONSTRAINT], body,
+                        chat, ac, structured, req_x, plan, sup, cid)
+                    acts = [a for a in acts if ext_mod.act_kind(a) != ext_mod.SET_CONSTRAINT]
+                    if refused is not None:
+                        return self._json(400, refused.body())
+                    if a_gram is not None:
+                        ac, gram = a_gram.answer, a_gram.grammar
+                        pattern, rec.constrained = ac.pattern, ac.kind
+                        if not (parse_calls and body.get("tools")):
+                            tool_types = ac.types          # as the request's own constraint sets it
+                        elif ac.types:
+                            tool_types = dict(tool_types or {})
+                            for fname, keys in ac.types.items():
+                                tool_types.setdefault(fname, {}).update({k: JSON_ANY for k in keys})
+                        self._constraint_param = compat.ACT_PARAM
+                    if a_bias is not None:
+                        pen_spec = PenaltySpec(rep=pen_spec.rep, presence=pen_spec.presence,
+                                               freq=pen_spec.freq, no_repeat=pen_spec.no_repeat,
+                                               bias=a_bias.bias)
+                        pen = (PenaltyState(pen_spec, STATE["engine"].cfg.vocab_size,
+                                            STATE.get("device", "cuda")) if pen_spec.on else None)
                 if sup.final_answer:
                     # A1's give-up after the retries (server/api/argloop.py): this answer is the
                     # sentence, served as a replay is, never generated; the client's tool loop
