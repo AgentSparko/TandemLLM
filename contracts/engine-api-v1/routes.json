@@ -1016,6 +1016,16 @@
       "doc": "the proxy's backends and rules (--backends); TandemApp's controller's since engine API 1.8, never the engine (it answers 404)"
     },
     {
+      "path": "/v1/settings",
+      "contract": null,
+      "doc": "TandemApp's settings interface (settings-v1, its controller's; never the engine: it answers 404)"
+    },
+    {
+      "path": "/v1/settings/*",
+      "contract": null,
+      "doc": "TandemApp's settings interface (settings-v1, its controller's; never the engine: it answers 404)"
+    },
+    {
       "path": "/v1/collect/*",
       "contract": null,
       "doc": "the host collector (--backends); TandemApp's controller's since engine API 1.8, never the engine (it answers 404)"

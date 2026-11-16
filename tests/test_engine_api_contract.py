@@ -654,8 +654,11 @@ def test_additive_1_9():
     assert (old["version"], doc["version"]) == ("1.8", "1.9")
     new = [r for r in doc["routes"] if r.get("since") == "1.9"]
     assert [r for r in doc["routes"] if r.get("since") != "1.9"] == old["routes"]
-    assert {k: v for k, v in doc.items() if k not in ("version", "routes")} == \
-        {k: v for k, v in old.items() if k not in ("version", "routes")}
+    # app_families lists routes the engine never serves (TandemApp's): a new family is additive, and
+    # every family 1.8 named stays as it was
+    assert {k: v for k, v in doc.items() if k not in ("version", "routes", "app_families")} == \
+        {k: v for k, v in old.items() if k not in ("version", "routes", "app_families")}
+    assert [f for f in doc["app_families"] if f in old["app_families"]] == old["app_families"]
     assert [(r["method"], r["path"], r["group"]) for r in new] == \
         [("GET", "/v1/engine/settings", 9), ("PATCH", "/v1/engine/settings", 9),
          ("GET", "/v1/engine/pair", 9), ("POST", "/v1/engine/pair/1", 9), ("POST", "/v1/engine/pair/2", 9),
