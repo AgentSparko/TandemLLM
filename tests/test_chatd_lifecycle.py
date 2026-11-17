@@ -374,7 +374,7 @@ def test_the_units_and_the_uninstall():
 def test_the_install_says_what_it_did():
     text = open(os.path.join(ROOT, "install.sh")).read()
     done = text[text.index("${B}Done.${N}"):]
-    assert "Control:   $DIR/bin/tandem start | stop | restart | status | smoke | logs | doctor | setup | chat | node" in done
+    assert "Control:   $DIR/bin/tandem start | stop | restart | status | smoke | logs | doctor | setup | pair | chat | node" in done
     assert "/dashboard" not in done and "Health:    http://$API_HOST:$PORT/health" in done
     chat = text[text.index('if [ "$MODE_NOW" = chat ] && [ "$CHATD_NOW" = node ]; then'):text.index("${B}Done.${N}")]
     assert "Chat:      TandemNode runs chatd ($DIR/bin/tandem chat status; its unit $NODE_UNIT)." in chat
@@ -384,7 +384,8 @@ def test_the_install_says_what_it_did():
     setup = text[text.index("no model is loaded yet. Point the Setup Guide"):text.index('if [ "$START" != 1 ]; then\n    info "skipped (--no-start). Start it with')]
     assert "/dashboard" not in setup and "only the Setup API (/v1/setup/*)" in setup
     assert "TandemNode starts chatd once the setup is done (%s/bin/tandem chat status)" in setup
-    assert "chat_note" in setup and done.rstrip().endswith("chat_note")
+    # ENG-448: the install ends in the pairing window, right after the chat note
+    assert "chat_note" in setup and done.rstrip().endswith("chat_note\npair_end")
     assert "A chatd that was running keeps the code it started with until: %s/bin/tandem chat restart" in text
 
 

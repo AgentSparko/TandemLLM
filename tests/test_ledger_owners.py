@@ -100,13 +100,23 @@ def _v1_file(path: str) -> None:
     con.close()
 
 
+#: SEC-28/SRV-867: the controller's ledger 13 adds the API token's columns; the engine's stays 12
+TOKEN_COLUMNS = ("token_id", "api")
+TOKEN_FORK = ("SCHEMA_VERSION", "COLUMNS", "ADDED")
+
+
 def test_the_schema_is_tandemapps():
     names = ("PRODUCTION", "SCHEMA_VERSION", "MIN_RETENTION_DAYS", "QUEUE_MAX", "BACKUP_KEEP",
              "COLUMNS", "ADDED", "AMENDABLE", "CONDUCTOR_DDL", "CONDUCTOR_TABLES", "DDL", "KINDS",
              "INTERNAL_UA", "PARENT_HEADER", "_OLD_INTERNAL", "HERMES_TOOLS", "HERMES_TOOLS_MIN",
              "HERMES_IDENTITY")
-    differ = [n for n in names if getattr(eng_ledger, n) != getattr(app_ledger, n)]
+    differ = [n for n in names if n not in TOKEN_FORK and getattr(eng_ledger, n) != getattr(app_ledger, n)]
     assert not differ, differ
+    # SEC-28/SRV-867: TandemApp's ledger is 13, the engine's 12 plus the token's two columns
+    # (token_id, api), which only a controller with API tokens writes: the engine keeps 12
+    assert app_ledger.SCHEMA_VERSION == eng_ledger.SCHEMA_VERSION + 1 == 13
+    assert app_ledger.COLUMNS == eng_ledger.COLUMNS + TOKEN_COLUMNS, app_ledger.COLUMNS[-3:]
+    assert tuple(app_ledger.ADDED) == tuple(eng_ledger.ADDED) + tuple((c, "TEXT") for c in TOKEN_COLUMNS)
     # the journal creates its tables from TandemApp's text, the engine's ledger from its own: equal
     assert decisions.CONDUCTOR_DDL == eng_ledger.CONDUCTOR_DDL
     assert eng_ledger.SIDE_SHAPES == signals.SIDE_SHAPES
@@ -116,7 +126,11 @@ def test_the_schema_is_tandemapps():
         led = mod.Ledger(p, log=_quiet().log).open()
         led.close()
         new[tag] = (_schema(p), _meta(p), led.schema_was)
-    assert new["eng"] == new["app"], (new["eng"], new["app"])
+    # TOKEN_FORK: TandemApp's new file has the token's columns and their index too
+    (se, me, we), (sa, ma, wa) = new["eng"], new["app"]
+    assert {x[1] for x in sa} - {x[1] for x in se} == {"requests_token_ts"}, sa
+    assert [x[:3] for x in se] == [x[:3] for x in sa if x[1] != "requests_token_ts"]
+    assert dict(me, schema_version="13") == ma and we == wa, (me, ma, we, wa)
     tables = {r[1] for r in new["eng"][0] if r[0] == "table"}
     assert tables == REQUEST_TABLES | JOURNAL_TABLES, tables
     old = {}
@@ -126,7 +140,15 @@ def test_the_schema_is_tandemapps():
         led = mod.Ledger(p, log=_quiet().log).open()
         led.close()
         old[tag] = (_schema(p), _meta(p), _table(p, "requests"), led.schema_was)
-    assert old["eng"] == old["app"], "a version-1 file migrates differently"
+    # TOKEN_FORK: alike but for the token's columns and index, and the version they bring
+    (se, me, re_, we), (sa, ma, ra_, wa) = old["eng"], old["app"]
+    n = len(TOKEN_COLUMNS)
+    assert [x[:3] for x in se] == [x[:3] for x in sa if x[1] != "requests_token_ts"], \
+        "a version-1 file migrates differently"
+    rename = {"schema_version": "13", "migrated_v1_to_v13": me.get("migrated_v1_to_v12")}
+    assert {**{k: v for k, v in me.items() if k != "migrated_v1_to_v12"}, **rename} == ma and we == wa, (me, ma)
+    assert [r[:-n] for r in ra_] == re_ and all(r[-n:] == (None,) * n for r in ra_), \
+        "a version-1 file's rows migrate differently"
     assert old["eng"][3] == 1 and old["eng"][1]["relabel_internal"] == "1", old["eng"][1]
     assert old["eng"][0] == new["eng"][0], "a migrated file and a new one differ in schema"
     return f"schema {eng_ledger.SCHEMA_VERSION}, {len(eng_ledger.COLUMNS)} columns, " \
@@ -281,11 +303,17 @@ def test_rows_equal_on_a_replay():
     _replay(app_ledger, app_usage, b)
     ra, rb = _table(a, "requests"), _table(b, "requests")
     assert len(ra) == len(HEADERS) * 3, len(ra)
+    # TandemApp's two token columns come last and stay empty without a token (TOKEN_FORK)
+    assert all(r[-len(TOKEN_COLUMNS):] == (None,) * len(TOKEN_COLUMNS) for r in rb), rb[0][-3:]
+    rb = [r[:-len(TOKEN_COLUMNS)] for r in rb]
     differ = [i for i, (x, y) in enumerate(zip(ra, rb)) if x != y]
     assert ra == rb, f"rows differ at {differ[:5]}: {ra[differ[0]] if differ else None} != " \
                      f"{rb[differ[0]] if differ else None}"
-    assert _meta(a) == _meta(b), (_meta(a), _meta(b))
-    assert _schema(a) == _schema(b)
+    ma, mb = _meta(a), _meta(b)
+    assert (ma.pop("schema_version"), mb.pop("schema_version")) == ("12", "13"), (ma, mb)
+    assert ma == mb, (ma, mb)
+    sa, sb = _schema(a), _schema(b)
+    assert [x[:3] for x in sa] == [x[:3] for x in sb if x[1] != "requests_token_ts"], (sa, sb)
     kinds = sorted({r[5] for r in ra})                   # client_kind
     assert {"hermes", "internal", "open-webui", "opencode", "dashboard", "chat-app",
             "curl"} <= set(kinds), kinds

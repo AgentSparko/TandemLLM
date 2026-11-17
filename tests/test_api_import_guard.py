@@ -360,11 +360,25 @@ FORK_ADDED = {"ledger": {"SIDE_SHAPES", "_text", "side_shape"},
                           # ENG-413 WP3a: the extension host's counter, an engine family
                           "ext_errors_total"}}
 #: functions the fork changed on purpose, each in both copies: (module, name) -> why
+#: SEC-28: TandemApp's sign-in is its accounts (proxy/accounts.py); its tandemapp/auth.py keeps the
+#: trusted proxies and the login limit only. The engine keeps its own admin rule (server/api/auth.py)
+FORKED_WHOLE = {"auth": "SEC-28: accounts on TandemApp's side, the admin rule on the engine's"}
+#: SRV-867/SRV-873: what only TandemApp's copies have (a token's columns, another account masked)
+FORK_APP_ADDED = {"dashboard_api": {"GROUPS", "ANOTHER", "_not_own", "_not_me", "_masked"},
+                  "parallel": {"_masked_lane"}}
 FORK_CHANGED = {("metrics", "_gpu_memory"): "reads _allocator without the hook",
                 ("metrics", "_gpu_reserved"): "reads _allocator without the hook",
                 # ENG-413 WP5: own_work reads the memory writer's numbers through the extension
                 # (engine-ext-v1 3.0 memory_writer), not the conductor's object in the state
-                ("metrics", "install"): "own_work asks the extension's memory_writer"}
+                ("metrics", "install"): "own_work asks the extension's memory_writer",
+                # SRV-867: the ledger's API token columns (13 against the engine's 12)
+                ("ledger", "SCHEMA_VERSION"): "13 on TandemApp's side", ("ledger", "COLUMNS"): "+ token_id, api",
+                ("ledger", "ADDED"): "+ token_id, api", ("ledger", "client_of"): "the token's id",
+                ("ledger", "migrate"): "the token's columns",
+                # SRV-873: per token and per user, another account masked
+                ("dashboard_api", "ApiError"): "carries facts", ("dashboard_api", "_filters"): "token=",
+                ("dashboard_api", "DashboardAPI"): "groups and masks by token and user",
+                ("parallel", "ParallelBoard"): "masks another account's lanes"}
 
 
 def _fork_view(path: str, mod: str, engine: bool) -> list[str]:
@@ -380,10 +394,16 @@ def _fork_view(path: str, mod: str, engine: bool) -> list[str]:
             body[0] = ast.Pass()
     out = []
     for node in tree.body:
-        if engine and getattr(node, "name", None) in FORK_ADDED.get(mod, ()):
+        name = getattr(node, "name", None)
+        if name is None and isinstance(node, ast.Assign) and len(node.targets) == 1 and \
+                isinstance(node.targets[0], ast.Name):
+            name = node.targets[0].id
+        if engine and name in FORK_ADDED.get(mod, ()):
             continue
-        if (mod, getattr(node, "name", None)) in FORK_CHANGED:
-            out.append(f"def {node.name}: changed by the fork")
+        if not engine and name in FORK_APP_ADDED.get(mod, ()):
+            continue
+        if (mod, name) in FORK_CHANGED:
+            out.append(f"def {name}: changed by the fork")
             continue
         if engine and isinstance(node, ast.Assign) and any(
                 getattr(t, "id", None) in FORK_ADDED.get(mod, ()) for t in node.targets):
@@ -401,6 +421,8 @@ def _fork_view(path: str, mod: str, engine: bool) -> list[str]:
 def test_the_copies_are_the_fork():
     diffs = []
     for m in WP2B:
+        if m in FORKED_WHOLE:
+            continue
         theirs = _fork_view(os.path.join(pairapp.APP, "tandemapp", m + ".py"), m, False)
         ours = _fork_view(os.path.join(ROOT, "server", "api", m + ".py"), m, True)
         if theirs != ours:
