@@ -10651,7 +10651,7 @@
    ],
    "tests/test_proxy_model_card_auth.py": [
     "test_card_needs_the_key_the_list_needs",
-    "test_open_deployment_unchanged"
+    "test_local_mode_unchanged"
    ],
    "tests/test_proxy_plugins.py": [
     "test_vllm_logger_reads_the_finished_requests",
