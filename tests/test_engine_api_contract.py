@@ -681,9 +681,11 @@ def test_additive_1_9():
     for name in ("health.example.json", "health.stage-tail.example.json", "health.stage-front.example.json"):
         a, b = _json(name), _json("compat", "1.8", name)
         assert not contract_check.validate(b, health, root=CONTRACT), name    # a 1.8 engine's answer
-        assert {k: v for k, v in a.items() if k != "engine_api"} == \
-            {k: v for k, v in b.items() if k != "engine_api"}, name
+        strip = lambda d: {k: v for k, v in d.items() if k not in ("engine_api", "extensions")}  # noqa: E731
+        assert strip(a) == strip(b), name
         assert a.get("engine_api") in (None, "1.9"), name
+    # engine-ext-v1 3.2 (ENG-458): the extension in the 1.9 example speaks it
+    assert [x["ext_api"] for x in _json("health.example.json")["extensions"]] == ["3.2"]
     # the hot keys: settings keys serve.env documents and assigns nowhere
     with open(os.path.join(ROOT, "ops", "serve.env")) as f:
         env = f.read()
