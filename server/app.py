@@ -6239,8 +6239,9 @@ def _compacting(plan, body: dict, client_kind: str | None = None) -> bool:
 
 
 #: SPD-257: when the log last said the reserve stays over the ceiling (`_memory_event`, at most every
-#: OVER_CEILING_LOG_S)
-_OVER_CEILING_LOGGED = [0.0]
+#: OVER_CEILING_LOG_S). SRV-807: never yet, far in the past: time.monotonic() counts from the machine's
+#: boot on Linux, so a 0.0 here silenced every event of a box up less than OVER_CEILING_LOG_S
+_OVER_CEILING_LOGGED = [-1e9]
 OVER_CEILING_LOG_S = 300.0
 
 
@@ -8347,11 +8348,23 @@ def _par_brief() -> dict:
     does, and the joint rounds so far (server/slots.py)."""
     pool = dict.get(STATE, "pool")
     meet = pool.meeting.report() if pool.meeting is not None else {}
-    return {"n": pool.n, "running": pool.running(), "decoding": len(pool.decoding()),
+    # SRV-809: the round runner (SPD-201, the default decode path) decodes in phase "runner" and keeps
+    # its own counters; both paths count. The runner's joint_hist counts every group, one slot too: a
+    # joint round is one of more than one slot, as the barrier's counters count it
+    rr = _round_runner.RUNNER
+    rs = dict(getattr(rr, "stats", None) or {}) if rr is not None else {}
+    rh = {int(k): int(v) for k, v in (rs.get("joint_hist") or {}).items() if int(k) > 1}
+    mh = {int(k): int(v) for k, v in (meet.get("joint_hist") or {}).items()}
+    hist = {k: mh.get(k, 0) + rh.get(k, 0) for k in sorted(set(mh) | set(rh))}
+    return {"n": pool.n, "running": pool.running(),
+            "decoding": len([s for s in pool.slots if s.phase in ("decode", "runner")]),
             "slots": [{"index": s.index, "window": s.max_len, "busy": s.busy, "phase": s.phase,
                        "request": s.owner if s.index else None} for s in pool.slots],
-            "rounds": meet.get("rounds"), "joint_rounds": meet.get("joint_rounds"),
-            "joint_hist": meet.get("joint_hist"), "timeouts": meet.get("timeouts"),
+            "rounds": int(meet.get("rounds") or 0) + int(rs.get("rounds") or 0),
+            "joint_rounds": int(meet.get("joint_rounds") or 0) + sum(rh.values()),
+            "joint_hist": hist if (mh or rh) else meet.get("joint_hist"),
+            "runner": {"rounds": int(rs.get("rounds") or 0), "joint_rounds": sum(rh.values())} if rr is not None else None,
+            "timeouts": meet.get("timeouts"),
             "admission": pool.admission.report() if pool.admission is not None else None}
 
 
@@ -14844,13 +14857,14 @@ class EngineServer(ThreadingHTTPServer):
     request_queue_size = 128
 
 
-def identity() -> dict:
+def identity(root: str | None = None) -> dict:
     """What this process is: the version file, the code hash row3 records, the git commit.
 
     The served directory is an rsync copy with no `.git`, so the commit comes from `.git-sha`
-    when the deploy wrote one.
+    when the deploy wrote one, else (SRV-811) from `.deployed-commit`, the file a deploy of a file
+    tree writes: its first line, a hex commit, first 12 characters.
     """
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root = root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out = {"version": "", "code_sha256": "", "code_sha": "", "git_sha": ""}
     try:
         out["version"] = open(os.path.join(root, "VERSION")).read().strip()
@@ -14864,11 +14878,16 @@ def identity() -> dict:
         out["git_sha"] = (git_head(Path(root)) or "")[:12]
     except Exception:                                              # noqa: BLE001
         pass
-    if not out["git_sha"]:
+    for name in (".git-sha", ".deployed-commit"):
+        if out["git_sha"]:
+            break
         try:
-            out["git_sha"] = open(os.path.join(root, ".git-sha")).read().strip()[:12]
+            with open(os.path.join(root, name)) as f:
+                first = (f.readline() or "").strip()
         except OSError:
-            pass
+            continue
+        if re.fullmatch(r"[0-9a-f]{7,40}", first):       # SRV-811: anything else is not a commit
+            out["git_sha"] = first[:12]
     # the weight profile ops/use-profile.sh started (ops/profiles/<name>.env): it joins the version,
     # so the dashboard's header, /metrics' info and every ledger row (engine_version) carry it
     prof = weights_profile()["name"]
