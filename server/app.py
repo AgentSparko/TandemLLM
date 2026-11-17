@@ -13237,6 +13237,13 @@ def parser() -> argparse.ArgumentParser:
                     help="how long a conversation is idle before the idle backfill writes it")
     ap.add_argument("--session-spill-idle-every-s", type=float, default=60.0,
                     help="the least time between two idle writes of one conversation")
+    ap.add_argument("--session-spill-resave-s", type=float, default=300.0,
+                    help="SRV-887: an eviction, switch or idle save of a conversation whose "
+                         "entry was written this recently is skipped while it grew by fewer than "
+                         "--session-spill-resave-min-tokens (its entry stays; a restore prefills "
+                         "the rest); 0 = always write")
+    ap.add_argument("--session-spill-resave-min-tokens", type=int, default=8192,
+                    help="SRV-887: the growth past the entry from which such a save runs anyway")
     ap.add_argument("--session-spill-min-tokens", type=int, default=16384,
                     help="the shortest resident conversation an eviction writes to the NVMe "
                          "(shorter ones are the RAM park's)")

@@ -88,7 +88,14 @@ SETTINGS = {"budget_gb": 64.0, "ttl_hours": 48.0, "min_tokens": 16384,
             "drain_min_tokens": 4096, "anchors": 4, "codec": "zstd", "codec_threads": 8,
             # SRV-E6: the idle backfill (`backfill`): on/off, the idle time before a conversation
             # is written, and the least time between two of its idle saves (s)
-            "idle": "on", "idle_s": 20.0, "idle_every_s": 60.0}
+            "idle": "on", "idle_s": 20.0, "idle_every_s": 60.0,
+            # SRV-887: an eviction, a switch or an idle save of a conversation whose entry was
+            # written less than `resave_s` ago and that grew by fewer than `resave_min_tokens`
+            # since is skipped: the entry stays, a restore prefills the rest. 0 = off (the server
+            # turns it on, --session-spill-resave-s)
+            "resave_s": 0.0, "resave_min_tokens": 8192}
+#: SRV-887: the saves that may be skipped; a drain (a planned stop) always writes
+RESAVE_REASONS = ("evict", "switch", "idle")
 #: SRV-E6: how often the idle backfill's thread looks at the slots (s)
 IDLE_LOOK_S = 5.0
 #: a compressed block's frames: each section's byte planes cut into pieces of this size, one zstd
@@ -435,7 +442,9 @@ class SessionSpill:
                       "bytes_raw_written": 0, "blocks_compressed": 0,
                       "last_restore": None, "swept": 0,
                       "idle": {"saves": 0, "bytes_written": 0, "busy": 0, "spill_busy": 0,
-                               "refused": {}, "errors": 0, "older_copy": 0}}
+                               "refused": {}, "errors": 0, "older_copy": 0, "skipped": 0},
+                      # SRV-887: saves skipped for a recent entry, and the tokens they left out
+                      "resave_skipped": {}, "resave_tokens": 0}
         self.events: list[dict] = []
 
     # --- settings and the directory ----------------------------------------------------------
@@ -830,6 +839,10 @@ class SessionSpill:
                 end.update(delta=int(res.end.get("delta") or 0), mm=bool(res.end.get("mm")))
         if end is None and not anchors:
             return None
+        if reason in RESAVE_REASONS:
+            kept = self._recent(res, n, reason)
+            if kept is not None:
+                return kept
         gen = getattr(res, "rows_gen", None)
         info = self._save(eng, drafter, tokens=res.tokens[:n], n=n, rows_from=None,
                           anchors=anchors, end=end, taint=res.taint, owner=res.owner,
@@ -838,6 +851,40 @@ class SessionSpill:
         if info is not None:
             self._mark(res, self.entries.get(info["eid"]), gen)
         return info
+
+    def _recent(self, res, n: int, reason: str) -> dict | None:
+        """SRV-887: the conversation's entry when it was written less than `resave_s` ago and
+        the rows in place go fewer than `resave_min_tokens` past what it shares with them; None
+        otherwise (the save runs). An agent conversation that another session evicts every turn
+        was written again each time, a gigabyte a save; its entry now stays, and the restore
+        prefills the newer turns from where it resumes, as for any entry shorter than the prompt.
+        The answer is the entry's info with `skipped`; nothing is written and `spill_mark` is not
+        set, so the rows are not taken for current."""
+        span = float(self.cfg.get("resave_s") or 0.0)
+        if span <= 0:
+            return None
+        tokens = res.tokens[:n]
+        with self.lock:
+            e = self.entries.get(self._eid_for(res.owner, tokens))
+        if e is None:
+            return None
+        age = self.clock() - float(e.man.get("created") or 0.0)
+        if not 0 <= age < span:
+            return None
+        common = 0
+        for a, b in zip(e.tokens[:e.valid], tokens):
+            if a != b:
+                break
+            common += 1
+        if n - common >= int(self.cfg.get("resave_min_tokens") or 0):
+            return None
+        sk = self.stats["resave_skipped"]
+        sk[reason] = sk.get(reason, 0) + 1
+        self.stats["resave_tokens"] += n - common
+        self._event("skip", why="recent", reason=reason, eid=e.eid, tokens=n, kept=e.valid,
+                    common=common, age_s=round(age, 1))
+        return {"eid": e.eid, "tokens": e.valid, "ms": 0.0, "bytes_written": 0,
+                "blocks_written": 0, "reason": reason, "skipped": "recent"}
 
     @staticmethod
     def _mark(res, e, gen) -> None:
@@ -1596,6 +1643,9 @@ class SessionSpill:
                     why = next((k for k, v in self.stats["refused"].items()
                                 if v > refused.get(k, 0)), "nothing")
                     st["refused"][why] = st["refused"].get(why, 0) + 1
+                    continue
+                if info.get("skipped"):
+                    st["skipped"] += 1                 # SRV-887: its entry is recent
                     continue
                 st["saves"] += 1
                 st["bytes_written"] += int(info["bytes_written"])

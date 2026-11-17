@@ -36,6 +36,9 @@ have resumed had the rows never left (the end anchor), and writes the same greed
      (the end not reached and the alignment refused, no end, the read cost, a line too short)
   12 SRV-779: a side slot's chat whose pages the KV pool reclaims is written first and comes back
      on its own slot from that entry, bit for bit, prefilling only its tail
+  3b SRV-887: an eviction of a conversation whose entry is a moment old and that grew by less than
+     resave_min_tokens is skipped; the next restore reads the older entry, prefills the rest and
+     writes the same tokens; a drain always writes; an older entry is written again
   13 SRV-E6, the idle backfill: an idle chat is written once (not while busy, not within the
      interval, only the changed blocks after its next turn), the capture guard only around device
      steps, idle saves skipped past the write budget while pressure saves go, a resident chat's
@@ -221,6 +224,64 @@ def test_written_again_only_the_changed_blocks_are_written_and_read():
         return f"{n1} blocks, then {second['blocks_written']} written and {second['blocks_kept']} kept"
     finally:
         shutil.rmtree(d, ignore_errors=True)
+
+
+# ------------------------------------------------------------------ 3b. SRV-887: a recent entry
+
+def _three_turns(d, with_spill: bool, resave_s: float = 0.0, resave_min: int = 10 ** 6):
+    """A's three turns, another session's request between each (B, then C): A is evicted twice."""
+    res = _state(park_bytes=0, guest_max=40)
+    sp = t = None
+    if with_spill:
+        sp, t = _spill(d, res)
+        sp.cfg.update(resave_s=resave_s, resave_min_tokens=resave_min)
+    prompt = tokens(220, seed=71)
+    out1, _, _ = turn(prompt, 40, session="A")
+    turn(tokens(200, seed=72), 8, session="B")
+    p2 = prompt + out1 + TOOL
+    out2, _, _ = turn(p2, 16, session="A")
+    turn(tokens(200, seed=75), 8, session="C")
+    out3, pre3, _ = turn(p2 + out2 + TOOL2, 16, session="A")
+    return res, sp, t, out2, out3, pre3
+
+
+def test_srv887_a_recent_entry_is_not_written_again_and_the_tokens_are_the_same():
+    d0, d1, d2 = (tempfile.mkdtemp(prefix="qse-spill-") for _ in range(3))
+    try:
+        _, _, _, ref2, ref3, _ = _three_turns(d0, False)
+        # off (0): A's second eviction is written as before
+        _, sp_on, t1, out2, out3, pre_on = _three_turns(d1, True, resave_s=0.0)
+        assert (out2, out3) == (ref2, ref3) and not sp_on.stats["resave_skipped"], sp_on.stats
+        # on: A's entry is a moment old and A grew by less than the limit: not written again
+        res, sp, t2, out2s, out3s, pre3 = _three_turns(d2, True, resave_s=300.0)
+        assert sp.stats["resave_skipped"].get("evict", 0) >= 1, sp.stats["resave_skipped"]
+        assert sp.stats["resave_tokens"] > 0
+        assert sp.stats["bytes_written"] < sp_on.stats["bytes_written"], (
+            sp.stats["bytes_written"], sp_on.stats["bytes_written"])
+        # the third turn reads the older entry back, prefills the rest and writes the same tokens
+        assert pre3["kind"] == "spill", pre3
+        assert pre3["reused"] < pre_on["reused"], (pre3, pre_on)
+        assert (out2s, out3s) == (ref2, ref3)
+        skips = [e for e in sp.events if e.get("kind") == "skip"]
+        assert skips and skips[-1]["why"] == "recent" and skips[-1]["reason"] == "evict", skips
+        # a drain always writes; an entry older than resave_s is written again too
+        eng = app.STATE["engine"]
+        before = sp.stats["saves"]
+        info = sp.save_resident(res, eng, None, "drain")
+        assert info and not info.get("skipped") and sp.stats["saves"] == before + 1, info
+        sp.cfg.update(resave_s=300.0)
+        e = sp.entries[info["eid"]]
+        e.man["created"] = sp.clock() - 301.0
+        again = sp.save_resident(res, eng, None, "evict")
+        assert again and not again.get("skipped"), again
+        for t in (t1, t2):
+            t.close()
+        return (f"{sum(sp.stats['resave_skipped'].values())} save(s) skipped, "
+                f"{sp.stats['bytes_written']} bytes against {sp_on.stats['bytes_written']}; "
+                f"turn 3 read {pre3['reused']} (was {pre_on['reused']}) and wrote the same tokens")
+    finally:
+        for d in (d0, d1, d2):
+            shutil.rmtree(d, ignore_errors=True)
 
 
 # ------------------------------------------------------------------ 4. the hidden spans
