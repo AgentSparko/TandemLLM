@@ -38,14 +38,11 @@ The verify is cheap because of the memory floor. A forward pass over 16 tree row
 
 ## What is in the repository
 
-TandemLLM is several programs that share one repository and one release number.
+This repository is the engine and what it needs to run. The dashboard, Chat, the gateway in front of other engines and cloud APIs, and the fleet of machines are [TandemApp](https://github.com/TandemLLM/TandemApp), a separate project with its own releases.
 
-[style=nextline]
 - **The engine**  `engine/`, `tools/` (kernels) and `server/app.py`: the model, its kernels, the drafters and routers, the caches, and an OpenAI-compatible HTTP server built on Python's standard library. It needs a CUDA GPU (measured on the DGX Spark only), PyTorch, Triton and the weights. The small models run on its own code: the Qwen3.5 narrator and shadow reader on its Qwen forward, Laya's decision models in the same process.
 - **The conductor**  `server/conductor/`: a layer in front of the model. It classifies each turn, sets the thinking effort, adds hidden notes and skills, watches the generation for loops and broken tool calls, keeps memory notes and shows the client what it does. It is off unless a configuration directory is given.
-- **The dashboard**  `dashboard/`: a web page the server serves at `/dashboard/`. It shows what each request is doing now, a year of usage, the log, a playground, the conductor's settings, the backends and the machine.
-- **The proxy**  `proxy/`: the same dashboard in front of other OpenAI-compatible engines and cloud APIs, routed by model id. It installs with `pip` and needs no GPU.
-- **The plugins**  `plugins/`: two small packages that run inside vLLM and SGLang and report each request's queue, prefill and decode times to the proxy.
+- **The contracts**  `contracts/`: the engine's HTTP API, the interface of the extension it loads in chat mode, the control verbs of `tandem remote` and pairing by code. TandemApp copies them at one engine commit and pins them.
 - **The installer**  `install.sh`: one command that sets up the served profile on the test board, and best effort on another CUDA GPU. With `--setup` it starts setup mode instead: the Setup Guide in the browser, or `ops/use-profile.sh` from a shell, then downloads and starts any weight profile ([A new box: setup mode, then the Setup Guide](install.md#a-new-box-setup-mode-then-the-setup-guide)).
 
 ## What runs today

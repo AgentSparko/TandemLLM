@@ -61,6 +61,8 @@ started it: opening another model leaves the job on its own model's progress pag
 
 ## Tests
 
+The Setup Guide's pages are TandemApp's since 0.16.0, and so are their tests, in
+[TandemLLM/TandemApp](https://github.com/TandemLLM/TandemApp):
 `dashboard/tests/setup-state.test.ts` covers the mode switch, the active page list, the
 route normalization, resume in the right mode, the job's model scope and the simple
 defaults (the card's cap, the pool only when it pays). `dashboard/e2e/setup-simple.spec.ts`

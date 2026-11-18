@@ -10,10 +10,6 @@ changelog:
       labels: [engine/core, engine/kernels, engine/drafting, engine/cache, perf]
     - title: Server and conductor
       labels: [server/api, server/conductor, server/proxy]
-    - title: Chat
-      labels: [chat]
-    - title: Dashboard
-      labels: [dash/setup, dash/chat, dash/usage, dash/performance, dash/dev, dash/playground, dash/conductor, dash/memory, dash/backends, dash/system]
     - title: Weights
       labels: [quant/exl3, quant/nvfp4, quant/bf16, quant/community]
     - title: Fixes

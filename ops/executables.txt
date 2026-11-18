@@ -8,6 +8,7 @@ ops/roles.sh
 ops/start.sh
 ops/stop.sh
 ops/use-profile.sh
+ops/venv-wheel.sh
 ops/watchdog.sh
 tools/exl3/common.sh
 tools/exl3/convert.sh

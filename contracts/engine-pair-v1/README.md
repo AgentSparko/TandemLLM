@@ -1,6 +1,6 @@
 # Engine pairing contract v1
 
-How TandemApp pairs with an engine host by a one-time code, and how it finds the host on the LAN. The engine owns this contract; its version is `1.0`, independent of the release, of the engine API (`../engine-api-v1`, whose group 9 lists the routes since 1.9) and of the control CLI (`../engine-ctl-v1`, whose `key_line` the exchange installs). The code is `server/pairing/`; the user's side is [docs/pairing.md](../../docs/pairing.md).
+How TandemApp pairs with an engine host by a one-time code, and how it finds the host on the LAN. The engine owns this contract; its version is `1.0`, independent of the release, of the engine API (`../engine-api-v1`, whose group 9 lists the routes since 1.9) and of the control CLI (`../engine-ctl-v1`, whose `key_line` the exchange installs). The code is `server/pairing/`; the user's side is [the pairing page](https://tandemengine.0xbakeer.com/latest/pairing/).
 
 | file | what |
 |-|-|

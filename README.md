@@ -139,8 +139,6 @@ Since 0.8.2 the setup guide also lists packs other people published, each as one
 | StairCut sizes the draft tree each round | the speed follows the kind of text |
 |-|-|
 | ![StairCut cuts the draft tree on the measured verify-cost staircase](docs/media/staircut_cut.gif) | ![Speed by kind of text: fresh text, code, edits, quotations](docs/media/content_speed.gif) |
-| **first turn of a ~42k-token opencode session: cold prefill** | **next turn: resumed from the cache, prefill starts near the end** |
-| ![Cold prefill](docs/media/cold_prefill.gif) | ![Warm prefill](docs/media/warm_prefill.gif) |
 
 More clips: thinking and tool calls in [docs/server.md](docs/server.md), a verbatim quotation in [docs/speculative-decoding.md](docs/speculative-decoding.md), the dashboard in TandemApp's [dashboard.md](https://github.com/TandemLLM/TandemApp/blob/main/docs/dashboard.md). The clips were recorded against the served engine on the published NVFP4 weights with StairCut on; sped-up parts are marked in each clip.
 
