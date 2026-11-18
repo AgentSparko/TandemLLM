@@ -1,7 +1,9 @@
 # The documentation website (tools/docs_site.py): docs/ built with MkDocs Material and deployed
 # with mike to the gh-pages branch, which GitHub Pages serves under the custom domain in
 # tools/docs_site.py (DOMAIN, through Cloudflare). A push to main updates /dev/; a release tag
-# vX.Y.Z adds /X.Y.Z/ and points /latest/ (the default) at it.
+# vX.Y.Z adds /X.Y.Z/ and points /latest/ (the default) at it. Run by hand with a version (a
+# release tag), it rebuilds that version's pages with this branch's site tools (the look, the
+# support line), and moves /latest/ only when the tag is the newest release.
 name: docs
 
 on:
@@ -9,6 +11,11 @@ on:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "A release tag (vX.Y.Z) to rebuild with this branch's site tools; empty: /dev/"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -32,26 +39,43 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Which version
+        env:
+          REF: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$VERSION" ]; then
+            case "$VERSION" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "version: a release tag vX.Y.Z, not $VERSION"; exit 1;; esac
+            git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null || { echo "no tag $VERSION"; exit 1; }
+            git rm -r -q docs
+            git checkout "$VERSION" -- docs
+            echo "SITE_REF=$VERSION" >> "$GITHUB_ENV"
+            echo "SITE_KIND=tag" >> "$GITHUB_ENV"
+          else
+            echo "SITE_REF=$REF" >> "$GITHUB_ENV"
+            echo "SITE_KIND=$REF_TYPE" >> "$GITHUB_ENV"
+          fi
+          newest="$(git tag -l 'v[0-9]*' --sort=-v:refname | grep -v -- - | head -1)"
+          echo "SITE_NEWEST=$newest" >> "$GITHUB_ENV"
+
       - name: MkDocs, Material and mike (pinned)
         run: pip install -r tools/docs-requirements.txt
 
       - name: Stage and build (strict)
-        env:
-          REF: ${{ github.ref_name }}
         run: |
           python3 tools/docs_site.py check
-          python3 tools/docs_site.py stage site-src --ref "$REF"
+          python3 tools/docs_site.py stage site-src --ref "$SITE_REF"
           mkdocs build --strict -f site-src/mkdocs.yml -d "$RUNNER_TEMP/site-check"
 
       - name: Deploy with mike
-        env:
-          REF: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ "$REF_TYPE" = tag ]; then
-            mike deploy -F site-src/mkdocs.yml --push --update-aliases "${REF#v}" latest
+          if [ "$SITE_KIND" = tag ] && [ "$SITE_REF" != "$SITE_NEWEST" ]; then
+            mike deploy -F site-src/mkdocs.yml --push "${SITE_REF#v}"
+          elif [ "$SITE_KIND" = tag ]; then
+            mike deploy -F site-src/mkdocs.yml --push --update-aliases "${SITE_REF#v}" latest
             mike set-default -F site-src/mkdocs.yml --push latest
           else
             mike deploy -F site-src/mkdocs.yml --push dev

@@ -147,6 +147,7 @@ def config(ref: str) -> str:
         "copyright": "The documentation is CC BY 4.0. The code has its own license.",
         "theme": {
             "name": "material",
+            "custom_dir": "overrides",
             "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight",
                          "content.code.copy", "toc.follow"],
             "palette": [
@@ -190,9 +191,59 @@ EXTRA_CSS = """/* the house colours: cobalt and signal orange (the product site'
 .md-typeset table:not([class]) {
   font-size: 0.72rem;
 }
+/* the support line above the top bar (overrides/main.html) */
+.md-banner {
+  background-color: #0f1621;
+  color: #c9d4e3;
+}
+[data-md-color-scheme="default"] .md-banner {
+  background-color: #eef3fb;
+  color: #1d2b3f;
+}
+.md-banner__inner {
+  margin-top: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+.tl-support {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 1rem;
+  font-size: 0.68rem;
+}
+.tl-support a.tl-support__link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tl-support a.tl-support__link:hover {
+  color: #f2994a;
+}
+.tl-support .btn-container {
+  margin: 0;
+}
+@media screen and (max-width: 44.9375em) {
+  .tl-support__text {
+    display: none;
+  }
+}
 .md-typeset table:not([class]) code {
   word-break: break-word;
 }
+"""
+
+# the line above the top bar on every page: Ko-fi's button, GitHub Sponsors and the two X accounts
+SUPPORT_HTML = """{% extends "base.html" %}
+{% block announce %}
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+{% endblock %}
 """
 
 
@@ -220,6 +271,9 @@ def stage(out: str, ref: str) -> list[str]:
     os.makedirs(os.path.join(dst, "stylesheets"), exist_ok=True)
     with open(os.path.join(dst, "stylesheets", "extra.css"), "w", encoding="utf-8") as fh:
         fh.write(EXTRA_CSS)
+    os.makedirs(os.path.join(out, "overrides"), exist_ok=True)
+    with open(os.path.join(out, "overrides", "main.html"), "w", encoding="utf-8") as fh:
+        fh.write(SUPPORT_HTML)
     with open(os.path.join(out, "mkdocs.yml"), "w", encoding="utf-8") as fh:
         fh.write(config(ref))
     return pages
@@ -258,6 +312,8 @@ def check() -> list[str]:
         cfg = open(os.path.join(d, "mkdocs.yml"), encoding="utf-8").read()
         if "!!python/name:pymdownx.superfences.fence_code_format" not in cfg:
             bad.append("mkdocs.yml: the mermaid fence")
+        if 'custom_dir: "overrides"' not in cfg or "kofiwidget2.draw()" not in open(os.path.join(d, "overrides", "main.html"), encoding="utf-8").read():
+            bad.append("the support line above the top bar (overrides/main.html)")
     return bad
 
 

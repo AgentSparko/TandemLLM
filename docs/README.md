@@ -64,7 +64,6 @@ TandemEngine is an inference engine, and we measure its speed on raw `/v1/comple
 | [roadmap.md](roadmap.md) | what Flash-Next still lacks, parallel requests, other GPUs |
 | [threat-model.md](threat-model.md) | where untrusted input enters, the parts that matter most for security |
 | [labels.md](labels.md) | the GitHub labels of issues and pull requests, by group |
-| [gallery/README.md](gallery/README.md) | the dashboard's pictures this README and the site use |
 | [CHANGELOG.md](../CHANGELOG.md) | every release |
 
 Three more references live next to the code. [contracts/engine-api-v1](../contracts/engine-api-v1/README.md) is the engine's API: every route, the shapes of its reads and [every Prometheus metric](../contracts/engine-api-v1/metrics.md). [contracts/engine-ext-v1](../contracts/engine-ext-v1/README.md) is the interface of the extension the engine loads in chat mode, and [contracts/engine-ctl-v1](../contracts/engine-ctl-v1/README.md) the control verbs of `tandem remote`.

@@ -33,7 +33,9 @@ def test_the_workflow():
         wf = fh.read()
     assert "pip install -r tools/docs-requirements.txt" in wf and "mkdocs build --strict" in wf
     assert wf.index("mkdocs build --strict") < wf.index("mike deploy")
-    assert '--update-aliases "${REF#v}" latest' in wf and "mike set-default" in wf and "push dev" in wf
+    assert '--update-aliases "${SITE_REF#v}" latest' in wf and "mike set-default" in wf and "push dev" in wf
+    # a hand run rebuilds a release tag with these tools; /latest/ moves only for the newest
+    assert "inputs.version" in wf and '"$SITE_REF" != "$SITE_NEWEST"' in wf
     assert "CNAME" in wf
     with open(os.path.join(ROOT, "tools", "docs-requirements.txt"), encoding="utf-8") as fh:
         reqs = fh.read().split()
