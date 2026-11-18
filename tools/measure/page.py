@@ -878,7 +878,7 @@ def body_of(pub: dict, prefix: str = "", nested: bool = False) -> list[str]:
 def footer(pub: dict) -> str:
     return (f'<footer>Made with tools/measure (tool {esc(pub.get("tool"))}) from its records; every number on '
             f'this page comes from one run on one box, two or three requests a cell. '
-            f'<a href="https://github.com/0xBakeer/TandemLLM">TandemLLM</a></footer></div></body></html>')
+            f'<a href="https://github.com/TandemLLM/TandemEngine">TandemLLM</a></footer></div></body></html>')
 
 
 def page(data: dict) -> str:

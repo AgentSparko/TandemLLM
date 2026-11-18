@@ -1178,14 +1178,14 @@ def profiles(m: dict) -> list[dict]:
 def json_schema() -> dict:
     """SCHEMA as models/schema/model.schema.json."""
     return {"$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://github.com/0xBakeer/TandemLLM/models/schema/model.schema.json",
+            "$id": "https://github.com/TandemLLM/TandemEngine/models/schema/model.schema.json",
             "title": "TandemLLM model registry entry, schema 1 (models/<id>/model.yaml)", **SCHEMA}
 
 
 def community_json_schema() -> dict:
     """COMMUNITY_SCHEMA as models/schema/community.schema.json."""
     return {"$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://github.com/0xBakeer/TandemLLM/models/schema/community.schema.json",
+            "$id": "https://github.com/TandemLLM/TandemEngine/models/schema/community.schema.json",
             "title": "TandemLLM community weight pack, schema 1 (models/<model>/community/<id>.json)",
             **COMMUNITY_SCHEMA}
 

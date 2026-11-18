@@ -34,7 +34,7 @@ import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 URL = "http://127.0.0.1:8000"
-CURL = re.compile(r"^curl -fsSLO https://raw\.githubusercontent\.com/0xBakeer/TandemLLM/v[0-9.]+/install\.sh$")
+CURL = re.compile(r"^curl -fsSLO https://raw\.githubusercontent\.com/TandemLLM/TandemEngine/v[0-9.]+/install\.sh$")
 PROFILE = re.compile(r"\b(?:flashnext|exl3|lfm25|nemotron|nvfp4)-[0-9a-z.]")
 
 

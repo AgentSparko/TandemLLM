@@ -822,7 +822,7 @@ def test_the_api():
             assert [c["profile"] for c in body["community"]] == [PID], body["community"]
             cs = body["community_sync"]
             assert cs["source"] == "bundled" and cs["dropped"] == [] and "base_model=qwen3.8-27b" in cs["add_url"], cs
-            assert cs["add_url"].startswith("https://github.com/0xBakeer/TandemLLM/issues/new?template=community-quant.yml")
+            assert cs["add_url"].startswith("https://github.com/TandemLLM/TandemEngine/issues/new?template=community-quant.yml")
             assert hub.seen == [], "a GET fetched"
             setup_api._get(h, None, ["community"])
             assert h.out[0] == 200 and list(h.out[1]["models"]["qwen3.8-27b"][0]) == list(body["community"][0])

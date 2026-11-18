@@ -2,7 +2,7 @@
 
 The test matrix (the Gherkin of OPS-201):
 
-  1  SECURITY.md names GitHub's private reporting on 0xBakeer/TandemLLM as the only channel, says a
+  1  SECURITY.md names GitHub's private reporting on TandemLLM/TandemEngine as the only channel, says a
      public issue would show the report, and names no e-mail address      test_one_private_channel
   2  it asks for the version, the part, the trigger and the gain; a script or a failing test
                                                                      test_what_a_report_says
@@ -16,7 +16,7 @@ The test matrix (the Gherkin of OPS-201):
      links resolve, and docs/README.md links it                      test_the_threat_model
 
 Whether private vulnerability reporting is on is a repository setting: `gh api
-repos/0xBakeer/TandemLLM/private-vulnerability-reporting` before a release, not here.
+repos/TandemLLM/TandemEngine/private-vulnerability-reporting` before a release, not here.
 
 Run: python tests/test_security_docs.py
 """
@@ -28,7 +28,7 @@ import os
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FORM = "https://github.com/0xBakeer/TandemLLM/security/advisories/new"
+FORM = "https://github.com/TandemLLM/TandemEngine/security/advisories/new"
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 
 

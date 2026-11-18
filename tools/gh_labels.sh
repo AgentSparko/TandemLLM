@@ -10,7 +10,7 @@
 # Bash 3.2 compatible.
 set -euo pipefail
 
-REPO="0xBakeer/TandemLLM"; DRY=0; TABLE=0
+REPO="TandemLLM/TandemEngine"; DRY=0; TABLE=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --repo) REPO="$2"; shift 2 ;;

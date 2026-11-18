@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/0xBakeer/TandemLLM/models/schema/model.schema.json",
+  "$id": "https://github.com/TandemLLM/TandemEngine/models/schema/model.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {

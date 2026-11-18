@@ -4,7 +4,7 @@
 
 \begin{table}[htbp]
 \centering\small
-\caption{Releases of TandemLLM.}\label{tab:releases}
+\caption{Releases of TandemEngine (TandemLLM up to 0.15.4).}\label{tab:releases}
 \begin{tabularx}{\linewidth}{@{}L{.2\linewidth}L{.15\linewidth}Y@{}}
 \toprule
 \hd{release} & \hd{date} & \hd{what it brought} \\
@@ -51,9 +51,16 @@
 0.15.2 & 11-04 & a prefill admitted over the engine's peak charged only its new memory at the box's floor; idle graph captures pause at the peak; chatd's Stop ends a request that waits for memory, and the engine books it abandoned; a \code{tandem_memory} tool call taken as the memory block; the allocator's counters read without cyclic garbage; 7-bit EXL3 tensors on the dense kernels; the Setup Guide's simple mode; the quality gate, the benchmark report and one adapter a GPU \\
 0.15.3 & 11-09 & Flash-Next's CUDA graphs on each slot's own stream, dropped together and capped; a request short of memory waits at the KV pool's floor and goes on; long chats side by side: 3-hour waits, a chat's priority, idle conversations on the NVMe before a reclaim, turns charged the rows they forward; a compaction as one more turn of the chat; Flash-Next's long prefill by a radix select and its drafts past 32k; Ada kernels, every GGUF quant type on NemotronH, strict HTTP framing \\
 0.15.4 & 11-10 & a turn charged the rows it forwards, on slot 0 and for a regenerate or an edit too; a short reserve raised at the first forward; the pool's floor at the chunk a turn forwards; a quiet log during a wait; the log's Export button; the wait for memory, a chat's priority and the swap to the SSD in the docs \\
+0.16.0 & 11-18 & the engine on its own: TandemApp in its own repository with its own releases, its conductor loaded as an extension; \code{tandem remote}; \code{SET_CONSTRAINT} for an extension; one model in two processes across two Sparks; an opt-in FP8 long-context cache \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\section{0.16.0, the engine on its own}\label{sec:changelog-0160}
+
+0.16.0 splits TandemLLM in two (ENG-413). This repository is TandemEngine: the OpenAI-compatible API, \code{/health}, the metrics and the engine's own reads. TandemApp, the page with the Chat tab, the controller, the conductor and TandemNode, has its own repository and releases, and its own manual. The chat mode still works: the engine loads TandemApp's conductor as an extension, engine-ext-v1 3.2. A box whose configuration still sets \code{QSE_BACKENDS} is told what to do before anything starts, and \code{tandem-app import-backends} moves those backends to TandemApp's controller.
+
+\code{tandem remote} drives the engine host over SSH: status, start, stop, a restart at an idle moment, settings, logs and upgrades (ENG-452, ENG-456). An extension may answer \code{SET_CONSTRAINT} with a regex, a choice list, a JSON schema or a logit bias, and the engine applies it with its own grammar (ENG-458). LFM2 MoE and Flash-Next run as two stage processes, one model across two Sparks (ENG-307, ENG-423), and every model with attention layers offers an FP8 long-context cache, off by default (SPD-150).
 
 \section{0.15.4, a turn charged what it reads}\label{sec:changelog-0154}
 

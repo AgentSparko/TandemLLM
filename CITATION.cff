@@ -6,7 +6,7 @@ authors:
   - family-names: Bakeer
     given-names: Khaled
     orcid: "https://orcid.org/0009-0001-8362-784X"
-repository-code: "https://github.com/0xBakeer/TandemLLM"
+repository-code: "https://github.com/TandemLLM/TandemEngine"
 license: AGPL-3.0-only
 commit: c111fa7
 keywords:

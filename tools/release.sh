@@ -32,9 +32,9 @@
 #              one), both against --smoke-base, whose /health must already name X.Y.Z (deploy the
 #              candidate first; both get RELEASE_SMOKE_KEY). --skip suite,setup,smoke,loose leaves parts
 #              out.
-#   tag        the annotated tag vX.Y.Z "TandemLLM X.Y.Z" on HEAD (git's configured identity)
+#   tag        the annotated tag vX.Y.Z "TandemEngine X.Y.Z" on HEAD (git's configured identity)
 #   push       HEAD as origin's main and the tag, no force
-#   release    one GitHub release, "TandemLLM X.Y.Z", the notes file, latest. CI's manual workflow
+#   release    one GitHub release, "TandemEngine X.Y.Z", the notes file, latest. CI's manual workflow
 #              attaches the PDF on the tag push; when it created a bare release first, this edits that one.
 #   milestone  the GitHub milestone vX.Y.Z is closed when it is open, and the next patch's, vX.Y.(Z+1),
 #              is created when it is missing (CONTRIBUTING.md: a milestone is a release)
@@ -377,7 +377,7 @@ if want tag; then
         [ "$(g rev-parse "$TAG^{commit}")" = "$(g rev-parse HEAD)" ] || die "a tag $TAG exists on another commit"
         say "$TAG is already on HEAD"
     else
-        run git -C "$ROOT" tag -a "$TAG" -m "TandemLLM $VERSION" HEAD
+        run git -C "$ROOT" tag -a "$TAG" -m "TandemEngine $VERSION" HEAD
     fi
 fi
 if want push; then
@@ -389,9 +389,9 @@ if want release; then
     [ -n "$NOTES" ] && [ -s "$NOTES" ] || die "--notes FILE is needed for the release"
     if [ "$DRY" = 0 ] && gh release view "$TAG" -R "$GH_REPO" > /dev/null 2>&1; then
         # CI's manual job created a bare release first: give it its title and notes
-        run gh release edit "$TAG" -R "$GH_REPO" --title "TandemLLM $VERSION" --notes-file "$NOTES" --latest
+        run gh release edit "$TAG" -R "$GH_REPO" --title "TandemEngine $VERSION" --notes-file "$NOTES" --latest
     else
-        run gh release create "$TAG" -R "$GH_REPO" --verify-tag --latest --title "TandemLLM $VERSION" --notes-file "$NOTES"
+        run gh release create "$TAG" -R "$GH_REPO" --verify-tag --latest --title "TandemEngine $VERSION" --notes-file "$NOTES"
     fi
     say "CI's manual workflow attaches $ASSET when its build on the tag ends"
 fi
@@ -429,7 +429,7 @@ if want verify; then
     if [ -z "$TAG_SHA" ]; then
         if [ "$DRY" = 1 ]; then
             say "(dry run: $TAG is not on $GH_REPO yet; after the push these run)"
-            echo "  the tag on origin = the local tag's commit; main contains it; release \"TandemLLM $VERSION\","
+            echo "  the tag on origin = the local tag's commit; main contains it; release \"TandemEngine $VERSION\","
             echo "  not a draft, latest; CI's $ASSET (up to $ASSET_WAIT min); README.md, install.sh and VERSION"
             echo "  at $TAG; anonymous HTTP 200: install.sh, the manual asset, each weight pack's README.md, config.json"
         else
@@ -456,7 +456,7 @@ if want verify; then
         if gh release view "$TAG" -R "$GH_REPO" --json name,isDraft,assets > "$WORK/release.json" 2>/dev/null; then
             name="$(gh release view "$TAG" -R "$GH_REPO" --json name -q .name)"
             draft="$(gh release view "$TAG" -R "$GH_REPO" --json isDraft -q .isDraft)"
-            [ "$name" = "TandemLLM $VERSION" ] && pass "release title \"$name\"" || fail "release title \"$name\""
+            [ "$name" = "TandemEngine $VERSION" ] && pass "release title \"$name\"" || fail "release title \"$name\""
             [ "$draft" = false ] && pass "release published (not a draft)" || fail "the release is a draft"
             gh release list -R "$GH_REPO" -L 20 --json tagName,isLatest -q '.[] | select(.isLatest) | .tagName' > "$WORK/latest" || : > "$WORK/latest"
             [ "$(cat "$WORK/latest")" = "$TAG" ] && pass "$TAG is the latest release" \

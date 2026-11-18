@@ -4,7 +4,7 @@ TandemApp controls an engine host over SSH, with a key that runs only `tandem re
 
 ## The install ends in pairing
 
-    curl -fsSL https://raw.githubusercontent.com/0xBakeer/TandemLLM/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/TandemLLM/TandemEngine/main/install.sh | bash
 
 No sudo is needed. The install starts the engine, or setup mode with `--setup`, then opens a pairing window. Its last lines are:
 

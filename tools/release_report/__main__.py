@@ -42,7 +42,7 @@ def cmd_publish(argv) -> int:
                                  description="upload DIR/report.html to the GitHub release of --tag")
     ap.add_argument("dir")
     ap.add_argument("--tag", required=True)
-    ap.add_argument("--repo", default="0xBakeer/TandemLLM")
+    ap.add_argument("--repo", default="TandemLLM/TandemEngine")
     ap.add_argument("--name", default=None, help="the asset's file name (default: "
                     "tandemllm-<version>-report-<model>.html; name the pack too for two packs of one model)")
     ap.add_argument("--dry-run", action="store_true")

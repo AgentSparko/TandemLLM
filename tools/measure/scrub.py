@@ -84,7 +84,7 @@ def leaks(html: str, private: dict | None = None) -> list[str]:
     for m in URL.finditer(html):
         if not m.group(0).startswith(("https://cdnjs.cloudflare.com/", "https://fonts.googleapis.com/",
                                       "https://fonts.gstatic.com/", "http://www.w3.org/2000/svg",
-                                      "https://github.com/0xBakeer/TandemLLM")):
+                                      "https://github.com/TandemLLM/TandemEngine")):
             found.append(f"url {m.group(0)[:60]!r}")
     for m in LAN.finditer(html):
         found.append(f"host {m.group(0)!r}")

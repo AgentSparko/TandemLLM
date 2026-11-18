@@ -49,8 +49,8 @@ import urllib.request
 from server.api.validate import validate
 from server.setup import registry
 
-DEFAULT_URL = "https://raw.githubusercontent.com/0xBakeer/TandemLLM/main/models/community-index.json"
-REPO = "0xBakeer/TandemLLM"                 # where "Add yours" opens its issue form
+DEFAULT_URL = "https://raw.githubusercontent.com/TandemLLM/TandemEngine/main/models/community-index.json"
+REPO = "TandemLLM/TandemEngine"                 # where "Add yours" opens its issue form
 GENERATOR = "server.setup.community 1"
 INDEX_SCHEMA_VERSION = 1
 TIMEOUT_S = 10.0
