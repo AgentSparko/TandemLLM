@@ -86,8 +86,10 @@ from engine.models import REGISTRY  # noqa: E402
 #: SRV-747: engine/disk_cache.py's knob owners gain app/ (the conductor's knobs left server/): the tier's v2
 #: moves with that file's bytes; the spill form, the one the engine computes (server/diskcache.py
 #: legacy_fingerprints), keeps its value
+# 0.16.0: the arithmetic half holds; the whole-tree half moved with ENG-413 and ENG-458 (no compute
+# change: the bit-equal gate on 4a133ba3 found 0 differing tokens)
 GOLDEN_V2 = ("fc7ccaed9feffdbe43ec4147f552a6052829438d0f2b2c138eb1c63946af6fb9",
-             "1cf3fc59d30aea910335a57a7f71f3cc2df8bcef2a30dd43b4d1f30dbb77c20d")
+             "d2252f06642da403b3f93bba579f9ac9599d4dd7817651a2dc099071aadf109c")
 GOLDEN_FP4 = {
     # SPD-201 (2026-10-24): the speed setup's knobs default on, so every family's fingerprint moved once;
     # SPD-215: Flash-Next's joint pass row-wise and grouped experts by default (its two adapters again);
