@@ -1,0 +1,71 @@
+# The documentation website (tools/docs_site.py): docs/ built with MkDocs Material and deployed
+# with mike to the gh-pages branch, which GitHub Pages serves under the custom domain in
+# tools/docs_site.py (DOMAIN, through Cloudflare). A push to main updates /dev/; a release tag
+# vX.Y.Z adds /X.Y.Z/ and points /latest/ (the default) at it.
+name: docs
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Python
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: "3.12"
+
+      - name: MkDocs, Material and mike (pinned)
+        run: pip install -r tools/docs-requirements.txt
+
+      - name: Stage and build (strict)
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          python3 tools/docs_site.py check
+          python3 tools/docs_site.py stage site-src --ref "$REF"
+          mkdocs build --strict -f site-src/mkdocs.yml -d "$RUNNER_TEMP/site-check"
+
+      - name: Deploy with mike
+        env:
+          REF: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$REF_TYPE" = tag ]; then
+            mike deploy -F site-src/mkdocs.yml --push --update-aliases "${REF#v}" latest
+            mike set-default -F site-src/mkdocs.yml --push latest
+          else
+            mike deploy -F site-src/mkdocs.yml --push dev
+          fi
+
+      - name: The custom domain on gh-pages
+        run: |
+          domain="$(python3 -c 'import sys; sys.path.insert(0, "tools"); import docs_site; print(docs_site.DOMAIN)')"
+          git fetch -q origin gh-pages
+          git worktree add -q "$RUNNER_TEMP/pages" origin/gh-pages
+          cd "$RUNNER_TEMP/pages"
+          if [ "$(cat CNAME 2>/dev/null)" != "$domain" ]; then
+            echo "$domain" > CNAME
+            git add CNAME
+            git commit -q -m "The custom domain: $domain"
+            git push -q origin HEAD:gh-pages
+          fi
