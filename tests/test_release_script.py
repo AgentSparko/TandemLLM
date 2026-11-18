@@ -124,7 +124,7 @@ def test_bump_then_preflight_then_a_dry_run():
         head = _git(work, "rev-parse", "HEAD").stdout.strip()
         r = _release(work, "1.2.4", "--only", "preflight,tag,push", "--notes", notes, "--dry-run")
         assert r.returncode == 0, r.stdout + r.stderr
-        assert "+ git -C" in r.stdout and "tag -a v1.2.4 -m TandemLLM 1.2.4 HEAD" in r.stdout, r.stdout
+        assert "+ git -C" in r.stdout and "tag -a v1.2.4 -m TandemEngine 1.2.4 HEAD" in r.stdout, r.stdout
         assert "push origin HEAD:refs/heads/main refs/tags/v1.2.4:refs/tags/v1.2.4" in r.stdout, r.stdout
         assert _git(work, "tag", "-l", "v1.2.4").stdout.strip() == "", "a dry run made the tag"
         assert _git(work, "ls-remote", "origin", "main").stdout.split()[0] != head, "a dry run pushed"
