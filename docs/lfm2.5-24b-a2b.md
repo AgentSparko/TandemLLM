@@ -18,6 +18,10 @@ Code: `engine/models/lfm2_moe/` (registry name `lfm2_moe`, selected by `Lfm2MoeF
 
 A decode token reads 4.9 GB of the BF16 weights: experts 2.87 GB, convolution projections 1.01, head 0.52, dense MLPs 0.29, attention 0.21 (`PackIndex.decode_bytes`). The decode step runs about 400 kernels, so it is one CUDA graph.
 
+A decode token of LiquidAI's LFM2.5-24B-A2B reads 4.91 GB of its BF16 weights and 1.31 GB of our 4.0-bit EXL3 pack (arithmetic, from the headers), because only 4 of its 64 experts run in each of 38 layers. On one DGX Spark the engine decodes it at 188.2 tok/s from the 2.5 pack, 153.5 tok/s from the default 3.5 pack and 44.8 tok/s in BF16 (measured, 2026-10-14). It is the third model the engine serves and the first that is not a Qwen; its support ships in release 0.9.0. [Adding a model](adding-a-model.md) describes the adapter path it came in through.
+
+A short-convolution layer projects the normed input to three vectors B, C and x of 2,048, takes B times x, runs a depthwise convolution of 3 taps over that product along the sequence, multiplies by C and projects back. Its state is the last two products, so a sequence keeps 30 layers times 2 times 2,048 values. The router takes the sigmoid of each expert's logit, adds a per-expert bias to choose the 4, and renormalises the 4 chosen sigmoids. `engine/models/lfm2_moe/config.py` reads the configuration and stops on a field it does not know.
+
 ## Profiles
 
 DGX Spark, 2026-10-14. Decode step: `tools/lfm_check.py bench`, one request, 256 tokens, from its graph. Chat: one greedy request through the server, 512 tokens, thinking off, plain / lookup. Quality: exllamav3 `model_diff` against BF16, 20 rows of 2,048 tokens of oasst1 chat and of wikitext-2. Engine KL: `tools/lfm_quality.py`, 100 rows of oasst1 chat.
@@ -92,6 +96,8 @@ Not yet: the packages, the memory notes and the effort sentences at a place this
 - Rollback: a verify block writes nothing into the convolution state. The commit rebuilds the state from the accepted path's last two inputs and moves the path's KV rows. Rollback is exact.
 - Prefill: chunks of 4,096 tokens on batched kernels (cuBLAS or the EXL3 GEMM, experts grouped, SDPA with a lower-right causal mask). The next token agrees with the row path; the bits do not. 8,192 tokens prefill at 7,360 tok/s on 4.0.
 - Dense splits: `ops/lfm25-dense-splits.json`, from `tools/fn_tiles.py --dense` at each pack's shapes. Decode step with / without, tok/s: 2.5 188.2 / 171.2, 3.0 175.0 / 159.1, 3.5 153.5 / 143.4, 4.0 145.9 / 136.1, 4.5 128.8 / 121.6, 6.0 106.9 / 106.9. The graph saves 5 % against eager launches.
+
+The decode step from its CUDA graph, one greedy request: 188.2 tok/s on 2.5, 145.9 on 4.0 (191 GB/s of the bytes a token reads), 44.8 in BF16 (220 GB/s) (measured). Each pack has its own dense splits (`ops/lfm25-dense-splits.json`; 4.0: 136.1 tok/s without them). Eager launches cost 5 %. An 8,192-token prompt prefills at 7,360 tok/s on 4.0.
 
 ## Speed by kind of text
 

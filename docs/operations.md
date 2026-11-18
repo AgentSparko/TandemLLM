@@ -29,6 +29,17 @@ Page cache counts as available memory but is not always given back in time. Afte
 
 The FP8 profile needs about 27.5 GiB of weights on the device instead of 16.4. The BF16 checkpoint needs about 54 GB: keep `--max-len` at 65,536 or less with it unless the byte math says otherwise.
 
+| part | GiB |
+|-|-|
+| weights | 16.35 |
+| KV pool | 16.00 |
+| drafter caches | 10.00 |
+| the rest | 14.70 |
+| caches at their caps | 13.5 |
+| left for the rest of the board | 48.65 |
+
+*Where the served engine's memory goes at the 262,144-token context. The first four parts are the engine at load, 57.0 GiB allocated (measured, the engine's memory split, 2026-10-01; “the rest” is the recurrent state, the vision tower, drafter weights and buffers, verify graphs and warm-up workspace). The caches at their caps add about 13.5 GiB under the 70 GiB ceiling (arithmetic, from the served budgets).*
+
 ## Running the service
 
 `ops/serve.env` is the served configuration. It holds about 60 settings, from paths and the port to every `QWEN38_*` switch, each with the reason for its value in a comment. The scripts read it.
@@ -208,12 +219,12 @@ Every release runs these on the box before its tag, and ships only when all pass
 3. `bash tools/release_gate_setup.sh` (OPS-177), mandatory: a fresh scratch install of the candidate runs the whole Setup Guide flow beside the live engine without touching it. Run A installs with `install.sh --setup`, applies a profile through the Setup Guide's API, checks the job, `/health` and a chat, and removes a second profile's weights through the API. The browser half (TandemApp's Setup page at 390 px) is TandemApp's gate: the engine serves no page. Run B strips the execute bit from `start.sh`, `stop.sh` and `use-profile.sh` first and must still install. The scratch installs use spare ports (never 8000, 8009 or 8016), no chatd, the CPU fake engine and a few KB of stand-in weights, a HOME of their own, and an interpreter copy the live box's `ops/engines.sh` does not count; every process they start is stopped at the end. The report is in `results/gate-setup/<utc>/`.
 4. A real agent session with its own tool calls.
 
-`tools/release.sh X.Y.Z` runs the rest as one command (OPS-223). `--only bump` writes the version into `VERSION`, `install.sh`'s default tag, the manual's `\version` and the lines that point at the previous tag; the changelogs and the README's release paragraph stay the author's. Then, from the release commit on `main`:
+`tools/release.sh X.Y.Z` runs the rest as one command (OPS-223). `--only bump` writes the version into `VERSION`, `install.sh`'s default tag and the lines that point at the previous tag (the install commands of README.md and the docs, the generated install flags); the changelogs and the README's release paragraph stay the author's. Then, from the release commit on `main`:
 
     bash tools/release.sh X.Y.Z --notes notes.md --box <ssh host> --box-py <python on the box> --dry-run
     bash tools/release.sh X.Y.Z --notes notes.md --box <ssh host> --box-py <python on the box>
 
-`preflight` checks the tree (clean, on `main`, a fast-forward of origin's), every version line, the changelog sections, the commits since the previous tag (no co-author or session trailers) and the weight packs a profile added or changed (an anonymous download at the pinned revision). `gate` copies a `git archive` of HEAD to the box and runs `tools/release_box_gate.sh` there: the engine's CPU suite (`tools/engine_tests.py`) through `tests/script_suite.py`, `tools/release_gate_setup.sh`, `tools/client_smoke.py` on the conductor and the raw path, then `tools/loose_ends_live.py` (a streamed call cut by the token limit, a turn behind a running one), both against `--smoke-base`, whose `/health` must already name the version (deploy the candidate first; `--skip suite,setup,smoke,loose` leaves parts out; `RELEASE_SMOKE_KEY` is the API key both use). `tag`, `push` and `release` make the annotated tag, push `main` and the tag, and publish the GitHub release with the notes; CI's manual workflow attaches the PDF. `milestone` closes the GitHub milestone `vX.Y.Z` and creates the next patch's, `vX.Y.(Z+1)`, when it is missing. `verify` reads what was published: the tag, `main`, the release and its PDF, `README.md`, `install.sh` and `VERSION` at the tag, and anonymous downloads. `--dry-run` runs all but `tag`, `push`, `release` and the milestone changes, whose commands it prints; `--only verify` checks a published release at any time.
+`preflight` checks the tree (clean, on `main`, a fast-forward of origin's), every version line, the changelog sections, the commits since the previous tag (no co-author or session trailers) and the weight packs a profile added or changed (an anonymous download at the pinned revision). `gate` copies a `git archive` of HEAD to the box and runs `tools/release_box_gate.sh` there: the engine's CPU suite (`tools/engine_tests.py`) through `tests/script_suite.py`, `tools/release_gate_setup.sh`, `tools/client_smoke.py` on the conductor and the raw path, then `tools/loose_ends_live.py` (a streamed call cut by the token limit, a turn behind a running one), both against `--smoke-base`, whose `/health` must already name the version (deploy the candidate first; `--skip suite,setup,smoke,loose` leaves parts out; `RELEASE_SMOKE_KEY` is the API key both use). `tag`, `push` and `release` make the annotated tag, push `main` and the tag, and publish the GitHub release with the notes. `milestone` closes the GitHub milestone `vX.Y.Z` and creates the next patch's, `vX.Y.(Z+1)`, when it is missing. `verify` reads what was published: the tag, `main`, the release, `README.md`, `install.sh` and `VERSION` at the tag, and anonymous downloads. `--dry-run` runs all but `tag`, `push`, `release` and the milestone changes, whose commands it prints; `--only verify` checks a published release at any time.
 
 
 After the tag, the release gets its benchmark report ([benchmark-report.md](benchmark-report.md)). GitHub has no GPU, so it is made on the reference DGX Spark: a fresh server of the tag, the full suite in parts, then the page.
@@ -263,6 +274,8 @@ To go back, run the release from before 1.8 and remove the `# ` in front of the 
 `/health` returns the status, the queue counters (running, waiting, served, refused, errors, timeouts, abandoned), the cache report and the allocator's memory figures. On this board `nvidia-smi` reports no used memory, so `torch.cuda.memory_allocated` and `memory_reserved` are the numbers to watch. Allocated memory that climbs across requests is a leak. Reserved memory that climbs while allocated memory stays flat is fragmentation.
 
 `/metrics` serves Prometheus metrics, listed in [metrics.md](../contracts/engine-api-v1/metrics.md). `ops/monitoring/` has a scrape config, alert rules with their tests, and a Grafana dashboard generated by `tools/grafana_dashboard.py`.
+
+`/metrics` serves Prometheus metrics ([Metrics and the ledger](reference/metrics.md)). `ops/monitoring/` has a scrape configuration, alert rules with their tests, and a Grafana dashboard that `tools/grafana_dashboard.py` generates. The conductor's stall watchdog can send a push notification when an unattended session's client has gone; the URL comes from `TANDEM_NOTIFY_URL` or the policy, and is empty in the shipped policy.
 
 ## When something is wrong
 

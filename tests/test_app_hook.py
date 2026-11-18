@@ -4,7 +4,7 @@ and its code needs none. TandemApp depends on the engine's contract; the engine 
   1  no app/ in the tree, no app.pin, no vendor tool; server/__init__.py installs no import finder
      (a child that imports server has none on sys.meta_path)       test_no_app_no_finder
   2  no engine module imports tandemapp, proxy or chatd: no import statement, no importlib call or
-     __import__ with the name, no code string that imports one (bench, contracts, engine, manual,
+     __import__ with the name, no code string that imports one (bench, contracts, engine,
      models, ops, server, tools), but the pair tools PAIR_TOOLS names, which find TandemApp
      through tools/pair_app.py (TANDEMAPP_SRC or an installed wheel). The extension seam
      (server/ext.py) imports the module QSE_EXT names, by name only    test_no_engine_module_imports_tandemapp
@@ -35,7 +35,7 @@ ROOT = os.path.dirname(HERE)
 #: TandemApp's top-level packages
 APP_TOPS = ("tandemapp", "proxy", "chatd")
 #: the engine's code, outside tests/
-CODE_DIRS = ("bench", "contracts", "engine", "manual", "models", "ops", "server", "tools")
+CODE_DIRS = ("bench", "contracts", "engine", "models", "ops", "server", "tools")
 SKIP_DIRS = ("__pycache__", "node_modules", ".git")
 #: the pair tools: each measures or replays the engine and TandemApp's conductor together and finds
 #: TandemApp through tools/pair_app.py (tests/test_api_import_guard.py says why each needs both)

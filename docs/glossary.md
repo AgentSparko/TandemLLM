@@ -1,0 +1,67 @@
+# Glossary
+
+[style=unboxed, leftmargin=0pt, itemsep=.5ex, font=]
+- **adapter**  A model family's code behind the shared methods: its loader, forward and caches, declared once in `engine/models/adapter.py`'s terms ([Adding a model](adding-a-model.md)). TandemApp's proxy has adapters of its own, one per backend kind ([TandemApp's docs](https://github.com/TandemLLM/TandemApp/blob/main/docs/README.md)).
+- **anchor**  A copy of the 48 recurrent states and their convolution tails at one position, 147 MiB. The resident prefix keeps one at every 1,024-token line of a prefill; the disk tier keeps them as files. A request resumes at the largest anchor its prompt shares.
+- **benchmark row**  `serve-single-i256-o256-v1`: one request at a time, 256 prompt tokens, 256 generated, thinking off, greedy, 50 requests after 3 warm-ups. Every speed in this book that says “the benchmark row” is this.
+- **block drafter**  The drafter that proposes a whole block of tokens in one pass: DFlash2, five decoder layers reading five of the target's hidden states, fine-tuned at block 8 and block 16.
+- **board**  The DGX Spark the engine runs on: one GB10 GPU and 128 GB of memory shared by the CPU and the GPU. “One engine per board” is the first rule of operations.
+- **cache source**  Where a request's prompt resumed: `resident`, `end`, `prefix`, `session`, `disk`, `spill`, `continuation`, `prepared` or `none`. In the ledger and on the dashboard.
+- **claim**  A role's declared memory peak, which the residency planner checks before a load.
+- **class**  The kind of task the router decides a turn is (`code_edit`, `chat` and eight more). It sets the effort, the packages and the rules.
+- **commit**  The step that keeps the accepted path's KV rows and recurrent state after a verify. For the recurrent layers it is one low-rank update per layer, folded into the next verify.
+- **compaction**  A client's request to summarise a long conversation. The engine serves it as a continuation of the conversation it holds, or from a summary written ahead.
+- **conductor**  The harness in front of the model: profiles, the router, packages, the session monitor, status lines, memory notes. It makes the model `TandemLLM`.
+- **decider**  A decision model that answers a typed question in one forward pass, such as Laya; the router's decider stage, off in the shipped router, asks one.
+- **draft tree**  The guesses of one round, merged so that a shared prefix is a shared node, stored in depth-first pre-order, at most 32 nodes.
+- **drafter**  A cheap model or procedure that guesses the next tokens for the target to verify: the block drafter and the lookup drafter.
+- **effort**  A turn's thinking level: off, low, medium, high or xhigh, with a reasoning cap of 0, 1,024, 8,192, 16,384 or none below the backstop.
+- **end anchor**  An anchor at the end of the last generation, so the next turn that sends the answer back resumes there instead of re-reading it.
+- **grid**  The 1,024-token lines of a prefill. Anchors, chunk files and prefix snapshots are taken on the grid, and a resumed request forwards the rest of its prompt on the same grid, so its state equals a cold prefill's bit for bit.
+- **guest**  A short request between two turns of a longer resident conversation; the rows it can reach are stashed and put back. Also the short request the side lane serves inside a running turn, which gets its engine state back bit for bit.
+- **harness**  The layer around the model that plans each turn and watches it run; in TandemLLM it is the conductor.
+- **hold**  Taking the board for a measurement or a second model: `ops/hold.sh` stops the service, runs the command, and restores the service.
+- **journal**  The conductor's record of every decision, acted on or not, in the usage ledger's file, kept 30 days.
+- **lookup drafter**  The drafter that copies text: the longest match of the last tokens in the request, a corpus and the suffix store.
+- **memory gate**  The check before every prefill that gives caches back, cheapest first, until the prompt's workspace fits under the declared peak, else a 503.
+- **memory note**  One fact the model keeps as a file, written from a block in its answer or by the background writer, read back in later turns.
+- **memory priority**  A chat's place in the line for memory, `tandem.priority` in the request: `"high"`, `"normal"` or `"low"`. TandemApp's Chat tab sets it per chat.
+- **memory wait**  A request that does not fit above the floor waits before its prefill and starts by itself once memory frees; `waiting_memory` on the dashboard, `X-Tandem-Wait: memory` on the response ([Waiting for memory](parallel-requests.md#waiting-for-memory)).
+- **narrator**  The small model that writes status lines: rewritten templates, thought summaries, or the voice.
+- **near tie**  A position where the two best tokens score within one unit in the last place, where a batched verify and a one-token step may choose differently.
+- **NVMe**  The box's SSD. The disk tier and the session spill keep their files on it.
+- **note**  The router's hidden text at the end of a turn's last message: the effort sentence, rules, packages. Replayed at the same position on later turns.
+- **outcome**  The structural reading of a tool-result turn: progress, no visible change, regression, error, stuck and others.
+- **package**  A text the router may put into a note: a task skill, a test skill, a card, a coding guide, or a library skill.
+- **park**  Copying another session's rows aside when a request of a new session replaces the resident prompt, so that session's next turn swaps them back.
+- **pin**  Copying the head of the resident prompt aside before a long unrelated request cuts it.
+- **profile**  Two things. A conductor profile is a document that sets what the harness does for a client (`coding`, `chat` and others). A serving profile is a `serve.env` file that sets the weights.
+- **raw**  The engine without the conductor: the release's raw path. `X-Tandem: raw` or the `raw` and `bench` profiles.
+- **residency planner**  The code that admits a role's load only when the board keeps its floor after the engine's growth to its peak.
+- **resident prefix**  The last prompt's rows, left in the engine's own buffers, with anchors, an end anchor, a stash, a pin and a park.
+- **role**  Anything beside the big model the conductor asks, with a contract: its kind, claim, window, latency budget, fallback and what it may write.
+- **round**  One draft, verify, accept and commit: about 93 ms and 4.58 tokens on the benchmark row.
+- **router**  Two things. The conductor's router decides a turn's class and plan. The speculation router (StairCut, the length router) decides each round's draft tree.
+- **safe point**  One of the four moments the session monitor may act: before the prefill, after a block, at the end token, at the held tool calls.
+- **session resume**  Continuing a conversation from state that verify rounds wrote (the end anchor, the session spill) rather than prefill chunks. It is held to the greedy gate (the same tokens), not to bit equality; the *taint* row marks where it begins.
+- **session monitor**  The conductor's watch over a running turn: loop guards, the empty-turn continue, tool-call checks, the claim check, session tasks.
+- **session spill**  Whole live conversations written to the NVMe at a planned stop, while idle or before an eviction, and read back: the swap of long chats to the SSD ([Live conversations on the NVMe](caches.md#live-conversations-on-the-nvme)).
+- **shadow**  A mode in which a part decides and journals what it would do and changes nothing.
+- **shadow reader**  A small model that keeps its own exact state of each session, read in idle time, and answers typed questions over the whole session.
+- **side lane**  Serving a short request at a safe point inside the running generation, which then gets its engine state back bit for bit. Its text equals an uninterrupted run's only while the tree shapes are the same ([Two runs of the same request](exactness.md#the-one-exception-near-ties)).
+- **side request**  A client's title or summary call, known by its shape and served small.
+- **spill**  See session spill.
+- **SSD**  Two things. The box's NVMe drive, where the session spill swaps long chats out ([Live conversations on the NVMe](caches.md#live-conversations-on-the-nvme)). In NemotronH, Mamba2's chunked state-space form of the prefill ([Nemotron 3.5 Bolt and Super VL](nemotron-h.md)).
+- **StairCut**  The router that cuts each round's draft tree to the node count with the most expected tokens per millisecond on the measured verify-cost staircase.
+- **state store**  Whole state snapshots, for the session cache and the prefix cache.
+- **status line**  One short line in the client for a step the conductor takes, stripped from whatever the client sends back.
+- **suffix store**  An append-only log of the token ids the engine read and wrote, with a suffix array, for the lookup drafter.
+- **swap**  Two things. The swap of long chats to the SSD is the session spill ([Live conversations on the NVMe](caches.md#live-conversations-on-the-nvme)). The park swaps two sessions' rows in the engine's memory ([The resident prefix](caches.md#resident-prefix)).
+- **taint**  The lowest row that a session resume wrote. Below it the caches are a cold prefill's bit for bit.
+- **TandemApp**  The dashboard, the proxy, the Chat tab, the conductor and TandemNode: a separate project with its own docs, `tandem-app` its command. It talks to the engine over HTTP, and its conductor runs inside the engine in chat mode as the extension.
+- **time to first token**  The time from a request's arrival to its first streamed token: the prefill, plus any wait in the queue. TTFT in the tables.
+- **ulp**  A unit in the last place: one rounding step of BF16 at a value.
+- **verify**  One forward pass of the target model over the whole draft tree, reading the model's own token at every node.
+- **voice**  The narrator's live lines: facts from the engine and a short checked phrase from the small model.
+- **writer**  The background turn that writes a session's facts as memory notes at its end or after a compaction.
+

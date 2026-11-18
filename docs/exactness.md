@@ -25,6 +25,23 @@ The agreement gate, `tools/verify_spec.py`, prints the gap between the top two l
 
 The paper measures how often this happens with StairCut in its served configuration on the published NVFP4 set. Of 30 prompts (held-out prose, code and chat, 256 new tokens), 17 outputs are identical to plain greedy decoding up to the end of the answer: 13 over all 256 tokens, and 4 more that differ only past the end of the answer (largest gap 1.46 ulp). The other 13 follow plain decoding up to a near tie inside the answer, with a gap of 0.04 to 0.76 ulp, take the other token and continue from there; in one of them the token taken is the end-of-answer token, so that answer ends early. No output differs inside the answer at a larger gap. The one-ulp rule names the condition under which the two decoders can differ; it does not show that the difference is harmless.
 
+The table below has a measurement on the 0.4.0 code (lookup store off, 2026-10-05): one raw greedy turn with a prompt of about 5,000 tokens at temperature 0, sent alone twice and once with 10 side-lane guests. Each parting is a near tie. Where the runs alone parted, the gap between the two best tokens was 0.022 and 0.029 nats at token 12, and 0.052 and 0.021 nats at token 504. Each text after the parting is a correct greedy continuation of its own prefix. `--no-learn-cost` takes out what earlier requests taught the router, not the timings inside the request.
+
+| runs compared | `--no-learn-cost` | learned costs |
+|-|-|-|
+| alone, twice | token 12 | token 504 |
+| alone, and with 10 side-lane guests | token 61 | token 573 |
+
+*Where two runs of one 5,000-token raw greedy turn first wrote a different token. (measured), the 0.4.0 code, lookup store off.*
+
+| against plain greedy, 30 prompts | outputs |
+|-|-|
+| identical over all 256 tokens | 13 |
+| differ only after the answer ended | 4 |
+| take the other token at a near tie in the answer | 13 |
+
+*StairCut in its served configuration against plain greedy decoding on 30 prompts of held-out prose, code or chat (256 new tokens). 17 outputs are identical to the end of the answer. The 13 that diverge inside the answer do so at a gap of 0.04 to 0.76 ulp; no output differs inside the answer at a larger gap. Measured: the StairCut paper, published NVFP4 weights.*
+
 ## Parallel requests
 
 With `--parallel N` ([server.md](server.md#parallel-requests-0338-test---parallel-n-off-by-default)) two or more decoding requests verify their trees in one pass. The promise is the same: each request writes its own greedy text up to a near tie. Two things can move a near tie that a request alone would not meet. A joint round verifies the request's tree cut to its share (16 nodes at two requests, 8 at four), another tree shape than the one it verifies alone. And the joint pass runs eagerly, or on the 27B from its own CUDA graphs once its shape has come `QWEN38_JOINT_GRAPHS_AFTER` (4) times, where a lone request's verify runs from the lone verify graphs; a graphed joint pass gives every lane's logits, state and KV bit for bit what the eager joint pass gives (`tools/joint_graph_check.py`). The batch itself is not one of them: every projection kernel keeps a row's result independent of the other rows up to the joint pass's row cap, which each model family sets for the weights it serves (`joint_policy`; 32 by default, 64 for the 27B on EXL3 weights, where the skinny kernel takes 33-64 rows as adjacent 32-row chunks and an 8 x 8-row joint pass measured each engine's rows bit for bit its own eager verify, SPD-159). The rows between the projections that are one program a row (the add-norms, the GDN gated norm) run once for all engines and keep their bits too (SPD-163); the GDN gate inputs stay per engine, because the library's bf16 GEMM does not keep a row's bits across row counts. On the box, `tools/parallel_verify_check.py` gives each slot's logits from the joint pass bit for bit what its own verify gives (with the lone verify eager too, as the joint one is), and on the CPU `tests/test_parallel_verify.py` holds two and three requests in lockstep to the tokens each writes alone.

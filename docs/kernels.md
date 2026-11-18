@@ -91,6 +91,17 @@ Trees rely on depth-first order. When the walk reaches a node at depth d, the la
 
 In the served build the commit happens inside the next verify. The accepted rows are recorded, and the next verify applies them to each state tile as it loads it. That halves the state traffic of a round, from 604 MB to 302 MB.
 
+A Gated DeltaNet layer updates a 128 by 128 state per head at every token:
+
+```
+S ← S · e^g
+δ ← (v − Sᵀk) · β
+S ← S + k ⊗ δ
+o ← Sᵀq
+```
+
+Each shape of this work has its own kernel:
+
 ## Head, norms, attention
 
 Two kernels serve the output head. `tools/head_gemv.py` handles one row, and a tensor-core GEMM handles more than one. At one row a GEMV reads fastest. At eight rows the same GEMV does eight times the scalar work without a tensor core, and a verify once ran 2.5 times slower because of that. Both kernels return fp32 logits.

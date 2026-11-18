@@ -102,6 +102,10 @@ Thinking off is the client's (0.3.40-test). `none` and every other off form (`en
 The answer reserve: when a client asked for a budget in any shape and the reasoning would otherwise run into the output limit (`max_tokens`, `max_completion_tokens`, or the server's default), the reasoning closes early enough to leave the answer `--answer-reserve` tokens after the closing phrase (`QSE_ANSWER_RESERVE`; `auto`, the default, is min(2,048, a quarter of the limit); 0 turns it off). The phrase is counted in because it streams where no monitor hides it. An uncapped request gets the limit less the reserve and the phrase as its cap. The close is the session monitor's hidden one where a monitor acts (SP1: the vendor's phrase goes into the model's context, the client receives `</think>` and the answer; the journal's `CLOSE_REASONING` has task `client`, or `reserve` when the reserve lowered the cap), and ThinkBudget's streamed phrase otherwise (no monitor, shadow, `X-Tandem: raw`, `n` > 1). The server log has one `[think] <id> client budget ...` line per such request, and with the router its journal row has `extra.client_budget` (field, kind, asked, reserve, limit, cap). `usage.completion_tokens_details.reasoning_tokens` counts the visible reasoning through `</think>`, the streamed phrase included and the hidden one not.
 
 A request with none of these fields is served as before, token for token: the template gets the same arguments and the loop the same budget. `enable_thinking` alone asks for no budget.
+| `thinking: {type, budget_tokens}` | `enabled` with `budget_tokens` a cap, `enabled` or `adaptive` alone on without a cap, `disabled` off |
+| `reasoning_budget`, `max_thinking_tokens`, `thinking_token_budget`, `thinking_budget_tokens` | a cap in tokens |
+| `reasoning_effort`, `reasoning.effort`, `chat_template_kwargs.reasoning_effort` | the level's cap: `minimal` and `low` 1,024, `medium` 8,192, `high` 16,384, `xhigh` and `max` none; `none` is thinking off |
+| `enable_thinking: false` (top level or in `chat_template_kwargs`) | thinking off |
 
 ## Tool calls
 
@@ -212,6 +216,17 @@ Since 0.15.1 (2026-11-02, SRV-773) the gate charges a prefill the workspace of t
 
 With `--parallel N` the gate runs for every slot, side slots too, on the live reserve, before the admission reserves the request's bytes (SRV-775). On a side slot it runs the peak stage only; the ceiling stage, which walks the allocator's pools, stays slot 0's. A prefill no reserve could ever take (the engine's load plus its workspace over the peak) gets its 503 at once. One the gate still refuses after shedding waits while another prefill runs, and runs alone over the peak when none does, counted: `/health` `memory.over_peak_admits`, `over_peak_slot` and `over_peak_gib` (the reserve over the peak now), a `[memory] over_peak_admit` log line. `QSE_PEAK_STRICT=1` makes a lone request wait too. The admission checks a lone request against its floor as well (`parallel.admission.lone_checked`); it caps the cache growth and the workspaces in flight at the engine's room to its peak, and a request admitted over the peak counts its workspace past that room, in full less the allocator's free default-pool blocks it takes before any new memory (`Budget.workspace_spare`), so the floor bounds it. Its line then names the part that is new memory, for example "this request over the peak 1.6 new (2.3 of its 3.9 in the allocator's free blocks)".
 
+```mermaid
+flowchart LR
+    due["prefill due:<br/>workspace estimated"] --> l1["state store"] --> l2["body anchors"] --> l3["end anchor"] --> l4["guest stash"] --> l5["parked session"] --> l6["pinned head"] --> l7["roles' pools"]
+    l7 -- still over --> r503["503 + Retry-After"]
+    l1 -. "fits under the peak" .-> run["the prefill runs"]
+```
+
+Cheapest first; each level only while the prompt's workspace does not fit.
+
+*The memory gate before every prefill. Each level is given back only while the prompt's workspace does not fit under the declared peak (77 GiB); a cache given back costs a later cold read, never a different token.*
+
 ### The side lane (0.3.27-test)
 
 A short request no longer waits for a long turn to end. On 2026-10-04 between 16:43 and 16:48 one opencode turn thought for minutes. A second session's first turn queued behind it and got a 429 after 256 s, twice. Before queueing, the router asked Qwen its two questions for that turn (the package and the library choice, TandemApp's `tandemapp/conductor/classify.py`): both waited in the same queue and gave up at their 8 s timeout, so the ledger shows them as `abandoned` after 9.0 s, client `anon`, model `qwen38-spark-engine`.
@@ -223,6 +238,22 @@ The generation gets the engine back as it was. `engine/cache.py` `Borrow` copies
 Three guards. A job waits for a later safe point when the engine's reserved memory plus the guest's copy and workspace would pass the declared peak (a long prefill near its peak). A disk-tier write that has not copied the rows below the guest yet stops where it is (`DiskTier.guard_rows`); the head's chunks are copied seconds after a prefill, so during a decode nothing stops. A job no holder takes (the turn ended, or the lock is held outside a generation) is run by its own request thread under the lock, at the side rank, with the resident rows lent and given back the same way.
 
 The ledger row of such a request has `lane` (`decode`, `prefill` or `self`); its `queue_ms` is the wait for the safe point. The `[req]` line adds `lane=`, `wait_ms=` and `lent_ms=` (how long the turn waited). Side-lane rows are not speed samples: a short plain decode beside a turn says nothing about the engine's decode rate. A client's side request too long for the lane (opencode's summary) is never refused for its wait: it waits as long as a request may run.
+
+```mermaid
+sequenceDiagram
+    participant G as guests
+    participant L as long turn
+    participant S as second turn
+    Note over L: prefill chunks
+    G->>L: title request, served between two chunks
+    Note over L: decode blocks
+    G->>L: router question, served between two blocks
+    S-->>S: arrives and waits in the queue
+    Note over S: the stream opens after 10 s, a waiting line every 10 s
+    L-->>S: the turn ends, the second turn runs
+```
+
+*The scheduler. A long turn holds the engine. Short guests (a title request, the router's own question) are served at the turn's next safe point and the turn gets its state back bit for bit. A second full turn waits in the queue; its stream opens after 10 s and carries a comment every 10 s.*
 
 
 ### A turn behind a running turn (2026-10-05)

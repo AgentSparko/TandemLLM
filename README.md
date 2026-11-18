@@ -8,7 +8,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="license"></a>
   <img src="https://img.shields.io/badge/hardware-DGX%20Spark%20(GB10)-76b900" alt="DGX Spark">
   <a href="https://huggingface.co/0xBakeer"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-0xBakeer-yellow" alt="Hugging Face"></a>
-  <a href="manual/tandemllm-manual.pdf"><img src="https://img.shields.io/badge/manual-PDF-lightgrey" alt="manual"></a>
+  <a href="docs/README.md"><img src="https://img.shields.io/badge/docs-read-lightgrey" alt="docs"></a>
   <a href="https://doi.org/10.5281/zenodo.23045275"><img src="https://img.shields.io/badge/paper-StairCut-informational" alt="paper"></a>
   <a href="docs/community-weights.md"><img src="https://img.shields.io/badge/community-weights-3987e5" alt="community weights"></a>
   <img src="https://img.shields.io/github/stars/TandemLLM/TandemEngine?style=social" alt="stars">
@@ -47,7 +47,7 @@ TandemLLM is a working name, and it says how the engine works. Small drafters gu
 
 Start with [docs/setup.md](docs/setup.md), section "A new box from the command line". On a new DGX Spark it takes three commands: `install.sh --setup`, then `use-profile.sh <profile> --dry-run` to see the downloads, then `use-profile.sh <profile>`. You need no Hugging Face token.
 
-The manual is in [manual/tandemllm-manual.pdf](manual/tandemllm-manual.pdf), a PDF you can read without LaTeX. Its install chapter covers both paths.
+[docs/install.md](docs/install.md) covers both paths, and [docs/README.md](docs/README.md) lists every page of the documentation.
 
 ## Models
 
@@ -343,7 +343,9 @@ The dashboard, the gateway in front of other engines and cloud APIs, Chat, the c
 
 ## Documentation
 
-- [The manual](manual/tandemllm-manual.pdf), the whole book as one PDF; its source is in `manual/`
+- [The documentation](docs/README.md): every page, in reading order, with the reference generated from the code
+- [Overview](docs/overview.md): what the engine is, and one request end to end
+- [Install](docs/install.md): the setups, the installer, the first request, upgrades
 - [Setup](docs/setup.md): a new box, setup mode and the Setup API, the model registry
 - [Community weights](docs/community-weights.md): running packs other people published, and adding yours
 - [Architecture](docs/architecture.md): the model, the byte budget, the decode loop

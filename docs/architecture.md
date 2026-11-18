@@ -19,6 +19,12 @@ Every fourth layer (3, 7, 11 and so on up to 63) is full attention, 16 layers in
 
 That split shapes most of the code. Published work on speculation and caching assumes attention, where undoing a token means moving a pointer back by one row. A recurrent state has absorbed every token and has no inverse, and the engine needs exact ways to undo, branch and restore it. [speculative-decoding.md](speculative-decoding.md) shows the undo and the branch, and [caches.md](caches.md) shows the restore.
 
+```
+[GDN] [GDN] [GDN] [attention]   x 16   = 64 layers: 48 Gated DeltaNet, 16 full attention
+```
+
+*The layer pattern of Qwen3.8-27B: three Gated DeltaNet layers, then one full-attention layer, sixteen times.*
+
 ## The byte budget
 
 A decode step reads every weight once. This table sums the bytes from the checkpoint's safetensors headers.
@@ -40,6 +46,15 @@ The three MLP projections are 63.6 % of that. Quantising them first, then the re
 | plus NVFP4 GDN and attention projections | 15.01 GB | 55.0 ms |
 
 State is small beside the weights. The 48 recurrent states are 151 MB together. KV costs 64 KB a token across the 16 attention layers, so 2.1 GB at 32k tokens and about 17 GB at the full 262,144-token context.
+
+| weight set | GB read per decode step | floor at 273 GB/s |
+|-|-|-|
+| FP8 as shipped | 26.93 | 98.6 ms |
+| NVFP4 MLPs | 19.44 | 71.2 ms |
+| + FP8 head | 18.17 | 66.5 ms |
+| + NVFP4 GDN, attention (served) | 15.01 | 55.0 ms |
+
+*Bytes a step for each weight set, and the floor each sets under one step at 273 GB/s (arithmetic). The served set is the last bar. The board reads about 240 GB/s in practice, so the real floors are about 14 % higher.*
 
 ## The decode loop
 

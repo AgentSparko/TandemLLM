@@ -17,6 +17,20 @@ A new architecture is a package under `engine/models/<name>/` with its own regis
 9. Data files: a StairCut price file for each profile and device (`ops/prices/<model>/<profile>.<device>.json`; without one the cut learns its prices online), the weight profiles (`ops/profiles/<name>.env`) and the Setup Guide's entry (`models/<id>/model.yaml`, [below](adding-a-model.md#register-the-model-for-the-setup-guide)).
 10. Pass the tests under [The tests a new model must pass](adding-a-model.md#the-tests-a-new-model-must-pass).
 
+```mermaid
+flowchart TD
+    m["methods, written once<br/>StairCut and its prices, the MTP drafter, the walk, every cache tier, the server, the governor"]
+    a["model adapters, one per architecture<br/>qwen3_5: the 27B · qwen4_exp: Flash-Next · hot and cold verbs, ModelState"]
+    f["weight formats<br/>the Linear protocol today; plugins with read and bind planned"]
+    h["hardware, planned<br/>KernelImpl keyed by op, format and device; device profiles"]
+    t["topology, planned<br/>Mesh at world 1: no collective on the code path"]
+    m --> a --> f --> h --> t
+    classDef planned stroke-dasharray: 5 5
+    class h,t planned
+```
+
+*The engine's layers. A layer reads only the layers under it, and per-model numbers are data the adapter returns or files under `models/` and `ops/`. Filled: built; outlined: planned.*
+
 ## The seams
 
 ```mermaid

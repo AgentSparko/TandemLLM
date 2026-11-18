@@ -126,6 +126,8 @@ Quality against BF16 (`tools/nh_quality.py`, the BF16 checkpoint's logits on 8 w
 - The prefill's workspace does not grow with the prompt: 3.34 GiB above the engine at 131,054 tokens, 3.18 at 249,983 (the memory policy's `observed`). The adapter says so (`cost()`: a floor of 3.5 GiB, capped at 4.0); before, the 27B's line (30 kB a token) refused a 1,000,000-token prefill as 29 GiB of workspace. A slot 0 window above 262,144 adds its KV above it to the memory policy's ceiling and peak (+6 GiB at 1,048,576), as the side slots' bytes are added, so the caches are not refused for it during a long prefill.
 - Each side slot at 262,144 takes 2.82 GiB allocated and 3.10 GiB of MemAvailable at load (its KV 2.00 GiB), built in 9.2 s; measured with 3 and with 4 slots. With slot 0 at 1,048,576 and 4 slots the residency planner refused Laya (its 3 GiB claim under the 15 GiB floor against the engine's peak); with 3 slots it fits.
 
+Three profiles run it. Two are our EXL3 packs, converted from NVIDIA's BF16 checkpoint (revision 97e00975) by exllamav3 1.6.2 with a patch for Super VL's layout; each is a public repository `0xBakeer/TandemLLM-Nemotron-3.5-Super-VL-120B-A12B-EXL3-<bpw>`, pinned by commit. The third reads NVIDIA's NVFP4 release as stored: ModelOpt NVFP4 for the routed and shared experts, FP8 with a tensor scale for the Mamba2 and attention projections and the head (`tools/nvfp4_relu2.py`). A decode token reads 10.1 GB of that release.
+
 ### Super VL: community EXL3 packs
 
 ENG-377. A community pack on Super VL ([community-weights.md](community-weights.md#bases)) is served as `community/<id>`: the nearest own EXL3 profile (`nemotron-super-vl-exl3-4.0` for 3.5 bpw) with the pack in place of its weights, so the same limits, sampler, LiLiCorr drafter and lookup; price file `ops/prices/nemotron-3.5-super-vl-120b-a12b/community/<id>.dgx-spark.json`.
@@ -271,6 +273,16 @@ IQ2_XXS needs K a multiple of 256: Lightning's 2,688 and 1,856 are not, so its c
 - Bolt ships no MTP head (its config lists no MTP blocks and the BF16 index no `mtp.*` tensors). NVIDIA's drafter for it is LiLiCorr, served beside the lookup ([LiLiCorr](#lilicorr)).
 - The checkpoint's MTP head (`mtp.py`, `--draft-head mtp`): one native depth, deeper drafts iterate the head on its own final normed row and the drafted token; its attention KV is a cache view. On Lightning BF16 (`nh_check.py mtp`, 8 chat prompts, 1,000 positions, depth 3): the head's draft equals the trunk's greedy token at depth 1, 2 and 3 in 91.9, 80.6 and 69.5 % of positions; mean accepted run 2.38 of 3.
 - Verify cost (chain, `nh_check.py staircase`, 1k context): 1, 2, 4, 8 and 16 rows take 29.5, 37.0, 51.6, 74.8 and 103.4 ms.
+
+| ask | plain | LiLiCorr + lookup |
+|-|-|-|
+| prose | 43.4 | 65.7 (3.0) |
+| code | 43.4 | 102.8 (4.9) |
+| chat | 43.3 | 69.4 (3.1) |
+| edit | 43.2 | 180.5 (13.6) |
+| copy | 43.0 | 244.7 (15.8) |
+
+*One request, 512 greedy tokens, thinking off, tok/s and in brackets tokens a block, (measured) 2026-10-16 on `nemotron-bolt-exl3-2.0`, the mean of 3 runs.*
 
 ### LiLiCorr
 

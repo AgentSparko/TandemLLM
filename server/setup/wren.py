@@ -4,7 +4,7 @@ A small Qwen3.5 model on the engine's own forward (engine/generative/qwen35.py),
 configuration the engine has: no session, prefix or state cache, no suffix store, no disk tier, no
 drafters, no conductor, one sequence, a window of WINDOW rows, thinking off, greedy. Qwen3.5-2B, or
 Qwen3.5-0.8B when the 2B is not on disk. It answers questions about the setup page from the docs,
-the manual, the model registry and the packages that describe TandemLLM (server/setup/knowledge.py),
+the model registry and the packages that describe TandemLLM (server/setup/knowledge.py),
 reads the page's state and the box's read-only facts every turn, and asks the page for changes with
 tool calls (server/setup/tools.py) that the browser executes. The server never applies one.
 

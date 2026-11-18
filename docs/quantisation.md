@@ -112,6 +112,16 @@ The second mix reads the same bytes as NVFP4 MLPs alone and beats it on all four
 
 Test 3 matters most. Teacher-forced loss never lets an error grow, so it cannot see a model that drifts off its own path. On an earlier engine on this board, loss rated a broken configuration better than a healthy one.
 
+| text | held-out loss against BF16, nats/token |
+|-|-|
+| gate prose, 2,048 tokens | 0.0221 |
+| gate code, 2,048 tokens | 0.0426 |
+| prose, 12k tokens | 0.0174 |
+| code, 8k tokens | 0.0184 |
+| more code, 10.5k tokens | 0.0272 |
+
+*The published NVFP4 set against Qwen's BF16 release: the change in held-out loss on the two gate files and on three wider texts that neither the calibration nor anything else reads. Measured: the StairCut paper's quality section.*
+
 ## The FP8 head
 
 As shipped, the output head is 248,320 by 5,120 in BF16, 2.54 GB, and every verify reads all of it. `tools/quant_head.py build` writes it as e4m3 with one fp32 scale per vocabulary row (1.27 GB), searching the multipliers 1.0, 0.95 and 0.90 of each row's largest weight. One scale per row, because rows are tokens and their sizes differ more than a block scale shared by 128 neighbouring ids can follow.
@@ -166,6 +176,23 @@ and its validation still apply. A stock DFlash2 checkpoint can be supplied with 
 --dflash2-ckpt /path/to/drafter` for one sequence; speculative parallel serving still requires the
 engine's `lenrouter` configuration and a suitable block-16 drafter. Vision and quantised MTP
 loading are not qualified by this text-only path.
+
+### The 27B in EXL3: sizes and quality
+
+Since 0.5.0 the 27B also runs from EXL3 weights at six sizes, one weight profile each (`ops/profiles/exl3-<bpw>.env`, switched with `ops/use-profile.sh`, [One model at a time](operations.md#one-model-at-a-time-the-27b-and-flash-next)). We quantised them with exllamav3 from Qwen's BF16 release, and all six are public on Hugging Face as `0xBakeer/TandemLLM-Qwen3.8-27B-EXL3-<bpw>`. The drafters for these profiles are in `0xBakeer/TandemLLM-Qwen3.8-27B-EXL3-drafters`: both DFlash2 drafters with their projections in EXL3 at 3 bits a weight (the K3 files) and a draft head at 4 bits (K4). The six sizes and the drafters form one collection, [TandemLLM Qwen3.8-27B EXL3](https://huggingface.co/collections/0xBakeer/tandemllm-qwen38-27b-exl3-6acdd787008264fa4f35eab4).
+
+| profile | disk | KL vs BF16 | top-1 agreement | note |
+|-|-|-|-|-|
+| `exl3-2.5` | 12.0 GB | 0.1112 | 86.3 % | the fastest |
+| `exl3-3.0` | 13.5 GB | 0.0621 | 89.8 % |  |
+| `exl3-3.5` | 15.2 GB | 0.0298 | 93.1 % |  |
+| `exl3-4.0` | 16.9 GB | 0.0171 | 94.8 % |  |
+| `exl3-4.5` | 18.4 GB | 0.0096 | 96.1 % | the default of a new box |
+| `exl3-6.0` | 23.3 GB | 0.0018 | 98.5 % | the closest to BF16 |
+
+*The 27B's EXL3 sizes against the BF16 model on wikitext-2, where BF16's perplexity is 6.849. Measured: copied from the model cards on Hugging Face.*
+
+Each card also has a speed table for every size on one DGX Spark (TandemLLM 0.6.2, one greedy request of 512 tokens, speculation on). An EXL3 profile needs four more downloads beside its weights: the K3 drafters and the K4 head (1.9 GB), the BF16 drafters `0xBakeer/TandemLLM-Qwen3.8-27B-DFlash2-b8` and `-b16` (7.7 GB, into the repository's `train/`), and the base checkpoint `Qwen/Qwen3.8-27B-FP8` (30.4 GB, without `mtp.safetensors`). Since 0.8.1 `ops/use-profile.sh` fetches all of them, checks each weight file against the hub's sha256, and needs no token. Each card's `calibration/` folder has the recipe; the calibration repository itself stays private, and no profile reads it.
 
 ## Knobs
 

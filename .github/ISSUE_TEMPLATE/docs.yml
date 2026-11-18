@@ -1,5 +1,5 @@
 name: Docs
-description: A page in the docs or the manual is wrong or lacks something.
+description: A page in the docs is wrong or lacks something.
 labels: [docs, needs-triage]
 body:
   - type: input

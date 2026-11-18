@@ -32,7 +32,7 @@ body:
         - Chat service
         - Dashboard
         - Setup Guide and install
-        - Docs or manual
+        - Docs
         - I do not know
 
   - type: textarea

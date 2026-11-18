@@ -27,6 +27,21 @@ flowchart LR
     C --> A
 ```
 
+```mermaid
+flowchart LR
+    last["last committed<br/>token and state"] --> bd["block drafter<br/>15 slots × 16 candidates<br/>(about 25 ms)"]
+    last --> ld["lookup drafter<br/>context, corpus, store<br/>(about 0.2 ms)"]
+    bd --> sc["StairCut<br/>merge and cut"]
+    ld --> sc
+    sc -- "8 to 32 rows" --> v["verify<br/>one forward, 64 layers"]
+    v -- "the model's token at every node" --> acc["accept<br/>longest agreeing path"]
+    acc -- "path + 1 token" --> c["commit<br/>KV rows and state"]
+    c -- "next round" --> last
+    acc -.-> out(["tokens stream to the client"])
+```
+
+*One speculative round. Both drafters propose; StairCut merges their proposals and cuts the tree to the node count with the most expected tokens per millisecond; one verify pass checks every node; the longest agreeing path and one token of the model's own are committed.*
+
 ## The block drafter
 
 `engine/drafters/dflash2.py` runs DFlash2, a small drafter that proposes a whole block of tokens at once. It has five decoder layers of its own (hidden size 5120) and reads five hidden states of the target (the residual stream entering layers 5, 19, 33, 47 and 61), fused into one input. It has no embedding and no head: it borrows the target's embedding and output head. Inside a block every row attends to every other row, which is what lets it guess 15 tokens in one pass instead of 15 chained steps.
@@ -93,6 +108,64 @@ What the router learns online (the draft cost per context class, the calibration
 The router releases the narrow drafter at the first round. With the node count calculated, the wide drafter's lattice cut to 16 nodes is a bush near the root on fresh text and a long line on copies, and the narrow drafter has nothing left to add. `tools/router_replay.py` replays these policies exactly on recorded lattices of both drafters, and `tools/forced_bench.py` measures them on the box on one reference text, so that different verify shapes, which move BF16 ties, compare on the same text.
 
 On the benchmark row with the published NVFP4 set, StairCut reaches 49.89 tok/s against 47.13 for the fixed block 8 and 44.80 for the fixed block 16. On the teacher-forced bench of 25 workloads it averages 90.45 tok/s against 59.31 and 81.95 ([measurement.md](measurement.md)).
+
+<!-- generated: verify-cost by tools/gen_reference.py; do not edit by hand -->
+
+### Verify plus commit by rows in the tree, ms (ops/stair-tables-nvfp4.json, measured, published NVFP4 set)
+
+| rows | tree 1k | chain 1k | tree 4k | chain 4k | tree 8k | chain 8k | tree 16k | chain 16k | tree 32k | chain 32k |
+|-|-|-|-|-|-|-|-|-|-|-|
+| 2 | 74.47 | 74.53 | 74.35 | 74.72 | 75.97 | 76.50 | 78.55 | 78.58 | 83.69 | 83.68 |
+| 4 | 74.73 | 74.79 | 75.06 | 75.02 | 76.85 | 76.84 | 78.99 | 78.98 | 84.25 | 84.32 |
+| 8 | 75.50 | 75.39 | 76.00 | 75.92 | 77.46 | 77.48 | 80.06 | 80.04 | 85.54 | 85.46 |
+| 12 | 73.44 | 72.89 | 75.17 | 74.43 | 76.19 | 76.11 | 79.72 | 79.24 | 86.04 | 86.33 |
+| 16 | 74.36 | 74.35 | 75.93 | 75.14 | 77.49 | 77.33 | 81.48 | 80.30 | 88.07 | 87.54 |
+| 17 | 80.48 | 78.12 | 83.20 | 79.42 | 83.90 | 81.42 | 87.86 | 85.90 | 96.33 | 94.36 |
+| 20 | 81.04 | 79.26 | 82.75 | 80.61 | 84.92 | 82.32 | 90.05 | 86.65 | 98.48 | 95.90 |
+| 24 | 83.13 | 80.02 | 85.25 | 82.58 | 87.33 | 84.52 | 92.29 | 89.76 | 103.74 | 99.14 |
+| 28 | 85.78 | 81.77 | 88.22 | 83.64 | 90.10 | 86.83 | 96.48 | 92.40 | 108.59 | 104.57 |
+| 32 | 87.76 | 85.46 | 90.02 | 87.08 | 92.05 | 89.74 | 99.60 | 95.44 | 111.56 | 108.46 |
+
+<!-- /generated -->
+
+*The verify-cost staircase: a tree verify with its commit, by rows, at five context lengths. Flat to 16 rows, then steps. Measured: `ops/stair-tables-nvfp4.json`, published NVFP4 set, the medians StairCut prices its cuts on; this chart is drawn from that file.*
+
+| decoding | tok/s, mean of 25 workloads |
+|-|-|
+| fixed block 8 | 59.31 |
+| fixed block 16 | 81.95 |
+| StairCut | 90.45 |
+
+*The teacher-forced bench: 25 workloads where every configuration commits the same reference text, so only rounds and their time differ. StairCut is above block 16 on 23 of the 25 workloads and above block 8 on 22. Measured: the StairCut paper.*
+
+## Longer contexts
+
+Every token of context adds 64 KB of KV rows that each round reads, and the drafter reads the whole context too, so a round costs more as the conversation grows. The verify itself shows it: a 16-row tree with its commit takes 74.4 ms at 1k tokens of context and 81.5 ms at 16k, and 88.1 ms at 32k (measured, the price table). The figure below puts the two measured decode rates the public record holds beside that curve and beside the bandwidth bound of plain decoding.
+
+| prompt length | StairCut, measured | plain decoding bound, arithmetic |
+|-|-|-|
+| 256 tokens | 49.89 tok/s | 16.0 tok/s |
+| 16,350 tokens | 36.02 tok/s | 14.9 tok/s |
+
+The bound is 240 / (15.01 + 0.0000655 · context) tokens a second: 15.01 GB of weights and 64 KiB (65.5 KB) of KV a token of context, the 64 KB above, read at 240 GB/s every step.
+
+<!-- generated: verify-by-context by tools/gen_reference.py; do not edit by hand -->
+
+### Verify plus commit by context length, ms (ops/stair-tables-nvfp4.json, measured, published NVFP4 set)
+
+| context | tree 16 rows | chain 16 rows | tree 32 rows | chain 32 rows |
+|-|-|-|-|-|
+| 1,024 | 74.36 | 74.35 | 87.76 | 85.46 |
+| 4,096 | 75.93 | 75.14 | 90.02 | 87.08 |
+| 8,192 | 77.49 | 77.33 | 92.05 | 89.74 |
+| 16,384 | 81.48 | 80.30 | 99.60 | 95.44 |
+| 32,768 | 88.07 | 87.54 | 111.56 | 108.46 |
+
+<!-- /generated -->
+
+*Single-request decode rate with StairCut at two prompt lengths (Measured: 256 tokens, the paper's benchmark row; 16,350 tokens, the shadow reader's A/B with the shadow off, the 0.4.0 series), and the bandwidth bound of plain one-token decoding when every step reads 15.01 GB of weights plus the context's KV at 240 GB/s (arithmetic). The table: the 16- and 32-row verify by context length (measured, `ops/stair-tables-nvfp4.json`).*
+
+Two points are all the public record holds for decode speed against prompt length on the published weights, and they come from two builds of the same series. A sweep over prompt lengths, under the rules of [Measurement](measurement.md), is not published yet.
 
 ## StairCut on Flash-Next, and the shared price files
 
@@ -186,6 +259,16 @@ The state after any accepted path can be written from quantities the verify alre
 `u_t` depends only on t's own path, because the inverse of an ancestor-masked matrix is ancestor-masked too. This formula holds for every root-to-node path, not only for prefixes. The commit is therefore one read of the state and one small matrix product per layer, and it reads no weights. For a chain the same identity is the rollback: keeping the first n tokens of a block is the path of length n.
 
 The KV side is simpler. The cache holds every node at its depth-first slot, and a commit gathers the accepted rows down into place.
+
+```
+node:   0      1      2      3 ...  7      (depth-first pre-order)
+token:  -      cat    sat    ...
+the model's own token at node 0 is "cat" (node 1 carries it),
+at node 1 "sat" (node 2 carries it), at node 2 "on" (no child carries it)
+-> the round commits "cat sat" and the model's "on"
+```
+
+*A draft tree of 8 nodes in depth-first pre-order. The model's own token at node 0 is “cat”, which node 1 carries; at node 1 it is “sat”, which node 2 carries; at node 2 it is “on”, which no child carries. The round commits “cat sat” and the model's “on”. Right: the ancestor mask the verify applies in the attention layers, and the relation the recurrent layers walk.*
 
 ## Sampling
 

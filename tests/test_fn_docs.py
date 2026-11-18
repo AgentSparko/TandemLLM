@@ -1,7 +1,7 @@
 """OPS-101: Flash-Next is documented like the 27B, no GPU.
 
-  * every QWEN38_FN_* switch in engine/settings.py is in the manual's generated switch table
-    (manual/generated/engine-knobs.tex, `manual/tools/gen_reference.py`) with its default;
+  * every QWEN38_FN_* switch in engine/settings.py is in the generated switch table of
+    docs/reference/variables.md (`tools/gen_reference.py`) with its default;
   * Wren's knowledge index (server/setup/knowledge.py) reads the Flash-Next registry entry: a question
     about the 6.05 pack's context finds that it fits no window, one about 3.05 its largest window and
     its warm n-gram table;
@@ -18,18 +18,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 
-def _tex(s: str) -> str:
-    return s.replace("_", "\\_\\allowbreak{}")
-
-
-def test_every_flashnext_switch_is_in_the_manual():
+def test_every_flashnext_switch_is_in_the_reference():
     from engine.settings import KNOBS
-    table = open(os.path.join(ROOT, "manual", "generated", "engine-knobs.tex")).read()
+    table = open(os.path.join(ROOT, "docs", "reference", "variables.md")).read()
     fn = sorted(k for k in KNOBS if k.startswith("FN_"))
     assert len(fn) >= 10, fn
-    missing = [k for k in fn if f"\\texttt{{QWEN38\\_\\allowbreak{{}}{_tex(k)}}} & \\texttt{{{_tex(KNOBS[k][0])}}}"
-               not in table]
-    assert not missing, f"not in manual/generated/engine-knobs.tex (run manual/tools/gen_reference.py): {missing}"
+    missing = [k for k in fn if f"| `QWEN38_{k}` | `{KNOBS[k][0] if KNOBS[k][0] not in (None, '') else 'none'}` |" not in table]
+    assert not missing, f"not in docs/reference/variables.md (run tools/gen_reference.py): {missing}"
     return f"{len(fn)} QWEN38_FN_* switches with their defaults"
 
 

@@ -29,8 +29,8 @@ The test matrix:
                                                          test_the_tool_checks
   8  retrieval: a question about a tool brings the tool's registry sentence into the prompt, among
      the top four sections                               test_retrieval
-  8b the index reads only the engine's own texts (ENG-413 WP14): docs/, the manual's chapters and
-     the model registry; every one of those files has sections in it, and no other file does
+  8b the index reads only the engine's own texts (ENG-413 WP14): docs/ (the reference pages too)
+     and the model registry; every one of those files has sections in it, and no other file does
                                                          test_the_knowledge_sources_are_files
   9  the page state is data and has no secret: a field named like a key arrives as "<set>"; a
      page too long for the window is cut, never an error  test_page_state
@@ -489,15 +489,14 @@ def test_retrieval():
 
 def test_the_knowledge_sources_are_files():
     """The engine's own texts only (ENG-413 WP14: TandemApp's package texts and documents are its
-    own): every docs/*.md and manual chapter has sections in the index, and nothing else does."""
+    own): every docs/**/*.md has sections in the index, and nothing else does."""
     import glob
     from server.setup import knowledge
     assert not hasattr(knowledge, "PACKAGES") and not hasattr(knowledge, "APP_DOCS")
     k = knowledge.Knowledge()
     k.ensure()
     root = knowledge.ROOT
-    want = {os.path.relpath(f, root) for f in glob.glob(os.path.join(root, "docs", "*.md"))
-            + glob.glob(os.path.join(root, "manual", "chapters", "*.tex"))}
+    want = {os.path.relpath(f, root) for f in glob.glob(os.path.join(root, "docs", "**", "*.md"), recursive=True)}
     got = {d["path"] for d in k.docs if not d["path"].startswith("models/")}
     assert want <= got, f"no section in the index: {sorted(want - got)}"
     assert got <= want, f"not the engine's own texts: {sorted(got - want)}"

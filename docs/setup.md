@@ -60,7 +60,7 @@ The other EXL3 sizes download 12.0 to 23.3 GB of weights and share the rest. Bef
 
 On a box in setup mode the switch removes `run/setup-pending`, so the engine starts with the profile. If the profile does not come up, the marker comes back and setup mode starts again. The setup page does the same through its install job.
 
-The `curl` line fetches the installer from the tag `v0.16.0`, and the installer checks out the same tag from the repository `--repo` names, `https://github.com/TandemLLM/TandemEngine.git` by default. Where the tag is missing, `curl` fails with a 404, and `install.sh` stops at its clone step with "no tag, branch or commit 'v0.16.0'"; `--ref` picks another release. The manual ([`tandemllm-manual.pdf`](../manual/tandemllm-manual.pdf), chapter "Installing TandemLLM") has the details.
+The `curl` line fetches the installer from the tag `v0.16.0`, and the installer checks out the same tag from the repository `--repo` names, `https://github.com/TandemLLM/TandemEngine.git` by default. Where the tag is missing, `curl` fails with a 404, and `install.sh` stops at its clone step with "no tag, branch or commit 'v0.16.0'"; `--ref` picks another release. [install.md](install.md) has the details.
 
 ## The model registry
 
@@ -143,7 +143,7 @@ A model that cannot be split here answers `splittable: false` with `reason` and 
 
 Wren is Qwen3.5-2B (Qwen3.5-0.8B when the 2B is not on disk) on the engine's own forward, in the plainest setup the engine has: one sequence, a window of 8,192 rows, thinking off, greedy, no caches. Its persona and rules are `server/setup/wren_system.md`.
 
-- Each turn it reads the page's state (fields named like a secret arrive as `<set>`), the box's free memory and disk and the profile it runs, and the four best sections of a BM25 search over `docs/*.md`, the manual's chapters, `models/*/model.yaml` and the packages that describe TandemLLM. It also reads the current step: the ids a tool call may name there, and on the three steps that show the measured table, the table itself with the fastest profile for each task.
+- Each turn it reads the page's state (fields named like a secret arrive as `<set>`), the box's free memory and disk and the profile it runs, and the four best sections of a BM25 search over `docs/**/*.md`, `models/*/model.yaml` and the packages that describe TandemLLM. It also reads the current step: the ids a tool call may name there, and on the three steps that show the measured table, the table itself with the fastest profile for each task.
 - It can ask the page to `set_field`, `toggle`, `select_profile`, `go_to_step`, `next`, `previous` and `explain`. `explain` takes only what the page can highlight, and a step's name is not one of them. The browser runs every call; the server checks each one against the step schema first. An invalid change never reaches the browser: Wren sees why and tries once more. If that fails too, Wren answers in words with no tools in the prompt, and the page shows one notice that nothing changed. A highlight it cannot make goes nowhere.
 - A turn always ends in words. After a call the page sends the result back and asks again, at most 4 rounds. A change the page refuses gets one repair, and the last round asks for words only (`"tools": false` in the chat body), so the server gives the model no tools and drops any call it still writes.
 - On a phone the sheet stays open while Wren works. A change shows in the sheet as a toast with Show me, which closes the sheet, scrolls to the field and highlights it. A refused call leaves the sheet alone.

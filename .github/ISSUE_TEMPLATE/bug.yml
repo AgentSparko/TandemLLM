@@ -25,7 +25,7 @@ body:
         - Setup Guide
         - install.sh
         - Service scripts, profiles, watchdog
-        - Manual or docs
+        - Docs
         - I do not know
     validations:
       required: true

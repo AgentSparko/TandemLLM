@@ -74,3 +74,59 @@ A Nemotron 3.5 Super VL pack (ENG-377) is served with the model's own EXL3 profi
 On the box, `ops/use-profile.sh community/<id>` writes the pack's profile from its entry, downloads the pack at the pinned commit into `~/.tandemllm/community/<id>`, checks every weight file against the sha256 Hugging Face publishes, and fetches our draft models if they are missing. Then it stops the engine, starts it on the pack and sends one test chat. It refuses a download that would leave less than 60 GB of disk free, and it rolls back to the previous profile when the start or the test chat fails. `--dry-run` prints every URL and size without downloading. The setup guide's "Use" button runs the same steps after its review page.
 
 The engine estimates a pack's memory from our own profile of the same format and the nearest size (`exl3-4.0` for a 4.0 bpw EXL3 pack). The number is only an estimate until a maintainer has loaded the pack.
+
+### The packs in the setup guide
+
+The weights step of the setup guide (`#/setup`) shows a Community weights section below our profiles, one card per pack. A card shows the maker's GitHub avatar and `@login`, the networks the entry lists, the fine-tune it comes from, the format, the bits a weight and the download size. It also lists the modalities the pack holds, in grey with the reason when TandemLLM cannot serve one yet, and which of our drafters it runs with. Once a maintainer has run the pack, its card shows the measured speed too. A badge gives the license, another the status, and a link leads to the Hugging Face repository.
+
+You can search over names, authors, handles, tags and the fine-tune's source, and sort by five keys, newest first by default. “Use” selects a pack the way a radio card selects one of our profiles, as `community/<id>`. Every later step takes that name, Wren included. A pack that cannot run images turns the Vision tool off, as the server would. “Add yours” opens the issue form of [Submitting a pack](#what-happens-to-your-file) with the model filled in.
+
+### Where the list comes from
+
+The list is `models/community-index.json`, one entry per file under `models/<model>/community/`. A box asks GitHub for that file on the public repository's `main` branch at two moments only: when the weights step opens and when you press Refresh (`POST /v1/setup/community/sync`). Nothing fetches it on a timer. The box sends the ETag of its last copy, so an unchanged list costs one 304 answer.
+
+When the fetch fails, the page shows the box's last copy (`~/.tandemllm/community/index.json`). A box that never fetched one shows the list that came with its release. Look at the section's head to see which source the list came from and which entries it dropped. A 404 from GitHub is not an error: the repository has published no list yet, and the page shows a quiet note, “no published list yet”, beside the bundled list. A real failure is one short line without the URL, such as “GitHub could not be reached”; the server's log has the URL and the detail. `QSE_COMMUNITY_URL` points the box at another index, and `QSE_COMMUNITY_URL=off` never fetches.
+
+A fetched index is untrusted. One with the wrong shape never replaces the cached copy, and an entry reaches the page only after it passes the registry's checks, those of [How verification works](#what-happens-to-your-file).
+
+### Packs on Nemotron 3.5 Super VL
+
+A pack on Super VL loads on NemotronH ([Nemotron 3.5 Bolt and Super VL](nemotron-h.md)) and is served with our EXL3 profile nearest in size: `nemotron-super-vl-exl3-4.0` for a 3.5 bpw pack. It takes that profile's memory limits, its sampler, NVIDIA's LiLiCorr drafter and the lookup, with the pack in place of the weights; the entry's `drafters` is `none`. The pack must be standalone, a NemotronH checkpoint with 88 layers, in EXL3. `python -m server.setup.community check-pack community/<id>` checks a downloaded pack's files and names what differs: the config, the layer count, the quantisation, every shard the index names, and the image tower when the entry lists images.
+
+| field | value |
+|-|-|
+| id | `nemotron-super-vl-exl3-3.5bpw` |
+| author | styles01 (pull request #63) |
+| pack | `aitamedia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-EXL3-3.5bpw`, EXL3: routed experts at 3.5 bits, every other projection at 5, an fp16 head; 57.8 GB, standalone |
+| modalities | text; the pack holds no image tower |
+| drafters | LiLiCorr and the lookup, from `nemotron-super-vl-exl3-4.0` |
+| speed | 33.2 tok/s prose, 53.9 code, 37.4 chat, 99.0 edit, 112.3 copy; 25.9 without speculation; every drafted text the plain run's |
+| agreement | top token equal to the converter's own forward (1.6.0) on the pack at 510 of 512 positions, both others near ties; KL 0.0019 |
+| memory | 53.58 GiB of weights at load; the served profile (262,144 tokens, 3 slots) starts and answers in 110 s |
+| license | OpenMDW-1.1 |
+
+*The first pack on Super VL. Speed: one run per kind of text on a DGX Spark with 0.12.1, 512 greedy tokens, thinking off, as the entry's `verified` block records it (measured); `models/nemotron-3.5-super-vl-120b-a12b/measurements/0.12.1-summary.json` has the runs.*
+
+Plain decoding runs at 25.9 tok/s on this pack and at 31.1 on our 4.0 pack (0.11.0). From the headers, a decode token reads 7.95 GB of this pack and 6.74 GB of ours.
+
+### An example: the first community pack
+
+```sh
+bash ~/TandemLLM/run/ops/use-profile.sh community/thinkingcap-27b-kearuga-exl3-4.00 --dry-run
+bash ~/TandemLLM/run/ops/use-profile.sh community/thinkingcap-27b-kearuga-exl3-4.00
+```
+
+The script writes the pack's profile from its entry to `run/community/<id>.env`, which `serve.env` reads; `--dry-run` writes it into a folder of its own.
+
+| field | value |
+|-|-|
+| id | `thinkingcap-27b-kearuga-exl3-4.00` |
+| author | 0xWhiteMage |
+| fine-tune of | `bottlecapai/ThinkingCap-Qwen3.8-27B` |
+| pack | `0xWhiteMage/ThinkingCap-Qwen3.8-27B-Kearuga-EXL3-4.00bpw`, EXL3 at 4.0 bits a weight, 16.38 GB, standalone |
+| modalities | text; the pack also holds a 6-bit vision tower, which the standalone path does not serve yet |
+| drafters | ours, the EXL3 K3 drafters and K4 draft head |
+| speed | 42.3 tok/s prose, 84.0 code, 41.4 chat |
+| license | PolyForm-Small-Business-1.0.0, with Apache-2.0 for Qwen's part |
+
+*The first community pack. Speed: the entry's `verified` block (measured on 0.14.2, 2026-10-26: one greedy request a kind of up to 512 tokens, thinking off, through the conductor, 8 lanes; `models/qwen3.8-27b/measurements/verified-2026-10-26-thinkingcap-27b-kearuga-exl3-4.00.json`).*

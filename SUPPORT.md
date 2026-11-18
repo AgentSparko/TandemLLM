@@ -11,4 +11,4 @@ Pick the place by what you have.
 
 Releases and breaking changes are posted under [Discussions, Announcements](https://github.com/TandemLLM/TandemEngine/discussions/categories/announcements) and in [CHANGELOG.md](CHANGELOG.md).
 
-Before you ask, the [docs](docs/README.md) and the manual answer most setup questions: docs/setup.md for the install, docs/operations.md for the service scripts and the watchdog.
+Before you ask, the [docs](docs/README.md) answer most setup questions: docs/install.md and docs/setup.md for the install, docs/operations.md for the service scripts and the watchdog.

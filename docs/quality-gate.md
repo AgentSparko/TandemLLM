@@ -25,7 +25,7 @@ A new GPU test in `tests/gpu/` needs a line under `kernels` in the same file, wi
 
 | Level | Paths | Suites |
 |-|-|-|
-| none | docs, the manual, the dashboard, `chatd/`, the proxy, packages, CPU tests, community packs | no report |
+| none | docs, the dashboard, `chatd/`, the proxy, packages, CPU tests, community packs | no report |
 | quick | the engine, models, kernels, profiles, the server's request path | all but stability; long runs one case |
 | quick+long | memory, caches, the scheduler, slots, start and stop scripts | quick, and the wide prefill chunk case |
 | full | VERSION, the release scripts | everything, the stability run included, two servers a side |

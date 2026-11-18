@@ -229,7 +229,7 @@ def _python_calls(path: str) -> list[str]:
 
 
 SHELL = [f for f in FILES if (f.endswith(".sh") or f == "install.sh") and not f.startswith("tests/")]
-PYTHON = [f for f in FILES if f.endswith(".py") and not f.startswith(("tests/", "manual/"))]
+PYTHON = [f for f in FILES if f.endswith(".py") and not f.startswith("tests/")]
 
 
 def test_the_tokenizer():
@@ -281,10 +281,9 @@ def test_no_direct_call_in_the_tree():
 
 def _doc_lines():
     """(file, line no, text) of every command line the docs show: cron lines, lines of fenced code
-    blocks and of LaTeX verbatim blocks, and indented (code) lines of the markdown files."""
+    blocks, and indented (code) lines of the markdown files."""
     docs = [f for f in FILES if f.startswith("docs/") and f.endswith(".md")] + \
-        [f for f in ("README.md", "EARLY-ACCESS.md") if f in FILES] + \
-        [f for f in FILES if f.startswith("manual/chapters/") and f.endswith(".tex")]
+        [f for f in ("README.md", "EARLY-ACCESS.md") if f in FILES]
     for f in docs:
         code = False
         for no, ln in enumerate(open(os.path.join(ROOT, f)).read().splitlines(), 1):

@@ -9,10 +9,10 @@
   "engine_ids": 4357,
   "engine_files": 510,
   "to": {
-   "engine": 2969,
+   "engine": 2963,
    "pair": 1337,
-   "tandemapp": 37,
-   "dropped": 16
+   "tandemapp": 36,
+   "dropped": 23
   },
   "to_note": "destinations: an id of a split file with two homes counts in both",
   "tandemapp_ids": 1133,
@@ -276,6 +276,47 @@
    "why": "the box gate ran TandemApp's tests from the vendored app/tests; TandemApp's suite runs in its own repository",
    "gone": [
     "app/tests"
+   ]
+  },
+  "tests/test_docs_flashnext.py": {
+   "ids": [
+    "test_the_chapter_is_in_the_manual"
+   ],
+   "why": "it checked the manual's Flash-Next chapter and its input line; the manual is gone, its chapter is docs/flash-next.md, which test_the_page_is_in_the_docs checks",
+   "gone": [
+    "manual/chapters/flashnext.tex",
+    "manual/tandemllm-manual.tex"
+   ]
+  },
+  "tests/test_fn_docs.py": {
+   "ids": [
+    "test_every_flashnext_switch_is_in_the_manual"
+   ],
+   "why": "it read the manual's generated switch table; the table is now a generated block of docs/reference/variables.md, which test_every_flashnext_switch_is_in_the_reference reads",
+   "gone": [
+    "manual/generated/engine-knobs.tex"
+   ]
+  },
+  "tests/test_manual_braces.py": {
+   "ids": [
+    "test_the_counter",
+    "test_every_generated_table_is_balanced",
+    "test_every_committed_table_is_balanced",
+    "test_the_ledger_journal_closes_its_group"
+   ],
+   "why": "it held the LaTeX tables the manual's generator wrote to balanced braces; the manual is gone and the generator writes Markdown, whose tables tests/test_docs_reference.py checks",
+   "gone": [
+    "manual",
+    "tests/test_manual_braces.py"
+   ]
+  },
+  "tests/test_chatd_docs.py": {
+   "ids": [
+    "test_the_manual_follows"
+   ],
+   "why": "it moved to TandemApp's tests with the Chat tab's manual chapter; both manuals are gone, and TandemApp's docs/chat.md is checked by the ids that stay",
+   "gone": [
+    "manual"
    ]
   }
  },
@@ -1501,7 +1542,7 @@
      "tandemapp:tests/test_chatd_docs.py"
     ],
     "test_the_manual_follows": [
-     "tandemapp:tests/test_chatd_docs.py"
+     "dropped"
     ],
     "test_the_patch_entry": [
      "engine"
@@ -2618,15 +2659,28 @@
    ]
   },
   "tests/test_docs_flashnext.py": {
-   "home": "engine",
-   "ids": [
-    "test_the_chapter_is_in_the_manual",
-    "test_the_pack_tables_match_the_registry_and_profiles",
-    "test_architecture_marks_the_unbuilt_layers_planned",
-    "test_adding_a_model_names_every_adapter_verb",
-    "test_unverified_status_is_not_a_validated_window",
-    "test_readme_explains_unverified_dense_dispatch"
-   ]
+   "home": "split",
+   "why": "the manual is folded into docs/ (its chapter is gone); the test of the chapter is now the test of the docs page under a new name",
+   "ids": {
+    "test_the_chapter_is_in_the_manual": [
+     "dropped"
+    ],
+    "test_the_pack_tables_match_the_registry_and_profiles": [
+     "engine"
+    ],
+    "test_architecture_marks_the_unbuilt_layers_planned": [
+     "engine"
+    ],
+    "test_adding_a_model_names_every_adapter_verb": [
+     "engine"
+    ],
+    "test_unverified_status_is_not_a_validated_window": [
+     "engine"
+    ],
+    "test_readme_explains_unverified_dense_dispatch": [
+     "engine"
+    ]
+   }
   },
   "tests/test_doctor.py": {
    "home": "engine",
@@ -3497,12 +3551,19 @@
    ]
   },
   "tests/test_fn_docs.py": {
-   "home": "engine",
-   "ids": [
-    "test_every_flashnext_switch_is_in_the_manual",
-    "test_wren_finds_each_packs_window_and_table",
-    "test_the_docs_name_flashnext"
-   ]
+   "home": "split",
+   "why": "the manual is folded into docs/ (its chapter is gone); the test of the chapter is now the test of the docs page under a new name",
+   "ids": {
+    "test_every_flashnext_switch_is_in_the_manual": [
+     "dropped"
+    ],
+    "test_wren_finds_each_packs_window_and_table": [
+     "engine"
+    ],
+    "test_the_docs_name_flashnext": [
+     "engine"
+    ]
+   }
   },
   "tests/test_fn_fingerprint.py": {
    "home": "engine",
@@ -5204,7 +5265,7 @@
    ]
   },
   "tests/test_manual_braces.py": {
-   "home": "engine",
+   "home": "dropped",
    "ids": [
     "test_the_counter",
     "test_every_generated_table_is_balanced",

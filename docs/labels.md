@@ -9,7 +9,7 @@ GitHub's own `duplicate`, `invalid`, `wontfix`, `good first issue` and `help wan
 | type | `bug` | Something is broken: a wrong answer, a crash, a hang, a wrong number |
 | type | `feature` | A new capability, or a change to how something works |
 | type | `perf` | Speed or memory: tok/s, time to first token, prefill, GPU memory |
-| type | `docs` | README, docs/ or the manual |
+| type | `docs` | README or docs/ |
 | type | `refactor` | Code that changes shape and keeps its behaviour and output |
 | type | `test` | Tests, test tools or the test suite |
 | type | `security` | A security fix or hardening. Report a vulnerability in private: SECURITY.md |
@@ -33,7 +33,6 @@ GitHub's own `duplicate`, `invalid`, `wontfix`, `good first issue` and `help wan
 | area | `quant/community` | Weights: community packs (models/<model>/community/) |
 | area | `install` | install.sh and the first start on a new machine |
 | area | `ops` | Service scripts, profiles, watchdog, release tooling |
-| area | `docs/manual` | The manual (manual/, LaTeX) |
 | area | `bench` | Benchmarks and measurement tools |
 | area | `ci` | GitHub workflows, issue forms, repository settings |
 | priority | `p0` | Broken for everyone, or data loss: first |

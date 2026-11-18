@@ -39,7 +39,7 @@ In this order:
 
 These matter less and stay in scope: the dashboard reads, the engine-only screens, the metrics route.
 
-Out of scope: `bench/`, the scripts under `tools/` (measurement, quantising, training; nothing serves them), `docs/`, `manual/`, the GPU kernels in `engine/`, and `tests/`.
+Out of scope: `bench/`, the scripts under `tools/` (measurement, quantising, training; nothing serves them), `docs/`, the GPU kernels in `engine/`, and `tests/`.
 
 ## Where to test
 

@@ -2,7 +2,7 @@
 
 The test matrix (the Gherkin of OPS-149):
 
-  1  the README's Install section, docs/setup.md's Setup mode and the manual's section "A new box" each
+  1  the README's Install section, docs/setup.md's Setup mode and docs/install.md's "A new box" each
      open with exactly two commands (the installer's curl line and `bash install.sh --setup --yes`),
      with no weight profile in them                          test_two_commands
   2  each says how to reach the Setup Guide (ENG-413 WP14: the engine serves no page): `bin/tandem
@@ -15,7 +15,7 @@ The test matrix (the Gherkin of OPS-149):
   4  install.sh's setup message names the engine's address on the box for the Setup Guide
      (TandemApp's page since ENG-413 WP7: the engine serves only the Setup API), the ssh tunnel and
      --host 0.0.0.0 (tests/test_fresh_install.py runs it on Linux)   test_the_installer_says_where
-  5  no README, docs, contract README or manual text counts the models ("five models", "three
+  5  no README, docs or contract README text counts the models ("five models", "three
      models")                                                test_no_model_count
   6  nothing under docs/ or contracts/ calls the Setup Guide's figure a bird
                                                              test_no_doc_calls_the_figure_a_bird
@@ -57,22 +57,16 @@ def _blocks(md: str) -> list[list[str]]:
     return out
 
 
-def _shells(tex: str) -> list[list[str]]:
-    return [[ln.strip() for ln in body.splitlines() if ln.strip()]
-            for body in re.findall(r"\\begin\{shell\}\n(.*?)\\end\{shell\}", tex, re.S)]
-
-
 def _docs() -> dict[str, tuple[str, list[list[str]], str]]:
     """name -> (the simple-install text, its command blocks, the advanced part)"""
     readme = _section(_read("README.md"), "## Install\n", "\n## Quick start")
     setup = _read("docs", "setup.md")
     simple = _section(setup, "## Setup mode\n", "\n## The model registry")
-    tex = _section(_read("manual", "chapters", "install-engine.tex"), r"\section{A new box", r"\section{Installing from")
+    install = _section(_read("docs", "install.md"), "## A new box", "\n## Updating a box in setup mode")
     return {
         "README.md": (readme, _blocks(readme), _section(readme, "### Advanced: from the command line", "\n| flag |")),
         "docs/setup.md": (simple, _blocks(simple), _section(simple, "## Advanced: from the command line", "\n| profile |")),
-        "manual install-engine.tex": (tex.replace(r"\#", "#"), _shells(tex),
-                                      _section(tex, r"\subsection{Advanced: from the command line}", r"\begin{table}")),
+        "docs/install.md": (install, _blocks(install), _section(install, "### Advanced: from the command line", "\n| profile |")),
     }
 
 
@@ -116,8 +110,8 @@ COUNT = re.compile(r"(?<![\w.])(?:two|three|four|five|six|seven|eight|nine|ten|[
 ALLOWED = ("two models working in tandem",)
 
 
-#: where a count is looked for besides README.md: the engine's docs, contracts and manual
-COUNT_GLOBS = (("docs", "**", "*.md"), ("contracts", "**", "*.md"), ("manual", "chapters", "*.tex"))
+#: where a count is looked for besides README.md: the engine's docs and contracts
+COUNT_GLOBS = (("docs", "**", "*.md"), ("contracts", "**", "*.md"))
 
 
 def test_no_model_count():

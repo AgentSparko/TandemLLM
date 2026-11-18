@@ -37,11 +37,9 @@ FILES = {
                   "| `--ref REF` | the engine version, default `v1.2.3`; |\n\n"
                   "The current release is `v1.2.3`. `v1.2.2` fixed install.sh.\n"),
     "docs/setup.md": "curl -fsSLO https://raw.githubusercontent.com/o/r/v1.2.3/install.sh\nthe tag `v1.2.3`.\n",
-    "manual/preamble.tex": "\\newcommand{\\version}{1.2.3}\n",
-    "manual/chapters/install-engine.tex": "curl -fsSLO https://raw.githubusercontent.com/o/r/v1.2.3/install.sh\n",
-    "manual/chapters/troubleshooting.tex": "no tag, branch or commit 'v1.2.3'; \\code{v1.2.3} by default\n",
-    "manual/generated/install-flags.tex": "\\texttt{-{}-ref REF} & the engine release (default v1.2.3) \\\\\n",
-    "manual/chapters/changelog.tex": "1.2.3 & 10-20 & a thing \\\\\n\\section{1.2.3, a thing}\n",
+    "docs/install.md": "curl -fsSLO https://raw.githubusercontent.com/o/r/v1.2.3/install.sh\n",
+    "docs/troubleshooting.md": "no tag, branch or commit 'v1.2.3'; `v1.2.3` by default\n",
+    "docs/reference/commands.md": "| `--ref REF` | the engine release (default v1.2.3) |\n",
     "CHANGELOG.md": "# Changelog\n\n## 1.2.3, 2026-10-20\n\nA thing.\n",
 }
 
@@ -99,17 +97,15 @@ def test_bump_then_preflight_then_a_dry_run():
         assert "/v1.2.4/install.sh" in readme and "default `v1.2.4`" in readme, readme
         assert "at the tag `v1.2.4`" in readme and "Where the tag `v1.2.4`" in readme, readme
         assert "The current release is `v1.2.3`. `v1.2.2` fixed install.sh." in readme, "the paragraph is prose"
-        assert "\\version}{1.2.4}" in _read(work, "manual/preamble.tex")
-        assert "v1.2.3" not in _read(work, "manual/chapters/troubleshooting.tex")
-        assert "(default v1.2.4)" in _read(work, "manual/generated/install-flags.tex")
+        assert "v1.2.3" not in _read(work, "docs/troubleshooting.md")
+        assert "/v1.2.4/install.sh" in _read(work, "docs/install.md")
+        assert "(default v1.2.4)" in _read(work, "docs/reference/commands.md")
 
         # the author's part: the release paragraph, the changelogs; then the release commit
         with open(os.path.join(work, "README.md"), "w") as fh:
             fh.write(readme.replace("The current release is `v1.2.3`.", "The current release is `v1.2.4`. In `v1.2.3` a thing."))
         with open(os.path.join(work, "CHANGELOG.md"), "w") as fh:
             fh.write("# Changelog\n\n## 1.2.4, 2026-10-22\n\nAnother thing.\n\n## 1.2.3, 2026-10-20\n\nA thing.\n")
-        with open(os.path.join(work, "manual/chapters/changelog.tex"), "a") as fh:
-            fh.write("1.2.4 & 10-22 & another thing \\\\\n\\section{1.2.4, another thing}\n")
         notes = os.path.join(d, "notes.md")
         with open(notes, "w") as fh:
             fh.write("Release notes.\n")
@@ -141,8 +137,6 @@ def test_a_trailer_stops_the_preflight():
         readme = _read(work, "README.md").replace("current release is `v1.2.3`", "current release is `v1.2.4`")
         with open(os.path.join(work, "README.md"), "w") as fh:
             fh.write(readme)
-        with open(os.path.join(work, "manual/chapters/changelog.tex"), "a") as fh:
-            fh.write("1.2.4 & 10-22 & x \\\\\n\\section{1.2.4, x}\n")
         _git(work, "add", "-A")
         _git(work, "commit", "-q", "-m", "Release 1.2.4\n\nCo-Authored-By: Someone <someone@example.invalid>")
         r = _release(work, "1.2.4", "--only", "preflight")
@@ -160,8 +154,6 @@ def test_a_knob_name_in_a_body_is_no_session_line():
         readme = _read(work, "README.md").replace("current release is `v1.2.3`", "current release is `v1.2.4`")
         with open(os.path.join(work, "README.md"), "w") as fh:
             fh.write(readme)
-        with open(os.path.join(work, "manual/chapters/changelog.tex"), "a") as fh:
-            fh.write("1.2.4 & 10-22 & x \\\\\n\\section{1.2.4, x}\n")
         _git(work, "add", "-A")
         _git(work, "commit", "-q", "-m", "Release 1.2.4\n\nRows for --session-spill-idle-every-s,\nSESSION_SPILL_IDLE and session_id.")
         r = _release(work, "1.2.4", "--only", "preflight")

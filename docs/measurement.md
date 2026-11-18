@@ -122,6 +122,27 @@ Each of these cost a wrong number once.
 - The engine's own turns look like a client's. The preparer and the memory writer run generations over the client's context; count them with `qse_prepare_runs_total` and `qse_memory_writer_runs_total` (server/METRICS.md), or measure raw with the conductor off.
 - A first request after a restart is not a baseline. The pack's page cache is dropped at the start, so the first measurement runs on a busy disk.
 
+## Measuring Flash-Next
+
+Flash-Next's numbers in these docs come from tools of their own (`tools/fn_*.py`), each answering one question, and every one ran under the board's lock with one model loaded. Most are single runs of one request, labelled so where they appear; none is a benchmark row yet.
+
+| tool | the question it answers |
+|-|-|
+| `fn_server_check.py --compare` | do 20 request shapes give the same text, tool calls and logprobs with and without speculation; `--sampled`: do seeded sampled answers |
+| `fn_spec_check.py` | does speculative greedy equal plain greedy in the engine, with the state bit-equal after every run |
+| `fn_fit_run.py` | does a pack hold its largest window: one long request, MemAvailable at 10 Hz, every limit knob the server reports |
+| `fn_cache_check.py` | does a request restored from each cache tier answer as on a cold server |
+| `fn_resume_check.py`, `fn_guest_check.py` | does a resumed prefill equal a cold one; does a short guest request leave the resident conversation's rows intact |
+| `fn_lookup_ab.py` | one greedy request a class through a server, for an A/B of the drafters |
+| `fn_memory_check.py` | memory after the load, the prefill workspace, the table's resident bytes under each policy |
+| `fn_exl3_xcheck.py`, `fn_refcheck.py` | our reading of a pack against the converter's; our forward against `transformers`' |
+
+*The Flash-Next tools behind the numbers in [Qwen3.8-Flash-Next](flash-next.md).*
+
+Every speculative rate in [Qwen3.8-Flash-Next](flash-next.md) comes with the statement that its texts equalled plain decoding, because a rate whose text changed measures another answer. The runs by context length started a fresh server and report its second round, so the first round's one-time graph captures do not count in them. What Flash-Next has not had yet is the release gate: no row of `serve-single-i256-o256-v1`, no block A/B and no task suite.
+
 ## Limits
 
 The published numbers come from one board, one model and one request at a time. Long prompts are measured separately ([caches.md](caches.md)). Parallel requests are measured on the weight cards only (above). The quality gates are held-out loss, confident argmax agreement and free generation. No task benchmark suite has been run, so this repository makes no claim about task accuracy.
+
+

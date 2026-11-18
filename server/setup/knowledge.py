@@ -1,12 +1,12 @@
-"""What Wren reads from (SRV-325): sections of the engine's docs, its manual and the model
-registry, and a BM25 search over them.
+"""What Wren reads from (SRV-325): sections of the engine's docs and the model registry, and a
+BM25 search over them.
 
 The scorer is server/api/textindex.py's `TextIndex` (ENG-413 WP2c: the engine's copy of the
 conductor's BM25, the one the package library and the memory notes use: lower-case words, a plural
 s dropped, no embeddings). The documents:
 
-    docs/*.md                 one per heading section (#, ##, ###), long sections cut in parts
-    manual/chapters/*.tex     the same, after a plain-text pass over the LaTeX
+    docs/**/*.md              one per heading section (#, ##, ###), long sections cut in parts
+                              (the reference pages under docs/reference/ too)
     models/*/model.yaml       one per model overview, weight profile, tool and field, in words
                               built from the registry (numbers with their units)
 
@@ -63,46 +63,6 @@ def markdown_sections(path: str, text: str) -> list[dict]:
         else:
             buf.append(line)
     return out + _parts(path, title, "\n".join(buf))
-
-
-_TEX_DROP = re.compile(r"\\(label|ref|cite|index|footnotemark|vspace|hspace|newpage|clearpage|"
-                       r"centering|small|footnotesize|toprule|midrule|bottomrule|noindent)"
-                       r"(\[[^\]]*\])?(\{[^}]*\})?")
-
-
-def tex_text(text: str) -> str:
-    """LaTeX as plain text, roughly: comments and environments out, `\\cmd{x}` as x."""
-    text = re.sub(r"(?<!\\)%.*", "", text)
-    text = re.sub(r"\\begin\{[^}]*\}(\{[^}]*\}|\[[^\]]*\])*|\\end\{[^}]*\}", "", text)
-    text = _TEX_DROP.sub("", text)
-    for _ in range(3):
-        text = re.sub(r"\\[a-zA-Z]+\*?(\[[^\]]*\])?\{([^{}]*)\}", r"\2", text)
-    text = re.sub(r"\\\\", "\n", text)
-    text = text.replace("~", " ").replace("&", " | ").replace("\\%", "%").replace("\\_", "_")
-    text = re.sub(r"\\[a-zA-Z]+\*?", "", text)
-    return re.sub(r"[{}]", "", text)
-
-
-def _braced(s: str, i: int) -> str:
-    """The text of the brace group that opens at s[i]."""
-    depth = 0
-    for j in range(i, len(s)):
-        depth += {"{": 1, "}": -1}.get(s[j], 0)
-        if depth == 0:
-            return s[i + 1:j]
-    return s[i + 1:]
-
-
-def tex_sections(path: str, text: str) -> list[dict]:
-    out, title, buf = [], os.path.basename(path), []
-    for line in text.splitlines():
-        m = re.match(r"\s*\\(chapter|section|subsection)\*?(\[[^\]]*\])?\{", line)
-        if m:
-            out += _parts(path, tex_text(title).strip(), tex_text("\n".join(buf)))
-            title, buf = _braced(line, m.end() - 1), []
-        else:
-            buf.append(line)
-    return out + _parts(path, tex_text(title).strip(), tex_text("\n".join(buf)))
 
 
 def _cell(m: dict, pid: str, mode: str, task: str):
@@ -205,8 +165,7 @@ class Knowledge:
 
     def _files(self) -> list[str]:
         r = self.root
-        files = sorted(glob.glob(os.path.join(r, "docs", "*.md")))
-        files += sorted(glob.glob(os.path.join(r, "manual", "chapters", "*.tex")))
+        files = sorted(glob.glob(os.path.join(r, "docs", "**", "*.md"), recursive=True))
         files += sorted(glob.glob(os.path.join(r, "models", "*", "model.yaml")))
         return files
 
@@ -238,7 +197,7 @@ class Knowledge:
                     text = fh.read()
             except OSError:
                 continue
-            docs += tex_sections(rel, text) if f.endswith(".tex") else markdown_sections(rel, text)
+            docs += markdown_sections(rel, text)
         self.text.build(docs, WEIGHTS)
         self.docs = docs
         self.builds += 1

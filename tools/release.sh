@@ -10,15 +10,14 @@
 # Sections (--only takes a comma-separated list; the default is
 # preflight,gate,tag,push,release,milestone,verify):
 #
-#   bump       VERSION, install.sh's default tag, the manual's \version, and the lines that
-#              point at the previous tag (the install commands and --ref defaults of README.md,
-#              docs/setup.md and the manual, the generated install flags); prose (CHANGELOG.md, README's
-#              release paragraph, install.sh's release comment, the manual's changelog) stays the author's.
-#              Writes files, no commit.
+#   bump       VERSION, install.sh's default tag, and the lines that point at the previous tag (the
+#              install commands and --ref defaults of README.md, docs/setup.md, docs/install.md,
+#              docs/troubleshooting.md and the generated install flags in docs/reference/commands.md);
+#              prose (CHANGELOG.md, README's release paragraph, install.sh's release comment) stays the
+#              author's. Writes files, no commit.
 #   preflight  read-only: a clean tree on main; origin's main an ancestor of HEAD (fast-forward only); no
-#              vX.Y.Z on origin; VERSION, install.sh, the manual's \version and the pointer
-#              lines say X.Y.Z, none still says the previous tag; CHANGELOG.md's first section and the manual's
-#              changelog have X.Y.Z; no commit since the previous tag carries a co-author or session trailer
+#              vX.Y.Z on origin; VERSION, install.sh and the pointer lines say X.Y.Z, none still says the
+#              previous tag; CHANGELOG.md's first section has X.Y.Z; no commit since the previous tag carries a co-author or session trailer
 #              (subjects over 72 characters are listed); the notes file is there (RELEASE_NOTES_CHECK, a
 #              command, runs on it; RELEASE_NOTES_DENY, a regex, must not match it); gh is logged in; each
 #              weight pack a profile added or changed since the previous tag (QSE_WEIGHTS_HF at
@@ -34,16 +33,15 @@
 #              out.
 #   tag        the annotated tag vX.Y.Z "TandemEngine X.Y.Z" on HEAD (git's configured identity)
 #   push       HEAD as origin's main and the tag, no force
-#   release    one GitHub release, "TandemEngine X.Y.Z", the notes file, latest. CI's manual workflow
-#              attaches the PDF on the tag push; when it created a bare release first, this edits that one.
+#   release    one GitHub release, "TandemEngine X.Y.Z", the notes file, latest; when a release of the
+#              tag is there already (made by hand), this edits that one.
 #   milestone  the GitHub milestone vX.Y.Z is closed when it is open, and the next patch's, vX.Y.(Z+1),
 #              is created when it is missing (CONTRIBUTING.md: a milestone is a release)
 #   verify     read-only, against what is published: the tag on origin (and the local tag's commit), main
-#              containing it, the release's title, draft state and latest flag, CI's manual PDF (waits up
-#              to --asset-wait minutes), README.md, install.sh and VERSION at the tag (each
-#              body saved to a file and then searched: a reader that stops early under a pipe makes curl
-#              fail with "(56) Failure writing output"), anonymous HTTP 200 for install.sh, the manual asset and the
-#              weight packs' README.md and config.json
+#              containing it, the release's title, draft state and latest flag, README.md, install.sh and
+#              VERSION at the tag (each body saved to a file and then searched: a reader that stops early
+#              under a pipe makes curl fail with "(56) Failure writing output"), anonymous HTTP 200 for
+#              install.sh and the weight packs' README.md and config.json
 #
 # --dry-run runs preflight, gate and verify (verify only lists its checks while the tag is not on origin)
 # and prints the tag, push, release and milestone commands without running them. Exit 0 when every
@@ -54,7 +52,7 @@ usage() { sed -n '2,/^set -euo pipefail$/p' "$0" | sed '$d'; }
 
 VERSION=""; NOTES=""; BOX="${RELEASE_BOX:-}"; BOX_PY="${RELEASE_BOX_PY:-python3}"
 BOX_PYTHONPATH="${RELEASE_BOX_PYTHONPATH:-}"; SMOKE_BASE="http://127.0.0.1:8000/v1"; SKIP=""; ONLY=""
-DRY=0; ASSET_WAIT=30; GATE_WAIT=180; REMOTE=origin; GH_REPO=""; HF_EXTRA=""; HF_AUTO=1; JOBS=6
+DRY=0; GATE_WAIT=180; REMOTE=origin; GH_REPO=""; HF_EXTRA=""; HF_AUTO=1; JOBS=6
 while [ $# -gt 0 ]; do
     case "$1" in
         --notes) NOTES="$2"; shift 2 ;;
@@ -65,7 +63,6 @@ while [ $# -gt 0 ]; do
         --skip) SKIP="$2"; shift 2 ;;
         --only) ONLY="$2"; shift 2 ;;
         --dry-run) DRY=1; shift ;;
-        --asset-wait) ASSET_WAIT="$2"; shift 2 ;;
         --gate-wait) GATE_WAIT="$2"; shift 2 ;;
         --jobs) JOBS="$2"; shift 2 ;;
         --remote) REMOTE="$2"; shift 2 ;;
@@ -84,7 +81,6 @@ esac
 printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "not a version: $VERSION" >&2; exit 2; }
 TAG="v$VERSION"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ASSET="tandemllm-manual-$VERSION.pdf"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/tandem-release.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 FAILS=0
@@ -214,17 +210,15 @@ def edit(path, fn):
 
 every = lambda line: re.sub(ov + END, tag, line)
 edit("install.sh", lambda l: l.replace('TANDEM_REF="${TANDEM_REF:-v%s}"' % old, 'TANDEM_REF="${TANDEM_REF:-%s}"' % tag))
-edit("manual/preamble.tex", lambda l: l.replace("\\newcommand{\\version}{%s}" % old, "\\newcommand{\\version}{%s}" % new))
 # files whose every mention of the previous tag points at the current release
-for f in ("docs/setup.md", "manual/chapters/install-engine.tex", "manual/chapters/troubleshooting.tex",
-          "manual/generated/install-flags.tex"):
+for f in ("docs/setup.md", "docs/install.md", "docs/troubleshooting.md", "docs/reference/commands.md"):
     edit(f, every)
 # README: the install command, the clone and missing-tag sentences, the --ref row; not the release paragraph
 KEYS = re.compile(r"install\.sh|--ref REF|It clones the engine at the tag|Where the tag")
 edit("README.md", lambda l: every(l) if KEYS.search(l) and not l.startswith("The current release is") else l)
 PY
     say "written; still the author's: CHANGELOG.md, README.md's release paragraph, install.sh's release"
-    say "comment, manual/chapters/changelog.tex; then preflight checks every line"
+    say "comment; then preflight checks every line"
     g diff --stat
 fi
 
@@ -263,16 +257,14 @@ if want preflight; then
         if has "$WORK/pin" "$2"; then pass "$1: ${3:-$2}"; else fail "$1 lacks: ${3:-$2}"; fi
     }
     pin install.sh "TANDEM_REF=\"\${TANDEM_REF:-$TAG}\"" "default tag $TAG"
-    pin manual/preamble.tex "\\newcommand{\\version}{$VERSION}" "\\version $VERSION"
     pin README.md "raw.githubusercontent.com/$GH_REPO/$TAG/install.sh" "install command at $TAG"
     pin README.md "default \`$TAG\`" "--ref default $TAG"
     pin README.md "The current release is \`$TAG\`" "release paragraph names $TAG"
     pin docs/setup.md "raw.githubusercontent.com/$GH_REPO/$TAG/install.sh" "install command at $TAG"
-    pin manual/chapters/install-engine.tex "raw.githubusercontent.com/$GH_REPO/$TAG/install.sh" "install command at $TAG"
-    pin manual/generated/install-flags.tex "(default $TAG)" "--ref default $TAG"
+    pin docs/install.md "raw.githubusercontent.com/$GH_REPO/$TAG/install.sh" "install command at $TAG"
+    pin docs/reference/commands.md "(default $TAG)" "--ref default $TAG"
     if [ -n "$OLD" ]; then
-        for f in docs/setup.md manual/chapters/install-engine.tex manual/chapters/troubleshooting.tex \
-                 manual/generated/install-flags.tex; do
+        for f in docs/setup.md docs/install.md docs/troubleshooting.md docs/reference/commands.md; do
             g show "HEAD:$f" > "$WORK/pin" 2>/dev/null || continue
             if grep -nE "v${OLD//./\\.}([^0-9.]|\\.[^0-9]|\$)" "$WORK/pin" > "$WORK/stale"; then
                 fail "$f still points at $PREV: line $(cut -d: -f1 "$WORK/stale" | paste -sd, -)"
@@ -292,8 +284,6 @@ if want preflight; then
     else
         fail "CHANGELOG.md's first section is \"$first\", not \"## $VERSION, YYYY-MM-DD\""
     fi
-    pin manual/chapters/changelog.tex "$VERSION & " "changelog table row"
-    pin manual/chapters/changelog.tex "\\section{$VERSION" "changelog section"
 
     if [ -n "$PREV" ]; then
         n=0; long=0
@@ -388,12 +378,11 @@ if want release; then
     say "== release"
     [ -n "$NOTES" ] && [ -s "$NOTES" ] || die "--notes FILE is needed for the release"
     if [ "$DRY" = 0 ] && gh release view "$TAG" -R "$GH_REPO" > /dev/null 2>&1; then
-        # CI's manual job created a bare release first: give it its title and notes
+        # a release of the tag is there already (made by hand): give it its title and notes
         run gh release edit "$TAG" -R "$GH_REPO" --title "TandemEngine $VERSION" --notes-file "$NOTES" --latest
     else
         run gh release create "$TAG" -R "$GH_REPO" --verify-tag --latest --title "TandemEngine $VERSION" --notes-file "$NOTES"
     fi
-    say "CI's manual workflow attaches $ASSET when its build on the tag ends"
 fi
 
 # ------------------------------------------------------------------------------------------- milestone
@@ -430,8 +419,8 @@ if want verify; then
         if [ "$DRY" = 1 ]; then
             say "(dry run: $TAG is not on $GH_REPO yet; after the push these run)"
             echo "  the tag on origin = the local tag's commit; main contains it; release \"TandemEngine $VERSION\","
-            echo "  not a draft, latest; CI's $ASSET (up to $ASSET_WAIT min); README.md, install.sh and VERSION"
-            echo "  at $TAG; anonymous HTTP 200: install.sh, the manual asset, each weight pack's README.md, config.json"
+            echo "  not a draft, latest; README.md, install.sh and VERSION at $TAG;"
+            echo "  anonymous HTTP 200: install.sh, each weight pack's README.md, config.json"
         else
             fail "no annotated tag $TAG on $GH_REPO"
         fi
@@ -461,15 +450,6 @@ if want verify; then
             gh release list -R "$GH_REPO" -L 20 --json tagName,isLatest -q '.[] | select(.isLatest) | .tagName' > "$WORK/latest" || : > "$WORK/latest"
             [ "$(cat "$WORK/latest")" = "$TAG" ] && pass "$TAG is the latest release" \
                 || fail "the latest release is $(cat "$WORK/latest"), not $TAG"
-            deadline=$(( $(date +%s) + ASSET_WAIT * 60 ))
-            while :; do
-                gh release view "$TAG" -R "$GH_REPO" --json assets -q '.assets[].name' > "$WORK/assets" 2>/dev/null || : > "$WORK/assets"
-                grep -qxF -- "$ASSET" "$WORK/assets" && break
-                [ "$(date +%s)" -lt "$deadline" ] || break
-                sleep 30
-            done
-            if grep -qxF -- "$ASSET" "$WORK/assets"; then pass "asset $ASSET"
-            else fail "no $ASSET after $ASSET_WAIT min: see the manual workflow's run on $TAG"; fi
         else
             fail "no GitHub release $TAG"
         fi
@@ -492,7 +472,7 @@ if want verify; then
         else
             fail "VERSION at $TAG: download failed"
         fi
-        for u in "$RAW/install.sh" "https://github.com/$GH_REPO/releases/download/$TAG/$ASSET"; do
+        for u in "$RAW/install.sh"; do
             code="$(code_of "$u")"
             [ "$code" = 200 ] && pass "anonymous $u: HTTP 200" || fail "anonymous $u: HTTP $code"
         done

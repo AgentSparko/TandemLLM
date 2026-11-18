@@ -19,6 +19,6 @@ changelog:
     - title: Fixes
       labels: [bug]
     - title: Docs
-      labels: [docs, docs/manual]
+      labels: [docs]
     - title: Other
       labels: ["*"]

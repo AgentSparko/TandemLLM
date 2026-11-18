@@ -81,7 +81,7 @@ WP2B = ("metrics", "usage", "ledger", "live", "parallel", "activity", "logbuf", 
         "http_body", "auth", "compaction")
 MOVED = {f"tandemapp.{m}": f"server.api.{m}" for m in WP2A + WP2B}
 #: the engine's tree (app/ is TandemApp's)
-ENGINE_DIRS = ("bench", "engine", "manual", "models", "ops", "server", "tests", "tools")
+ENGINE_DIRS = ("bench", "engine", "models", "ops", "server", "tests", "tools")
 SKIP_DIRS = ("__pycache__", "node_modules")
 TEXT_SUFFIXES = (".sh", ".yaml", ".yml", ".env", ".toml", ".cfg", ".txt")
 #: files that may name a moved module of TandemApp's in text, and why

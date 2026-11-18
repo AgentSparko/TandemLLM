@@ -25,7 +25,7 @@ done
 LABELS='type|bug|0a3069|Something is broken: a wrong answer, a crash, a hang, a wrong number
 type|feature|0550ae|A new capability, or a change to how something works
 type|perf|0969da|Speed or memory: tok/s, time to first token, prefill, GPU memory
-type|docs|218bff|README, docs/ or the manual
+type|docs|218bff|README or docs/
 type|refactor|54aeff|Code that changes shape and keeps its behaviour and output
 type|test|80ccff|Tests, test tools or the test suite
 type|security|033d8b|A security fix or hardening. Report a vulnerability in private: SECURITY.md
@@ -49,7 +49,6 @@ area|quant/bf16|db61a2|Weights: BF16
 area|quant/community|f0b6d0|Weights: community packs (models/<model>/community/)
 area|install|424a53|install.sh and the first start on a new machine
 area|ops|57606a|Service scripts, profiles, watchdog, release tooling
-area|docs/manual|6e7781|The manual (manual/, LaTeX)
 area|bench|8c959f|Benchmarks and measurement tools
 area|ci|afb8c1|GitHub workflows, issue forms, repository settings
 priority|p0|b60205|Broken for everyone, or data loss: first

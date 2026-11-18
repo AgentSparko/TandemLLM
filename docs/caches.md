@@ -29,6 +29,26 @@ Flash-Next (ENG-157): its sections are the 36 GDN states and conv tails, the PLE
 | disk tier | rows and recurrent-state anchors of prefixes prefilled more than once, and of a session's first long request | NVMe | off in the code, on in the served profile from 0.3.13-test, 16 GB (50 GB until 0.4.2-test) |
 | session spill | whole live conversations: at a planned stop, and before another session evicts them | NVMe | on with the disk tier from 0.3.22-test, 64 GB (40 GB until 0.4.2-test), compressed from 0.4.3-test |
 
+| prompt | cold prefill | sent again: resumed from the resident prefix |
+|-|-|-|
+| 32k tokens | 44.4 s | 0.3 s |
+| 64k tokens | 93.7 s | 0.6 s |
+| 128k tokens | 208.3 s | 1.1 s |
+
+*Time to first token for a long prose prompt, cold and sent a second time (log scale). Measured: the StairCut paper, published NVFP4 weights, one request each.*
+
+| what happens | which cache answers | read cold |
+|-|-|-|
+| turn 1, a new session | disk tier (the 24k head) | the user's first message |
+| turn 2, the answer and a tool result | end anchor of turn 1's answer | the tool result |
+| opencode's title call (a guest) | guest stash (rows copied aside) | its own 2k prompt |
+| turn 3, after a 33k thinking | end anchor of the thinking | the tool result, not the 33k |
+| a 10k request of another session | parked session (the 53k rows) | the other session's 10k |
+| a deploy restarts the engine | session spill (written at the drain) | the next message |
+| the same session, the next morning | disk tier (the head again) | everything past the head |
+
+*One agent conversation through the cache tiers. Top: what the client does. Middle: the cache the prefill resumes from. Bottom: what it still reads cold. A turn after a long thinking resumes at the end anchor and reads only the tool result; a title call is a guest whose rows are stashed and put back; another session's request parks the conversation; a restart brings it back from the session spill; the next morning only the common head is still on the NVMe. The token counts are the measured cases of [The resident prefix](#resident-prefix) to [Live conversations on the NVMe](#live-conversations-on-the-nvme).*
+
 ## Resident prefix
 
 An agent client such as opencode sends one conversation that only grows: each turn's prompt is the previous prompt, plus the previous answer, plus a tool result. At 190k tokens a whole snapshot would be about 20 GB, so the state store cannot keep one.
@@ -72,6 +92,16 @@ An answer's reasoning the client does not send back (0.3.50-test, SRV-239). Open
 A guest keeps no end anchor. A guest (at most 8,192 tokens and under a quarter of the resident prompt, as above) writes over rows the resident prompt's next turn needs, which the stash puts back before the next request; the guest's own rows and its end go with that. A short conversation that starts while a longer one is resident re-reads its first answer at its second turn, as it re-reads its whole prompt on every turn (0.3.14-test's live check: a 459-token first turn after a 1,932-token conversation was a guest, and its follow-up resumed nowhere). Keeping a guest's end beside the stash is not built: the router's classifier requests run between such a conversation's turns as guests of their own, and they would write over the guest's rows in turn.
 
 Whether the client's copy matches: in the box's suffix store on 2026-10-02 (4,607 turns that followed another, token ids only), the next prompt held the engine's visible output token for token to its end in 3,844 (83 %); where it did not, it parted late (91 tokens before the end at the median), and such a turn resumes at the prompt's last line, as before. The 147 MiB are asked of the memory policy once, at the `end` level: given back after the body anchors and before the guest stash (`Budget.LEVELS`). Anchors every 1,024 generated tokens, which would also serve a copy that parts inside the generation, are not built.
+
+```
+turn 1: [ prompt (prefilled on the grid) | | | | | | | ][ answer (verify rounds) ]*
+          grid anchors every 1,024 tokens: |              end anchor: *
+                                                                       |
+turn 2: [ resumed: nothing re-read ..................................... ][ new: forwarded ]
+          the end anchor matches every token the client sent back
+```
+
+*The resident prefix in an agent conversation. Turn 1's prompt is anchored every 1,024 tokens; its answer was written by verify rounds and gets one anchor at its end. Turn 2 sends back the prompt and the answer and adds a tool result: it resumes at the end anchor and forwards only the new part.*
 
 ## State store
 
@@ -277,6 +307,14 @@ opencode's `/compact` sends its compaction agent's prompt and ONE user message: 
 A summary still has to be written, about 2,000 tokens at 40 to 60 tok/s. The server therefore writes it ahead: when no request has come for `--compaction-idle-s` (30 s), no hold or box lock is on, and the resident conversation is an opencode session's of at least `--compaction-min-tokens` (32,768) whose summary at its end anchor is not written yet, it runs the continuation in scratch rows (no anchor taken, nothing kept) with opencode's instructions (the last ones a request of that client brought, else the 1.18.34 text). It takes the box lock without waiting for as long as it writes, and it writes nothing while someone else holds the lock. Since 0.3.24-test it also gives the box back: it does not start while another program is on the GPU (nvidia-smi), and it stops when a process waits in `flock` for the lock it holds (the kernel's /proc/locks, looked at every 0.5 s) or when another program comes to the GPU (every 5 s). A hold's `flock -w` then waits about half a second instead of the summary's 45 s. A program that polls with `flock -n` is not visible this way; it should wait with `flock -w`. A request that comes for the engine, or a drain, stops it at the next prefill chunk or decode block, and the conversation's rows, anchors and end anchor are as they were. A compaction request of that session at that end anchor, with the same system text and template, is answered from it without the engine (`cache_source: prepared`). `--compaction client` serves every compaction as the client sent it; `--compaction-prepare off` writes nothing ahead.
 
 `tests/test_compaction_continue.py`: the request's parts and the guard; the continuation's tokens equal a cold run's of the same ids; after images, the end offered to the continuation alone and its offset kept on the NVMe; the preparer leaves the conversation as it was, also when a waiting request stops it.
+
+| how it was served | seconds to serve the compaction request |
+|-|-|
+| served as sent | 115.5 |
+| as a continuation | 40.7 |
+| summary written ahead | 0.07 |
+
+*One captured 57,008-token compaction request of a 104,313-token opencode turn, served three ways. As a continuation the prefill took 1.04 s; the rest was writing the 1,406-token summary. (measured), 2026-10-04.*
 
 ## Workers, parents and the park (ENG-371)
 

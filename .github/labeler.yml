@@ -62,12 +62,9 @@ ops:
   - changed-files:
       - any-glob-to-any-file: ['tools/release*.sh', 'tools/gh_labels.sh']
       - all-globs-to-any-file: ['ops/**', '!ops/profiles/**']
-docs/manual:
-  - changed-files:
-      - any-glob-to-any-file: ['manual/**']
 docs:
   - changed-files:
-      - all-globs-to-all-files: ['{docs/**,manual/**,*.md}']
+      - all-globs-to-all-files: ['{docs/**,*.md}']
 test:
   - changed-files:
       - all-globs-to-all-files: ['tests/**']

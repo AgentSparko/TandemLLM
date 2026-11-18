@@ -637,16 +637,15 @@ def test_the_defaults():
     for k, v in want.items():
         assert KNOBS[k][0] == v and knobs.DEFAULTS[k] == v, (k, KNOBS[k], knobs.DEFAULTS.get(k))
     root = os.path.dirname(HERE)
-    tex = open(os.path.join(root, "manual", "generated", "engine-knobs.tex"), encoding="utf-8").read()
+    ref = open(os.path.join(root, "docs", "reference", "variables.md"), encoding="utf-8").read()
     # ENG-413 WP11: the extension's knobs (contracts/engine-ext-v1/knobs.json) are in TandemApp's
-    # manual's ext-knobs.tex
-    ext_tex = open(os.path.join(pairapp.APP, "manual", "generated", "ext-knobs.tex"),
+    # reference (its docs/reference/variables.md, the ext-knobs block)
+    ext_ref = open(os.path.join(pairapp.APP, "docs", "reference", "variables.md"),
                    encoding="utf-8").read()
     with open(os.path.join(root, "contracts", "engine-ext-v1", "knobs.json"), encoding="utf-8") as f:
         ext_knobs = json.load(f)["knobs"]
     for k, v in want.items():
-        name = ("QWEN38_" + k).replace("_", r"\_\allowbreak{}")
-        assert f"\\texttt{{{name}}} & \\texttt{{{v}}}" in (ext_tex if k in ext_knobs else tex), k
+        assert f"| `QWEN38_{k}` | `{v}` |" in (ext_ref if k in ext_knobs else ref), k
     env = {k: os.environ.get("QWEN38_" + k) for k in want}
     if not any(env.values()):
         assert router_mod.PACKAGE_HOLD == "pick" and libsearch.LIBRARY_HOLD == "message"

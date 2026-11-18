@@ -1,9 +1,7 @@
-"""OPS-101 (second part): the Flash-Next docs and manual say what the code and the registry say, no GPU.
+"""OPS-101 (second part): the Flash-Next docs say what the code and the registry say, no GPU.
 
-  * the manual has a Flash-Next chapter and includes it (manual/chapters/flashnext.tex,
-    manual/tandemllm-manual.tex);
-  * the pack table in README.md, docs/quantisation.md and the chapter (Table "The Flash-Next
-    packs") matches
+  * the docs have a Flash-Next page and the index lists it (docs/flash-next.md, docs/README.md);
+  * the pack table in README.md, docs/quantisation.md and docs/flash-next.md matches
     models/qwen3.8-flash-next/model.yaml and ops/profiles/flashnext-<bpw>.env row by row: the branch,
     the disk size, the weights, the n-gram table and its policy, the largest window (or that load/generation is unverified, the pack
     does not load yet, or fits none);
@@ -60,15 +58,14 @@ def _cells(rows: list[str], profile_id: str, sep: str) -> list[str]:
     return hit[0]
 
 
-def test_the_chapter_is_in_the_manual():
-    chapter = _read("manual", "chapters", "flashnext.tex")
-    assert "\\chapter{Qwen3.8-Flash-Next}\\label{ch:flashnext}" in chapter
-    main = _read("manual", "tandemllm-manual.tex")
-    assert "\\input{chapters/flashnext}" in main
-    # in the part on how the engine works, after the chapter on adding a model
-    assert main.index("\\input{chapters/adding-model}") < main.index("\\input{chapters/flashnext}") \
-        < main.index("\\part{Reference}")
-    return "chapters/flashnext.tex, input after adding-model"
+def test_the_page_is_in_the_docs():
+    page = _read("docs", "flash-next.md")
+    assert page.startswith("# Qwen3.8-Flash-Next\n"), page[:60]
+    index = _read("docs", "README.md")
+    assert "(flash-next.md)" in index
+    # among the pages on how the engine works, after adding a model
+    assert index.index("(adding-a-model.md)") < index.index("(flash-next.md)")
+    return "docs/flash-next.md, listed after adding-a-model.md"
 
 
 def test_the_pack_tables_match_the_registry_and_profiles():
@@ -76,8 +73,7 @@ def test_the_pack_tables_match_the_registry_and_profiles():
     assert len(profiles) == 5, [p["id"] for p in profiles]
     md_rows = [ln for ln in _read("docs", "quantisation.md").splitlines() if ln.startswith("| `flashnext-")]
     rd_rows = [ln for ln in _read("README.md").splitlines() if ln.startswith("| `flashnext-")]
-    tex_rows = [ln for ln in _read("manual", "chapters", "flashnext.tex").splitlines()
-                if ln.startswith("\\code{flashnext-")]
+    fn_rows = [ln for ln in _read("docs", "flash-next.md").splitlines() if ln.startswith("| `flashnext-")]
     for p in profiles:
         pid, env, table = p["id"], _env(p["id"]), p["table"]
         assert env["QSE_WEIGHTS_REVISION"] == p["hf_revision"], (pid, env["QSE_WEIGHTS_REVISION"])
@@ -96,14 +92,14 @@ def test_the_pack_tables_match_the_registry_and_profiles():
         assert r[1] == f"`{p['hf_revision']}`", (pid, r[1])
         assert r[2] == f"{p['disk_gb']} GB", (pid, r[2])
         assert _window(p) in r[3], (pid, r[3])
-        # manual: profile & disk & weights & table & window
-        t = [x.replace("~", " ") for x in _cells(tex_rows, pid, "&")]
+        # docs/flash-next.md: profile | disk | weights | table | window
+        t = _cells(fn_rows, pid, "|")
         assert t[1] == f"{p['disk_gb']} GB", (pid, t[1])
         assert t[2] == f"{p['weights_gib']} GiB", (pid, t[2])
         assert t[3] == want_table, (pid, t[3])
         assert _window(p) in t[4], (pid, t[4])
         assert ("recommended" in t[4]) == bool(p.get("recommended")), (pid, t[4])
-    return f"{len(profiles)} profiles in README.md, docs/quantisation.md and manual/chapters/flashnext.tex"
+    return f"{len(profiles)} profiles in README.md, docs/quantisation.md and docs/flash-next.md"
 
 
 def test_architecture_marks_the_unbuilt_layers_planned():
@@ -147,7 +143,7 @@ def test_unverified_status_is_not_a_validated_window():
     assert _window({"badges": [], "max_window": 53248}) == "53,248"
     assert _window({"badges": [], "max_window": None}) == "does not fit"
     assert _window({"badges": ["does not load yet"], "max_window": 53248}) == "does not load yet"
-    assert "Two packs do not run." not in _read("manual", "chapters", "flashnext.tex")
+    assert "Two packs do not run." not in _read("docs", "flash-next.md")
     p = next(pr for pr in _profiles() if pr["id"] == "flashnext-5.05")
     assert "load/generation unverified" in p["badges"] and "does not load yet" not in p["badges"]
     for needle in ("7-bit dense projections", "unverified", "estimate"):
