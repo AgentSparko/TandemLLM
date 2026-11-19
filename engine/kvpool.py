@@ -38,6 +38,16 @@ import os
 import threading
 import time
 
+
+def unmap_guard():
+    """SRV-885: every unmap of a pool page holds `capture_lock.GUARD` (reentrant), taken before the buffer's
+    own lock. The threads that read a paged buffer off the engine's thread hold it around each copy and its
+    synchronize (the disk tier's writer, a spill save's device steps), so a page is never unmapped under a
+    copy in flight. On the 27B replay (2026-11-19) the writer copied a finished prompt's draft rows while the
+    next request raised the draft window's floor and gave those pages back: an illegal memory access."""
+    from engine import capture_lock
+    return capture_lock.GUARD
+
 GiB = 1 << 30
 MiB = 1 << 20
 
@@ -502,7 +512,7 @@ class PagedBuffer:
     def trim(self, rows: int = 0) -> int:
         """Release the pages past rows [0, rows). Returns the bytes given back."""
         rows = max(0, min(int(rows), self.max_rows))
-        with self.lock:
+        with unmap_guard(), self.lock:
             target = self.round_rows(rows)
             t0 = time.perf_counter()
             keep = set(self._pages_for(0, target))
@@ -521,10 +531,11 @@ class PagedBuffer:
         """Give everything back (the buffer must not be used after)."""
         self.trim(0)
         if self.drv is not None and self.base is not None:
-            self._flat = None
-            self.tensor = None
-            self.drv.free_va(self.base, self.va_size)
-            self.base = None
+            with unmap_guard():
+                self._flat = None
+                self.tensor = None
+                self.drv.free_va(self.base, self.va_size)
+                self.base = None
         if self.pool is not None:
             with self.pool.lock:
                 if self in self.pool.buffers:

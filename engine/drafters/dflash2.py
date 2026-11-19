@@ -1178,7 +1178,7 @@ def _window_buffer(kvp):
             was an illegal memory access. The set's count comes down with this buffer's."""
             floor = (max(0, int(floor)) // self.page_rows) * self.page_rows
             lowered = False
-            with self.lock:
+            with kvp.unmap_guard(), self.lock:
                 if floor > self.floor:
                     gone = [p for p in self._pages_for(0, floor) if p in self.handles]
                     nbytes = self._release_pages(gone)
@@ -1211,7 +1211,7 @@ def _window_buffer(kvp):
                 self.set_floor(want)                   # the window moved on: give the old pages back
             if rows <= self.rows:
                 return 0
-            with self.lock:
+            with kvp.unmap_guard(), self.lock:
                 if rows <= self.rows:
                     return 0
                 target = self.round_rows(rows)
@@ -1239,7 +1239,7 @@ def _window_buffer(kvp):
             lo, hi = max(0, int(lo)), min(int(hi), self.max_rows)
             if hi <= lo:
                 return 0
-            with self.lock:
+            with kvp.unmap_guard(), self.lock:
                 # at or above the floor a page on the shared page counts as missing too: a lowered
                 # floor leaves its uncovered pages there (SRV-885), and a gather reads them fresh
                 miss = [p for p in self._pages_for(lo, hi)
@@ -1269,7 +1269,7 @@ def _window_buffer(kvp):
             got = super().trim(rows)
             # the shared page's aliases past the rows kept go too: nothing reads there (SRV-885 keeps
             # the ones a lowered floor uncovered under the kept rows)
-            with self.lock:
+            with kvp.unmap_guard(), self.lock:
                 keep = set(self._pages_for(0, self.round_rows(rows)))
                 self._alias_unmap([p for p in self.alias if p not in keep])
             return got
