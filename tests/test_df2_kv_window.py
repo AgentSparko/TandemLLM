@@ -77,7 +77,13 @@ def test_a_resume_earlier_maps_its_window_again():
     assert set(w._pages_for(20000 - 2048, 20000)) <= set(w.handles)
     assert not (set(w.handles) & w.alias)
     w.trim(1000)
-    assert w.floor == 0 and not w.alias
+    # SRV-885: the floor is down; the pages under the rows kept stay on the shared page (readable) and
+    # nothing past them is mapped; the next ensure maps them fresh
+    assert w.floor == 0 and w.alias and not w.handles
+    assert all(q in w.alias for q in w._pages_for(0, 1000))
+    assert not [q for q in w.alias if q not in w._pages_for(0, 8192)]
+    w.ensure(1000)
+    assert set(w._pages_for(0, 1000)) <= set(w.handles) and not w.alias
 
 
 def _drafter(pool):
@@ -199,6 +205,26 @@ def test_a_trim_below_the_floor_leaves_every_kept_row_readable():
     return f"floor 24,576 -> {w.floor:,}; rows 0..{kept:,} all mapped or aliased"
 
 
+def test_a_new_chat_after_a_long_one_writes_real_rows():
+    """SRV-885: the 27B soak's 20,672-token chat after a 40,188-token one drafted from the shared page (most
+    drafts rejected): the floor the long chat left was still up when the new chat prefilled from row 0. The
+    drafter's reset (a request's start) brings it down; the rows below the old floor are stamped not real
+    first, and the new chat's window rows land on pages of their own."""
+    d = _drafter(_pool())
+    _write(d, 0, 40188, 1.0)
+    assert d._ckb.floor == 24576 and bool(d._cs[:24576].any()), "a sync stamps every row it writes"
+    d.reset()
+    assert d._ckb.floor == d._cvb.floor == 0 and d._partial
+    assert not bool(d._cs[:24576].any()) and bool((d._cs[24576:40188] == 1).all())
+    _write(d, 0, 21184, 2.0)
+    for b in (d._ckb, d._cvb):
+        assert set(b._pages_for(21184 - 2048, 21184)) <= set(b.handles), "the window's rows are real pages"
+        assert not [q for q in b._pages_for(0, 21184) if q not in b.handles and q not in b.alias]
+    d.reset()
+    assert not d._partial, "a reset with the floor down already marks nothing"
+    return "floor 24,576 -> 0 at the reset; the new chat's window on its own pages"
+
+
 def test_cover_maps_the_pages_a_gather_reads_and_nothing_else():
     """SPD-223: a draft graph's gather reads [pos0 - window + 1, + span). A floor lowered without its ensure (the
     SPD-211 shape: pages uncovered stay unmapped until the next ensure) is mapped by `cover`, below the floor onto
@@ -207,14 +233,19 @@ def test_cover_maps_the_pages_a_gather_reads_and_nothing_else():
     w, _ = _pair(pool)
     w.ensure(65536)
     assert w.cover(65536 - 2048, 65536) == 0                    # the window behind the newest row: mapped
-    w.set_floor(16384)                                          # lowered: pages 16384..49151 unmapped
+    w.set_floor(16384)                          # lowered: pages 16384..49151 on the shared page (SRV-885)
     lo, hi = 20000, 20000 + 2048
-    miss = [q for q in w._pages_for(lo, hi) if q not in w.handles and q not in w.alias]
-    assert miss, "the lowered floor left the gathered rows unmapped"
+    assert all(q in w.alias for q in w._pages_for(lo, hi)), "readable, never a hole"
+    miss = [q for q in w._pages_for(lo, hi) if q not in w.handles]
+    assert miss
     assert w.cover(lo, hi) == len(miss)
-    assert all(q in w.handles or q in w.alias for q in w._pages_for(lo, hi))
+    assert set(w._pages_for(lo, hi)) <= set(w.handles) and not (set(w.handles) & w.alias), "mapped fresh"
     assert w.cover(lo, hi) == 0
-    return f"{len(miss)} unmapped page(s) under a lowered floor mapped once, then nothing"
+    # below the floor, in every region, onto the shared page
+    w.trim(0)
+    w.ensure(65536)
+    assert w.cover(1000, 3000) == 0 and all(q in w.alias for q in w._pages_for(1000, 3000))
+    return f"{len(miss)} page(s) under a lowered floor mapped fresh once, then nothing"
 
 
 def test_the_window_is_the_27bs_choice_and_off_for_any_other_build():

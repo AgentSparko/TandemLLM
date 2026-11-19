@@ -1127,6 +1127,11 @@ def _window_buffer(kvp):
             self.alias: set = set()        # pages mapped onto `dummy`
             self.dummy = None              # the shared page's handle
 
+        def _region_row(self, p: int) -> int:
+            """The first row page `p` holds, in its own region (a page index counts every region's pages:
+            region `r`'s rows at the floor are not page `floor // page_rows`)."""
+            return (p * self.page) % self.region_bytes // self.row_bytes
+
         def _floor_for(self, rows: int) -> int:
             r = max(0, int(rows) - self.keep)
             return (r // self.page_rows) * self.page_rows
@@ -1162,8 +1167,9 @@ def _window_buffer(kvp):
                 self.alias.discard(p)
 
         def set_floor(self, floor: int) -> None:
-            """Move the floor: pages wholly below it alias the shared page; pages it uncovers are
-            unaliased (`ensure` maps them fresh and zeroed).
+            """Move the floor: pages wholly below it alias the shared page; pages it uncovers stay on the
+            shared page until `ensure` or `cover` maps them fresh and zeroed (SRV-885: never unmapped, so
+            no reader in between faults).
 
             SPD-211: an uncovered page is unmapped until that `ensure`, and the paged set's `ensure`
             (`kvpool.ensure_for`) returns at once while the set's row count is past the rows asked:
@@ -1181,7 +1187,10 @@ def _window_buffer(kvp):
                         self.pool._add(self.owner, -nbytes)
                         self.pool.stats["pages_released"] += len(gone)
                 elif floor < self.floor:
-                    self._alias_unmap(self._pages_for(floor, self.floor))
+                    # SRV-885: the uncovered pages keep their alias. Unmapped, they were a hole under rows a
+                    # reader still takes: the 27B soak (2026-11-18 21:10Z) trimmed a 21,184-row chat after
+                    # a 40,188-row one, the floor came down from 24,576 to 8,192, and the next spill save
+                    # read rows 8,192..21,184 through `kv_views`: an illegal memory access
                     self.rows = min(self.rows, floor)
                     lowered = True
                 self.floor = floor
@@ -1231,16 +1240,20 @@ def _window_buffer(kvp):
             if hi <= lo:
                 return 0
             with self.lock:
-                miss = [p for p in self._pages_for(lo, hi) if p not in self.handles and p not in self.alias]
+                # at or above the floor a page on the shared page counts as missing too: a lowered
+                # floor leaves its uncovered pages there (SRV-885), and a gather reads them fresh
+                miss = [p for p in self._pages_for(lo, hi)
+                        if p not in self.handles and (p not in self.alias or self._region_row(p) >= self.floor)]
                 if not miss:
                     return 0
-                fp = self.floor // self.page_rows if self.page_rows else 0
-                below, above = [p for p in miss if p < fp], [p for p in miss if p >= fp]
+                below = [p for p in miss if self._region_row(p) < self.floor]
+                above = [p for p in miss if self._region_row(p) >= self.floor]
                 self._alias_map(below)
                 if above:
                     nbytes = len(above) * self.page
                     if self.pool is not None:
                         self.pool.gate(self.owner, nbytes)
+                    self._alias_unmap(above)
                     self._map_pages(above)
                     if self.drv is not None:
                         P = self.page
@@ -1253,7 +1266,13 @@ def _window_buffer(kvp):
         def trim(self, rows: int = 0) -> int:
             if int(rows) < self.floor:
                 self.set_floor(self._floor_for(rows))
-            return super().trim(rows)
+            got = super().trim(rows)
+            # the shared page's aliases past the rows kept go too: nothing reads there (SRV-885 keeps
+            # the ones a lowered floor uncovered under the kept rows)
+            with self.lock:
+                keep = set(self._pages_for(0, self.round_rows(rows)))
+                self._alias_unmap([p for p in self.alias if p not in keep])
+            return got
 
         def close(self) -> None:
             self.set_floor(0)
@@ -1619,6 +1638,21 @@ class DFlash2Drafter(Drafter):
         self._tap_rows = []
         self._psync = []
         self._partial = False
+        # SRV-885: a request's start (a resume or a restore maps its own window after, `_fit_window`).
+        # The floor a longer conversation left stays where it was before this: a new chat prefilled
+        # from row 0 then wrote its rows below it onto the shared page and drafted from that page's
+        # garbage (the 27B soak: 20,672 tokens after a 40,188-token chat, most drafts rejected). The
+        # rows below the old floor are not real: their stamps say so before the floor comes down.
+        old = 0
+        for b in (getattr(self, "_ckb", None), getattr(self, "_cvb", None)):
+            if b is not None and b.floor:
+                old = max(old, b.floor)
+        if old:
+            self._stamps_floor()
+            for b in (self._ckb, self._cvb):
+                if b is not None and b.floor:
+                    b.set_floor(0)
+            self._partial = True
 
     # ---- serving-time state cache ----------------------------------------------------------
     def state_snapshot(self):

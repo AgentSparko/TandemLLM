@@ -57,7 +57,39 @@ def test_a_resume_below_the_window_over_driver_pages():
     return "; ".join(out)
 
 
+def test_a_trim_below_the_floor_then_the_spill_reads_the_rows():
+    """SRV-885 on the device: the 27B soak's shape. A 40,188-row chat holds the floor at 24,576; a new chat
+    ends at 21,184 rows; the end-of-request trim brings the floor down to 8,192; the spill save then reads
+    every row it keeps. Before the fix that read was an illegal memory access (run this in its own process:
+    a fault poisons the context)."""
+    assert kvpool.Driver.get() is not None, "needs CUDA virtual memory management"
+    pool = kvpool.KVPool(hard_floor=0, margin_rows=256, meminfo=lambda: 1 << 50)
+    ps = kvpool.PagedSet("s", pool=pool)
+    W = D._window_buffer(kvpool)
+    w = ps.add(W(SHAPE, 2, torch.bfloat16, "cuda", pool=pool, window=2048))
+    t = w.tensor
+    ps.ensure(40188)
+    t[:, :, 40188 - 2048:40188] = 1.0
+    assert w.floor == 24576
+    ps.ensure(21184)
+    t[:, :, :21184] = 2.0                             # the new chat: below the old floor, the shared page
+    ps.trim(21184)
+    assert w.floor == 8192
+    total = float(t[:, :, :21184 + 256].float().sum().item())    # the spill save's read of the rows kept
+    torch.cuda.synchronize()
+    assert total == total, "read"
+    ps.ensure(21184)
+    t[:, :, 21184 - 2048:21184] = 3.0                 # the next turn writes its window: real pages again
+    torch.cuda.synchronize()
+    assert bool((t[:, :, 21184 - 2048:21184] == 3.0).all())
+    ps.trim(0)
+    assert not w.alias and w.committed_bytes() == 0
+    w.close()
+    return "floor 24,576 -> 8,192 at the trim; rows 0..21,440 read without a fault; the window maps again"
+
+
 if __name__ == "__main__":
     print(test_window_over_driver_pages())
     print(test_a_resume_below_the_window_over_driver_pages())
-    print("2 passed")
+    print(test_a_trim_below_the_floor_then_the_spill_reads_the_rows())
+    print("3 passed")
