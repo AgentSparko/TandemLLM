@@ -88,8 +88,11 @@ from engine.models import REGISTRY  # noqa: E402
 #: legacy_fingerprints), keeps its value
 # 0.16.0: the arithmetic half holds; the whole-tree half moved with ENG-413 and ENG-458 (no compute
 # change: the bit-equal gate on 4a133ba3 found 0 differing tokens)
-GOLDEN_V2 = ("fc7ccaed9feffdbe43ec4147f552a6052829438d0f2b2c138eb1c63946af6fb9",
-             "d2252f06642da403b3f93bba579f9ac9599d4dd7817651a2dc099071aadf109c")
+# SRV-885: the 27B's draft window (engine/drafters/dflash2.py) moves both halves on purpose: entries written
+# before could hold a new chat's draft rows from the window's shared page, stamped real; the 27B's disk caches
+# are rebuilt once
+GOLDEN_V2 = ("0c7d5ac4408f0a82c2a55c6de189dc6053f73f0860704af6ead078bbe3ef6fa1",
+             "beebae2e5f951fb12ac6574ffa94a054e0b00a5834d06f2dc0db475440e0c0be")
 GOLDEN_FP4 = {
     # SPD-201 (2026-10-24): the speed setup's knobs default on, so every family's fingerprint moved once;
     # SPD-215: Flash-Next's joint pass row-wise and grouped experts by default (its two adapters again);
@@ -171,7 +174,8 @@ GOLDEN_FP4 = {
     # SPD-249: the layer-major prefill windows, the fused hyper-connection inputs, the attention stages and fewer
     # copies (QWEN38_FN_PF_*, all off, the bits the same), the tensor-core mixer modes (QWEN38_FN_PREFILL_MM, fp32 by
     # default); tools/gdn_prefill_kernels.py's `view` and tools/gpu/base.py's fn_pf_hc: every adapter
-    "qwen3_5": "8cda55ed3a16bc084685cdf040f31151800c4dab822497c3452dbab4bae89a1d",
+    # SRV-885: the draft window's floor and reset (engine/drafters/dflash2.py): qwen3_5, once
+    "qwen3_5": "659c721f15b2285e0ce323dfd6e976264b05c5ba3cb437f4ad450620de52758e",
     # the prefill's indexer scores and PLE decode in row tiles (engine/models/flashnext/engine.py): qwen4_exp, qwen3_5_moe
     # SRV-795: each graph captured on its slot's own stream (engine/models/flashnext/engine.py; the same rows, its
     # SAME_ROWS entry): qwen4_exp, qwen3_5_moe
