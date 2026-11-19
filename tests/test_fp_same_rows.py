@@ -110,8 +110,9 @@ V2_0150 = "58a0f1a95d3c8187"
 #: engine/drafters/ngram.py; then the GPU adapters, tools/gpu (tests/test_adapter_guards.py GOLDEN_V2[0])
 #: #144: the Ada kernels behind the tools/gpu adapter; #159: then QWEN38_MTP_BACKLOG_CAP; SPD-249: then
 #: tools/gdn_prefill_kernels.py's `view` and tools/gpu/base.py's fn_pf_hc
-#: SRV-885: then the 27B's draft window (engine/drafters/dflash2.py), on purpose
-V2_NOW = "0c7d5ac4408f0a82"
+#: SRV-885: then the 27B's draft window (engine/drafters/dflash2.py), on purpose; #174: its sync's check of
+#: the pages (the same rows; no release between the two)
+V2_NOW = "7c6b4c314c5f6cf7"
 #: 0.15.0's fp4 by adapter (extra {}): what no family adopts after ENG-411
 FP4_0150 = {"qwen3_5": "be7b55433345d94d", "qwen4_exp": "b41ebca1bd94daf9", "nemotron_h": "d3e365f847df2f74",
             "lfm2_moe": "eae9da4634edd3fa", "qwen3_5_moe": "c3db84a3452b9cbb", "flint": "be812ac05a869010"}

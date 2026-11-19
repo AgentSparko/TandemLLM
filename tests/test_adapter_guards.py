@@ -91,8 +91,10 @@ from engine.models import REGISTRY  # noqa: E402
 # SRV-885: the 27B's draft window (engine/drafters/dflash2.py) moves both halves on purpose: entries written
 # before could hold a new chat's draft rows from the window's shared page, stamped real; the 27B's disk caches
 # are rebuilt once
-GOLDEN_V2 = ("0c7d5ac4408f0a82c2a55c6de189dc6053f73f0860704af6ead078bbe3ef6fa1",
-             "beebae2e5f951fb12ac6574ffa94a054e0b00a5834d06f2dc0db475440e0c0be")
+# #174: a draft sync is not written onto pages given back (engine/drafters/dflash2.py, engine/kvpool.py). The
+# stored rows are the same; the move rides SRV-885's, which no release carries yet (one rebuild for both)
+GOLDEN_V2 = ("7c6b4c314c5f6cf7f086c9208b0ac4f74198984a8093d1d41a82a71e9ca0d6f5",
+             "42ea37125c89666b43bdeae29fa1232e6b7de5e40ea93c4d18ec457ead2e3f1a")
 GOLDEN_FP4 = {
     # SPD-201 (2026-10-24): the speed setup's knobs default on, so every family's fingerprint moved once;
     # SPD-215: Flash-Next's joint pass row-wise and grouped experts by default (its two adapters again);
@@ -175,7 +177,8 @@ GOLDEN_FP4 = {
     # copies (QWEN38_FN_PF_*, all off, the bits the same), the tensor-core mixer modes (QWEN38_FN_PREFILL_MM, fp32 by
     # default); tools/gdn_prefill_kernels.py's `view` and tools/gpu/base.py's fn_pf_hc: every adapter
     # SRV-885: the draft window's floor and reset (engine/drafters/dflash2.py): qwen3_5, once
-    "qwen3_5": "659c721f15b2285e0ce323dfd6e976264b05c5ba3cb437f4ad450620de52758e",
+    # #174: a draft sync's check of its pages (dflash2.py, engine/kvpool.py): the same rows, with SRV-885's move
+    "qwen3_5": "9a3189baa8ec501f006b6bd19c26b106e29fdabdbc002193e23338eb4bb0e792",
     # the prefill's indexer scores and PLE decode in row tiles (engine/models/flashnext/engine.py): qwen4_exp, qwen3_5_moe
     # SRV-795: each graph captured on its slot's own stream (engine/models/flashnext/engine.py; the same rows, its
     # SAME_ROWS entry): qwen4_exp, qwen3_5_moe

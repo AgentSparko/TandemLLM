@@ -1,6 +1,7 @@
 """On the board: SPD-177's window buffer over real driver pages (engine/drafters/dflash2.py `_window_buffer`).
 Rows past the floor keep what was written; rows below it read and write one shared page without a fault;
-a lowered floor maps fresh zeroed pages and keeps the rows above the old floor; the pool's account follows.
+a lowered floor maps fresh zeroed pages and keeps the rows above the old floor; the pool's account follows;
+a sync whose rows' pages went back writes nothing (#174).
 Run on the box under the lock: python tests/gpu/test_df2_kv_window_gpu.py
 """
 
@@ -88,8 +89,59 @@ def test_a_trim_below_the_floor_then_the_spill_reads_the_rows():
     return "floor 24,576 -> 8,192 at the trim; rows 0..21,440 read without a fault; the window maps again"
 
 
+def test_a_pending_sync_after_the_pages_went_back():
+    """#174 on the device: a side slot's warm-up leaves a sync pending, its pages go back (`trim(0)`), and
+    the slot's first request reads the drafter's views. Before the fix the pending sync wrote rows
+    2,600..2,608 onto unmapped pages: an illegal memory access (run this in its own process: a fault
+    poisons the context). Rows on pages still held are written as before."""
+    import types
+    assert kvpool.Driver.get() is not None, "needs CUDA virtual memory management"
+    pool = kvpool.KVPool(hard_floor=0, margin_rows=256, meminfo=lambda: 1 << 50)
+    ps = kvpool.PagedSet("s", pool=pool)
+    W = D._window_buffer(kvpool)
+    d = D.DFlash2Drafter.__new__(D.DFlash2Drafter)
+    d._psync, d._partial, d.ctx_len, d._tap_rows, d._want = [], False, 0, [], [0]
+    d._ckb = ps.add(W(SHAPE, 2, torch.bfloat16, "cuda", pool=pool, name="draft.k", window=2048))
+    d._cvb = ps.add(W(SHAPE, 2, torch.bfloat16, "cuda", pool=pool, name="draft.v", window=2048))
+    d._ck, d._cv = d._ckb.tensor, d._cvb.tensor
+    d._cs = torch.zeros(SHAPE[2], dtype=torch.uint8, device="cuda")
+    d.eng = types.SimpleNamespace(device="cuda")
+    one = lambda n: torch.ones(SHAPE[1], n, SHAPE[3], dtype=torch.bfloat16, device="cuda")  # noqa: E731
+    m = types.SimpleNamespace(dtype=torch.bfloat16, project_context=lambda x: x,
+                              context_kv=lambda h, pos: [(one(len(pos)), one(len(pos)))] * SHAPE[0])
+    d.module, d._build = types.SimpleNamespace(w=object()), lambda: m
+    fused = torch.ones(8, 4, dtype=torch.bfloat16, device="cuda")
+    ps.ensure(2700)                                   # the warm-up
+    d._psync.append((fused, 2600, 8))
+    d.ctx_len = 2608
+    d.kv_views()                                      # held: written
+    torch.cuda.synchronize()
+    assert bool((d._ck[:, :, 2600:2608] == 1).all()) and bool((d._cs[2600:2608] == 1).all())
+    d._psync.append((fused, 2608, 8))                 # the last block's sync, still pending
+    d.ctx_len = 2616
+    ps.trim(0)                                        # the slot's build gives its pages back
+    assert ps.committed_bytes() == 0
+    d.kv_views()                                      # the first request's carry reads the views
+    torch.cuda.synchronize()
+    assert not d._psync and d._partial and d.ctx_len == 2608 and ps.committed_bytes() == 0
+    d._tap_rows = [fused]
+    D.DFlash2Drafter.sync(d, list(range(8)), None, 2608)      # the router's catch-up, written at once
+    torch.cuda.synchronize()
+    assert d.ctx_len == 2608 and ps.committed_bytes() == 0
+    ps.ensure(3000)                                   # the request's own rows: fresh pages, zeroed
+    assert not bool(d._ck[:, :, 2600:2616].any())
+    D.DFlash2Drafter.sync(d, list(range(8)), None, 2608)
+    torch.cuda.synchronize()
+    assert bool((d._cv[:, :, 2608:2616] == 1).all()) and d.ctx_len == 2616
+    ps.trim(0)
+    for b in (d._ckb, d._cvb):
+        b.close()
+    return "a pending sync after trim(0) writes nothing and faults nothing; held rows are written"
+
+
 if __name__ == "__main__":
     print(test_window_over_driver_pages())
     print(test_a_resume_below_the_window_over_driver_pages())
     print(test_a_trim_below_the_floor_then_the_spill_reads_the_rows())
-    print("3 passed")
+    print(test_a_pending_sync_after_the_pages_went_back())
+    print("4 passed")

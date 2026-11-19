@@ -462,6 +462,12 @@ class PagedBuffer:
     def committed_bytes(self) -> int:
         return len(self.handles) * self.page
 
+    def holds(self, lo: int, hi: int) -> bool:
+        """#174: every page of rows [lo, hi) holds memory, so a write of them lands on a mapped page.
+        One int compare for rows under the committed count; past it the pages are looked up."""
+        lo, hi = max(0, int(lo)), min(int(hi), self.max_rows)
+        return hi <= max(lo, self.rows) or all(p in self.handles for p in self._pages_for(lo, hi))
+
     def round_rows(self, rows: int) -> int:
         """`rows` rounded up to where the pages that hold it end in every region (capped)."""
         rows = max(0, min(int(rows), self.max_rows))
@@ -653,6 +659,22 @@ def ensure_for(t, rows: int) -> None:
     ps = _BY_PTR.get(t.data_ptr())
     if ps is not None and int(rows) + ps.margin() > ps.rows:
         ps.ensure(int(rows))
+
+
+def holds_for(t, lo: int, hi: int) -> bool:
+    """#174: do the pages of rows [lo, hi) of `t` (a whole KV or draft-KV tensor) hold memory? True for a
+    static tensor. A write kept for later (a drafter's deferred sync) asks before it writes: a trim since
+    may have given its rows' pages back, and a write onto an unmapped page is an illegal memory access."""
+    if t is None:
+        return True
+    ptr = t.data_ptr()
+    ps = _BY_PTR.get(ptr)
+    if ps is None:
+        return True
+    for b in ps.bufs:
+        if b.tensor is not None and b.tensor.data_ptr() == ptr:
+            return b.holds(lo, hi)
+    return True
 
 
 def env_on() -> bool:

@@ -1198,6 +1198,13 @@ def _window_buffer(kvp):
             if ps is not None:
                 ps.lower(self.rows)
 
+        def holds(self, lo: int, hi: int) -> bool:
+            """#174: as the plain buffer's, with the shared page: a write below the floor lands there. The
+            count is low after a lowered floor while the pages above it stay (SRV-885): those are looked up."""
+            lo, hi = max(0, int(lo)), min(int(hi), self.max_rows)
+            return (hi <= max(lo, self.rows)
+                    or all(p in self.handles or p in self.alias for p in self._pages_for(lo, hi)))
+
         def need_bytes(self, rows: int) -> int:
             rows = max(0, min(int(rows), self.max_rows))
             lo = max(self.floor, self._floor_for(rows))
@@ -1335,6 +1342,8 @@ def check_window(device: str = "cpu", rows: int = 37387, resume: int = 28672,
 
 #: the longest sync that waits (a block's rows); a prompt's sync runs at once
 DEFER_SYNC_ROWS = 64
+#: #174: the syncs not written because their rows' pages had been given back, and their rows
+DROPPED = {"syncs": 0, "rows": 0}
 
 
 def flush_syncs(ds) -> None:
@@ -1344,6 +1353,14 @@ def flush_syncs(ds) -> None:
     rowcopy.flush()
     groups: dict = {}
     for d in ds:
+        if getattr(d, "_psync", None):
+            # #174: a sync whose rows' pages were given back since it was queued (a trim) is not written
+            gone = [e for e in d._psync if not d._rows_held(e[1], e[1] + e[2])]
+            if gone:
+                d._psync = [e for e in d._psync if d._rows_held(e[1], e[1] + e[2])]
+                for _, first, n in gone:
+                    d._sync_dropped(first, n)
+                d.ctx_len = min(d.ctx_len, min(first for _, first, _ in gone))
         if getattr(d, "_psync", None):
             groups.setdefault(id(d.module.w), []).append(d)
     for grp in groups.values():
@@ -1769,6 +1786,12 @@ class DFlash2Drafter(Drafter):
         n = len(tokens)
         if n == 0:
             return
+        if not self._rows_held(first_pos, first_pos + n):
+            # #174: rows a trim gave back since the target wrote them (a side slot's warm-up ends with
+            # the length router's backlog for them; the slot's pages then go back to the pool). Written,
+            # they were an illegal memory access. Nothing is synced: the cache ends where it did
+            self._sync_dropped(first_pos, n)
+            return
         taps = [r for r in self._tap_rows if r is not None]
         if len(taps) != len(self._want):
             raise RuntimeError(f"tap delivered {len(taps)} of {len(self._want)} target hidden "
@@ -1813,6 +1836,23 @@ class DFlash2Drafter(Drafter):
                 self._cs[first_pos:first_pos + n] = 1
                 self._stamps_floor()
         self.ctx_len = first_pos + n
+
+    def _rows_held(self, lo: int, hi: int) -> bool:
+        """#174: rows [lo, hi) of the draft K and V are on pages that hold memory (always, without the pool)."""
+        ckb, cvb = getattr(self, "_ckb", None), getattr(self, "_cvb", None)
+        if ckb is not None and cvb is not None:
+            return ckb.holds(lo, hi) and cvb.holds(lo, hi)
+        from engine import kvpool as _kvp
+        return _kvp.holds_for(self._ck, lo, hi) and _kvp.holds_for(self._cv, lo, hi)
+
+    def _sync_dropped(self, first: int, n: int) -> None:
+        """#174: a sync that was not written: its rows are not real (their stamps stay 0)."""
+        self._partial = True
+        DROPPED["syncs"] += 1
+        DROPPED["rows"] += int(n)
+        owner = getattr(getattr(self, "_ckb", None), "owner", None)
+        print(f"[drafter] a draft sync of rows {first}..{first + n} is dropped: their pages were given back"
+              f"{f' ({owner})' if owner else ''}", flush=True)
 
     def _flush_sync(self) -> None:
         """This drafter's pending syncs into its cache, before anything reads it (`DEFER_SYNC`)."""
