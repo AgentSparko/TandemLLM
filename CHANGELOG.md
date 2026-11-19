@@ -8,6 +8,7 @@ Releases of TandemEngine, TandemLLM's inference engine (TandemLLM up to 0.15.4; 
 
 - The 27B no longer stops answering after a short chat follows a long one (SRV-885). The end of a request could lower the draft window's floor and leave the rows between the new floor and the old one unmapped. The next save of that conversation to the disk read them, the GPU faulted (an illegal memory access) and every request after it was a 503 `engine_failed` until a restart. A lowered floor now leaves those rows on the window's shared page until they are mapped again, and a trim drops only what lies past the rows it keeps.
 - A new chat after a long one drafts from its own rows (SRV-885). The floor the long chat left stayed up while the new chat prefilled from row 0, so its draft rows went to the shared page and most drafts were rejected. The drafter's reset at a request's start brings the floor down.
+- A page of the KV pool is never unmapped while the disk tier's writer copies from it (SRV-885). The writer copies a finished prompt's rows after its request ends, under the capture guard; the next request could release the draft window's pages under that copy, an illegal memory access. Every unmap now holds the same guard.
 
 ## 0.16.0, 2026-11-18
 
