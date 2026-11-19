@@ -220,6 +220,9 @@ def test_a_new_chat_after_a_long_one_writes_real_rows():
     for b in (d._ckb, d._cvb):
         assert set(b._pages_for(21184 - 2048, 21184)) <= set(b.handles), "the window's rows are real pages"
         assert not [q for q in b._pages_for(0, 21184) if q not in b.handles and q not in b.alias]
+    d.reset()                                          # the 21,184-row chat raised its own floor (8,192)
+    assert d._ckb.floor == 0 and d._partial
+    _write(d, 0, 5000, 3.0)                            # a short chat: the floor stays down
     d.reset()
     assert not d._partial, "a reset with the floor down already marks nothing"
     return "floor 24,576 -> 0 at the reset; the new chat's window on its own pages"
