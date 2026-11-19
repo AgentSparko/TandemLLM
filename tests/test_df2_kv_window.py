@@ -9,7 +9,9 @@ CPU only, with the pool's bookkeeping fallback (no driver: pages counted, nothin
     again; `trim` below the floor lowers it too; a snapshot past the threshold holds only the rows
     from the floor and restores into the same rows;
   * the window is the family's choice: a DFlash2 drafter is built without it unless its family asks
-    (only the 27B's builds do), and an explicit QWEN38_DF2_KV_WINDOW wins either way.
+    (only the 27B's builds do), and an explicit QWEN38_DF2_KV_WINDOW wins either way;
+  * #174: a sync whose rows' pages were given back since (a trim) writes nothing: it is dropped, the
+    rows stay not real; a sync onto pages still held (above a lowered floor, the shared page) is written.
 
 Run: python tests/test_df2_kv_window.py
 """
@@ -297,6 +299,101 @@ def test_cover_maps_the_pages_a_gather_reads_and_nothing_else():
     w.ensure(65536)
     assert w.cover(1000, 3000) == 0 and all(q in w.alias for q in w._pages_for(1000, 3000))
     return f"{len(miss)} page(s) under a lowered floor mapped fresh once, then nothing"
+
+
+def _set_drafter(pool, device="cpu"):
+    """A drafter whose window buffers are in a paged set, as the server builds them (the engine's set)."""
+    ps = kvpool.PagedSet("s", pool=pool)
+    W = D._window_buffer(kvpool)
+    d = D.DFlash2Drafter.__new__(D.DFlash2Drafter)
+    d._psync, d._partial, d.ctx_len, d._tap_rows, d._want = [], False, 0, [], [0]
+    d._ckb = ps.add(W(SHAPE, 2, torch.bfloat16, device, pool=pool, name="draft.k", window=2048))
+    d._cvb = ps.add(W(SHAPE, 2, torch.bfloat16, device, pool=pool, name="draft.v", window=2048))
+    d._ck, d._cv = d._ckb.tensor, d._cvb.tensor
+    d._cs = torch.zeros(SHAPE[2], dtype=torch.uint8, device=device)
+    d.eng = types.SimpleNamespace(device=device)
+    one = lambda n: torch.ones(SHAPE[1], n, SHAPE[3], dtype=torch.bfloat16, device=device)  # noqa: E731
+    m = types.SimpleNamespace(dtype=torch.bfloat16, project_context=lambda x: x,
+                              context_kv=lambda h, pos: [(one(len(pos)), one(len(pos)))] * SHAPE[0])
+    d.module, d._build = types.SimpleNamespace(w=object()), lambda: m
+    return ps, d
+
+
+def _written(d, a, b) -> bool:
+    return bool(d._ck[:, :, a:b].any()) or bool(d._cv[:, :, a:b].any()) or bool(d._cs[a:b].any())
+
+
+def _unheld(d, a, b) -> list:
+    return [(buf.name, q) for buf in (d._ckb, d._cvb) for q in buf._pages_for(a, b)
+            if q not in buf.handles and q not in buf.alias]
+
+
+def test_a_pending_sync_whose_pages_were_given_back_writes_nothing():
+    """#174: a side slot's warm-up ends with a sync not yet written (the packed draft's `DEFER_SYNC`, the
+    length router's backlog for the arm that is not drafting), then its pages go back to the pool
+    (`pages.trim(0)`: the warm-up's rows are nobody's conversation). The slot's first request read the
+    drafter's `kv_views` before its reset (a side slot's carry) and the pending sync wrote its rows onto
+    pages that were no longer mapped: an illegal memory access, every request after it a 503."""
+    ps, d = _set_drafter(_pool())
+    ps.ensure(2700)                                     # the warm-up's prefill and its blocks
+    d._psync.append((torch.ones(8, 4, dtype=torch.bfloat16), 2600, 8))
+    d.ctx_len = 2608
+    ps.trim(0)                                          # the slot's build gives the pages back
+    assert _unheld(d, 2600, 2608), "the rows' pages are gone"
+    d.kv_views()                                        # the next request's first read of the cache
+    assert not d._psync
+    assert not _written(d, 2600, 2608), "a pending sync wrote rows whose pages were given back"
+    assert not d._ckb.handles and not d._cvb.handles, "and it maps nothing for them"
+    assert d._partial and d.ctx_len <= 2600, "the rows count as not real"
+    return "rows 2,600..2,608 after trim(0): the pending sync is dropped"
+
+
+def test_a_sync_onto_pages_given_back_writes_nothing():
+    """#174, the router's order on the board: the backlog is synced inside `kv_views` (its catch-up), with
+    the packed draft on (queued, then flushed by the same call) or off (written at once)."""
+    saved = D.DRAFT_MEET
+    try:
+        for meet in (None, lambda *a: None):
+            D.DRAFT_MEET = meet
+            ps, d = _set_drafter(_pool())
+            ps.ensure(2700)
+            d.ctx_len = 2600
+            ps.trim(0)
+            d._tap_rows = [torch.ones(8, 4, dtype=torch.bfloat16)]
+            D.DFlash2Drafter.sync(d, list(range(8)), None, 2600)
+            d.kv_views()
+            assert not d._psync
+            assert not _written(d, 2600, 2608), f"a sync wrote rows whose pages were given back (meet {meet})"
+            assert d.ctx_len == 2600, "nothing was synced: the cache ends where it did"
+    finally:
+        D.DRAFT_MEET = saved
+    return "a sync at rows 2,600..2,608 after trim(0) is dropped, deferred or at once"
+
+
+def test_a_sync_onto_pages_still_held_is_written():
+    """The other side of #174's check: rows whose pages hold memory take the sync, whatever the buffer's
+    row count says (a lowered floor leaves it low, SRV-885), and so do rows on the shared page."""
+    ps, d = _set_drafter(_pool())
+    ps.ensure(40188)
+    assert d._ckb.floor == 24576
+    d._psync.append((torch.ones(8, 4, dtype=torch.bfloat16), 100, 8))          # below the floor: the shared page
+    d.kv_views()
+    assert bool((d._ck[:, :, 100:108] == 1).all()) and not d._psync
+    for b in (d._ckb, d._cvb):
+        b.set_floor(0)                                  # a request's start: the count comes down, the pages stay
+    assert d._ckb.rows == 0 and not _unheld(d, 30000, 30008)
+    d._psync.append((torch.ones(8, 4, dtype=torch.bfloat16), 30000, 8))
+    d.ctx_len = 30008
+    d.kv_views()
+    assert bool((d._ck[:, :, 30000:30008] == 1).all()) and bool((d._cs[30000:30008] == 1).all())
+    assert d.ctx_len == 30008 and not d._psync
+    d.ctx_len = 20000
+    d._tap_rows = [torch.ones(8, 4, dtype=torch.bfloat16)]
+    ps.ensure(20008)                                    # the forward's rows, as the engine commits them
+    D.DFlash2Drafter.sync(d, list(range(8)), None, 20000)
+    d.kv_views()
+    assert bool((d._cv[:, :, 20000:20008] == 1).all()) and d.ctx_len == 20008
+    return "held rows are written: the shared page, above a lowered floor, a forward's rows"
 
 
 def test_the_window_is_the_27bs_choice_and_off_for_any_other_build():
