@@ -178,6 +178,27 @@ def test_a_trim_below_the_floor_keeps_the_set_count_honest():
     ps.trim(5000)
     assert w.floor == 0 and ps.rows == w.rows
 
+def test_a_trim_below_the_floor_leaves_every_kept_row_readable():
+    """SRV-885 (the 27B soak, 2026-11-18 21:10Z): a 40,188-row agent conversation holds the floor at 24,576;
+    the next request is a new 20,672-token chat from row 0 that ends at 21,184 rows; its end-of-request trim
+    (`kv_trim_current`) lowers the floor to 8,192. The next request's spill save then read the resident's
+    rows [0, 21,184) through `kv_views` and the GPU faulted (an illegal memory access): the trim had left
+    the rows between the new floor and the old one neither mapped nor aliased. Every page of the rows a
+    reader may touch is mapped or aliased after any trim."""
+    pool = kvpool.KVPool(hard_floor=0, margin_rows=256, meminfo=lambda: 1 << 50)
+    ps = kvpool.PagedSet("s", pool=pool)
+    W = D._window_buffer(kvpool)
+    w = ps.add(W(SHAPE, 2, torch.bfloat16, "cpu", pool=pool, window=2048))
+    ps.ensure(40188)                                    # the agent conversation
+    assert w.floor == 24576
+    ps.ensure(21184)                                    # the new chat's prefill and answer: no new page
+    ps.trim(21184)                                      # kv_trim_current at the end of its request
+    kept = 21184 + pool.margin_rows
+    hole = [p for p in w._pages_for(0, kept) if p not in w.handles and p not in w.alias]
+    assert not hole, f"{len(hole)} page(s) of rows 0..{kept:,} unmapped after the trim (floor {w.floor:,})"
+    return f"floor 24,576 -> {w.floor:,}; rows 0..{kept:,} all mapped or aliased"
+
+
 def test_cover_maps_the_pages_a_gather_reads_and_nothing_else():
     """SPD-223: a draft graph's gather reads [pos0 - window + 1, + span). A floor lowered without its ensure (the
     SPD-211 shape: pages uncovered stay unmapped until the next ensure) is mapped by `cover`, below the floor onto
