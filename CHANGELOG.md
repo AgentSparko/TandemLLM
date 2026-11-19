@@ -2,6 +2,13 @@
 
 Releases of TandemEngine, TandemLLM's inference engine (TandemLLM up to 0.15.4; TandemApp's releases are in its own repository). Speed numbers are the benchmark row `serve-single-i256-o256-v1` (one request at a time, 256 prompt tokens, 256 generated, thinking off, greedy), mean tok/s with the lookup store off unless noted. [docs/measurement.md](docs/measurement.md) explains the row. Every release produces the same text as the one before it, except where an entry says otherwise.
 
+## Unreleased
+
+### Fixes
+
+- The 27B no longer stops answering after a short chat follows a long one (SRV-885). The end of a request could lower the draft window's floor and leave the rows between the new floor and the old one unmapped. The next save of that conversation to the disk read them, the GPU faulted (an illegal memory access) and every request after it was a 503 `engine_failed` until a restart. A lowered floor now leaves those rows on the window's shared page until they are mapped again, and a trim drops only what lies past the rows it keeps.
+- A new chat after a long one drafts from its own rows (SRV-885). The floor the long chat left stayed up while the new chat prefilled from row 0, so its draft rows went to the shared page and most drafts were rejected. The drafter's reset at a request's start brings the floor down.
+
 ## 0.16.0, 2026-11-18
 
 0.16.0 is the engine on its own. TandemApp (the page, the Chat tab, the controller, the conductor and TandemNode) moved to its own repository, [TandemLLM/TandemApp](https://github.com/TandemLLM/TandemApp), with releases of its own. This repository is now TandemEngine: the OpenAI-compatible API, `/health`, the metrics and the engine's own reads. The chat mode still works: the engine loads TandemApp's conductor as an extension (engine-ext-v1 3.2). A box that still relays to other backends through `QSE_BACKENDS` is told what to do on every path, and `tandem-app import-backends` brings those backends over to TandemApp's controller. The engine also gains `tandem remote` (status, start, stop, an idle-gated restart, settings, logs, upgrade), `SET_CONSTRAINT` for an extension (a regex, a choice list, a JSON schema or a logit bias), one model in two processes across two Sparks (LFM2 MoE and Flash-Next), and an opt-in FP8 long-context cache for every model with attention layers.
