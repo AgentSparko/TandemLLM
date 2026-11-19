@@ -228,6 +228,54 @@ def test_a_new_chat_after_a_long_one_writes_real_rows():
     return "floor 24,576 -> 0 at the reset; the new chat's window on its own pages"
 
 
+def test_every_unmap_holds_the_capture_guard():
+    """SRV-885: the disk tier's writer copies a finished prompt's rows (draft rows too) off the engine's thread,
+    under `capture_lock.GUARD`. On the 27B replay (2026-11-19) the next request raised the draft window's floor
+    and gave those pages back while a copy was in flight: an illegal memory access. Every unmap of a pool page,
+    a released page or the shared page's alias, holds the same guard. A fake driver records it."""
+    import ctypes
+    from engine import capture_lock
+    seen = []
+
+    class Lib:
+        def cuMemCreate(self, *a):
+            return 0
+
+        def cuMemMap(self, *a):
+            return 0
+
+        def cuMemSetAccess(self, *a):
+            return 0
+
+        def cuMemUnmap(self, *a):
+            seen.append(("alias", capture_lock.GUARD._is_owned()))
+            return 0
+
+    class Drv:
+        lib, prop, access = Lib(), ctypes.c_int(0), ctypes.c_int(0)
+
+        def _check(self, rc, name):
+            pass
+
+        def unmap_release(self, *a):
+            seen.append(("page", capture_lock.GUARD._is_owned()))
+
+    w, _ = _pair(_pool())
+    w.ensure(40188)                                     # the bookkeeping: pages and aliases
+    w.drv, w.base = Drv(), 0                            # from here every map and unmap goes to the fake
+    sync, torch.cuda.synchronize = torch.cuda.synchronize, lambda *a: None
+    try:
+        w.set_floor(32768)                              # up: pages given back, their rows aliased
+        w.trim(0)                                       # down and empty: every page and alias goes
+    finally:
+        torch.cuda.synchronize = sync
+        w.drv = None
+    kinds = {k for k, _ in seen}
+    assert kinds == {"page", "alias"}, seen
+    assert all(held for _, held in seen), [k for k, held in seen if not held]
+    return f"{len(seen)} unmaps, every one under the guard"
+
+
 def test_cover_maps_the_pages_a_gather_reads_and_nothing_else():
     """SPD-223: a draft graph's gather reads [pos0 - window + 1, + span). A floor lowered without its ensure (the
     SPD-211 shape: pages uncovered stay unmapped until the next ensure) is mapped by `cover`, below the floor onto
