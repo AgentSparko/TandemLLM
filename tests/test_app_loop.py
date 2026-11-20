@@ -19,6 +19,8 @@ reaches the socket the moment it is accepted -- and the gate tools never run it:
   * nor does the role chunk, thinking on or off: it goes out with the first text;
   * a streamed stop string never reaches the client, not even the part of it that arrives before
     the match, and a streamed answer with `stop` is the non-streamed one;
+  * the completion response carries the answer's id at stream open: `X-Tandem-Request-Id`,
+    the same id the body carries, and nothing that is not a completion carries it;
   * the `both` format closes the `<think>` it opens in `content`;
   * the `[req]` line carries the loop's own block count, decode time and first-miss histogram,
     for the chain and the tree, and a request that never generated carries none;
@@ -312,6 +314,48 @@ def test_the_stop_header_is_non_streaming_only_and_the_stream_says_it_in_band():
         assert text.endswith(app.GUARD_MARKER), "the streamed client gets the stop in band"
     finally:
         app.PatternStop = real
+
+
+def _request_id_of(head):
+    got = [v for k, v in (line.split(": ", 1) for line in head.splitlines()[1:])
+           if k.lower() == "x-tandem-request-id"]
+    assert len(got) == 1, head
+    return got[0]
+
+
+def test_the_completion_response_carries_the_answer_id_at_stream_open():
+    """SRV-733: the TandemApp controller joins its prefill-phase rows to the engine's live
+    rows by the answer's id -- the engine row's request_id -- and on a stream that id only
+    reached the client with the first frame, after prefill. Every response to a completion
+    request now carries it at stream open: `X-Tandem-Request-Id`, the same id the body
+    carries; a response to anything else carries no answer id."""
+    def first_frame_id(raw):
+        return next(json.loads(line[6:]) for line in raw.splitlines()
+                    if line.startswith("data: {"))["id"]
+    serve()
+    app.STATE["tok"] = CharTok()
+    real = app.generate_stream
+    app.generate_stream = lambda *a, **k: iter([ord(c) for c in "done"])
+    try:
+        chat = {"messages": [{"role": "user", "content": "tidy up"}], "max_tokens": 8}
+        head, out = Req("/v1/chat/completions", dict(chat, stream=True)).response()
+        cid = _request_id_of(head)
+        assert cid.startswith("chatcmpl-") and len(cid) == 9 + 24, cid
+        assert first_frame_id(out) == cid, (out[:200], cid)
+        head, out = Req("/v1/chat/completions", chat).response()
+        assert json.loads(out)["id"] == _request_id_of(head)
+    finally:
+        app.generate_stream = real
+    serve()
+    comp = {"prompt": "hello", "max_tokens": 8}
+    head, out = Req("/v1/completions", dict(comp, stream=True)).response()
+    cid = _request_id_of(head)
+    assert cid.startswith("cmpl-") and len(cid) == 5 + 24, cid
+    assert first_frame_id(out) == cid, (out[:200], cid)
+    head, out = Req("/v1/completions", comp).response()
+    assert json.loads(out)["id"] == _request_id_of(head)
+    head, _ = Req("/v1/not-a-completion", {"x": 1}).response()
+    assert "X-Tandem-Request-Id" not in head, head
 
 
 

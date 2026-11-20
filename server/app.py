@@ -8405,6 +8405,7 @@ class Handler(BaseHTTPRequestHandler):
     disable_nagle_algorithm = True
     _status: int | None = None
     _tandem: str | None = None          # the conductor mode of the completion in hand
+    _request_id: str | None = None      # the answer id of the completion in hand (SRV-733)
     _images_left_out = 0                # the completion's earlier images left out (server/images.py)
 
     def send_response(self, code, message=None):
@@ -8415,6 +8416,12 @@ class Handler(BaseHTTPRequestHandler):
             # every completion response says which mode it ran in, so a bench client can
             # assert it was served raw (docs/server.md, "The conductor's session monitor")
             self.send_header("X-Tandem", self._tandem)
+        if self._request_id is not None:
+            # SRV-733: the answer's own id, made at accept time, on the headers of every
+            # response to its request -- a stream's first frame carries it only after
+            # prefill, and the TandemApp controller joins its prefill-phase rows to this
+            # request's live rows by it (the engine row's request_id)
+            self.send_header("X-Tandem-Request-Id", self._request_id)
         if self._images_left_out:
             self.send_header("X-Tandem-Images-Left-Out", str(self._images_left_out))
 
@@ -9513,6 +9520,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self._tandem = None
+        self._request_id = None         # a keep-alive socket's handler is reused
         if self._strip_session():
             return
         if self._chat("GET"):
@@ -9794,6 +9802,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         self._tandem = None
+        self._request_id = None         # a keep-alive socket's handler is reused
         if self._strip_session():
             return
         if self._chat("POST"):                      # before the JSON read: uploads are multipart
@@ -10070,6 +10079,7 @@ class Handler(BaseHTTPRequestHandler):
         self._early, self._early_body, self._bar = None, False, None
         t_req = time.perf_counter()
         cid = ("chatcmpl-" if chat else "cmpl-") + uuid.uuid4().hex[:24]
+        self._request_id = cid          # SRV-733: on the response headers from here on
         rec = usage_mod.RequestRecord(cid, "chat" if chat else "completions",
                                       bool(body.get("stream")), t_arrival=t_req)
         rec.usage_context = STATE.get("usage_context", "client")

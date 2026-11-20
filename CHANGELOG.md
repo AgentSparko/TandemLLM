@@ -4,6 +4,10 @@ Releases of TandemEngine, TandemLLM's inference engine (TandemLLM up to 0.15.4; 
 
 ## Unreleased
 
+### Server
+
+- A completion response carries the answer's own id on its headers: `X-Tandem-Request-Id: chatcmpl-...`, the same id the body carries (SRV-733). The id is made when the request is accepted, but on a stream it reached the client only with the first frame, after prefill, so TandemApp's Live view could not join its prefill-phase rows to the engine's live rows while the answer was still prefilling. The header is additive: every response is otherwise the one it was, and only responses to completion requests carry it.
+
 ### Fixes
 
 - The 27B no longer stops answering after a short chat follows a long one (SRV-885). The end of a request could lower the draft window's floor and leave the rows between the new floor and the old one unmapped. The next save of that conversation to the disk read them, the GPU faulted (an illegal memory access) and every request after it was a 503 `engine_failed` until a restart. A lowered floor now leaves those rows on the window's shared page until they are mapped again, and a trim drops only what lies past the rows it keeps.
