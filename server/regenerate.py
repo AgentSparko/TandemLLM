@@ -60,9 +60,10 @@ tool result — `signature` cannot match it (the rule above needs a user tail), 
 returns the identical degenerate continuation forever (observed: three byte-identical retries,
 request chatcmpl-6d21296b94bb48f5b802af7d). So a completion that wrote reasoning and nothing
 else is remembered by the conversation's retry signature (a user OR tool tail), and the next
-request with that signature samples like a regenerate. A request that answers clears the mark:
-a deliberate re-send after a good answer stays greedy, and `X-Tandem-Regenerate: 0` never
-matches it either.
+request with that signature samples like a regenerate. The signature is anchored at the last
+tool result (or the prompt behind a run of user rows), so a client that appends a nudge to the
+retry tail still matches. A request that answers clears the mark: a deliberate re-send after a
+good answer stays greedy, and `X-Tandem-Regenerate: 0` never matches it either.
 """
 
 from __future__ import annotations
@@ -111,16 +112,33 @@ def signature(messages) -> str | None:
 
 
 def retry_signature(messages) -> str | None:
-    """The fingerprint for the degenerate-retry match: the same canonical hash as `signature`,
-    but the tail may be the user's OR a tool result — an agent loop retries on its tool round.
-    None when there are no messages or the tail is an assistant row (a Continue is not a retry)."""
+    """The fingerprint for the degenerate-retry match: the canonical hash of the conversation
+    up to its UNANSWERED ANCHOR — the last tool result if the conversation carries one, else
+    the first user row of a trailing run of user rows. The tail may be the user's OR a tool
+    result (an agent loop retries on its tool round), and a client that appends a nudge on
+    retry — a user row after a tool result, or a second user row after its prompt — still
+    signs the same conversation. None when there are no messages or the tail is an assistant
+    row (a Continue is not a retry)."""
     if not isinstance(messages, list):
         return None
     conv = [_norm(m) for m in messages if isinstance(m, dict) and m.get("role") not in
             ("system", "developer")]
     if not conv or conv[-1].get("role") not in ("user", "tool"):
         return None
-    raw = json.dumps(conv, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    cut = len(conv)
+    for i in range(len(conv) - 1, -1, -1):
+        if conv[i].get("role") == "tool":
+            cut = i + 1
+            break
+    else:
+        # no tool row: a lone user tail IS the prompt; a run of user rows is the prompt plus
+        # nudges appended on retry — sign the prompt, not what was appended
+        if len(conv) >= 2 and conv[-1].get("role") == "user" and conv[-2].get("role") == "user":
+            i = len(conv) - 1
+            while i > 0 and conv[i - 1].get("role") == "user":
+                i -= 1
+            cut = i + 1
+    raw = json.dumps(conv[:cut], sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8", "surrogatepass")).hexdigest()
 
 

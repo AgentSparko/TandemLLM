@@ -122,6 +122,38 @@ def test_tool_tail_answered_keeps_retry_memory_of_user_tail():
     print("ok: classic regenerate path untouched")
 
 
+def test_nudge_after_tool_tail_still_matches():
+    # a client that appends a nudge user row after the tool result on retry still signs the
+    # same conversation (anchored at the last tool result), so the retry samples
+    r = _r()
+    body = {"messages": [SYS, U1, AS, TR]}
+    d1 = r.decide(body, H)
+    r.degenerate(d1, "req-1")
+    nudged = {"messages": [SYS, U1, AS, TR, {"role": "user", "content": "Please answer now."}]}
+    d2 = r.decide(nudged, H)
+    assert d2.sample and d2.how == "degenerate"
+    print("ok: nudge after a tool tail still matches")
+
+
+def test_nudge_after_user_tail_still_matches():
+    # a second user row after the prompt is the prompt plus an appended nudge: the signature
+    # is anchored at the first user row of the run, so the marked prompt and the nudged retry
+    # sign the same conversation
+    r = _r()
+    body = {"messages": [SYS, U1]}
+    d1 = r.decide(body, H)
+    r.degenerate(d1, "req-1")
+    nudged = {"messages": [SYS, U1, {"role": "user", "content": "Say something useful."}]}
+    d2 = r.decide(nudged, H)
+    assert d2.sample and d2.how == "degenerate"
+    # and a genuinely different prompt in a fresh session is not swept in by the anchor
+    r2 = _r()
+    d3 = r2.decide({"messages": [SYS, {"role": "user", "content": "Totally new question."}]},
+                   {"x-session-id": "sess-2"})
+    assert not d3.sample
+    print("ok: nudge after a user tail still matches, a new prompt does not")
+
+
 def run():
     test_retry_signature()
     test_degenerate_completion()
@@ -130,6 +162,8 @@ def run():
     test_off_header_and_client_params()
     test_bounds_and_ttl()
     test_tool_tail_answered_keeps_retry_memory_of_user_tail()
+    test_nudge_after_tool_tail_still_matches()
+    test_nudge_after_user_tail_still_matches()
     print("regenerate degenerate-retry: all ok")
 
 
