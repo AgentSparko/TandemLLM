@@ -391,6 +391,13 @@ def structured_pattern(body: dict) -> str | None:
                                                     '{"choice": [...]}, {"json": <schema>}')
             (k, v), = so.items()
             if k == "regex" and isinstance(v, str):
+                # a request's regex is compiled on this thread: the act path's own length
+                # limit holds here too, and the builder's state budget (engine/grammar.py)
+                # behind it — nested repetitions compose past any length
+                if len(v) > ACT_LIMITS["regex_chars"]:
+                    raise Refusal("structured_outputs",
+                                  f"the regex has {len(v)} characters; the limit is "
+                                  f"{ACT_LIMITS['regex_chars']}")
                 pattern = v
             elif k == "choice" and isinstance(v, list) and v and all(isinstance(x, str) for x in v):
                 pattern = "(?:" + "|".join(grammar.literal(x) for x in v) + ")"

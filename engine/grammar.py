@@ -260,6 +260,14 @@ def _split(lo: int, hi: int) -> list[list[tuple[int, int]]]:
 
 # --------------------------------------------------------------------------------- AST -> NFA
 
+#: A request's regex is built on the handler's thread, and repetitions compose:
+#: `((\d{1000}){1000}){1000}` asks for ~10^9 states and the box dies of OOM before the
+#: DFA's own cap below is ever asked. The largest legitimate grammar measured is the
+#: tool-call language for twenty tools (~30k states, tests/test_grammar_dos.py); the
+#: budget is ~8x that, and it bounds one build to tens of MB and a second.
+NFA_STATE_BUDGET = 250_000
+
+
 class _NFA:
     """States with byte-range edges and epsilon edges (Thompson)."""
 
@@ -268,6 +276,9 @@ class _NFA:
         self.eps: list[list[int]] = []
 
     def state(self) -> int:
+        if len(self.edges) >= NFA_STATE_BUDGET:
+            raise GrammarError(f"the constraint needs more than the "
+                               f"{NFA_STATE_BUDGET}-state budget")
         self.edges.append([])
         self.eps.append([])
         return len(self.edges) - 1
