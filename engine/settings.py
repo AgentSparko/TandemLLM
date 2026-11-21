@@ -244,6 +244,9 @@ KNOBS: dict[str, tuple] = {
     'SIDE_MIN_ROOM': ('16384', 'server/app.py'),
     'SIDE_NEW_FIRST': ('on', 'server/app.py'),
     'SIDE_HOME_WAIT_S': ('10', 'server/app.py'),
+    # the home wait is cost-aware: the hop's re-read is estimated at this loaded rate
+    'HOP_READ_TOK_S': ('500', 'server/app.py'),
+    'HOME_WAIT_MAX_S': ('600', 'server/app.py'),
     'SIDE_RESIDENT_GB': ('0.5', 'server/app.py'),
     'SIDE_STASH_GB': ('1.0', 'server/app.py'),
     # SPD-257: the end anchor's buffers are each resident prefix's own from the load (off: asked of the policy)

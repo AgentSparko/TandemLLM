@@ -1112,6 +1112,28 @@ SIDE_NEW_FIRST = (_S.get("SIDE_NEW_FIRST") or "on").strip().lower()
 #: (`_carry_from_side`) or read again
 SIDE_HOME_WAIT_S = float(_S.get("SIDE_HOME_WAIT_S") or 10.0)
 
+#: The home wait is cost-aware (2026-11-21 02:58-04:28, engine-20261121-013742.log, the ledger's
+#: seven `abandoned` rows at 900 s each): the fixed 10 s budget was written for SRV-528's 45k
+#: conversation, whose re-read measured 80.9 s — hopping then cost about what a longer wait
+#: would. A 133,075-token conversation hopped on the same 10 s budget and re-read its rows on a
+#: slot holding nothing of it: under the load of the other resident streams the re-read never
+#: finished inside the client's 900 s, each retry hopped again, and every hop charged another
+#: conversation's rows to be re-read too. Waiting at home costs only the first token; a hop
+#: costs the whole prompt. So the home budget scales with the estimated re-read cost at
+#: HOP_READ_TOK_S (a conservative loaded rate), clamped to [SIDE_HOME_WAIT_S, HOME_WAIT_MAX_S]:
+#: a small chat still hops after 10 s, a 133k conversation waits ~4.5 min at home first — and
+#: rows prefilled before a client left stay good for its retry (`_prefill_watch`), which only a
+#: request that stayed on its slot can resume.
+HOP_READ_TOK_S = float(_S.get("HOP_READ_TOK_S") or 500.0)
+HOME_WAIT_MAX_S = float(_S.get("HOME_WAIT_MAX_S") or 600.0)
+
+
+def _home_wait_budget_s(need) -> float:
+    """How long a turn waits for its busy home slot before hopping: the fixed floor, or the
+    estimated cost of re-reading `need` rows on a slot that holds none of them, whichever is
+    more, capped."""
+    return min(HOME_WAIT_MAX_S, max(SIDE_HOME_WAIT_S, (need or 0) / HOP_READ_TOK_S))
+
 #: FX17: a new chat of at most SIDE_NEW_SHORT rendered tokens (plus the margins) beside a long
 #: resident conversation waits SIDE_NEW_WAIT_S for a busy side slot before it takes slot 0, where
 #: it would send the long conversation to the NVMe (restorable, about 3 s, but its next turn
@@ -1823,7 +1845,8 @@ def _queue_why(pool, why: dict, side_need, waited: float, me: dict) -> str:
             return f"too long for a side slot ({longest:,} tokens); waits for slot 0"
         return _wait_reason(me)[0]
     if why.get("home") is not None and why.get("home_wait") is None:
-        return f"waits up to {SIDE_HOME_WAIT_S:g} s for slot {why['home']}, which holds its conversation"
+        return (f"waits up to {float(why.get('home_budget_s') or SIDE_HOME_WAIT_S):g} s "
+                f"for slot {why['home']}, which holds its conversation")
     if why.get("hop_from") is not None:
         return (f"moved from slot {why['hop_from']} (busy {why.get('home_wait')} s): re-reading its "
                 f"conversation on the next free slot")
@@ -1846,7 +1869,8 @@ def _par_nums(why: dict) -> str:
     request with images their count and the expanded rows (SRV-629)."""
     nums = " ".join(f"{k}={why[k]}" for k in ("view", "view_common", "valid", "res_common",
                                               "conv", "need", "guest", "park", "slot0_wait_s",
-                                              "home", "home_share", "home_wait", "hop_from",
+                                              "home", "home_share", "home_wait", "home_budget_s",
+                                              "hop_from",
                                               "prefer_side", "prefer_side_end", "slot0_stale", "new_wait",
                                               "spill", "spill_head", "spill_home", "slot0_wait")
                     if k in why)
@@ -10786,6 +10810,7 @@ class Handler(BaseHTTPRequestHandler):
                     new_wait = False
                     par_why["new_wait"] = round(time.monotonic() - t_wait, 1)
                 if home is not None:
+                    par_why["home_budget_s"] = round(_home_wait_budget_s(side_need), 1)
                     side = par.take_slot(int(home), side_need, owner=cid)
                     got = side is not None
                     if got:
@@ -10793,7 +10818,7 @@ class Handler(BaseHTTPRequestHandler):
                         with par._lk:
                             par.stats["home_side"] = par.stats.get("home_side", 0) + 1
                         break
-                    if time.monotonic() - t_wait < SIDE_HOME_WAIT_S:
+                    if time.monotonic() - t_wait < _home_wait_budget_s(side_need):
                         time.sleep(0.05)
                         if self._client_gone():
                             left = True
