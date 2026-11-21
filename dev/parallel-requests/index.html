@@ -1,0 +1,2521 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/parallel-requests/">
+      
+      
+        <link rel="prev" href="../server/">
+      
+      
+        <link rel="next" href="../measurement/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Parallel requests - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#parallel-requests" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Parallel requests
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#switching-it-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      Switching it on
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-window-for-every-lane-srv-707" class="md-nav__link">
+    <span class="md-ellipsis">
+      One window for every lane (SRV-707)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#waiting-for-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      Waiting for memory
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Waiting for memory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-turn-is-charged-0154-srv-801" class="md-nav__link">
+    <span class="md-ellipsis">
+      What a turn is charged (0.15.4, SRV-801)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-a-round-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      How a round runs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prompts-that-arrive-together-spd-245" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prompts that arrive together (SPD-245)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-slot-costs" class="md-nav__link">
+    <span class="md-ellipsis">
+      What a slot costs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#beside-the-small-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      Beside the small models
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-memory-policy-and-the-side-slots" class="md-nav__link">
+    <span class="md-ellipsis">
+      The memory policy and the side slots
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-shared-kv-pool" class="md-nav__link">
+    <span class="md-ellipsis">
+      The shared KV pool
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-request-goes-where" class="md-nav__link">
+    <span class="md-ellipsis">
+      Which request goes where
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-was-measured" class="md-nav__link">
+    <span class="md-ellipsis">
+      What was measured
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spd-e5-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      SPD-E5 (2026-10-23)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spd-245-2026-10-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      SPD-245 (2026-10-26)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      The text
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-flash-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      On Flash-Next
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#seeing-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      Seeing it
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      Not yet
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#switching-it-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      Switching it on
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-window-for-every-lane-srv-707" class="md-nav__link">
+    <span class="md-ellipsis">
+      One window for every lane (SRV-707)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#waiting-for-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      Waiting for memory
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Waiting for memory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-turn-is-charged-0154-srv-801" class="md-nav__link">
+    <span class="md-ellipsis">
+      What a turn is charged (0.15.4, SRV-801)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-a-round-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      How a round runs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prompts-that-arrive-together-spd-245" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prompts that arrive together (SPD-245)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-slot-costs" class="md-nav__link">
+    <span class="md-ellipsis">
+      What a slot costs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#beside-the-small-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      Beside the small models
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-memory-policy-and-the-side-slots" class="md-nav__link">
+    <span class="md-ellipsis">
+      The memory policy and the side slots
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-shared-kv-pool" class="md-nav__link">
+    <span class="md-ellipsis">
+      The shared KV pool
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-request-goes-where" class="md-nav__link">
+    <span class="md-ellipsis">
+      Which request goes where
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-was-measured" class="md-nav__link">
+    <span class="md-ellipsis">
+      What was measured
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spd-e5-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      SPD-E5 (2026-10-23)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spd-245-2026-10-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      SPD-245 (2026-10-26)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      The text
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-flash-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      On Flash-Next
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#seeing-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      Seeing it
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      Not yet
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="parallel-requests">Parallel requests<a class="headerlink" href="#parallel-requests" title="Permanent link">&para;</a></h1>
+<p>With <code>--parallel N</code> the engine holds N sequences (lanes) over the one copy of the weights and decodes up to N requests at once. Two or more decoding requests share each verify pass, so the weights are read once for all of them. The flag's own default is 1; the shipped <code>ops/serve.env</code>, the profiles of every family with side slots and the Setup Guide run 8 lanes (SRV-707), every lane with the same window, except <code>ops/profiles/_ornith.env</code> and <code>_flint.env</code>, which keep <code>QSE_PARALLEL=1</code> (a setup through the guide writes the card's count over it, <a href="../setup/#the-cards-slot-count">setup.md</a>).</p>
+<p>How it works inside (slots, the GPU turn, lockstep rounds, admission) is in <a href="../server/">server.md</a>, section Parallel requests. This page is about using it.</p>
+<h2 id="switching-it-on">Switching it on<a class="headerlink" href="#switching-it-on" title="Permanent link">&para;</a></h2>
+<p>In <code>ops/serve.env</code> (or <code>local.env</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="nv">QSE_PARALLEL</span><span class="o">=</span><span class="m">8</span><span class="w">            </span><span class="c1"># lanes: slot 0 and N - 1 side slots; 1 is one sequence</span>
+<span class="nv">QSE_SIDE_MAX_LEN</span><span class="o">=</span><span class="m">0</span><span class="w">        </span><span class="c1"># 0: every side slot has MAX_LEN, slot 0's window (a shorter value is kept)</span>
+<span class="nv">QSE_KV_POOL</span><span class="o">=</span>on<span class="w">            </span><span class="c1"># windows are addresses, pages are committed as conversations grow</span>
+<span class="nv">QSE_PARALLEL_FLOOR_GB</span><span class="o">=</span><span class="m">15</span><span class="w">  </span><span class="c1"># admission keeps MemAvailable at or above this</span>
+</code></pre></div>
+<p>then restart the service. The same settings as flags: <code>--parallel N</code>, <code>--side-max-len</code>, <code>--parallel-floor-gb</code>.</p>
+<table>
+<thead>
+<tr>
+<th>flag</th>
+<th>default</th>
+<th>what it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--parallel N</code></td>
+<td>1 (serve.env: 8)</td>
+<td>sequence slots; N - 1 side slots beside the engine</td>
+</tr>
+<tr>
+<td><code>--side-max-len</code></td>
+<td>0</td>
+<td>a side slot's window; 0 is <code>--max-len</code>, every lane the same window (SRV-707). A shorter one is kept for old setups; a request whose prompt plus <code>max_tokens</code> does not fit it waits for slot 0</td>
+</tr>
+<tr>
+<td><code>--parallel-floor-gb</code></td>
+<td>15</td>
+<td>a request waits while what the caches may still grow into (at most the engine's room to <code>--mem-peak-gib</code>), the workspaces of the prefills in flight, its own and the KV pages still to commit would push MemAvailable under this, a request alone too (0.15.1, SRV-775); a side slot is built only if it fits above it. The wait is queue time (<code>wait_mem_ms</code> in the ledger) and the client sees a waiting line</td>
+</tr>
+<tr>
+<td><code>QSE_GUARD_MARGIN_GB</code></td>
+<td>5</td>
+<td>the floor a check holds is the live guard (SRV-785): one prefill chunk's workspace at the class of the longest prefill in flight, one KV commit, a chat sandbox's ask from the last minute and this margin, never above <code>--parallel-floor-gb</code> (for the KV pool's commits, never above <code>QSE_KV_HARD_FLOOR_GB</code>). The wait line names its inputs</td>
+</tr>
+<tr>
+<td><code>QSE_MEM_WAIT_S</code></td>
+<td>10800</td>
+<td>the longest a streamed request, or one that sends <code>wait_for_memory: true</code>, waits for memory (3 h); any other request without a stream waits at most <code>--queue-timeout</code>. Then it is refused with the reason: a 503 with <code>Retry-After</code>, or an error event (<code>memory_wait_timeout</code>) on a stream opened while it waited (SRV-787, SRV-797; <a href="#waiting-for-memory">Waiting for memory</a>)</td>
+</tr>
+<tr>
+<td><code>QSE_PEAK_STRICT</code></td>
+<td>0</td>
+<td><code>1</code>: a lone request the memory gate refuses waits too instead of running over the peak, and the gate counts the workspaces of the prefills in flight on the reserve (SRV-775; in no profile)</td>
+</tr>
+<tr>
+<td><code>QSE_REQ_PEAK</code></td>
+<td>0</td>
+<td><code>1</code>: the <code>[req]</code> line adds <code>peak_gib=</code>, the allocator's peak over a request that ran alone less what was allocated at its prefill's start (a measurement, SRV-773)</td>
+</tr>
+<tr>
+<td><code>--parallel-batch</code></td>
+<td>on</td>
+<td>decoding slots verify their trees in one joint pass (off: they take turns)</td>
+</tr>
+<tr>
+<td><code>--parallel-draft</code></td>
+<td>on</td>
+<td>the decoding slots' draft calls in one packed pass over the drafter</td>
+</tr>
+<tr>
+<td><code>--parallel-cut</code></td>
+<td>the family's</td>
+<td><code>share</code>: each slot's tree cut to a fixed share (16 rows at two slots, 10 at three, 8 at four); <code>joint</code>: the round cuts all trees together, best nodes first; <code>auto</code> (SPD-155): <code>joint</code> from <code>QSE_PARALLEL_AUTO_N</code> (3) decoding slots, <code>share</code> below. Unset, the model family's <code>joint_policy</code> decides (the 27B: <code>auto</code>), else <code>share</code></td>
+</tr>
+<tr>
+<td><code>--parallel-draft-rows</code></td>
+<td>128</td>
+<td>rows of a packed draft pass (SPD-157): eight slots' 16-row draft blocks in one pass; drafting decides speed only</td>
+</tr>
+<tr>
+<td><code>--parallel-max-rows</code></td>
+<td>the family's</td>
+<td>rows of a joint pass at most (<code>QSE_PARALLEL_MAX_ROWS</code>; 0 or unset: the model family's <code>joint_policy</code>, else 32). SPD-159: the 27B on EXL3 weights takes 64, each engine's rows in an 8 x 8-row joint pass bit for bit its own eager verify; on NVFP4 and FP8 it keeps 32, since NVFP4 sends 33-64 rows to another tile; past <code>max_rows // 2</code> decoding lanes (2 rows each) a round runs more passes</td>
+</tr>
+<tr>
+<td><code>--side-precapture</code></td>
+<td>off</td>
+<td>capture a side slot's verify graphs at start (about a minute a slot) instead of at first use</td>
+</tr>
+<tr>
+<td><code>--side-graphs</code></td>
+<td>on</td>
+<td><code>off</code>: a side slot holds no verify graphs and verifies eager when it decodes alone (about 1.5 GiB instead of 7.5 beyond its window)</td>
+</tr>
+<tr>
+<td><code>--side-slot-const-gb</code></td>
+<td>7.5, or 1.5 with side graphs off</td>
+<td>a side slot's bytes beyond its window in the build's estimate (<code>QSE_SIDE_SLOT_CONST_GB</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>8 lanes are measured on the 27B, Flash-Next, Ornith and Flint (SRV-711, 2026-10-24, 1/2/4/8 requests at once, total tok/s, 3-round medians, N decoding at once: the 27B ThinkingCap EXL3 4.0 38.3 / 67.6 / 100.1 / 154.5, Flash-Next 3.05 36.5 / 45.6 / 57.5 / 71.3, Ornith EXL3 4.0 37.7 / 47.0 / 58.4 / 69.8, Flint EXL3 4.0 111.7 / 154.9 / 193.3 / 232.3). Every weight card has a speed row with 1, 2, 4 and 8 requests at once on the current build (<a href="../measurement/#the-weight-cards-speed-rows">measurement.md</a>); a card's lanes default is never above the lanes its row measured.</p>
+<p>The shipped <code>ops/serve.env</code> runs 8 lanes on the pool with <code>QSE_SIDE_GRAPHS=off</code> and <code>QSE_SIDE_SLOT_CONST_GB=1.5</code>, the values the Setup Guide writes for the 27B. Until SRV-707 it kept one sequence, and the box the older measurements come from ran two with a 65,536-token side window.</p>
+<h2 id="one-window-for-every-lane-srv-707">One window for every lane (SRV-707)<a class="headerlink" href="#one-window-for-every-lane-srv-707" title="Permanent link">&para;</a></h2>
+<p>Every lane has the window the setup names (<code>MAX_LEN</code>); the Setup Guide has no side window of its own any more, and writes <code>QSE_SIDE_MAX_LEN</code> equal to the window. With the KV pool on a lane's window is addresses: a side slot built at 262,144 tokens takes its constant part and nothing of its window at load (engine/models/*/serving.py <code>side_slot_bytes</code>: no bytes a token when paged), and its pages come from the one pool as its conversation grows. With the pool off (the families whose pool is not verified yet: NemotronH, LFM2.5, Flint, Ornith) every lane's window is memory at load, and a lane is built only while the floor holds.</p>
+<p>The guide counts how many lanes can all hold the full window at once, the guarantee (<code>lanes_full</code> in the estimate): <code>min(lanes, floor(room / (window x KV bytes a token)))</code>, where room is what the budget leaves after the weights, the tools and every lane's constant part. With the pool off it is every lane whenever the selection fits. Past the guarantee the lanes share what is left, in this order:</p>
+<ol>
+<li>A new request waits for memory before its prefill (the admission reserves its prompt and up to <code>QSE_KV_ADMIT_ROWS</code> of its <code>max_tokens</code> in pages): its stream says "waiting: memory is almost full", the Lanes view and the live view show it as <code>waiting_memory</code> with what it needs, what is free, what is being freed or which prefill is in the way, and when the wait ends. A streamed chat request gets its stream's headers at once and an SSE comment every 15 s while it waits, so no client's read timeout cuts the wait; it waits up to <code>QSE_MEM_WAIT_S</code> (SRV-787). With the KV pool the admission checks two things, each as the pool's gate will see it, in the order the pages commit (SRV-797): the prompt's pages (and the router's notes' room) against the pool's hard floor while the prefill runs, without the request's own workspace (the 27B maps the prompt's rows before its prefill; Flash-Next maps each chunk's rows before that chunk and gives the allocator's blocks back after every chunk once the state holds more than 4,096 rows, and the pool's floor already holds one chunk's workspace); the whole request (workspace, every page) against the admission's floor, as before. So the pool never refuses a page the admission counted, and nothing is counted twice: a 142k turn with a 10.8 GiB workspace resumed in place is admitted at 19.9 GiB.</li>
+<li>A turn short only by the caches' room (what the state store and the resident prefix may still take under the memory policy's ceiling, which nothing holds) does not wait: it is let in on that room, which the policy keeps from the caches until its prefill has run, or until it ends when its answer's pages needed it too (<code>[parallel] ... let in on N GiB of the caches' room</code>). Only the shortfall is held: the caches still grow by the rest of their room, and a cache that would grow into the held part (a stash, another chat's guest rows, a state-store snapshot) is refused meanwhile, so that conversation may read more again on its next turn. The response cache's budget (host memory) stays counted.</li>
+<li>Before anyone waits for memory something holds, idle conversations give their pages back, as much as the admission is short and in this order, each level in the log with its bytes and ms: the caches' levels and the allocator's free blocks, the small models, idle side slots' conversations already current on the NVMe (the idle backfill wrote them: trimmed only), the others (oldest first, a turn that ended within 30 s last, each to the NVMe first with the spill on), slot 0's idle conversation (to the NVMe first unless current), then the side conversations no save could write (SRV-779), then the kept park; after it the host heap is trimmed (<code>malloc_trim</code>, at most every 30 s).</li>
+<li>A running lane whose next pages would take the box under <code>QSE_KV_HARD_FLOOR_GB</code> gives way (SRV-709, <code>QSE_KV_RECOMPUTE=on</code>), a streamed one in its prefill as in its answer and alone too (SRV-797): it gives every page back (its conversation to the NVMe first), waits at the head of the line for memory (before any request that has not started; among such lanes, the one that gave way first) and goes on in the same stream by reading its prompt and the text it wrote again. A streamed client sees an SSE comment (<code>: paused: waiting for memory</code>) meanwhile, no token. Each give-way with fewer than 256 tokens written since the one before backs off twice as long before it is admitted again (1 s, 2 s, 4 s, up to 60 s; <code>: paused: backing off after giving way</code> when memory is there), so a lane the pool keeps refusing does not read its rows back every few seconds; while it backs off, requests that fit go. Its re-admission is priced as its first (image rows, <code>cache_prompt</code>, its home slot, its priority), the request's <code>--request-timeout</code> does not count its waits (nor its first admission's), its waits for memory add up toward <code>QSE_MEM_WAIT_S</code> from its first admission on, and a planned stop during the wait ends it with the restart's retryable error (<code>engine_restarting</code>). <code>/health</code> <code>parallel.recompute</code> counts the lanes that gave way, resumed and gave up. Reading again costs a prefill; the text goes on where it stopped, and a sampled or near-tie token after the resume may differ from the one an uninterrupted run would write. The thinking budget goes on from where it was once the lane wrote a token; refused before that, it starts as it would have.</li>
+<li>A streamed lane stops only once its waits for memory add up to <code>QSE_MEM_WAIT_S</code>, with the wait's refusal (<code>memory_wait_timeout</code>). One not streamed (its client reads nothing until the answer is whole) keeps SRV-709's count: alone it stops at the pool's refusal with <code>memory_full</code>, beside other lanes it gives way at most <code>KV_RECOMPUTE_MAX</code> (16) times. What changed for it (SRV-797): each of those waits is now a non-streamed request's wait, at most <code>--queue-timeout</code> after a 1 s backoff, ending with <code>memory_wait_timeout</code> (a 503 to send again); before, each could last up to <code>QSE_MEM_WAIT_S</code> with nothing sent. The Chat tab keeps the text and continues it once memory is free.</li>
+<li>A request not streamed waits for memory at most <code>--queue-timeout</code> (120 s), then gets a 503 with <code>Retry-After: 30</code> and the code <code>memory_wait_timeout</code>, its message naming the cause: "Memory stayed full for 2 min (needed X GiB, Y GiB free above the guard): this turn did not start; send it again, or stream it (or send <code>wait_for_memory: true</code>) to wait longer." A client that does not stream and wants the long wait (an agent app) asks for it with <code>wait_for_memory: true</code> in the body (or in its <code>tandem</code> object) or the header <code>X-Tandem-Wait-For-Memory: 1</code>: it then waits up to <code>QSE_MEM_WAIT_S</code> and gives way as a streamed one does.</li>
+</ol>
+<p>Admission reserves KV pages for the prompt and at most <code>QSE_KV_ADMIT_ROWS</code> (8,192) of <code>max_tokens</code> (0: all of it), so more lanes start than the worst case allows; a lane that writes past its reservation and finds the pool full gives way as above.</p>
+<p>A round with more than 16 decoding lanes verifies in more than one pass of 32 rows (2 rows a lane), so each lane gets less speculation; the guide says so above 16 and takes up to 64.</p>
+<h2 id="waiting-for-memory">Waiting for memory<a class="headerlink" href="#waiting-for-memory" title="Permanent link">&para;</a></h2>
+<p>A request whose bytes do not fit above the floor waits for memory before its prefill. The server pauses it and does not refuse it: it keeps its place in the line, and its prefill starts by itself once memory frees. The client sends nothing again. This holds with more than one lane, where the admission by bytes runs (<code>server/app.py</code> <code>_par_admit</code>).</p>
+<p>What a client sees while it waits:</p>
+<ul>
+<li>A streamed chat request gets its stream's headers at once, with <code>X-Tandem-Wait: memory</code>, and an SSE comment every 15 s: <code>: waiting for memory, position &lt;n&gt;, &lt;x&gt; GiB short, &lt;s&gt; s so far, refused in &lt;s&gt; s unless memory frees</code>. A comment is no event, so no client reads it as a token, and an idle-read timeout does not close the connection. With the profile's progress lines on, the client also gets a waiting line, "memory is almost full, your request starts when a running one frees memory".</li>
+<li>The live view and the Lanes view show the request as <code>waiting_memory</code>, with <code>activity.memory</code>: <code>need_gib</code> (what this turn takes in the check that holds it), <code>others_gib</code> (what other turns and the caches hold, 0.15.4), <code>check</code> (<code>request</code>, <code>prefill</code> or <code>peak</code>, 0.15.4), <code>rows</code> (the rows it forwards), <code>free_gib</code>, <code>guard_gib</code> and its inputs <code>guard</code>, <code>short_gib</code>, <code>freed_gib</code>, <code>in_the_way</code> (the prefill in its way, with its time left), <code>place</code>, <code>waited_ms</code>, <code>bound_s</code>, <code>ends_in_ms</code>, and <code>lines</code>, the three sentences the dashboard shows (<a href="https://github.com/TandemLLM/TandemApp/blob/main/docs/dashboard.md#held-for-memory">dashboard.md</a>).</li>
+<li>The engine log has <code>[parallel] &lt;id&gt; waits for memory: ...</code> with the check's terms, <code>still waits for memory (&lt;s&gt; s of &lt;bound&gt;)</code> every 15 s, and <code>[parallel] &lt;id&gt; admitted after &lt;s&gt; s</code> at the end. The ledger books the wait as <code>wait_mem_ms</code>. A wait does not count toward <code>--request-timeout</code>.</li>
+</ul>
+<p>The line for memory goes by the chat's priority, then by arrival (<code>server/slots.py</code> <code>Admission.wait</code>). The priority is <code>tandem.priority</code> in the request body: <code>"high"</code>, <code>"normal"</code> or <code>"low"</code>, and anything else or no field is normal. A request that waits moves up one step for every 30 minutes it has waited, so a low chat still gets its turn. A new request does not take the bytes a higher-priority waiter is held for: it joins the line behind it. The KV pool's reclaim takes the idle conversations of lower-priority chats first, after the older copies of a chat. A lane that gave its memory back in the middle of its answer goes to the head of the line. The Chat tab sets the priority per chat (<a href="https://github.com/TandemLLM/TandemApp/blob/main/docs/chat.md#memory-priority">chat.md</a>).</p>
+<p>How long it waits:</p>
+<table>
+<thead>
+<tr>
+<th>knob</th>
+<th>default</th>
+<th>what it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>QSE_MEM_WAIT_S</code></td>
+<td>10800 (3 h)</td>
+<td>the longest wait of a streamed request, or of one that asks for the long wait with <code>wait_for_memory: true</code> (in the body or in its <code>tandem</code> object) or <code>X-Tandem-Wait-For-Memory: 1</code></td>
+</tr>
+<tr>
+<td><code>--queue-timeout</code></td>
+<td>120 (serve.env: 240)</td>
+<td>the longest wait of any other request not streamed</td>
+</tr>
+<tr>
+<td><code>QSE_KV_ADMIT_ROWS</code></td>
+<td>8192</td>
+<td>the part of <code>max_tokens</code> the admission reserves KV pages for; 0 is all of it</td>
+</tr>
+<tr>
+<td><code>QSE_KV_RECOMPUTE</code></td>
+<td>on</td>
+<td>a lane the KV pool refuses gives way and goes on later; <code>off</code> ends it with <code>memory_full</code></td>
+</tr>
+</tbody>
+</table>
+<p>The table in the section Switching it on above has the floors the wait checks against: <code>--parallel-floor-gb</code>, <code>QSE_GUARD_MARGIN_GB</code> and, for the pool's commits, <code>QSE_KV_HARD_FLOOR_GB</code> (10).</p>
+<p>At its bound the server checks the request once more and then refuses it: a 503 with <code>Retry-After: 30</code>, type <code>server_busy</code>, code <code>memory_wait_timeout</code>, and a message that says what it needed and what was free above the guard. A stream opened while it waited ends with the same error as an event. A planned stop ends the wait at once with a 503 to send again. A client that leaves while it waits is booked <code>abandoned</code> (<code>left_while_waiting_memory</code>).</p>
+<h3 id="what-a-turn-is-charged-0154-srv-801">What a turn is charged (0.15.4, SRV-801)<a class="headerlink" href="#what-a-turn-is-charged-0154-srv-801" title="Permanent link">&para;</a></h3>
+<p>The admission reserves the workspace of the rows the prefill forwards and the KV pages its prompt may still commit. It counts the rows from where the prompt resumes on its slot: the rows in place, the end anchor, or the conversation's entry on the NVMe (<code>ws_kind=spill</code>, #167). The <code>[req]</code> line has the charge as <code>ws_rows</code> and <code>ws_gib</code>, and the rows forwarded as <code>fwd</code>.</p>
+<ul>
+<li>Slot 0 counts its own conversation. On 0.15.3 slot 0 had no share of it, so a turn of the chat it held was charged a cold read of the whole chat. On a user's box such a turn waited 148.6 s, charged 212,938 rows (10.75 GiB), and then forwarded 449.</li>
+<li>The price is the served prompt's: the router's notes and the replayed spans count as the prefill reads them.</li>
+<li>A regenerate or an edit asks the slot's rows where its prefill will resume, the way the prefill asks them, and pays the rows from there. A prompt with images cannot ask the rows, so a regenerate or an edit with images takes no share and pays more.</li>
+<li>A next turn whose copy leaves out the last answer's reasoning is charged from the end anchor. Before, the last answer was charged twice.</li>
+<li>The floor a prefill's pages commit under holds the chunk the turn forwards, not a whole 4,096-row chunk. Where the forwarded rows are not known, it holds a whole chunk, as before.</li>
+<li>Before the prefill's first forward the server compares the rows it forwards with the price (<code>server/app.py</code> <code>_forward_backstop</code>). When they need more workspace, the request's own reserve is raised, checked at the floor, and the log says <code>[memory] &lt;id&gt; forwards &lt;n&gt; rows, priced at &lt;m&gt;: its workspace &lt;a&gt; -&gt; &lt;b&gt; GiB, reserved</code>. When the floor does not hold the raise, the lane gives way before the forward allocates anything: a streamed one, or one that asked for the long wait, waits and reads again; any other that runs alone ends with <code>memory_full</code>.</li>
+</ul>
+<p>A hand-back that frees nothing during a wait prints its line once, then a count once a minute, and the count again when the wait ends (<code>--verbose</code> only). Before, every one-second retry printed eight lines.</p>
+<p>Measured on one DGX Spark (2026-11-10, Flash-Next 3.05, 8 lanes, a synthetic chat of about 203,000 tokens through the chat endpoint, then short turns): every request line of the build had <code>ws_rows</code> equal to <code>fwd</code>. Follow-ups forwarded 931 to 1,059 rows, a regenerate 7,281 and an edit 2,737. No turn waited in that run, so a wait at the new price is not measured yet. Known gap (SRV-805, open): a cold read took more host memory than its reserve, 0.37 GiB more for a 3,412-row prompt and 0.44 GiB for a 203,415-row one. The cause is not known.</p>
+<h2 id="how-a-round-runs">How a round runs<a class="headerlink" href="#how-a-round-runs" title="Permanent link">&para;</a></h2>
+<p>One thread runs every decoding lane's round (<code>QSE_ROUND_RUNNER=1</code>, SPD-201): the lanes' proposals, one packed draft, one joint verify pass, the walks and the tails (commits, penalties, stop strings, the stream). <code>/health</code> <code>parallel.round_runner</code> has its host and GPU milliseconds by phase. A lane of a family without a draft head joins the pass with its plain step as a one-row block (ENG-241). The 27B's joint pass runs from CUDA graphs once a pass shape has come <code>QWEN38_JOINT_GRAPHS_AFTER</code> times; a graphed pass gives each lane's logits, state and KV bit for bit what the eager pass gives (<code>tools/joint_graph_check.py</code>).</p>
+<table>
+<thead>
+<tr>
+<th>knob</th>
+<th>default</th>
+<th>what it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>QSE_ROUND_RUNNER</code></td>
+<td>1</td>
+<td>one runner thread for every lane's round (0: each slot runs its own loop)</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_MTP_PACK</code></td>
+<td>1</td>
+<td>the lanes' MTP drafts in one packed pass (Flash-Next, Ornith; SPD-235)</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_COMMIT_MULTI</code></td>
+<td>1</td>
+<td>a joint round's commits in one call where the family has <code>commit_tree_multi</code> (SPD-239)</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_HOST_BLOCKS</code></td>
+<td>0</td>
+<td>a joint pass hands the families that read a block on the host (<code>host_blocks</code>) host tensors, not a device copy each lane (SPD-249)</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_SUPERVISED</code></td>
+<td>1</td>
+<td>supervised requests and reasoning blocks with a budget or stall arms go with the runner, handed back to the slot's thread at SP1, SP2 and the spent budget (SPD-249; 0: the slot's own loop)</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_VERDICT_WAIT_MS</code></td>
+<td>4</td>
+<td>how long a round waits for the SP1 verdicts its lanes owe before those lanes sit the round out</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_COUNTERS</code></td>
+<td>0</td>
+<td>a measurement: host counters by lane count in <code>parallel.round_runner.counters</code> (segment wall, thread and process CPU, GC ms; timed drafter and family calls; kept-row depths, rows, accepted lengths). Timers only (SPD-249)</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_BUSY_WORK</code></td>
+<td>0</td>
+<td>host work no round waits for runs in the next joint pass's GPU wait (<code>engine/methods/busy.py</code>, the family calls <code>busy()</code> between the pass's issue and its wait): a joint round's tokens are handed to the slots' threads there (at once for a task that ends, goes back or reaches an SP1 marker), the report line is printed there, and <code>/health</code>'s full body and the live sampler's ticks wait for that window (at most 0.15 s / a cadence). Before the runner waits for anything but its next pass (the turn to another holder, slot 0's lane job, SP1 verdicts) the held tokens go and the windows are given up. The same tokens in the same order, on the wire up to a round's own work later (SPD-249)</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_GC</code></td>
+<td>0</td>
+<td>the collector kept out of the rounds: the load's objects frozen (<code>gc.freeze</code>), no automatic collection while the runner's rounds run, the young generations collected in a GPU wait at Python's thresholds, the full collection in an idle gap (0.25 s idle, no request in flight) or every <code>QSE_RUNNER_GC_FULL_ROUNDS</code> rounds in a GPU wait; Python's collector back on when the runner idles. Counts and ms in <code>parallel.round_runner.host_work</code> (SPD-249)</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_GC_FULL_ROUNDS</code></td>
+<td>200</td>
+<td>with <code>QSE_RUNNER_GC</code>: rounds under load between full collections (in a GPU wait)</td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_GRAPHS</code></td>
+<td>1</td>
+<td>the 27B's joint verify pass from CUDA graphs (0: eager)</td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_GRAPHS_MAX</code></td>
+<td>24</td>
+<td>joint graphs kept; a full set is reset whole and captured again into a new pool</td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_GRAPHS_AFTER</code></td>
+<td>4</td>
+<td>times a pass shape comes before it is captured (16 before SPD-245)</td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_ATTN_GROUP</code></td>
+<td>1</td>
+<td>a graphed pass runs every lane's attention of a layer in one scatter, one split and one combine launch, every row the lone launch's bits (0: a lane at a time)</td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_ROWS_AT_LANES</code></td>
+<td><code>4:8</code></td>
+<td>rows a block keeps at exactly that many lanes, <code>lanes:rows</code> pairs: 8 rows a lane at 4 lanes (32-row pass) instead of 16</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_LANE_PLAIN</code></td>
+<td><code>auto</code></td>
+<td>at each lane count, the drafted round or the joint plain step, whichever makes more tokens a GPU ms; <code>auto</code> for the families that opt in (NemotronH), <code>1</code> for every family that joins a plain step, <code>0</code> off</td>
+</tr>
+<tr>
+<td><code>QSE_NH_LILICORR_PACK</code></td>
+<td><code>on</code></td>
+<td>NemotronH: the lanes' LiLiCorr drafts in one packed pass</td>
+</tr>
+<tr>
+<td><code>QSE_NH_JOINT_ROWS8</code></td>
+<td>16</td>
+<td>NemotronH: rows of a joint pass at 8 lanes (0: the 32-row cap)</td>
+</tr>
+</tbody>
+</table>
+<p>NemotronH reads its routed experts once for the union a pass's rows pick, so its joint pass costs more with every row than a dense model's; at 8 lanes it keeps 16 rows (SPD-233). Where drafts do not pay, the runner takes the joint plain step: it learns at each lane count the tokens a GPU ms of its drafted rounds and of its plain rounds, decided on live rounds only (a round that captures a graph enters no rate), takes the better with a 3 % margin (<code>QSE_RUNNER_LANE_MARGIN</code>) and runs the other mode every 16th round (<code>QSE_RUNNER_LANE_PROBE</code>); a workload whose drafts pay keeps drafting. <code>/health</code> <code>parallel.round_runner.lane_plain</code> has the rates. <a href="../nemotron-h/#how-the-engine-runs-it">nemotron-h.md</a> has the family's numbers.</p>
+<p>Each graph owner captures on a stream of its own (SPD-223): <code>engine/capture_lock.py</code> <code>lease_stream</code> hands out a driver-created stream to one owner at a time (a lone draft graph, a packed draft set, the joint set, a slot's verify graphs) and takes it back only after the owner's graphs are reset. A graph's reset frees the cuBLAS workspace torch keeps for its capture stream, and every graph captured on that stream bakes the workspace into its GEMM nodes. With the streams of torch's shared pool, one owner's eviction freed the workspace of another owner's kept graph, and that graph's next replay wrote into freed memory: an illegal memory access at 4 and 8 greedy lanes. The same kernels are captured into the same pools, so every replay keeps its bits.</p>
+<h2 id="prompts-that-arrive-together-spd-245">Prompts that arrive together (SPD-245)<a class="headerlink" href="#prompts-that-arrive-together-spd-245" title="Permanent link">&para;</a></h2>
+<p>Requests bound to lanes while no lane decodes form a burst (<code>QSE_PREFILL_BURST</code>, <code>server/prefill_burst.py</code>). Every member prefills before any of them decodes, so the lanes decode in joint rounds of all of them from the first round on instead of beside the prefills still waiting. With <code>joint</code>, the default, the members' prompts run in one layer-major forward (<code>engine/model.py</code> <code>prefill_joint</code>): each EXL3 projection is one call over every member's rows on a slab decoded once a layer, the row-wise kernels run once over all rows, and the mixers run one sequence at a time on its own engine. Every row is bit for bit what its own prefill gives (<code>tests/gpu/test_prefill_joint_gpu.py</code>); 8 prompts of 512 tokens took 3.55 s in one forward against 4.43 s one after another, in process. The joint forward takes a prompt of up to <code>EXL3_CHUNK_UNTIL</code> rows (512 on the 27B's EXL3 profiles) on a plain text forward; a longer prompt, an image or another weight format joins the burst with no job and prefills alone.</p>
+<p>Flash-Next runs its own joint prefill (<code>QWEN38_FN_JOINT_PREFILL</code>, <code>engine/models/flashnext/joint_prefill.py</code>, SPD-249), on in its profiles and off in the family's defaults. Each layer's experts run once over every member's rows; the rest of a layer runs a prompt at a time at its own rows, so every prompt ends bit for bit as its own prefill leaves it (<code>tools/fn_joint_check.py --joint-prefill</code>). It takes a prompt whose remaining rows fit one prefill chunk (<code>QWEN38_FN_PREFILL_CHUNK</code>) without images, and cuts the members into runs of at most one chunk of rows. A member's own steps before the forward (its open chain, its start, its KV pages) run on its own thread, so a failure there fails that member alone; a failure inside the forward fails every member of it. The trade: requests that arrive together get more tokens per second in total, and long prompts in a burst get their first token later, since every first token of the burst waits for the one forward.</p>
+<p>A member that would run the joint forward alone while another request is still on its way to a lane gives the turn back and waits for it, up to <code>QSE_PREFILL_BURST_WAIT_S</code>. A request with none on its way starts at once, so a lone request never waits. A request whose own question runs on this server (the router's class, package or library question before a chat turn, <code>X-Tandem-Parent</code>) is not on its way while the question runs, so the question never waits for the turn that waits for its answer (SRV-769). <code>/health</code> <code>parallel.prefill_burst</code> has the bursts, their members, the joint forwards and their rows, <code>incoming</code>, <code>asking</code>, <code>held</code>, <code>held_own</code> (holds for a member's own turn) and the last holds with the requests each waited for; the engine log has a <code>[burst]</code> line per hold.</p>
+<table>
+<thead>
+<tr>
+<th>knob</th>
+<th>default</th>
+<th>what it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>QSE_PREFILL_BURST</code></td>
+<td><code>joint</code></td>
+<td><code>joint</code>: a burst's prompts in one forward; <code>wait</code> (or <code>on</code>): each prompt alone, the decodes after every member's prefill; <code>off</code>: no burst</td>
+</tr>
+<tr>
+<td><code>QSE_PREFILL_BURST_WAIT_S</code></td>
+<td>10</td>
+<td>how long a member waits for the others, then it goes on (counted as a timeout)</td>
+</tr>
+<tr>
+<td><code>QSE_PREFILL_BURST_ASKING</code></td>
+<td><code>out</code></td>
+<td><code>out</code>: a request is not on its way while its own question runs; <code>in</code>: counted as on its way (before SRV-769)</td>
+</tr>
+</tbody>
+</table>
+<p>Only the order of the work moves, so a burst changes no token. It changes time to first token: a member's first token comes after every member's prefill.</p>
+<h2 id="what-a-slot-costs">What a slot costs<a class="headerlink" href="#what-a-slot-costs" title="Permanent link">&para;</a></h2>
+<p>A side slot holds its own KV, recurrent state and verify graphs: about 104 KiB a token of window plus 7.5 GiB, most of it the pools of its 121 verify graphs. An 8,192-token slot took 6.9 to 7.5 GiB on the box; a 65,536-token slot is about 14 GiB (arithmetic). On a 128 GB DGX Spark next to the engine's own caches, <code>--parallel 2</code> with the default window fits; four slots need shorter windows (the measurements below used 8,192).</p>
+<h2 id="beside-the-small-models">Beside the small models<a class="headerlink" href="#beside-the-small-models" title="Permanent link">&para;</a></h2>
+<p>A box that also runs the decision models (Laya) and the narrator has less room for side slots. The plan for a 128 GB DGX Spark serving the 27B at its 262,144-token window, Laya-english, the narrator (Qwen3.5-2B) and the shadow reader (measured on 0.3.42-test, 2026-10-06):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">GiB</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>unified memory</td>
+<td style="text-align: right;">121.6</td>
+</tr>
+<tr>
+<td>the engine between requests (caches full, the 70 GiB ceiling) and its 77 GiB peak</td>
+<td style="text-align: right;">+8.6 at the peak</td>
+</tr>
+<tr>
+<td>Laya-english inside the engine</td>
+<td style="text-align: right;">1.6</td>
+</tr>
+<tr>
+<td>the narrator (Qwen3.5-2B)</td>
+<td style="text-align: right;">4.2</td>
+</tr>
+<tr>
+<td>the shadow reader (Qwen3.5-0.8B) and its session states (cap 4)</td>
+<td style="text-align: right;">1.5 + up to 4</td>
+</tr>
+<tr>
+<td>MemAvailable at the worst moment with one sequence</td>
+<td style="text-align: right;">about 22.7</td>
+</tr>
+</tbody>
+</table>
+<p>Four slots of 8,192 tokens (about 25 GiB with their graphs) do not fit beside that. Two do, with one side slot of 65,536 tokens and <code>--side-graphs off</code> (about 8 GiB). The window matters more than the number of slots: a request takes a side slot only when its prompt, its <code>max_tokens</code> and the conductor's margin (64 tokens, 8,192 more when the conductor shapes the request) fit. Over seven days on that box, opencode's prompts were 103k tokens at the median with <code>max_tokens</code> 65,536 (they always need slot 0); Open WebUI's were 19k with <code>max_tokens</code> 32,768, and a 65,536-token side window takes 57 % of them, an 8,192-token one none.</p>
+<p>Side slots are built while the engine loads, before <code>ops/start.sh</code> asks the residency planner for Laya and the narrator. The planner then sees what the side slot took, so the <code>residency</code> document's claims must be the models' measured sizes (the reference box: decider 3.0, narrator 4.5 GiB, margin 5); with the old declared ones (8.2 and 6.0, margin 6) both are refused. Since 0.11.3 the shipped decider claim is the measured 3.0 GiB, and the narrator is off by default (SRV-534). A model the planner refuses is journaled in <code>residency.jsonl</code> and the engine serves without it.</p>
+<p>On that box one decider of three and the shadow reader stay unloaded, and that is the planner doing its job (0.4.1). The numbers from <code>residency.jsonl</code> on 0.3.51-test: MemAvailable 28.97 GiB, the engine at 76.4 GiB of a declared peak of 84.65 (77 plus the side slot's 7.65), so 8.25 GiB of growth is still to come; the shadow reader claims 6.5 GiB and would leave 14.22 GiB, under the 15 GiB floor itself; a second decider (3.0 GiB) would leave 17.72, above the floor and under floor plus the 4 GiB margin. The growth is not counted twice. The parallel admission checks MemAvailable only while two requests are in flight; a request alone is admitted by the engine's own peak (<code>server/slots.py</code> <code>Admission.reserve</code>), so a single 262k prefill can take those 8.25 GiB whatever else has loaded, and the planner's growth is the one thing that keeps the floor then. The Deciders screen says so in words: "not loaded: kept free for requests", with the numbers, and names the shadow reader when the last refusal was its. Room for them comes from a lower declared peak or a smaller margin, both edits in the <code>residency</code> document that trade cache room or safety for a model, not from the planner.</p>
+<p>While two requests run, Laya answers only when slot 0 is idle: a decision forward takes the engine lock (stage A). A request that takes a side slot arrives while slot 0 is busy, so its router question passes Laya's 400 ms and goes to the next stage, as it does for any request that arrives while the engine is busy with one sequence. The narrator serves both requests; a second request asking at the same moment gets the template line for that step.</p>
+<h2 id="the-memory-policy-and-the-side-slots">The memory policy and the side slots<a class="headerlink" href="#the-memory-policy-and-the-side-slots" title="Permanent link">&para;</a></h2>
+<p>The side slots' buffers are the engine's for good, so the engine's memory policy (engine/cache.py <code>Budget</code>) raises its ceiling and peak by what they took when they are built (7.65 GiB for one 65,536-token slot without graphs). From 0.3.44-test to 0.3.46-test the first request's residency document set the two limits again to their configured figures (70 and 77 GiB) and the raise was gone: the caches had no room left (live on 0.3.46-test: 131 anchors, 2 guest stashes, a park and a pin refused in one evening), and a guest whose stash was refused cut the resident rows at its start, so the next turn of a 41,474-token Open WebUI conversation read 41,749 tokens again (56 s). Since 0.3.47-test the slots' bytes are kept apart (<code>Budget.fixed</code>, in <code>/health</code> <code>cache.memory.fixed</code>) and added to every value the limits get. Replayed on the live engine with one build (n = 1 each): a 32,875-token conversation and two new user messages read 0 % from the cache at a 70 GiB ceiling (67.5 s and 70.7 s) and 99.9 % and 99.3 % at 78 GiB (6.4 s and 9.4 s).</p>
+<h2 id="the-shared-kv-pool">The shared KV pool<a class="headerlink" href="#the-shared-kv-pool" title="Permanent link">&para;</a></h2>
+<p><code>QSE_KV_POOL=on</code> (<code>--kv-pool on</code>, SRV-307, 2026-10-10). Without it every slot allocates its whole
+window at load: 104.25 KiB a token, 106,752 bytes (64 KiB of engine attention KV for the 16 full-attention layers,
+2 × 20 KiB of the two drafter arms' context KV, 256 B of rotary table). Four slots of 262,144 tokens
+would be ~104 GiB before the first request; the box could afford one long window and three short ones.</p>
+<p>With the pool, <code>engine/kvpool.py</code> reserves each KV tensor's full size as virtual addresses
+(<code>cuMemAddressReserve</code>) and maps 2 MiB physical pages (<code>cuMemCreate</code>/<code>cuMemMap</code>, the allocation
+granularity on GB10) only for the rows a conversation writes. The tensor has the static buffer's shape,
+dtype and strides, so every kernel, every view and every captured CUDA graph is unchanged, and the
+results are bit-identical by construction (<code>tests/gpu/test_kvpool_identity_gpu.py</code>: logits, KV rows, the
+recurrent state and a greedy spec-tree decode equal at 8k, 32k and 128k).</p>
+<ul>
+<li><strong>Commit.</strong> Every engine forward commits <code>start + rows</code> plus a margin (<code>QSE_KV_MARGIN_ROWS</code>, 256)
+  before it runs; a generation commits its prompt first; every copy into the KV (a store restore, the
+  pin, the park, the guest stash, the disk tier, the NVMe spill, a side slot's carry) commits its rows
+  before it writes them. A fresh page is zeroed, as <code>torch.zeros</code> was.</li>
+<li><strong>Give back.</strong> When a request ends, its slot keeps the rows its conversation still holds (the KV
+  length, the resident prefix's valid rows, a side slot's carried end) and the pages past them go back.</li>
+<li><strong>Under pressure</strong> a commit that would take MemAvailable under <code>QSE_KV_HARD_FLOOR_GB</code> (10) first asks
+  the memory policy's levels (store, anchors, end, stash, park, pin) and the allocator's free blocks,
+  then the small models (0.6.1, <code>server/rolemem.py</code>: the shadow reader, then the narrator; see below),
+  then the conversations idle side slots keep (oldest first), then slot 0's idle conversation (to the
+  NVMe first when the spill is on); only if none of that is enough is the commit refused. A request
+  that does not fit the admission takes the same levels back, the caches left out, before it waits.</li>
+<li><strong>The small models under pressure</strong> (0.6.1). An unloaded role gets a memory hold: its callers get
+  <code>unloaded_for_memory</code> at once (no narrator lines, the template line instead; the shadow reader's
+  journal-only answers stop) and nothing loads it on demand. It loads again through the residency
+  planner, one role at a time and the narrator before the shadow reader, once the headroom
+  (MemAvailable less the caches' growth and the requests' reservations) has stayed at
+  <code>QSE_PARALLEL_FLOOR_GB</code> + its claim + <code>QSE_ROLE_RELOAD_MARGIN_GB</code> (4) for <code>QSE_ROLE_RELOAD_S</code> (60 s)
+  with no request waiting and no reclaim in that time. A role unloaded again within <code>QSE_ROLE_THRASH_S</code>
+  (600 s) of its reload waits twice as long next time (up to <code>QSE_ROLE_MAX_HOLD_S</code>). The Laya deciders
+  stay loaded unless <code>QSE_ROLE_UNLOAD_LAYA=on</code>: they answer the router's questions, and their fallback,
+  Qwen's own answer, can choose another class, another package or another effort, which changes what the model is
+  given, and costs an engine turn and guest KV rows exactly while memory is short. <code>/health</code> <code>roles</code>
+  and the System view's memory panel show each role as <code>loaded</code>, <code>unloaded_for_memory</code> or
+  <code>reloading</code>; every unload and reload is a <code>[roles]</code> log line and a row of the residency journal.
+  While no Laya model is loaded because the planner refused it, <code>/health</code> <code>roles.laya.refused</code> names
+  the model, the reason and the planner's numbers, and the log has one <code>[deciders] WARNING</code> line
+  (0.11.3, SRV-534): on a model whose fit leaves the class question to Laya, no class is decided then.
+  Qwen's output does not depend on the roles (their own memory pools and stream):
+  <code>tests/gpu/test_roles_dynamic_gpu.py</code> checks tokens, blocks and prefill logits loaded, out and
+  reloaded.</li>
+<li><strong>Admission</strong> reserves, beside a request's prefill workspace, the KV pages its prompt and <code>max_tokens</code>
+  may still commit on its slot, credited as its slot commits them. A request that does not fit waits
+  (SRV-305): its stream carries "waiting: memory is almost full" and the rest of that line every 15 s (Open WebUI's status
+  line, opencode's reasoning; the states lines are stripped from a turn sent back), the header
+  <code>X-Tandem-Wait: memory</code>, the Parallel view shows the lane as <code>waiting_memory</code> and counts
+  <code>totals.waiting_memory</code>; a streamed request waits up to <code>QSE_MEM_WAIT_S</code> (SRV-787; until then <code>--request-timeout</code>),
+  a non-streamed one gets a 503 <code>memory_wait_timeout</code> with <code>Retry-After</code> after <code>--queue-timeout</code>.</li>
+<li><strong>The memory policy</strong> no longer holds slot 0's window: its ceiling and peak drop by it (26 GiB at
+  262,144), so the residency planner sees the uncommitted window as free and loads the narrator and the
+  Laya decider beside four slots. <code>/health</code> <code>kv_pool</code> shows the committed pages by slot and by kind
+  (<code>committed_by_kind_gib</code>: engine KV, drafter KV). The System view's memory split counts the KV as
+  these committed pages, outside the allocator, never as a paged tensor's size (that is its reserved
+  address range, <code>kv_reserved_va</code>, 26.6 GiB a 262,144-row slot and no memory), and adds <code>outside</code>
+  (the CUDA context, the host side, other programs) so that the bar sums to MemTotal - MemAvailable.</li>
+</ul>
+<p>One memory policy for every prefill (0.15.1, 2026-11-02, SRV-773, SRV-775). Before a request reserves its bytes,
+the engine's memory gate runs on its slot, slot 0 and every side slot alike, on the reserve as it is, and charges
+the workspace of the rows the prefill forwards from where the prompt resumes in place (the end anchor, the last
+prompt's end, the anchors). On Flash-Next a resumed turn of 21 rows took 0.10 GiB at every context from 8k to 146k
+tokens; the old charge, the whole context's (2.75 to 10.39 GiB), refused such a turn on slot 0 while the side slots
+ran with no gate at all. A side slot's gate runs the peak stage only; the ceiling stage, which walks the allocator's
+pools, stays slot 0's. A side slot's gate whose reserve plus workspace stays 0.5 GiB under the peak admits on one
+reading without the policy's lock, which slot 0's gate holds (<code>cache.memory.fast_gates</code>; never under
+<code>QSE_PEAK_STRICT</code>). The admission then counts every prefill's workspace by its rows while it runs (on Flash-Next
+a cold prompt without the gate's 2.75 GiB floor) and gives it back when the prefill has run
+(<code>parallel.admission.ws_in_flight_gib</code>). It caps the caches' growth and the workspaces of the prefills in flight at
+the engine's room to its peak, as before: the gate keeps each prefill it admits under the peak. A lone admit over
+the peak counts its workspace against the box floor, in full less the allocator's free default-pool blocks it takes
+before any new memory (<code>Budget.workspace_spare</code>; MemAvailable already leaves the engine's whole reserve out, those
+blocks too). A request alone is checked against the floor too
+(<code>alone</code>, <code>lone_checked</code>).</p>
+<p>A prefill the gate still refuses after shedding waits in the memory line while another prefill runs
+(<code>peak_waits</code>; its line names the peak), and runs alone over the peak when none does, counted in <code>/health</code>
+<code>memory.over_peak_admits</code>, with <code>over_peak_slot</code> and the reserve over the peak now in <code>over_peak_gib</code>: a
+long-lived server's reserve holds graph scratch no shed lowers, so a lone request would wait for good.
+<code>QSE_PEAK_STRICT=1</code> makes a lone request wait too. A prefill no reserve could ever take (the engine's load plus
+its workspace over the peak) gets its 503 at once, and no idle conversation is reclaimed for a request the gate
+refuses while another prefill runs. The rows a prefill forwards are priced again before every gate pass and before
+its reservation, and a continuation keeps its end anchor through the gate's passes (2026-11-02). A request that
+waits for memory leaves the prefill burst, so the others prefill without it, and one that waits for a prefill in
+flight runs the gate again only when a prefill has run, its resume point moved or 5 s passed.</p>
+<h2 id="which-request-goes-where">Which request goes where<a class="headerlink" href="#which-request-goes-where" title="Permanent link">&para;</a></h2>
+<p>Slot 0 is the engine as it always was: the full window, the resident conversation, the disk tier and the side lane. A request takes a side slot only when slot 0 is busy, its prompt plus <code>max_tokens</code> fits the side window, and it does not continue slot 0's resident conversation (that turn waits for slot 0 up to <code>QWEN38_SIDE_SLOT0_WAIT_S</code>, 3 s, and resumes in place; after that it takes a free side slot, below). One kind of request takes an idle side slot even when slot 0 is free (0.3.47-test, SRV-207): a guest of slot 0's conversation, that is, a short request (at most <code>--resident-guest-max</code> tokens and under a quarter of the conversation) that shares less than one prefill chunk with it, while slot 0 holds at least two chunks. The router's own questions before a new user message (the class, the package: 150 to 450 tokens) and a client's title, tags and follow-up tasks are such requests. On slot 0 a guest writes over the rows the conversation's next turn resumes from and only the guest stash puts them back; on a side slot it costs the same prefill and touches nothing of slot 0. A guest short enough for the side lane takes the idle side slot too; a side-lane request that is no guest is still served at slot 0's safe points, except TandemLLM's own questions (SPD-249, <code>QWEN38_OWN_SIDE=on</code>): with slot 0 busy, the router's question takes an idle side slot whose last end no conversation waits for, and a question too long for the lane does not wait <code>SIDE_AFTER_OWN_S</code> (15 s) behind another one of TandemLLM's own jobs on slot 0. Its rows are nobody's to carry (<code>no_carry</code>). With every side slot busy it runs on slot 0 with the stash, as before (<code>QWEN38_SIDE_GUESTS=off</code> restores that for every guest). Everything else about the request is served by the same code: the conductor, the monitor, tool calls, structured outputs, streaming.</p>
+<p>A request with images takes a side slot the way a text request does (SRV-629). On 2026-10-19 two Chat-tab agent runs called <code>render_page</code>, and every later request carried 3 to 8 screenshots. The router sent each of them to slot 0, so all 31 requests of both chats ran there: 56.6 min of wall time for 18.9 min of decoding, with slot 1 idle. Nothing in the engine needed slot 0. Each side slot is its own engine over the same weights, with its own image context and rotary offset, and the vision tower runs inside the slot's prefill. Now the router expands each image to its rows on the host and gives them the image's key, as the caches do (<code>_mm_keys</code>). Window, output cut and memory admission count those rows: a screenshot of 1,280 by 800 pixels is 1,000 rows, not one placeholder. Every continuation test reads the same keys. A turn with the same screenshots resumes on the slot that holds its rows, and another screenshot in the same place starts a new conversation. An end kept after images and carried into slot 0 keeps its rotary offset. A request with images is never a guest of slot 0. The <code>[parallel]</code> line says <code>images=N rows=R</code>. <code>QWEN38_SIDE_IMAGES=off</code> sends images to slot 0 only, as 0.12.0 did. Super VL's RADIO tower builds its own context and stays on slot 0.</p>
+<p>"Continues slot 0's conversation" is judged on the client's tokens (0.3.46-test, SRV-197): at the end of every request on slot 0 whose rows stay resident, the server keeps that prompt as the client's messages render it (no router note, no replayed span, no generated row). A new request whose rendered prompt starts with all of it, within one prefill chunk, and which is at least a chunk long, waits for slot 0, also when slot 0 is held only for a moment by TandemLLM's own work (the shadow reader, a summary being prepared), which gives way to it. Until 0.3.45-test the test compared the request with the resident rows themselves; under a conductor plan those rows also hold the router's notes and the end of the last generation, so no agent turn ever counted as a continuation, and a turn that met slot 0 held by the shadow reader took the side slot and read its whole conversation again (an opencode session's cached share fell from about 0.97 to 0.4-0.68). <code>QWEN38_SIDE_CONTINUE=resident</code> restores the old test, for an A/B. And TandemLLM's own work never sends a client's request to a side slot: while slot 0 is held only by it (the shadow reader, a summary being prepared, the memory writer, the router's question), a request keeps waiting for slot 0, which that work gives up at its next safe point, for up to 15 s; a side slot is for a second client's request. Two long agent sessions at once mostly take turns on slot 0, each resuming its own conversation (the resident one in place, the other from the park or the disk): a side slot keeps no conversation, so a long agent turn there reads its whole prompt again, and the GPU it shares slows slot 0 too. Measured with two opencode sessions started together (n = 1 each, needs verification): taking turns on slot 0, both done in 301 s with cached shares 0.90 and 1.00; with one session sent to the side slot whenever slot 0 was busy, 490 s, that session at 0.26 (17 of 18 turns on the side slot, 379 s of prefill); one after the other, 193 s. A side slot pays off for requests slot 0 holds nothing for: a new conversation, a short chat, a script. The <code>[parallel]</code> log line names the slot, the numbers it was chosen on and who held slot 0; the <code>[req]</code> line and the usage ledger (schema 7, <code>slot</code>) record the slot of every request.</p>
+<p>Sharing a client's head is not continuing a conversation (0.3.49-test, SRV-223). Open WebUI's system prompt and tool block render to about 6,700 tokens before the first user message, opencode's to about 7,400, the same for every chat of that client. While slot 0 held a conversation shorter than that head plus one chunk, a new chat of the same client shared all but a chunk of it and counted as its next turn: in the UX2 run's W18 a second Open WebUI tab asked '17 × 23' while the first wrote an essay, shared 6,675 of slot 0's 7,096 rows, and waited 35.8 s in the queue while the side slot was idle. Both tests (the client view and the resident rows) now also require the shared part to reach past the end of the request's first user message (<code>&lt;|im_start|&gt;user ... &lt;|im_end|&gt;</code> in the rendered ids, the template's own marks, not its words). A new chat then takes the idle side slot; the <code>[parallel]</code> line says <code>new conversation (shared head N)</code>. The next turn of the same chat shares its first message and everything after it and still waits for slot 0. <code>QWEN38_SIDE_CONV=off</code> is the old rule.</p>
+<p>A conversation that ran on a side slot is carried into slot 0 (0.4.1, SRV-213). A new chat or agent session that starts beside a long conversation on slot 0 is a guest of it by size and runs on the idle side slot; once it outgrows the guest limit its next turn runs on slot 0, and until 0.4.1 it read everything past its client's head on the NVMe again there: 8.7k tokens in 18.3 s in UX2's O07, cached 0.44 and 17.0 s to the first token in UX1's W11 beside an 80,000-token conversation. At the end of every request on a side slot the server notes what the slot's rows hold. The conversation's next turn on slot 0 moves slot 0's conversation out the way a request of another session does (to the NVMe when it is longer than the park holds, else to the park), copies the side slot's rows and its state at the end into slot 0, about 104 KiB a token, and resumes at that end as at any end anchor, the hidden spans and Open WebUI's reasoning-less copy included. The ledger's <code>cache_source</code> is <code>side</code>. A short request unrelated to slot 0's conversation (the router's question before the next user message, a title task) leaves such a side slot alone for 10 minutes while slot 0 is free, and runs on slot 0 with the stash. <code>QWEN38_SIDE_CARRY=off</code> is 0.4.0's re-read. <code>tests/test_side_carry.py</code> checks that the carried turn writes the same greedy tokens as the conversation run on slot 0 throughout.</p>
+<p>A side slot keeps its conversation (0.4.8-test, FX16). On 2026-10-08 two Open WebUI chats ran at once: a 64,000-token tool loop on slot 0 and a new chat on the side slot, decoding beside it. The new chat's next turn found slot 0 idle and was carried into it, which moved the long chat to the NVMe (83,160 tokens, 4.1 s); from then on neither chat could take the side slot, because the window was compared with the prompt plus the whole served <code>max_tokens</code> of 32,768 (any prompt past about 24,000 tokens was "too long"), and the two took turns on slot 0 with waits of 31 to 180 s while the side slot stood idle. Three changes. A side slot takes a request whose window leaves it at least <code>QWEN38_SIDE_MIN_ROOM</code> rows of output (16,384, the <code>high</code> thinking budget), with <code>max_tokens</code> cut to the room; the <code>[parallel]</code> line says <code>max_tokens N -&gt; M (the slot's window)</code>. A side slot has a resident prefix of its own (<code>QWEN38_SIDE_RESIDENT_GB</code> of anchors, <code>QWEN38_SIDE_STASH_GB</code> of stash for a guest, the end anchor and the end alignment as slot 0's; no pin, park, disk tier or spill): the next turn of the conversation it holds is judged on the client's tokens against the last prompt served there and names the slot as its home (<code>[parallel] ... continues its conversation here (home)</code>), takes it before anything else, waits up to <code>QWEN38_SIDE_HOME_WAIT_S</code> while another request has it, and resumes at the end anchor there, slot 0's conversation untouched; the router's question in between is a guest of it and leaves it in place through the stash. The carry into slot 0 is the fallback (the slot busy for too long, the prompt outgrown): it copies the end anchor's own state pair, not the live state a guest wrote. And a new conversation beside one a side slot could never hold takes an idle side slot before slot 0 (<code>QWEN38_SIDE_NEW_FIRST</code>), as a guest does, so the long conversation is not evicted for it. <code>tests/test_side_home.py</code> holds that resumed turn on the side slot to the end anchor's gate.</p>
+<p>A guest chat keeps its end (SPD-257). A side slot treats every request shorter than its conversation and up to <code>--resident-guest-max</code> as a guest, so a short new chat that landed on a side slot holding another chat kept no end anchor, and each of its follow-ups read it again. Now a conversation's turn (a session, not the router's question nor a lane job) that ran as a guest becomes the slot's conversation at its end, and keeps its end anchor, when its rows above the head it shares with the slot's conversation are at least that conversation's, or that one has been idle <code>QWEN38_SIDE_GUEST_IDLE_S</code> (300 s); the old conversation keeps the shared head and its anchors below it (<code>QWEN38_SIDE_GUEST_END=off</code>: as before). Never over a conversation that comes back (ENG-371): a parent waiting on its worker sits idle behind it for as long as the worker runs, and a worker comes back at its next call; the guest's stash puts their rows back, since a promotion would cut them without the NVMe write any other cut gives them. And only when the end can be kept: the engine within the committed tokens (a pending block past them cut back first), the end's buffers in hand, a drafter that resumes in place; otherwise the old conversation is not cut. A new conversation or a guest takes the free side slot whose conversation was served longest ago, not the lowest free one (<code>QWEN38_SIDE_LRU</code>, on). <code>tests/test_end_anchor_memory.py</code> routes the promoted chat's follow-up through <code>_side_home</code> and holds it to the end anchor's gate.</p>
+<p>A turn that continues slot 0's conversation never waits minutes behind another conversation's run (0.8.2). On 2026-10-13 a new Open WebUI chat sat "Queued" for 437 s on Flash-Next while both side slots were free: slot 0 ran another chat's 19,291-token <code>write_file</code> call (496 s), and the new chat's 9,093-token prompt had matched an older chat's NVMe entry at 8,192 tokens, which is only Open WebUI's system prompt and tool list. The rule "a conversation on the NVMe comes back through slot 0" then made it wait for slot 0 for as long as a request may run (the <code>[parallel] ... slot 0, continues its conversation (spill)</code> line came after the long run ended). Two changes. The spill wait needs an entry that holds the prompt past its first user message (<code>conv</code>); a match at the client's head is logged as <code>spill_head=</code> and the request is a new conversation, which takes a free side slot at once (the disk tier serves that head there too). And every slot-0 wait (<code>view</code>, <code>resident</code>, <code>spill</code>) is a preference now: the request tries slot 0 for <code>QWEN38_SIDE_SLOT0_WAIT_S</code> (3 s), then takes a free side slot its prompt fits in, prefilling what the disk tier does not hold (<code>[parallel] ... slot 0 still busy after 3.0 s, its conversation (spill) read here ... slot0_wait=3.0</code>). A side slot has no spill reader, so a long conversation that is only on the NVMe is read again there; that costs seconds at Flash-Next's 1,200 tokens a second, against a wait with no bound. A request too long for every side slot still waits for slot 0. <code>/health</code> <code>parallel</code> counts <code>spill_waits</code> and <code>slot0_gave_up</code>; <code>max_running</code> is now the most requests that may run at once (every slot built, fewer only while the admission holds requests for memory, with <code>max_running_reason</code>), <code>requested</code> is what <code>--parallel</code> asked for, and the old high-water mark is <code>peak_running</code> (it read as a cap: <code>max_running 2</code> on three slots). The Lanes view's queued line says why it waits: <code>Queued: slot 0 reads its conversation back from the NVMe; a free side slot takes it after 3 s</code>, <code>Queued: all 3 slots are busy</code>, <code>Queued: too long for a side slot (65,536 tokens); waits for slot 0</code>. <code>tests/test_slot0_wait.py</code> holds a request behind a busy slot 0 and sees it served on a side slot after the wait.</p>
+<p>A conversation stays on the slot that holds its rows (0.11.3, SRV-528). On 2026-10-17 at 00:05 a Super VL chat (<code>--parallel 4</code>, three 262,144-token side slots) ran seven requests on slot 2 and its eighth, 45,683 tokens, on slot 1, which held nothing of it: 45,778 tokens read again in 80.9 s. A side slot was home only when it had kept an end anchor, and none of that run's turns had (SRV-530), so each turn was routed as a new conversation and took the lowest free side slot; slot 1's carry record of the chat's previous run kept it off for <code>CARRY_KEEP_S</code> (600 s), until 00:05:15, and the hop came at 00:05:19. Every new conversation went to a side slot at all because slot 0 held the partial state of a cancelled 1,000,000-token test prompt (<code>prefer_side=937984</code> on every line while slot 0 was free). Three changes. The home is the side slot with the longest share of the prompt, end anchor or not: the client's tokens against the last prompt served there, or the slot's own rows past the first user message; a slot within a chunk of the longest that is free goes before a busy one, and a turn without an end anchor resumes at the slot's anchors. It is home even when the prompt also continues slot 0's conversation, as long as it holds more of the prompt than slot 0 does (<code>home_share=</code> in the line): a chat whose first prompt was the one slot 0 had just served waited 3.0 s for a busy slot 0 at every turn, then took the lowest free side slot. A slot-0 conversation whose last request stopped inside its prompt (a cancelled prefill), or that no request continued for <code>QWEN38_SLOT0_KEEP_S</code> (1,800 s), no longer sends new conversations to the side slots (<code>slot0_stale=partial|idle</code> in the <code>[parallel]</code> line); its rows stay until a request needs slot 0, and its own retry still resumes there. A turn whose slot stays busy past <code>QWEN38_SIDE_HOME_WAIT_S</code> says so (<code>[parallel] ... moved from slot 2 (busy 10.0 s): re-reads what this slot lacks</code>, <code>Queued: moved from slot 2 ...</code> in the Lanes view), and <code>/health</code> <code>parallel</code> counts <code>hops</code> and <code>hop_tokens</code>, the tokens those turns read again. <code>tests/test_slot_affinity.py</code> replays the incident's eight requests on a fake clock: on 0.11.2 the request of 00:05:19 lands on slot 1, now every turn stays on the slot it started on.</p>
+<p>An agent's worker keeps its rows, and its parent is kept while it waits (ENG-371). The Chat tab's workers send <code>X-Tandem-Worker: 1</code> and <code>X-Tandem-Parent-Session: &lt;the chat's session&gt;</code> (TandemApp's chatd/render.py). On 2026-10-17 at 23:38 a worker's first three calls (2,532, 5,764 and 7,925 tokens) each read their prompt from 0 beside a 24,200-token chat on slot 0: call 1 was a guest of that chat by length, so the stash put the chat's rows back over the worker's; call 2 found slot 0 held by call 1's tail, took the side slot as a guest and wrote over the parent's 15,066 rows there, keeping nothing of its own; call 3 was no guest and read everything. The parent's return then re-read 11,039 of 16,159 tokens. A request with either header is never a guest, on slot 0 or a side slot (<code>ResidentPrefix.begin</code>'s <code>stay</code>): it becomes the slot's conversation, the one in place goes to the park or the NVMe as for any other session, and its next call resumes at its end anchor. A worker never waits <code>QWEN38_SIDE_NEW_WAIT_S</code> for a side slot, and a new one takes a free side slot first when slot 0 holds its own parent, so the parent stays in place. For <code>PARENT_KEEP_S</code> (600 s) after a worker's last request its parent's rows are written to the NVMe rather than dropped: from a side slot, before another session's prefill cuts them (a side slot has no park or spill of its own; the <code>[spill] parent ...</code> line), and from slot 0's park, before the memory policy takes the park on slot 0's thread (the <code>[spill] parked parent ...</code> line; at the ceiling at 23:05 the gate had dropped a parked 15,417-token parent and its return re-read 11,895 of 17,015 tokens). A request whose conversation slot 0's park holds tries slot 0 first for <code>QWEN38_SIDE_SLOT0_WAIT_S</code>, as one on the NVMe does (<code>[parallel] ... park=N</code>). A conversation that ran on a side slot and then carries an image (a worker's first screenshot) is carried into slot 0 on its key ids when its images all come after the side slot's end; before, a request with images skipped the carry and read its prompt again. Two workers with screenshots take turns on slot 0 and park each other: a parked end kept after images is offered to a request whose key ids hold every row up to it, as the end in place is (on 2026-10-18 at 00:58 a worker's call read 16,161 tokens again from 0 with its rows in the park). A worker whose copy parts inside its own rows on slot 0 (a write_file's content folded to a stub in the next request, TandemApp's chatd/render.py) waits for slot 0 as a continuation and resumes there below the part, instead of taking a side slot another conversation is on. A worker's rows on a side slot go to the NVMe before another session's prefill cuts them, as a parent's do (<code>WORKERS</code>), and so does any client's conversation a worker's call cuts there (a worker is no guest of it). A swap of two conversations on slot 0 parks the longer one whole with its end: the park's buffers grow to it within <code>--resident-park-gb</code>, else it goes to the NVMe first; before, the buffers were the size of the conversation that went in first, and the longer one lost its end. A conversation of at least <code>--session-spill-min-tokens</code> that another session replaces while the memory policy refuses the park goes to the NVMe, not away (on 2026-10-18 at 02:34 a worker's 27,381 rows were dropped so, at a carry into slot 0). A parent whose worker ran (its session in <code>PARENTS</code>) tries slot 0 first, where its rows come back from the park or the NVMe, unless a side slot still holds them, and waits for slot 0 up to the time reading its prompt again would take (<code>slot0_wait_s</code> in the <code>[parallel]</code> line, 60 s at most), as a worker's call that continues slot 0's rows does; the memory gate at a request's start does not give back the end anchor that request resumes at (<code>end_hold</code>): on 2026-10-18 at 01:00 two parents' returns took the side slot and read 11,119 and 11,010 tokens again, because the client's copy, without the router's notes, matched no NVMe entry before the lock. Not built yet: chatd's prewarm of the parent when its worker ends, and <code>/health</code> and the usage frame saying where the parent was. <code>tests/test_worker_cache.py</code> replays the incident, two chats' workers on slot 0 with one park, a parent on a side slot and a parked parent at the ceiling, and holds every resume to the cold prefill's greedy tokens; <code>tests/test_mm_end_anchor.py</code> the screenshot's carry.</p>
+<p>A side slot's conversation is written to the NVMe before the KV pool takes its pages, and comes back on that slot (SRV-779). The pool's reclaim of an idle side slot emptied it unwritten while slot 0's went to the NVMe first, so a long chat on a side slot was read again from the client's head after any reclaim; the slot whose turn had just ended (an agent between two tool steps) went first, as a slot with no end recorded sorted as the oldest. Now each idle side conversation of at least <code>drain_min_tokens</code> (4,096) goes through slot 0's spill with the side slot's own rows and end anchor before its pages go (<code>[kv-pool] reclaim for admission level=idle_side bytes=... owner=slot0 victim=slot3 conv=... rows=85010 written=true ms=612</code>); one the day's write budget, a busy spill or a full budget refuses is skipped (<code>[kv-pool] reclaim skips slot N</code>), and only the <code>unwritten_side</code> level, after slot 0's conversation, takes it unwritten (<code>written=false why=nothing_else_left</code>, <code>[kv-pool] nothing else to reclaim</code>). A slot whose turn ended within 30 s, or that recorded no end, goes last. A lane that gives way (SRV-709) on a side slot writes its own conversation first too, and gives back its own slot's pages (it gave back slot 0's). Every side slot's resident prefix reads and writes slot 0's spill, holding the capture lock: its next turn goes home to the slot its rows were written from while that slot holds no other conversation (<code>[parallel] ... home=N home_share=0 spill_home=True</code>), reads the entry back into the slot's own buffers there (its end-alignment regions into the slot's own alignment) and prefills only what follows its end anchor; a side conversation of at least <code>--session-spill-min-tokens</code> that another session's prefill replaces goes to the NVMe first, as slot 0's does. <code>tests/test_kvpool_admission.py</code> holds the order, the write before the trim and the log line; <code>tests/test_session_spill.py</code> holds the restore on the side slot to the rows, end anchor, anchors and next-turn logits of a run whose rows never left, bit for bit.</p>
+<p>A side slot reads slot 0's disk tier (0.3.49-test, SRV-231): its prefill asks the tier as slot 0's does and reads a hit into its own buffers, so a new chat there starts from the client's head on the NVMe instead of prefilling it (server/diskcache.py <code>SideReader</code>). It writes nothing to the tier, counts no line and fences none of slot 0's write-behind jobs; a restore shares the tier's staging slots and locks with slot 0's. <code>/health</code> <code>parallel.side_disk</code> counts its lookups, hits and restored tokens; <code>QWEN38_SIDE_DISK=off</code> is 0.3.48-test's slot without the tier. Measured on one build with the tier switched off and on (a new Open WebUI chat on the side slot, n = 2 each): TTFT 9.6 and 9.8 s without it, 1.9 and 1.9 s with it.</p>
+<h2 id="what-was-measured">What was measured<a class="headerlink" href="#what-was-measured" title="Permanent link">&para;</a></h2>
+<p>On one DGX Spark, Qwen3.8-27B NVFP4, store off, thinking off, greedy, single runs (needs verification):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">total tok/s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>one request (median of 4 long-answer prompts, 384 tokens)</td>
+<td style="text-align: right;">48.8</td>
+</tr>
+<tr>
+<td>two at once (median of the two pairs)</td>
+<td style="text-align: right;">67.4 (1.38x)</td>
+</tr>
+<tr>
+<td>four at once</td>
+<td style="text-align: right;">69.2 (1.42x)</td>
+</tr>
+<tr>
+<td>four at once, <code>--parallel-cut joint</code></td>
+<td style="text-align: right;">76.5 (1.57x)</td>
+</tr>
+</tbody>
+</table>
+<p>One request at a time costs nothing with the flag on: in one hour, A/B/A/B, 49.29 and 49.75 tok/s without it, 50.59 with <code>--parallel 2</code> (the atlas row, <code>--no-learn-cost</code>).</p>
+<p>Every two- and four-request window showed that many slots decoding at once and joint passes of that many blocks; none queued. A joint pass of two blocks takes 94 to 98 ms on the GPU, of four 114 to 119 ms.</p>
+<p>After the merge into 0.4.0 (2026-10-06), one check per shape (single runs, <code>--parallel 4 --side-max-len 8192</code>, the same four prompts): one at a time 48.35 tok/s (median), two at once 65.83 in total (1.36x; 59 and 80 two-way joint rounds, 2 slots decoding at once in both pairs), four at once 67.00 (1.39x; 45 four-way and 55 three-way rounds, 4 slots decoding at once), no round timed out. With the flag off, one request at a time: 49.96 tok/s before the merge and 50.39 after (93.4 and 93.5 ms a block; the atlas row, <code>--no-learn-cost</code>, one run each).</p>
+<h2 id="spd-e5-2026-10-23">SPD-E5 (2026-10-23)<a class="headerlink" href="#spd-e5-2026-10-23" title="Permanent link">&para;</a></h2>
+<p>On the ThinkingCap EXL3 4.0 pack, 8 slots (side window 65,536, KV pool on, side graphs off), suffix store off, temperature 1.0, prose prompt, 512 tokens a request, one round a level, N decoding at once proven from <code>/health</code> at 5 Hz:</p>
+<table>
+<thead>
+<tr>
+<th>rules</th>
+<th style="text-align: right;">C1</th>
+<th style="text-align: right;">C2</th>
+<th style="text-align: right;">C4</th>
+<th style="text-align: right;">C8 (total tok/s)</th>
+<th style="text-align: right;">8-slot round</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>before (chains alone, draft packs of 2, share cut)</td>
+<td style="text-align: right;">37.4</td>
+<td style="text-align: right;">47.1</td>
+<td style="text-align: right;">56.2</td>
+<td style="text-align: right;">37.7</td>
+<td style="text-align: right;">426 ms</td>
+</tr>
+<tr>
+<td>chains join the joint pass (SPD-153)</td>
+<td style="text-align: right;">35.0</td>
+<td style="text-align: right;">48.7</td>
+<td style="text-align: right;">57.3</td>
+<td style="text-align: right;">43.2</td>
+<td style="text-align: right;">379 ms</td>
+</tr>
+<tr>
+<td>and draft packs of 8 (SPD-157)</td>
+<td style="text-align: right;">35.8</td>
+<td style="text-align: right;">49.0</td>
+<td style="text-align: right;">60.8</td>
+<td style="text-align: right;">49.9</td>
+<td style="text-align: right;">326 ms</td>
+</tr>
+<tr>
+<td>and the auto cut (SPD-155)</td>
+<td style="text-align: right;">34.4</td>
+<td style="text-align: right;">48.4</td>
+<td style="text-align: right;">56.3</td>
+<td style="text-align: right;">55.2</td>
+<td style="text-align: right;">294 ms</td>
+</tr>
+<tr>
+<td>and waiters asleep while the turn is busy (SPD-161)</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">60.4</td>
+<td style="text-align: right;">60.9</td>
+<td style="text-align: right;">268 ms</td>
+</tr>
+<tr>
+<td>and packed drafts in slot order (SPD-157)</td>
+<td style="text-align: right;">32.4</td>
+<td style="text-align: right;">46.8</td>
+<td style="text-align: right;">61.8</td>
+<td style="text-align: right;">68.4</td>
+<td style="text-align: right;">236 ms</td>
+</tr>
+<tr>
+<td>and the joint pass's row-wise steps once for all engines (SPD-163)</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">54.5, 53.5</td>
+<td style="text-align: right;">68.8, 70.0</td>
+<td style="text-align: right;">73.7, 71.7</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr>
+<td>and a 64-row joint pass (SPD-159)</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">53.7, 53.5</td>
+<td style="text-align: right;">69.0, 70.2</td>
+<td style="text-align: right;">79.8, 79.2</td>
+<td style="text-align: right;"></td>
+</tr>
+</tbody>
+</table>
+<p>Single runs; three repeats of the old rules spread 33.1 to 37.7 at C8, so a difference under about 10 % is noise. In an 8-slot round the joint verify pass is still about 210 ms against 77 ms for one block: the per-state parts (GDN, attention, norms, the gate inputs) run once per engine, eagerly, and the pass issues about 7,500 kernels (SPD-163).</p>
+<h2 id="spd-245-2026-10-26">SPD-245 (2026-10-26)<a class="headerlink" href="#spd-245-2026-10-26" title="Permanent link">&para;</a></h2>
+<p>The 27B ThinkingCap EXL3 4.0 pack on one DGX Spark: 8 lanes, every lane the 262,144-token window, KV pool on, side graphs off, suffix store off, <code>--sampled-tree det</code>, <code>X-Tandem: raw</code>. N requests of 512 prompt tokens each sent at once, 512 tokens each; temperature 0 (greedy) or temperature 1.0 alone (the card's top_k 20 and top_p 0.95 then apply, and an unseeded request draws its own seed). Wall is all completion tokens over the time from the first send to the last end; the decode window leaves out each request's first token and the time before the first one. Medians of the last two of three rounds, every round with N decoding at once and no fault. The greedy rows and C4 sampled ran on a3dc1e45, the other sampled rows on 345ab0fa (two rounds), the same day.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">N at once</th>
+<th style="text-align: right;">greedy, wall tok/s</th>
+<th style="text-align: right;">sampled, wall tok/s</th>
+<th style="text-align: right;">sampled, decode window</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">42.5</td>
+<td style="text-align: right;">36.5</td>
+<td style="text-align: right;">38.1</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">73.5</td>
+<td style="text-align: right;">62.9</td>
+<td style="text-align: right;">67.9</td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">108.9</td>
+<td style="text-align: right;">99.2</td>
+<td style="text-align: right;">105.7</td>
+</tr>
+<tr>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">155.9</td>
+<td style="text-align: right;">146.2</td>
+<td style="text-align: right;">168.4</td>
+</tr>
+</tbody>
+</table>
+<p>One prompt alone, greedy, time to first token: 2,048 tokens 1.90 s, 8,192 tokens 6.76 s, 32,768 tokens 29.4 s. At 8,192 tokens, four arms in one session: the chunk-64 GDN prefill on and the joint burst on 6.76 s, the GDN prefill off 6.97 s, the burst off 6.72 s, both off 6.95 s; the burst does not change a lone prompt. A/Bs on the way, each in one session: <code>QWEN38_JOINT_GRAPHS_AFTER</code> 4 against 16 gave C4 99 to 101 against 96 tok/s; <code>QWEN38_JOINT_ROWS_AT_LANES</code> 4:8 took the 4-lane round from 106 to 91 ms for one token less a round (steady C4 112 to 117 sampled, 124 to 131 greedy, three rounds on two servers each). Before the SPD-223 stream lease every full bench order faulted in its second or third C8 greedy batch; after it, none did.</p>
+<h2 id="the-text">The text<a class="headerlink" href="#the-text" title="Permanent link">&para;</a></h2>
+<p>Beside other requests, a request writes what it writes alone up to a near tie. A joint round verifies the request's tree cut to its share, a different tree shape than alone, and the shape of the verified tree can move a token whose two best candidates score almost the same (<a href="../exactness/">exactness.md</a>). On 30 prompts (prose, code, chat, 256 tokens), 17 of 30 were identical to their alone text at two requests and 15 of 30 at four, every first difference at a top-2 gap of 0.0019 to 0.118 nats. Two runs of one request alone can also part at a near tie, for the same reason (<a href="../exactness/#the-one-exception-near-ties">exactness.md</a>). The rows of a joint projection are the bits they are alone (<code>tools/parallel_verify_check.py</code>).</p>
+<h2 id="on-flash-next">On Flash-Next<a class="headerlink" href="#on-flash-next" title="Permanent link">&para;</a></h2>
+<p>The same flags work on Flash-Next since ENG-241, and its profiles turn them on (<code>QSE_PARALLEL=3</code>, <code>QSE_KV_POOL=on</code> in <code>ops/profiles/_flashnext.env</code>, 1d4af64d). On 3.05, on fresh servers, greedy: three requests arriving together took 27.18 s against 27.03 s one after the other, the same total throughput. The first tokens came at 2.2 to 6.1 s instead of up to about 20 s for the last of three, and every answer equalled its single-stream answer. One request alone decoded at 45.78 tok/s with three slots and the pool, against 45.79 with one slot, with the same text. At the profile's default window (262,144) with two 65,536-token side slots, a 260,800-token prompt kept MemAvailable at 31.6 GiB or more (the floor is 15). So the slots buy time to first token for the second and third request, not throughput.</p>
+<p>The limits, the serve.env defaults unless the profile sets them:</p>
+<table>
+<thead>
+<tr>
+<th>setting</th>
+<th>value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>sequence slots (<code>QSE_PARALLEL</code>)</td>
+<td>8 (3 measured)</td>
+</tr>
+<tr>
+<td>side window (<code>QSE_SIDE_MAX_LEN</code>)</td>
+<td>0: <code>MAX_LEN</code>, every lane the same window (65,536 before SRV-707)</td>
+</tr>
+<tr>
+<td>admission floor (<code>QSE_PARALLEL_FLOOR_GB</code>)</td>
+<td>15 GiB</td>
+</tr>
+<tr>
+<td>joint verify</td>
+<td>up to 32 rows</td>
+</tr>
+<tr>
+<td>turn quantum, batch timeout</td>
+<td>50 ms, 2 ms</td>
+</tr>
+<tr>
+<td>KV pool</td>
+<td>on; hard floor 10 GiB (<code>QSE_KV_HARD_FLOOR_GB</code>), margin 256 rows, page 2 MiB</td>
+</tr>
+<tr>
+<td>memory ceiling, peak, reserve slack</td>
+<td>66 GiB, 77 GiB, 2 GiB</td>
+</tr>
+</tbody>
+</table>
+<p>A side slot took 0.20 to 0.22 GiB allocated (0.38 to 0.40 GiB of MemAvailable) at load. Not built yet: CUDA graphs for the joint pass, and commits and drafts in one turn a round.</p>
+<ul>
+<li>KV pool (<code>--kv-pool on</code>): the K, V and indexer-key buffers of the 12 attention layers and of the MTP layer are reserved as addresses and committed as rows are written. On the server it committed 0.13, 0.91 and 4.01 GiB at 1k, 32k and 140k tokens of a 7.31 GiB window, and the answers equalled plain decode.</li>
+<li>Side slots: <code>side_slot</code> builds a slot over the same engine, with its own state, graphs, MTP head and drafter (StairCut from the same prices, the lookup over slot 0's corpus).</li>
+<li>Joint verify: <code>verify_multi</code> runs several states' blocks in one eager pass. The projections, the experts and the head run once over all rows; the norms, the mixers, the GDN recurrence and attention run per state. In one process the joint pass equalled each state's lone verify bit for bit (3 states, 12 rounds of chains and trees, 15 to 18 rows).</li>
+</ul>
+<p>Measured on 3.05 with <code>--parallel 3 --kv-pool on</code> (2026-10-12, one run): three different 2,048-token requests of 384 new tokens each decoded at once, each answer equal to its single-stream answer. The server reported 3 decoding at once and ran 150 joint rounds, 106 of three and 44 of two. Together the three finished in 23.6 s by the wall clock, prefill included. Alone they took 10.2, 7.6 and 8.7 s, so one after the other 26.5 s. Beside each other each decoded at 19 to 26 tok/s, against 47.8, 67.4 and 55.3 tok/s alone. That first run predates the like-for-like check above, which timed both orders on fresh servers.</p>
+<h2 id="seeing-it">Seeing it<a class="headerlink" href="#seeing-it" title="Permanent link">&para;</a></h2>
+<p><code>/health</code> and the dashboard's System page carry <code>parallel</code> (the slots, the GPU turn, the rounds by size, the admission) only when side slots exist. The Parallel view shows each engine lane's slot. <code>tools/parallel_bench.py</code> measures c1, c2 and c4 totals, each request against its alone text, and proves from <code>/health</code> that the requests decoded together; a level whose windows never show c slots decoding at once is reported as invalid.</p>
+<h2 id="not-yet">Not yet<a class="headerlink" href="#not-yet" title="Permanent link">&para;</a></h2>
+<p>Side slots do not resume slot 0's resident prefix, and have none of slot 0's caches in memory (they read its disk tier, nothing else). A conversation's turns that stay on a side slot read their prompt again each turn from the disk tier's head; only the move to slot 0 carries the rows (SRV-201 is the side slot keeping its own conversation). Two requests reach about 1.4x, not 2x: a joint pass of 32 rows costs more than one of 16 at today's kernels.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../server/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Server and API">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Server and API
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../measurement/" class="md-footer__link md-footer__link--next" aria-label="Next: Measurement">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Measurement
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

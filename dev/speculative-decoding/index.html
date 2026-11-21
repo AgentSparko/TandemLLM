@@ -1,0 +1,2452 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/speculative-decoding/">
+      
+      
+        <link rel="prev" href="../kernels/">
+      
+      
+        <link rel="next" href="../exactness/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Drafters and tree verify - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#drafters-and-tree-verify" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Drafters and tree verify
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-round" class="md-nav__link">
+    <span class="md-ellipsis">
+      The round
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-block-drafter" class="md-nav__link">
+    <span class="md-ellipsis">
+      The block drafter
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-lookup-drafter" class="md-nav__link">
+    <span class="md-ellipsis">
+      The lookup drafter
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The lookup drafter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-corpus-of-each-tokenizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      The corpus of each tokenizer
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#staircut-the-node-count-calculated-each-round" class="md-nav__link">
+    <span class="md-ellipsis">
+      StairCut: the node count, calculated each round
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="StairCut: the node count, calculated each round">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verify-plus-commit-by-rows-in-the-tree-ms-opsstair-tables-nvfp4json-measured-published-nvfp4-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verify plus commit by rows in the tree, ms (ops/stair-tables-nvfp4.json, measured, published NVFP4 set)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#longer-contexts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Longer contexts
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Longer contexts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verify-plus-commit-by-context-length-ms-opsstair-tables-nvfp4json-measured-published-nvfp4-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verify plus commit by context length, ms (ops/stair-tables-nvfp4.json, measured, published NVFP4 set)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#staircut-on-flash-next-and-the-shared-price-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      StairCut on Flash-Next, and the shared price files
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="StairCut on Flash-Next, and the shared price files">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#coupled-drafts-and-the-corrector" class="md-nav__link">
+    <span class="md-ellipsis">
+      Coupled drafts and the corrector
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#never-slower-than-the-plain-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      Never slower than the plain step
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-length-router-staircut-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      The length router (StairCut off)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building-the-tree" class="md-nav__link">
+    <span class="md-ellipsis">
+      Building the tree
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tree-verify-through-recurrent-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tree verify through recurrent layers
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sampling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reasoning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reasoning
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Knobs
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-round" class="md-nav__link">
+    <span class="md-ellipsis">
+      The round
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-block-drafter" class="md-nav__link">
+    <span class="md-ellipsis">
+      The block drafter
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-lookup-drafter" class="md-nav__link">
+    <span class="md-ellipsis">
+      The lookup drafter
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The lookup drafter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-corpus-of-each-tokenizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      The corpus of each tokenizer
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#staircut-the-node-count-calculated-each-round" class="md-nav__link">
+    <span class="md-ellipsis">
+      StairCut: the node count, calculated each round
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="StairCut: the node count, calculated each round">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verify-plus-commit-by-rows-in-the-tree-ms-opsstair-tables-nvfp4json-measured-published-nvfp4-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verify plus commit by rows in the tree, ms (ops/stair-tables-nvfp4.json, measured, published NVFP4 set)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#longer-contexts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Longer contexts
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Longer contexts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verify-plus-commit-by-context-length-ms-opsstair-tables-nvfp4json-measured-published-nvfp4-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verify plus commit by context length, ms (ops/stair-tables-nvfp4.json, measured, published NVFP4 set)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#staircut-on-flash-next-and-the-shared-price-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      StairCut on Flash-Next, and the shared price files
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="StairCut on Flash-Next, and the shared price files">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#coupled-drafts-and-the-corrector" class="md-nav__link">
+    <span class="md-ellipsis">
+      Coupled drafts and the corrector
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#never-slower-than-the-plain-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      Never slower than the plain step
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-length-router-staircut-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      The length router (StairCut off)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building-the-tree" class="md-nav__link">
+    <span class="md-ellipsis">
+      Building the tree
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tree-verify-through-recurrent-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tree verify through recurrent layers
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sampling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reasoning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reasoning
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Knobs
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="drafters-and-tree-verify">Drafters and tree verify<a class="headerlink" href="#drafters-and-tree-verify" title="Permanent link">&para;</a></h1>
+<p>A verify of 16 tree rows costs about the same as a verify of 8. On the published NVFP4 set at 1k tokens of context, a tree verify with its commit takes 75.5 ms at 8 rows, 74.4 ms at 16, 83.1 ms at 24 and 87.8 ms at 32 (<code>ops/stair-tables-nvfp4.json</code>, median of 8). That flat stretch is the reason this engine speculates at all: the model's forward pass is bound by reading weights, and extra rows in the same pass are nearly free. TandemLLM therefore lets cheap drafters guess many tokens and checks them all at once.</p>
+<p>This page covers the drafters, how StairCut decides what to spend each round, how the guesses become one tree, and how the tree is verified through recurrent layers.</p>
+<h2 id="the-round">The round<a class="headerlink" href="#the-round" title="Permanent link">&para;</a></h2>
+<p>Each round has four steps.</p>
+<ol>
+<li>Draft. The block drafter proposes a block of tokens, and the lookup drafter proposes continuations it has seen before. The router merges them into one draft tree of at most 32 nodes.</li>
+<li>Verify. One forward pass of the target model runs over the whole tree, and reads the model's own next token at every node.</li>
+<li>Accept. Walk down from the root. At each node take the model's token, and move to the child that carries it. Stop where no child carries it. The model's token at the stopping point is kept too, so a round yields at least one token.</li>
+<li>Commit. Keep the KV rows and the recurrent state of the accepted path, and drop the rest.</li>
+</ol>
+<p>On the benchmark row a StairCut round takes 93.4 ms and commits 4.58 tokens (both means over the row; the row's 49.89 tok/s is the mean of the requests' own rates, <a href="../measurement/#the-row">measurement.md</a>).</p>
+<pre class="mermaid"><code>flowchart LR
+    A[anchor token] --&gt; B[block drafter lattice]
+    A --&gt; L[lookup drafter tree]
+    B --&gt; M[merge and prune to the node budget]
+    L --&gt; M
+    M --&gt; V[one verify pass over the tree]
+    V --&gt; W[walk the tree with the model's tokens]
+    W --&gt; C[commit the accepted path]
+    C --&gt; A</code></pre>
+<pre class="mermaid"><code>flowchart LR
+    last["last committed&lt;br/&gt;token and state"] --&gt; bd["block drafter&lt;br/&gt;15 slots × 16 candidates&lt;br/&gt;(about 25 ms)"]
+    last --&gt; ld["lookup drafter&lt;br/&gt;context, corpus, store&lt;br/&gt;(about 0.2 ms)"]
+    bd --&gt; sc["StairCut&lt;br/&gt;merge and cut"]
+    ld --&gt; sc
+    sc -- "8 to 32 rows" --&gt; v["verify&lt;br/&gt;one forward, 64 layers"]
+    v -- "the model's token at every node" --&gt; acc["accept&lt;br/&gt;longest agreeing path"]
+    acc -- "path + 1 token" --&gt; c["commit&lt;br/&gt;KV rows and state"]
+    c -- "next round" --&gt; last
+    acc -.-&gt; out(["tokens stream to the client"])</code></pre>
+<p><em>One speculative round. Both drafters propose; StairCut merges their proposals and cuts the tree to the node count with the most expected tokens per millisecond; one verify pass checks every node; the longest agreeing path and one token of the model's own are committed.</em></p>
+<h2 id="the-block-drafter">The block drafter<a class="headerlink" href="#the-block-drafter" title="Permanent link">&para;</a></h2>
+<p><code>engine/drafters/dflash2.py</code> runs DFlash2, a small drafter that proposes a whole block of tokens at once. It has five decoder layers of its own (hidden size 5120) and reads five hidden states of the target (the residual stream entering layers 5, 19, 33, 47 and 61), fused into one input. It has no embedding and no head: it borrows the target's embedding and output head. Inside a block every row attends to every other row, which is what lets it guess 15 tokens in one pass instead of 15 chained steps.</p>
+<p>The engine holds two fine-tunes of the released drafter, trained on the target's own output. One proposes 7 tokens a block (trained at block 8), the other 15 (trained at block 16). Both are on Hugging Face: <a href="https://huggingface.co/0xBakeer/TandemLLM-Qwen3.8-27B-DFlash2-b8"><code>0xBakeer/TandemLLM-Qwen3.8-27B-DFlash2-b8</code></a> and <a href="https://huggingface.co/0xBakeer/TandemLLM-Qwen3.8-27B-DFlash2-b16"><code>0xBakeer/TandemLLM-Qwen3.8-27B-DFlash2-b16</code></a>. StairCut, the served behaviour, drafts with the block 16 one only. The served profile loads the block 8 one too and releases it at the first round; it drafts only with StairCut off. A draft moves about 6 GB (3.6 GB of drafter layers plus one read of the head for all rows), about 25 ms. The EXL3 profiles run the same two drafters with their projections in EXL3 at 3 bits a weight (the K3 files) and a draft head at 4 bits (K4), from <a href="https://huggingface.co/0xBakeer/TandemLLM-Qwen3.8-27B-EXL3-drafters"><code>0xBakeer/TandemLLM-Qwen3.8-27B-EXL3-drafters</code></a>; <code>ops/use-profile.sh</code> downloads them, and the BF16 drafters into <code>train/</code>, before it switches.</p>
+<p>The drafter's head gives the top 16 candidates per slot, and a small bigram selector scores how each candidate follows the one before. That is a lattice of 7 or 15 slots by 16 candidates. The greedy path through it becomes the spine of the tree, and the next-best candidates become branches.</p>
+<h2 id="the-lookup-drafter">The lookup drafter<a class="headerlink" href="#the-lookup-drafter" title="Permanent link">&para;</a></h2>
+<p><code>engine/drafters/ngram.py</code> copies text instead of predicting it. It looks for the longest match of the last few tokens in three places:</p>
+<ul>
+<li>the request itself, prompt and output so far (orders 2 to 8);</li>
+<li>a corpus of public text, memory-mapped with a suffix array: 38 million tokens on my box, 31 million on an install (below);</li>
+<li>the persistent suffix store, a log of what this engine has read and written before (<a href="../caches/">caches.md</a>).</li>
+</ul>
+<p><img alt="A verbatim quotation, where the lookup drafter carries long lines" src="../media/quote_speed.gif" /></p>
+<p><em>A verbatim quotation in opencode: the lookup drafter copies whole lines and the decode rate rises. Recorded against the served engine (published NVFP4 weights, StairCut on); sped-up parts are marked in the clip.</em></p>
+<p>Every continuation found is a vote, and the votes form a tree whose node scores are path probabilities. A lookup costs about 0.2 ms, against about 25 ms for the block drafter. On fresh prose it rarely fires. On an edit of a file already in the context, or a quotation, it can commit 15 tokens in a round.</p>
+<p>It fires only when the tree it would propose is worth its verify cost. A drafter that proposes on every step and is usually wrong costs the round, because the alternative on a declined step is the block drafter.</p>
+<p>After two wide rounds in a row that commit their whole width, the lookup drafter may propose one deep chain of up to 32 rows (<code>QWEN38_DEEP</code>). On an editing workload that raised the accepted tokens per round from 12.6 to 15.75.</p>
+<h3 id="the-corpus-of-each-tokenizer">The corpus of each tokenizer<a class="headerlink" href="#the-corpus-of-each-tokenizer" title="Permanent link">&para;</a></h3>
+<p>A corpus holds token ids, so it serves only the tokenizer that wrote it. Its <code>meta.json</code> records the sha256 of that tokenizer's <code>tokenizer.json</code>. A read skips a store that records another one, with one log line naming both fingerprints, and the lookup reads the conversation only; a write to such a store is refused. Qwen3.8 and Flash-Next share one tokenizer; Ornith, Flint, LFM2.5 and the Nemotron models use others.</p>
+<p>The corpus I serve with has 38 million tokens and is not published. <code>install.sh</code> builds a public one with the same recipe: one English and one German Wikipedia shard (CC BY-SA 4.0) and the Python sources of transformers, torch, triton and this repository, about 31 million tokens. It builds it for the 27B, at <code>~/TandemLLM/corpus</code>.</p>
+<p>One <code>CORPUS</code> folder holds one store a tokenizer (<code>server/setup/corpus.py</code>):</p>
+<table>
+<thead>
+<tr>
+<th>path</th>
+<th>what it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CORPUS/</code></td>
+<td>the store <code>install.sh</code> builds for the 27B, or a store built by hand</td>
+</tr>
+<tr>
+<td><code>CORPUS/tokenizers/&lt;16 hex&gt;/</code></td>
+<td>the store of one tokenizer, named by the first 16 hex digits of its fingerprint</td>
+</tr>
+</tbody>
+</table>
+<p><code>ops/use-profile.sh</code> builds the profile's store once its weights are complete, when neither folder serves its tokenizer. The Setup Guide's install runs it, so a box that <code>install.sh --setup</code> set up drafts from a corpus too. <code>install.sh --setup</code> downloads the two Wikipedia shards, and the build reads them from the Hugging Face cache, so it needs no network. A shard that is missing there is fetched, and without the network the store is built from the local sources alone. The build runs on the CPU and takes a few minutes. It changes speed only: if it fails, the switch goes on and the lookup reads the conversation and the suffix store. <code>QSE_CORPUS_BUILD=off</code> skips it.</p>
+<p><code>ops/start.sh</code> then passes the engine the store of the served model's tokenizer: <code>CORPUS</code> when it records that tokenizer, else that tokenizer's folder. A <code>CORPUS</code> that records no tokenizer, as one built before the fingerprint existed, is read as every model's, with a warning, as before. No folder is built beside it.</p>
+<p>The card rows of Ornith and Flint do not record which corpus they ran with. I have not yet measured decode with no corpus, the public corpus and the served one on the same prompts, greedy and at the card's sampling. That measurement goes here, with its build and date.</p>
+<h2 id="staircut-the-node-count-calculated-each-round">StairCut: the node count, calculated each round<a class="headerlink" href="#staircut-the-node-count-calculated-each-round" title="Permanent link">&para;</a></h2>
+<p>StairCut is the served behaviour. <code>QWEN38_LEN_SWITCH=1 QWEN38_LEN_MODE=wide</code> turns it on; the flags are off in the code, and <code>ops/serve.env</code> sets them. Every round drafts with the wide drafter and builds four candidates at up to 31 nodes: its lattice tree, its chain, the lookup tree and their merge. Each candidate is then cut to the node count that maximises its expected committed tokens per millisecond:</p>
+<div class="highlight"><pre><span></span><code>(1 + sum of q over the kept nodes) / (verify(rows) + draft + commit)
+</code></pre></div>
+<p><img alt="StairCut cuts the draft tree on the measured verify-cost staircase" src="../media/staircut_cut.gif" /></p>
+<p><img alt="The cut changes with the text: a bush on fresh text, a long line on copies" src="../media/content_speed.gif" /></p>
+<p><em>Schematic animations; the numbers in them are the paper's measurements on the published weights.</em></p>
+<p>A node's <code>q</code> is its path probability from the drafter's lattice (read at temperature 1.4), or the lookup's vote share, scaled by the calibration the router already learns online, and capped at 1. Nodes are admitted in the order of the drafter's own score, each with the ancestors it needs, and the expected gain counts at most one token per kept node (<code>min(sum q, n)</code>). The price of a tree is verify(rows) + draft + commit; a chain pays the rollback instead of the commit, weighted by the chance that it is rejected. The verify price is a staircase, not a line, so the router tries every count instead of a search that assumes a smooth cost. A cut ends at 7, 15, 23 or 31 nodes (8, 16, 24 or 32 rows) or at the whole candidate, so other sizes occur when a candidate is smaller. The draft cost is the drafter's own measured time at the current context length, because the drafter reads the whole context; it is learned online, per context class. <code>learn_block=True</code> (off) also learns a multiplicative correction per block shape from measured round times; it was noise-driven on the box and is not used.</p>
+<p><code>QWEN38_STAIR_TABLES</code> names a JSON file of verify prices by context length, chain and tree apart (<code>tools/verify_curve.py</code> at a few lengths). At 32k a 24-row tree costs about 16 ms more than a 16-row one against 9 ms at 1k, and a tree costs 2 to 4 ms more than a chain of the same rows. <code>QWEN38_STAIR_RHO</code> names a prior for the lookup's continuation rate on 8-token matches (<code>ops/lookup-rho.json</code>, counted on held-out traces; its provenance is in the file), in place of the fixed decay of 1/1.6 a level, which lets a long verbatim copy keep its whole line. The rate is a Beta-binomial per (source, match length, copy-run bin), and the router updates it online against every committed block, halving the counts past 4,000 trials. <code>QWEN38_STAIR_SKIP=1</code> decides whether to draft the head at all on the same prices, but only once a copy run has started: on a copy round the lookup line alone often wins, and at 32k a draft costs more than at 1k.</p>
+<p>What the router learns online (the draft cost per context class, the calibration, the copy counts) belongs to the router object. The server keeps one router for its whole life, so what one request teaches reaches the next; <code>router.reset()</code> clears the per-text evidence (the arms' acceptance, the calibration) and keeps the costs and the copy counts. <code>tools/forced_bench.py</code> also keeps one router per configuration for a whole run, while <code>tools/verify_spec.py</code> builds a new one for every prompt.</p>
+<p>The router releases the narrow drafter at the first round. With the node count calculated, the wide drafter's lattice cut to 16 nodes is a bush near the root on fresh text and a long line on copies, and the narrow drafter has nothing left to add. <code>tools/router_replay.py</code> replays these policies exactly on recorded lattices of both drafters, and <code>tools/forced_bench.py</code> measures them on the box on one reference text, so that different verify shapes, which move BF16 ties, compare on the same text.</p>
+<p>On the benchmark row with the published NVFP4 set, StairCut reaches 49.89 tok/s against 47.13 for the fixed block 8 and 44.80 for the fixed block 16. On the teacher-forced bench of 25 workloads it averages 90.45 tok/s against 59.31 and 81.95 (<a href="../measurement/">measurement.md</a>).</p>
+<!-- generated: verify-cost by tools/gen_reference.py; do not edit by hand -->
+
+<h3 id="verify-plus-commit-by-rows-in-the-tree-ms-opsstair-tables-nvfp4json-measured-published-nvfp4-set">Verify plus commit by rows in the tree, ms (ops/stair-tables-nvfp4.json, measured, published NVFP4 set)<a class="headerlink" href="#verify-plus-commit-by-rows-in-the-tree-ms-opsstair-tables-nvfp4json-measured-published-nvfp4-set" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>rows</th>
+<th>tree 1k</th>
+<th>chain 1k</th>
+<th>tree 4k</th>
+<th>chain 4k</th>
+<th>tree 8k</th>
+<th>chain 8k</th>
+<th>tree 16k</th>
+<th>chain 16k</th>
+<th>tree 32k</th>
+<th>chain 32k</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2</td>
+<td>74.47</td>
+<td>74.53</td>
+<td>74.35</td>
+<td>74.72</td>
+<td>75.97</td>
+<td>76.50</td>
+<td>78.55</td>
+<td>78.58</td>
+<td>83.69</td>
+<td>83.68</td>
+</tr>
+<tr>
+<td>4</td>
+<td>74.73</td>
+<td>74.79</td>
+<td>75.06</td>
+<td>75.02</td>
+<td>76.85</td>
+<td>76.84</td>
+<td>78.99</td>
+<td>78.98</td>
+<td>84.25</td>
+<td>84.32</td>
+</tr>
+<tr>
+<td>8</td>
+<td>75.50</td>
+<td>75.39</td>
+<td>76.00</td>
+<td>75.92</td>
+<td>77.46</td>
+<td>77.48</td>
+<td>80.06</td>
+<td>80.04</td>
+<td>85.54</td>
+<td>85.46</td>
+</tr>
+<tr>
+<td>12</td>
+<td>73.44</td>
+<td>72.89</td>
+<td>75.17</td>
+<td>74.43</td>
+<td>76.19</td>
+<td>76.11</td>
+<td>79.72</td>
+<td>79.24</td>
+<td>86.04</td>
+<td>86.33</td>
+</tr>
+<tr>
+<td>16</td>
+<td>74.36</td>
+<td>74.35</td>
+<td>75.93</td>
+<td>75.14</td>
+<td>77.49</td>
+<td>77.33</td>
+<td>81.48</td>
+<td>80.30</td>
+<td>88.07</td>
+<td>87.54</td>
+</tr>
+<tr>
+<td>17</td>
+<td>80.48</td>
+<td>78.12</td>
+<td>83.20</td>
+<td>79.42</td>
+<td>83.90</td>
+<td>81.42</td>
+<td>87.86</td>
+<td>85.90</td>
+<td>96.33</td>
+<td>94.36</td>
+</tr>
+<tr>
+<td>20</td>
+<td>81.04</td>
+<td>79.26</td>
+<td>82.75</td>
+<td>80.61</td>
+<td>84.92</td>
+<td>82.32</td>
+<td>90.05</td>
+<td>86.65</td>
+<td>98.48</td>
+<td>95.90</td>
+</tr>
+<tr>
+<td>24</td>
+<td>83.13</td>
+<td>80.02</td>
+<td>85.25</td>
+<td>82.58</td>
+<td>87.33</td>
+<td>84.52</td>
+<td>92.29</td>
+<td>89.76</td>
+<td>103.74</td>
+<td>99.14</td>
+</tr>
+<tr>
+<td>28</td>
+<td>85.78</td>
+<td>81.77</td>
+<td>88.22</td>
+<td>83.64</td>
+<td>90.10</td>
+<td>86.83</td>
+<td>96.48</td>
+<td>92.40</td>
+<td>108.59</td>
+<td>104.57</td>
+</tr>
+<tr>
+<td>32</td>
+<td>87.76</td>
+<td>85.46</td>
+<td>90.02</td>
+<td>87.08</td>
+<td>92.05</td>
+<td>89.74</td>
+<td>99.60</td>
+<td>95.44</td>
+<td>111.56</td>
+<td>108.46</td>
+</tr>
+</tbody>
+</table>
+<!-- /generated -->
+
+<p><em>The verify-cost staircase: a tree verify with its commit, by rows, at five context lengths. Flat to 16 rows, then steps. Measured: <code>ops/stair-tables-nvfp4.json</code>, published NVFP4 set, the medians StairCut prices its cuts on; this chart is drawn from that file.</em></p>
+<table>
+<thead>
+<tr>
+<th>decoding</th>
+<th>tok/s, mean of 25 workloads</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>fixed block 8</td>
+<td>59.31</td>
+</tr>
+<tr>
+<td>fixed block 16</td>
+<td>81.95</td>
+</tr>
+<tr>
+<td>StairCut</td>
+<td>90.45</td>
+</tr>
+</tbody>
+</table>
+<p><em>The teacher-forced bench: 25 workloads where every configuration commits the same reference text, so only rounds and their time differ. StairCut is above block 16 on 23 of the 25 workloads and above block 8 on 22. Measured: the StairCut paper.</em></p>
+<h2 id="longer-contexts">Longer contexts<a class="headerlink" href="#longer-contexts" title="Permanent link">&para;</a></h2>
+<p>Every token of context adds 64 KB of KV rows that each round reads, and the drafter reads the whole context too, so a round costs more as the conversation grows. The verify itself shows it: a 16-row tree with its commit takes 74.4 ms at 1k tokens of context and 81.5 ms at 16k, and 88.1 ms at 32k (measured, the price table). The figure below puts the two measured decode rates the public record holds beside that curve and beside the bandwidth bound of plain decoding.</p>
+<table>
+<thead>
+<tr>
+<th>prompt length</th>
+<th>StairCut, measured</th>
+<th>plain decoding bound, arithmetic</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>256 tokens</td>
+<td>49.89 tok/s</td>
+<td>16.0 tok/s</td>
+</tr>
+<tr>
+<td>16,350 tokens</td>
+<td>36.02 tok/s</td>
+<td>14.9 tok/s</td>
+</tr>
+</tbody>
+</table>
+<p>The bound is 240 / (15.01 + 0.0000655 · context) tokens a second: 15.01 GB of weights and 64 KiB (65.5 KB) of KV a token of context, the 64 KB above, read at 240 GB/s every step.</p>
+<!-- generated: verify-by-context by tools/gen_reference.py; do not edit by hand -->
+
+<h3 id="verify-plus-commit-by-context-length-ms-opsstair-tables-nvfp4json-measured-published-nvfp4-set">Verify plus commit by context length, ms (ops/stair-tables-nvfp4.json, measured, published NVFP4 set)<a class="headerlink" href="#verify-plus-commit-by-context-length-ms-opsstair-tables-nvfp4json-measured-published-nvfp4-set" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>context</th>
+<th>tree 16 rows</th>
+<th>chain 16 rows</th>
+<th>tree 32 rows</th>
+<th>chain 32 rows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1,024</td>
+<td>74.36</td>
+<td>74.35</td>
+<td>87.76</td>
+<td>85.46</td>
+</tr>
+<tr>
+<td>4,096</td>
+<td>75.93</td>
+<td>75.14</td>
+<td>90.02</td>
+<td>87.08</td>
+</tr>
+<tr>
+<td>8,192</td>
+<td>77.49</td>
+<td>77.33</td>
+<td>92.05</td>
+<td>89.74</td>
+</tr>
+<tr>
+<td>16,384</td>
+<td>81.48</td>
+<td>80.30</td>
+<td>99.60</td>
+<td>95.44</td>
+</tr>
+<tr>
+<td>32,768</td>
+<td>88.07</td>
+<td>87.54</td>
+<td>111.56</td>
+<td>108.46</td>
+</tr>
+</tbody>
+</table>
+<!-- /generated -->
+
+<p><em>Single-request decode rate with StairCut at two prompt lengths (Measured: 256 tokens, the paper's benchmark row; 16,350 tokens, the shadow reader's A/B with the shadow off, the 0.4.0 series), and the bandwidth bound of plain one-token decoding when every step reads 15.01 GB of weights plus the context's KV at 240 GB/s (arithmetic). The table: the 16- and 32-row verify by context length (measured, <code>ops/stair-tables-nvfp4.json</code>).</em></p>
+<p>Two points are all the public record holds for decode speed against prompt length on the published weights, and they come from two builds of the same series. A sweep over prompt lengths, under the rules of <a href="../measurement/">Measurement</a>, is not published yet.</p>
+<h2 id="staircut-on-flash-next-and-the-shared-price-files">StairCut on Flash-Next, and the shared price files<a class="headerlink" href="#staircut-on-flash-next-and-the-shared-price-files" title="Permanent link">&para;</a></h2>
+<p>Flash-Next drafts with its own MTP layer and the shared StairCut (<code>engine/methods/staircut.py</code>, ENG-245): each round the MTP head drafts a chain of 4 with its top-2 tokens a depth (<code>engine/models/flashnext/mtp.py</code>, one captured graph), and the cut keeps the chain's prefix (and, with <code>siblings</code>, second-choice leaves) that maximises (1 + sum of q) / (V(rows) + draft). q comes from <code>ProbDeciles</code>: the head's probability mapped to the measured acceptance per tenth of probability, starting from the probability itself and learned from every verified round. The drafter that drives it in the server loop is written once for any model's MTP head (<code>engine/methods/mtp_drafter.py</code>).</p>
+<p>With <code>QWEN38_FN_LOOKUP=1</code> (the Flash-Next profiles set it, ENG-229) the lookup joins the same round. It reads the request's own text, <code>--corpus</code> and the server's suffix store, the same stores as the 27B's lookup, because the tokenizer is the same. Its best continuation enters the cut as one more branch. While its tokens match the head's chain the two share nodes, and a shared node's q is 1 minus the chance that both are wrong. Where they differ, the lookup's chain hangs under the last shared node; where the head's chain ends, it runs on. The cut admits nodes best-first by q, as long as (1 + sum of q) / (V(rows) + draft) rises, up to 32 rows. A round still runs one verify, and the text does not change.</p>
+<table>
+<thead>
+<tr>
+<th>class (one greedy request of up to 512 tokens)</th>
+<th>MTP alone, tok/s</th>
+<th>with the lookup, tok/s</th>
+<th>tokens a block, alone and with the lookup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>edit</td>
+<td>106</td>
+<td>132</td>
+<td>4.6 and 10.4</td>
+</tr>
+<tr>
+<td>copy</td>
+<td>102</td>
+<td>133</td>
+<td>4.4 and 11.9</td>
+</tr>
+<tr>
+<td>prose</td>
+<td>49</td>
+<td>51</td>
+<td>2.2 and 2.2</td>
+</tr>
+<tr>
+<td>chat</td>
+<td>62</td>
+<td>64</td>
+<td>2.5 and 2.5</td>
+</tr>
+<tr>
+<td>code</td>
+<td>85</td>
+<td>83</td>
+<td>3.4 and 3.5</td>
+</tr>
+</tbody>
+</table>
+<p>That A/B ran on 3.05 on 2026-10-12, and every text equalled plain decode. The gain on copies is smaller than the gain in tokens a block, because a verify of 16 rows costs about 69 ms against 28 ms for 2 rows on this MoE.</p>
+<h3 id="coupled-drafts-and-the-corrector">Coupled drafts and the corrector<a class="headerlink" href="#coupled-drafts-and-the-corrector" title="Permanent link">&para;</a></h3>
+<p>A seeded sampled request drafts coupled (<code>QWEN38_FN_MTP_COUPLED</code>, on in the Flash-Next profiles, SPD-249). At each depth the MTP head proposes argmax(log q + G). Here q is the head's distribution under the request's own top-k and top-p, and G is the target's keyed noise for that output position, the same noise the target samples with. A draft lands on the target's token whenever the head and the target put the same token on top of that noise, and every emitted token is still the target's draw. A sampled request without a seed draws its own at admission where <code>/health</code> <code>sampling.unseeded.keyed</code> is true, as in the default setup (<a href="../exactness/">exactness.md</a>), and drafts coupled as well. Greedy requests draft the argmax. The cut reads a calibration of the coupled drafts measured on 15 held-out prompts (<code>QWEN38_FN_MTP_COUPLED_CAL</code>, <code>ops/prices/qwen3.8-flash-next/flashnext-3.05.dgx-spark.coupled.json</code>).</p>
+<p>On the 3.05 pack a learned corrector re-ranks the head's top 8 tokens before that pick, so more drafts land on the token the target samples (<code>QWEN38_FN_MTP_CORRECTOR</code>, <code>engine/models/flashnext/corrector.py</code>). Its file is 34.9 MB on Hugging Face, in <code>0xBakeer/TandemLLM-Qwen3.8-Flash-Next-EXL3-3.05-corrector</code>. <code>ops/use-profile.sh flashnext-3.05</code> downloads it at the commit the profile pins to <code>ops/correctors/qwen3.8-flash-next/flashnext-3.05.corrector.safetensors</code> and checks its sha256. It covers requests sampled at T 1.0, top-k 20 and top-p 0.95; other requests keep the plain coupled pick. With no file, or one that fails the engine's check, the drafts stay plain coupled and the log says why in one line. <code>GET /health</code> shows the state under <code>weights.corrector</code>: <code>loaded</code>, <code>why</code>, the file's name and its sha256. In the A/B on 3.05, 4 pairs of fresh servers with fixed prompts and seeds, every token was the same with the corrector on and off.</p>
+<p>V(rows) comes from <code>PriceModel</code>. Its prior is a price file, <code>ops/prices/&lt;model&gt;/&lt;profile&gt;.&lt;device&gt;.json</code> (Flash-Next 3.05 on the DGX Spark: <code>ops/prices/qwen3.8-flash-next/flashnext-3.05.dgx-spark.json</code>), in the format of the 27B's stair tables:</p>
+<div class="highlight"><pre><span></span><code>{"&lt;context class&gt;": {"&lt;kind&gt;": {"&lt;rows&gt;": ms, ...}, ...}, ..., "step_ms": 3.7, "measured": "how and when"}
+</code></pre></div>
+<p><code>kind</code> is <code>chain</code> or <code>tree</code>; the context class is the model's. The 27B's tables key it by context length. Flash-Next's <code>price_class</code> is 0 while its sparse attention is still dense (up to 2,051 tokens), and above that the next of 4,096 × 2^k and 6,144 × 2^k at or above the context, up to 262,144. Its file also holds, per class, the plain step's cost (<code>plain</code>), a drafted round's cost a token (<code>spec</code>) and the draft head's cost a backlog row (<code>prime</code>). A class not in the file takes the nearest lower one, rows between two measured counts interpolate, rows past the last add <code>step_ms</code> a row (else the last two counts' slope). The model follows the live prices online (EMA 0.1 a count, the unmeasured counts shifted by the learned offset), and a price never falls with more rows. A profile without a file for its device logs the missing path once and starts every count at the same 1 ms, so the cut drafts to the full depth until the first rounds price it; the text does not change either way. The device is <code>dgx-spark</code> for the GB10, else the GPU's name in lower case (<code>engine/methods/device.py</code>).</p>
+<p>The flashnext-3.05 profile keeps the cut on its price file (<code>QWEN38_FN_DRAFT_FREEZE=1</code>, SPD-249): the cut learns no prices, no turn ages and the usual answer length stays at its start, so a request drafts the same rounds whatever ran before it; the text does not change. Without a price file for the device the knob does nothing and the cut learns, with one log line; the other Flash-Next packs have no price file and learn.</p>
+<p>The 3.05 file is provisional (ENG-155). In class 0, rows 2 to 16 are the prices the cut learned online on the ENG-229 A/B server (about 1k of context, 600 rounds): 27.8 ms for 2 rows, 38.6 for 5, 52.2 for 10, 68.8 for 16; row 1 is the bench of 2026-10-11. Classes 32,768, 131,072 and 262,144 come from single requests at 32,000, 140,000 and 260,800 tokens. No sweep has run; the cut follows the live prices either way.</p>
+<h3 id="never-slower-than-the-plain-step">Never slower than the plain step<a class="headerlink" href="#never-slower-than-the-plain-step" title="Permanent link">&para;</a></h3>
+<p>At long context a drafted round can cost more a token than the plain step. On the first runs at 260,800 tokens the drafter decoded 22.5 tok/s (the second request of a 3.05 run, its prompt from the caches) and plain decoding 36.6 (one request on a server without a drafter). StairCut on Flash-Next therefore keeps, per context class, the plain step's cost and a drafted round's cost a token, both by wall time and both starting from the price file:</p>
+<ul>
+<li><code>skip</code>: a class whose drafted rounds cost more a token than its plain steps takes the plain step, and drafts one probe round at an interval that doubles while drafting keeps losing (16 rounds, up to 256).</li>
+<li><code>turn</code>: a turn drafts only when what speculation saves over the expected answer pays for the draft head's backlog, the prompt rows it has not read yet (0.28 ms a row at 260,800 tokens). A turn that does not draft takes the plain step throughout and never reads the backlog.</li>
+<li>What a class learned of its drafted rounds ages back to the file's prior while its turns take the plain step, so one slow request does not keep a class plain for good.</li>
+<li>While the server is idle (one second after the last request), it captures the verify, commit and draft graphs the current context class lacks, 25 to 30 graphs in about 4.3 s a class. A drafted turn is charged for graphs its class still lacks. Before this, the first drafted request in a new class paid 3.4 to 5.1 s of captures inside its answer.</li>
+<li>The idle window also captures the classes ahead of the current length (the next one, and each further one that starts within 6,144 tokens of it; from an empty state the 1,024 class, from 2,051 tokens, and the 2,048 class, from 4,096) and every class a turn found without its graphs, whatever length the state was left at. The warm-up captures class 0 only. Every request through the conductor starts in the 2,048 class (its plan's prompt is 4.1k to 4.8k tokens), so before this such turns took the plain step until an idle window found the state in that class (SRV-713).</li>
+<li>The idle window captures nothing while the engine's reserve plus the smallest prefill's workspace is over its declared peak (<code>--mem-peak-gib</code>; SPD-273, 2026-11-02). Each captured graph keeps a private pool that no cache shed and no <code>empty_cache</code> returns, about 20 MB a graph: in 80 minutes of mixed load the idle windows took 635 of 1,390 captures, and one window moved the reserve from 76.1 to 80.0 GiB over a 75.8 GiB peak. The log says <code>[graphs] idle captures paused</code> once; a request's own class still captures at its first use.</li>
+</ul>
+<p>Measured on 3.05 on 2026-10-12: one fresh server, two rounds at each length of one greedy request and the same request again (its prompt then from the caches), and plain decode from a <code>--drafter none</code> server. Each cell is the first request and its repeat:</p>
+<table>
+<thead>
+<tr>
+<th>context</th>
+<th>speculation, round 2, tok/s</th>
+<th>plain, tok/s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1k</td>
+<td>56.6 and 57.3</td>
+<td>41.0 and 45.4</td>
+</tr>
+<tr>
+<td>32k</td>
+<td>34.9 and 55.6</td>
+<td>33.0 and 42.5</td>
+</tr>
+<tr>
+<td>140k</td>
+<td>42.1 and 52.4</td>
+<td>33.9 and 41.4</td>
+</tr>
+<tr>
+<td>260,800</td>
+<td>41.0 and 41.0 (plain turns)</td>
+<td>39.6 and 40.5</td>
+</tr>
+</tbody>
+</table>
+<p>All 16 texts equalled plain decode. With the idle captures, the first request at a new length took the plain step and the next one drafted: 48.2 against 42.5 tok/s at 32k and 46.0 against 41.4 at 140k, every answer equal to plain decode.</p>
+<h2 id="the-length-router-staircut-off">The length router (StairCut off)<a class="headerlink" href="#the-length-router-staircut-off" title="Permanent link">&para;</a></h2>
+<p>Before StairCut, the served profile picked the block width once per request. With the StairCut flags off, <code>engine/lenrouter.py</code> still does, so a <code>serve.env</code> without them behaves as before.</p>
+<p>Which block width wins depends on the text rather than the model. On a quotation the wide drafter commits 14.9 tokens a round against 8.0 for the narrow one. On fresh prose the narrow one does as well, 2.7 against 2.6, for less work.</p>
+<p>It decides once per request. It runs four wide rounds first. A wide round prices both widths at once, because a narrow block is a prefix of a wide one, and the target's token at row i does not depend on rows after i. Where that says the narrow width still has room, it runs up to four narrow probes, because the narrow drafter is a different checkpoint and drafts its own 7 slots better than a cut-down wide block. Then it decides and keeps the decision for the rest of the request.</p>
+<p>It decides once because switching costs acceptance. A drafter keeps its own cache of the context, and a switched-in drafter starts behind. A schedule that alternated the two widths as often as a per-round router, while knowing nothing, lost 3 % on chat, 10 % on code and 18 % on a quotation against never switching. Once the decision is made, the losing drafter is released (<code>DROP_IDLE=1</code>) and stops syncing, which added a median 3.2 % on a five-workload bench.</p>
+<h2 id="building-the-tree">Building the tree<a class="headerlink" href="#building-the-tree" title="Permanent link">&para;</a></h2>
+<p><code>engine/router.py</code> merges the block drafter's lattice and the lookup tree into one <code>DraftTree</code> (<code>engine/tree.py</code>), where a shared prefix becomes a shared node. With StairCut on, the merge is built at up to 31 nodes and the staircase cut above sets its size. With StairCut off, the router prunes it to a node budget: a node stays only while its expected gain in accepted tokens pays for its share of the verify cost, priced on a verify curve (<code>QWEN38_TREE_MS</code>, or a price table from <code>ops/prices.json</code>). That budget is 16 nodes for either drafter, and the wide drafter gets 24 once the request has committed 32 tokens, so a short answer never pays for branches it cannot use. A deep chain may use up to 32 rows. These budgets are also the configuration of the fixed-width baselines the paper measures StairCut against.</p>
+<p>The router's cost estimates are learned in the loop. It scores the lookup tree against the tokens the target actually wrote on every round, chosen or not, so its calibration settles before the lookup drafter has had a turn.</p>
+<h2 id="tree-verify-through-recurrent-layers">Tree verify through recurrent layers<a class="headerlink" href="#tree-verify-through-recurrent-layers" title="Permanent link">&para;</a></h2>
+<p>Verifying a tree through attention layers is known work: give each node an attention mask of its ancestors and a position equal to its depth. The 48 Gated DeltaNet layers are harder. Their state after node t is the state after t's parent, updated by t, and a plain left-to-right walk overwrites the parent's state before t's sibling needs it.</p>
+<p><code>engine/tree.py</code> stores a tree in depth-first pre-order: every node's parent has a lower index, and every subtree is a contiguous range. In that order the ancestor relation is part of the strict lower triangle, and every prefix operation of a chain verify has an exact tree counterpart:</p>
+<table>
+<thead>
+<tr>
+<th>chain</th>
+<th>tree</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>causal mask</td>
+<td>the committed prefix plus the node's ancestors</td>
+</tr>
+<tr>
+<td>position = index</td>
+<td>position = depth, so two siblings share a position</td>
+</tr>
+<tr>
+<td>the convolution slides over neighbours</td>
+<td>it gathers each node's 3 nearest ancestors</td>
+</tr>
+<tr>
+<td>cumulative gate along the sequence</td>
+<td>the sum of gates along the node's path</td>
+</tr>
+<tr>
+<td>the delta rule's lower-triangular solve</td>
+<td>the same solve on the ancestor relation</td>
+</tr>
+<tr>
+<td>accept a prefix, roll back to a length</td>
+<td>accept a path, commit it by a gather</td>
+</tr>
+</tbody>
+</table>
+<p>The state after any accepted path can be written from quantities the verify already computed. Let <code>S0</code> be the state before the round, and for each node on the path let <code>k</code> be its key, <code>u</code> its pseudo-value and <code>gc</code> its cumulative gate. Then</p>
+<div class="highlight"><pre><span></span><code>S_path = exp(gc_last) * S0 + sum over t on the path of exp(gc_last - gc_t) * k_t (x) u_t
+</code></pre></div>
+<p><code>u_t</code> depends only on t's own path, because the inverse of an ancestor-masked matrix is ancestor-masked too. This formula holds for every root-to-node path, not only for prefixes. The commit is therefore one read of the state and one small matrix product per layer, and it reads no weights. For a chain the same identity is the rollback: keeping the first n tokens of a block is the path of length n.</p>
+<p>The KV side is simpler. The cache holds every node at its depth-first slot, and a commit gathers the accepted rows down into place.</p>
+<div class="highlight"><pre><span></span><code>node:   0      1      2      3 ...  7      (depth-first pre-order)
+token:  -      cat    sat    ...
+the model's own token at node 0 is "cat" (node 1 carries it),
+at node 1 "sat" (node 2 carries it), at node 2 "on" (no child carries it)
+-&gt; the round commits "cat sat" and the model's "on"
+</code></pre></div>
+<p><em>A draft tree of 8 nodes in depth-first pre-order. The model's own token at node 0 is “cat”, which node 1 carries; at node 1 it is “sat”, which node 2 carries; at node 2 it is “on”, which no child carries. The round commits “cat sat” and the model's “on”. Right: the ancestor mask the verify applies in the attention layers, and the relation the recurrent layers walk.</em></p>
+<h2 id="sampling">Sampling<a class="headerlink" href="#sampling" title="Permanent link">&para;</a></h2>
+<p>Greedy requests (temperature 0) take the path above. A sampled request stays exact in distribution: the target draws its own token at each node, and a drafted token survives exactly while the draw lands on it. For a drafter that proposes one fixed token this is the standard rejection sampler, with no second draw. With <code>--sampled-tree det</code> a sampled request keeps the tree. When it was adopted (rc5, before StairCut), a five-workload bench at temperature 0.7 went from about 4.1 to about 5.3 tokens a round (19 to 21 % more tok/s).</p>
+<p>A request with a <code>seed</code> draws with noise keyed by position (the Gumbel-max trick), so the same seed gives the same text whatever the drafters and the router did. <a href="../exactness/">exactness.md</a> covers both.</p>
+<h2 id="reasoning">Reasoning<a class="headerlink" href="#reasoning" title="Permanent link">&para;</a></h2>
+<p>The model thinks inside <code>&lt;think&gt;</code> tags. A reasoning budget (<code>--think-budget</code>, <code>max_reasoning_tokens</code> or <code>reasoning_effort</code>) closes the block when it is spent. The server appends the vendor's closing sentence and <code>&lt;/think&gt;</code>, runs those tokens through the engine at their real positions, and the model answers from there. This changes the answer, and the sentence is visible in the response.</p>
+<p>Closing a block that loops is the conductor's job (<a href="https://github.com/TandemLLM/TandemApp/blob/main/docs/chat-mode.md#the-conductors-session-monitor">server.md</a>): its reasoning-loop task watches the block with three arms (a pattern repeated over 128 tokens or more, the share of the last 256 tokens' 16-grams already seen earlier in the block, and novelty collapse) and, with <code>--conductor on</code>, closes it with a hidden phrase, of which the client sees only <code>&lt;/think&gt;</code>. With <code>--conductor raw</code>, the default, nothing closes a block but a budget.</p>
+<h2 id="knobs">Knobs<a class="headerlink" href="#knobs" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>knob</th>
+<th>what</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--drafter lenrouter</code>, <code>--dflash2-ckpt</code>, <code>--dflash2-ckpt16</code></td>
+<td>the block drafters (both loaded; StairCut drafts with the block 16 one)</td>
+</tr>
+<tr>
+<td><code>--len-fixed 8\|16</code>, <code>--len-latch</code></td>
+<td>with StairCut off: pin one width, or decide once per request</td>
+</tr>
+<tr>
+<td><code>--drop-idle</code></td>
+<td>release the drafter that is not drafting</td>
+</tr>
+<tr>
+<td><code>--tree</code>, <code>--budget</code>, <code>QWEN38_TREE_NODES</code>, <code>QWEN38_TREE_NODES_NARROW</code>, <code>QWEN38_TREE_WIDE_AFTER</code></td>
+<td>the tree and its node budgets</td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_MS</code>, <code>--price-table</code></td>
+<td>the verify price curve the node budget is pruned on (StairCut off)</td>
+</tr>
+<tr>
+<td><code>--corpus</code>, <code>--suffix-store</code></td>
+<td>the lookup drafter's corpus and persistent store</td>
+</tr>
+<tr>
+<td><code>QWEN38_DEEP</code>, <code>QWEN38_DEEP_AFTER</code></td>
+<td>the deep chain after long accepted paths</td>
+</tr>
+<tr>
+<td><code>QWEN38_LEN_SWITCH=1</code>, <code>QWEN38_LEN_MODE=wide</code></td>
+<td>StairCut: the node count calculated each round, wide drafter only (off in the code, on in <code>ops/serve.env</code>)</td>
+</tr>
+<tr>
+<td><code>QWEN38_STAIR_TABLES</code>, <code>QWEN38_STAIR_RHO</code>, <code>QWEN38_STAIR_SKIP</code></td>
+<td>verify prices by context length, the lookup's continuation rates, and the head-skip rule on the same prices, for that mode</td>
+</tr>
+<tr>
+<td><code>QWEN38_LATCH_PRICE=1</code></td>
+<td>the per-request decision priced on the verify curve (off by default)</td>
+</tr>
+<tr>
+<td><code>--sampled-tree det\|mixed</code>, <code>QWEN38_DRAFT_TEMP</code></td>
+<td>sampled requests on the tree, and the drafter's temperature</td>
+</tr>
+<tr>
+<td><code>--think-budget</code>, <code>--reasoning-effort</code>, <code>--think-stall</code></td>
+<td>the reasoning controls (<code>--think-stall</code> lets the conductor's loop arms run)</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../kernels/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Kernels">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Kernels
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../exactness/" class="md-footer__link md-footer__link--next" aria-label="Next: Exactness">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Exactness
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

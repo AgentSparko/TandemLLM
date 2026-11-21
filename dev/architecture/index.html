@@ -1,0 +1,2365 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/architecture/">
+      
+      
+        <link rel="prev" href="../design-simple-setup/">
+      
+      
+        <link rel="next" href="../quantisation/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Architecture - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architecture" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      The model
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-byte-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      The byte budget
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-decode-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      The decode loop
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-second-model-qwen38-flash-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      The second model, Qwen3.8-Flash-Next
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#methods-written-once-models-plugged-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      Methods written once, models plugged in
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods written once, models plugged in">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Model adapters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#modelstate-sections-and-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      ModelState: sections and views
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weight-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Weight formats
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kernels-and-devices-then-the-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kernels and devices, then the mesh
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stages-one-model-in-two-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stages: one model in two processes
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      The parts
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-request-one-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      One request, one engine
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      The model
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-byte-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      The byte budget
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-decode-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      The decode loop
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-second-model-qwen38-flash-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      The second model, Qwen3.8-Flash-Next
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#methods-written-once-models-plugged-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      Methods written once, models plugged in
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods written once, models plugged in">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Model adapters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#modelstate-sections-and-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      ModelState: sections and views
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weight-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Weight formats
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kernels-and-devices-then-the-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kernels and devices, then the mesh
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stages-one-model-in-two-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stages: one model in two processes
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      The parts
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-request-one-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      One request, one engine
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h1>
+<p>A decode step of Qwen3.8-27B reads about 27 GB of weights in the vendor's FP8 format. The DGX Spark reads memory at 273 GB/s on paper and about 240 GB/s in practice. Those two numbers put a floor of about 100 ms under every step, or 10 tok/s, before any code runs. TandemLLM exists to get under that floor while writing the model's own greedy text, with one documented exception at near ties (<a href="../exactness/">exactness.md</a>).</p>
+<p>It does two things. It cuts the bytes a step reads, from 27 GB to 15 GB. And it makes one step produce about 4.6 tokens: cheap drafters guess, and one pass of the big model checks all the guesses.</p>
+<p>The engine serves a second model the same way, Qwen3.8-Flash-Next, a mixture of experts of the same family that reads about 4.23 GB a plain token from turboderp's 3.05 EXL3 pack. The box runs one of the two at a time. Most of this page describes the 27B. <a href="./#the-second-model-qwen38-flash-next">The second model</a> says what differs, and <a href="./#methods-written-once-models-plugged-in">Methods written once</a> shows how one server, one set of caches and one speculation method serve both.</p>
+<h2 id="the-model">The model<a class="headerlink" href="#the-model" title="Permanent link">&para;</a></h2>
+<p><code>engine/config.py</code> reads <code>config.json</code> and nothing else. Its text model has 64 decoder layers, hidden size 5120, a dense SiLU MLP of width 17,408 in every layer, and a vocabulary of 248,320 tokens. The model has no mixture of experts. A 0.92 GB vision tower sits in the same checkpoint. The language-model loader skips it by name and <code>engine/vision.py</code> loads it on its own for image input (<a href="../server/#images">server.md</a>).</p>
+<p>Every fourth layer (3, 7, 11 and so on up to 63) is full attention, 16 layers in all. Gated DeltaNet fills the other 48. It is a recurrent layer that keeps a fixed-size state instead of a growing KV cache.</p>
+<table>
+<thead>
+<tr>
+<th>layer kind</th>
+<th>count</th>
+<th>state per sequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gated DeltaNet</td>
+<td>48</td>
+<td>an fp32 state of 48 heads, each 128 by 128 (3.15 MB) and a 4-wide convolution tail (80 KB), per layer</td>
+</tr>
+<tr>
+<td>full attention</td>
+<td>16</td>
+<td>BF16 keys and values, 4 KV heads of 256, so 4 KB a token per layer</td>
+</tr>
+</tbody>
+</table>
+<p>That split shapes most of the code. Published work on speculation and caching assumes attention, where undoing a token means moving a pointer back by one row. A recurrent state has absorbed every token and has no inverse, and the engine needs exact ways to undo, branch and restore it. <a href="../speculative-decoding/">speculative-decoding.md</a> shows the undo and the branch, and <a href="../caches/">caches.md</a> shows the restore.</p>
+<div class="highlight"><pre><span></span><code>[GDN] [GDN] [GDN] [attention]   x 16   = 64 layers: 48 Gated DeltaNet, 16 full attention
+</code></pre></div>
+<p><em>The layer pattern of Qwen3.8-27B: three Gated DeltaNet layers, then one full-attention layer, sixteen times.</em></p>
+<h2 id="the-byte-budget">The byte budget<a class="headerlink" href="#the-byte-budget" title="Permanent link">&para;</a></h2>
+<p>A decode step reads every weight once. This table sums the bytes from the checkpoint's safetensors headers.</p>
+<table>
+<thead>
+<tr>
+<th>group</th>
+<th>bytes a step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>48 Gated DeltaNet layers</td>
+<td>18.43 GB</td>
+</tr>
+<tr>
+<td>16 attention layers</td>
+<td>5.96 GB</td>
+</tr>
+<tr>
+<td>the output head, BF16, 248,320 rows by 5,120</td>
+<td>2.54 GB</td>
+</tr>
+<tr>
+<td>total, FP8 as shipped</td>
+<td>26.93 GB</td>
+</tr>
+</tbody>
+</table>
+<p>The three MLP projections are 63.6 % of that. Quantising them first, then the rest, moved the budget down in steps, and each step had to pass the quality gate (<a href="../quantisation/">quantisation.md</a>):</p>
+<table>
+<thead>
+<tr>
+<th>weight set</th>
+<th>bytes a step</th>
+<th>floor at 273 GB/s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP8 as shipped</td>
+<td>26.93 GB</td>
+<td>98.6 ms</td>
+</tr>
+<tr>
+<td>NVFP4 MLPs</td>
+<td>19.44 GB</td>
+<td>71.2 ms</td>
+</tr>
+<tr>
+<td>plus the FP8 (e4m3) head</td>
+<td>18.17 GB</td>
+<td>66.5 ms</td>
+</tr>
+<tr>
+<td>plus NVFP4 GDN and attention projections</td>
+<td>15.01 GB</td>
+<td>55.0 ms</td>
+</tr>
+</tbody>
+</table>
+<p>State is small beside the weights. The 48 recurrent states are 151 MB together. KV costs 64 KB a token across the 16 attention layers, so 2.1 GB at 32k tokens and about 17 GB at the full 262,144-token context.</p>
+<table>
+<thead>
+<tr>
+<th>weight set</th>
+<th>GB read per decode step</th>
+<th>floor at 273 GB/s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP8 as shipped</td>
+<td>26.93</td>
+<td>98.6 ms</td>
+</tr>
+<tr>
+<td>NVFP4 MLPs</td>
+<td>19.44</td>
+<td>71.2 ms</td>
+</tr>
+<tr>
+<td>+ FP8 head</td>
+<td>18.17</td>
+<td>66.5 ms</td>
+</tr>
+<tr>
+<td>+ NVFP4 GDN, attention (served)</td>
+<td>15.01</td>
+<td>55.0 ms</td>
+</tr>
+</tbody>
+</table>
+<p><em>Bytes a step for each weight set, and the floor each sets under one step at 273 GB/s (arithmetic). The served set is the last bar. The board reads about 240 GB/s in practice, so the real floors are about 14 % higher.</em></p>
+<h2 id="the-decode-loop">The decode loop<a class="headerlink" href="#the-decode-loop" title="Permanent link">&para;</a></h2>
+<p>Speed is one fraction:</p>
+<div class="highlight"><pre><span></span><code>tok/s = tokens committed a round / (draft ms + verify ms + commit ms)
+</code></pre></div>
+<p>A round starts from the last committed token. Next, the drafters propose a tree of guesses after it. One forward pass then runs over the whole tree through all 64 layers. The engine reads the model's own choice at every node and keeps the longest path where the model agrees with the guesses. It always keeps one more token, the model's own choice after the last accepted guess, so a round yields at least one token. Then it commits the state of that path and starts again.</p>
+<p>On the served profile (the published NVFP4 set, StairCut on) a round on the benchmark row takes 93.4 ms and commits 4.58 tokens, and the row's rate is 49.89 tok/s. The rate is the mean of the 50 requests' own rates (<a href="../measurement/#the-row">measurement.md</a>), not the quotient of the two means (4.58 tokens in 93.4 ms is 49.0 tok/s). Without speculation, the same box writes 13.69 tok/s at 72.8 ms a token (measured on 28 September on an earlier build, whose path with speculation off is unchanged).</p>
+<pre class="mermaid"><code>sequenceDiagram
+    participant C as Client
+    participant S as Server
+    participant D as Drafters and router
+    participant M as Target model
+    C-&gt;&gt;S: POST /v1/chat/completions
+    S-&gt;&gt;M: prefill the prompt (or restore it from a cache)
+    loop every round, about 93 ms
+        S-&gt;&gt;D: last committed token and context
+        D-&gt;&gt;S: a draft tree (up to 32 nodes)
+        S-&gt;&gt;M: verify the whole tree in one pass
+        M-&gt;&gt;S: the model's own token at every node
+        S-&gt;&gt;M: commit the accepted path (KV rows and recurrent state)
+        S-&gt;&gt;C: stream the committed tokens
+    end</code></pre>
+<h2 id="the-second-model-qwen38-flash-next">The second model, Qwen3.8-Flash-Next<a class="headerlink" href="#the-second-model-qwen38-flash-next" title="Permanent link">&para;</a></h2>
+<p>Flash-Next keeps the 27B's hybrid, Gated DeltaNet layers with an attention layer every fourth, and changes most of what sits around it. <code>engine/models/flashnext/config.py</code> reads its config and refuses any field it does not know by name.</p>
+<table>
+<thead>
+<tr>
+<th>part</th>
+<th>Flash-Next</th>
+<th>the 27B</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>layers</td>
+<td>48: 36 Gated DeltaNet, 12 attention</td>
+<td>64: 48 Gated DeltaNet, 16 attention</td>
+</tr>
+<tr>
+<td>MLP</td>
+<td>512 experts a layer, 10 routed and 1 shared run a token</td>
+<td>dense, width 17,408</td>
+</tr>
+<tr>
+<td>residual stream</td>
+<td>4 streams of 2,560 joined by hyper-connection mixers</td>
+<td>one stream of 5,120</td>
+</tr>
+<tr>
+<td>attention</td>
+<td>sparse past 2,051 tokens: an indexer scores blocks and each row reads the 512 best</td>
+<td>full</td>
+</tr>
+<tr>
+<td>extra input</td>
+<td>a hashed n-gram embedding (16 table rows a token) in front of layer 1</td>
+<td>none</td>
+</tr>
+<tr>
+<td>draft layer</td>
+<td>one multi-token-prediction (MTP) layer in the checkpoint</td>
+<td>none; DFlash2 drafters beside it</td>
+</tr>
+<tr>
+<td>state a sequence</td>
+<td>110.3 MiB of sections plus 29,952 bytes a token</td>
+<td>about 147 MiB plus 64 KB a token</td>
+</tr>
+<tr>
+<td>weights served</td>
+<td>turboderp's EXL3 packs, 2.05 to 6.05 bits a weight</td>
+<td>NVFP4 with an e4m3 head, or EXL3</td>
+</tr>
+</tbody>
+</table>
+<p>A plain decode token on the 3.05 pack reads about 4.23 GB (arithmetic from the pack's headers, with the mixers as int8). The engine decodes 45.8 tok/s at 1k of context without speculation, about 21.8 ms a token (measured 2026-10-11, one run a class). Its verify rows equal its decode rows bit for bit, so greedy speculation on Flash-Next writes the plain greedy text token for token, with no near-tie exception (<a href="../exactness/">exactness.md</a>). The one known difference is where a think budget closes: at the first block boundary past the cap (ENG-235). Through the server on 2026-10-12, one greedy request of up to 512 tokens a class with the MTP drafter and the lookup: prose 51, chat 64, code 83, an edit 132 and a copy 133 tok/s, against 41.5 to 45.7 plain. <a href="../quantisation/#flash-next-on-turboderps-exl3-packs">quantisation.md</a> covers the packs and <a href="../speculative-decoding/#staircut-on-flash-next-and-the-shared-price-files">speculative-decoding.md</a> the drafter.</p>
+<h2 id="methods-written-once-models-plugged-in">Methods written once, models plugged in<a class="headerlink" href="#methods-written-once-models-plugged-in" title="Permanent link">&para;</a></h2>
+<p>A second model could have meant a second server, a second set of caches and a second StairCut. The engine avoids that with five layers that depend only downward. A method (speculation, a cache tier, the memory governor, the server) reads a model through its adapter and through data files. It never branches on a model's name, never asks <code>hasattr</code> of an engine and never touches a private field. <code>tests/test_load_shared.py</code> registers a third, made-up architecture on the CPU and gets an answer on <code>/v1/chat/completions</code> with no edit under <code>server/</code>.</p>
+<pre class="mermaid"><code>flowchart TB
+    subgraph M[methods, written once]
+        SPEC[StairCut, PriceModel, the MTP drafter, the walk]
+        CACHE[every cache tier, the KV pool]
+        SRV[server, memory governor, extension host, setup guide]
+    end
+    subgraph A[model adapters, one per architecture]
+        Q35[qwen3_5: the 27B]
+        FN[qwen4_exp: Flash-Next]
+    end
+    subgraph F[weight formats]
+        FMT[EXL3, NVFP4, FP8, int8 rows, BF16]
+    end
+    subgraph H[hardware]
+        KREG[kernel registry by op, format and device]
+        DEV[device profile]
+    end
+    subgraph T[topology]
+        MESH[Mesh, world 1]
+    end
+    M --&gt; A --&gt; F --&gt; H --&gt; T
+    A --&gt; H</code></pre>
+<p>Half of it is built. Since 2026-10-12 the adapters, the state, the shared methods and the server's one loader serve every model. Four parts are still design, each with its ticket: format plugins, a kernel registry, device profiles and the mesh.</p>
+<table>
+<thead>
+<tr>
+<th>layer</th>
+<th>what</th>
+<th>where</th>
+<th>today</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>methods</td>
+<td>StairCut with its price model and calibration, the MTP tree drafter, the walk of a verified block, fingerprint v3</td>
+<td><code>engine/methods/</code></td>
+<td>built (ENG-245, ENG-243); the 27B still cuts with its own StairCut in <code>engine/lenrouter.py</code> until ENG-257</td>
+</tr>
+<tr>
+<td>methods</td>
+<td>every cache tier over the model's state</td>
+<td><code>engine/cache.py</code>, <code>disk_cache.py</code>, <code>spill.py</code>, <code>kvpool.py</code></td>
+<td>built (ENG-157, ENG-241)</td>
+</tr>
+<tr>
+<td>methods</td>
+<td>one loader driven by the registry</td>
+<td><code>server/app.py</code> <code>_load</code></td>
+<td>built (SRV-341)</td>
+</tr>
+<tr>
+<td>model adapters</td>
+<td>the registry, <code>Capabilities</code>, <code>CostModel</code>, <code>ModelState</code></td>
+<td><code>engine/models/</code></td>
+<td>built for <code>qwen3_5</code> and <code>qwen4_exp</code></td>
+</tr>
+<tr>
+<td>weight formats</td>
+<td>the <code>Linear</code> protocol</td>
+<td><code>engine/linear.py</code>, <code>tools/*_linear.py</code>, <code>engine/models/flashnext/pack.py</code></td>
+<td>built; a format plugin with <code>read</code> and <code>bind</code> and one checkpoint reader are planned (ENG-253)</td>
+</tr>
+<tr>
+<td>hardware</td>
+<td><code>KernelImpl</code> keyed by <code>(op, fmt, device)</code>, resolved once at load</td>
+<td>none yet: each weight object holds its kernel, and tile tables sit under <code>ops/</code> per model</td>
+<td>planned (ENG-251)</td>
+</tr>
+<tr>
+<td>hardware</td>
+<td>device profiles</td>
+<td><code>engine/methods/device.py</code> names the device for price files; the Setup Guide's device preset sits in each <code>model.yaml</code></td>
+<td><code>devices/&lt;id&gt;.yaml</code> and a probe at start planned (ENG-255)</td>
+</tr>
+<tr>
+<td>topology</td>
+<td><code>Mesh</code>, <code>Collectives</code>, <code>ShardSpec</code> at world 1</td>
+<td>none: one process, one GPU</td>
+<td>planned (ENG-259), then two boxes (ENG-233)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="model-adapters">Model adapters<a class="headerlink" href="#model-adapters" title="Permanent link">&para;</a></h3>
+<p><code>engine/models/__init__.py</code> keeps a registry of architectures, each registered by its own package's <code>arch.py</code>. An entry names the <code>architectures</code> strings and <code>model_type</code>s that select it, its config reader, its engine class, its server builder and its manifest, all by import path, and what the shared code needs to know about the model as data (its tool-call form and reasoning, the files it shares with other families, the kernel options it turns on; <a href="../adding-a-model/#what-a-family-declares">adding-a-model.md</a>). <code>architecture(config)</code> returns the entry, or fails naming every registered one.</p>
+<table>
+<thead>
+<tr>
+<th>name</th>
+<th>model</th>
+<th>engine</th>
+<th>server builder</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>qwen3_5</code></td>
+<td>Qwen3.8-27B</td>
+<td><code>engine.models.qwen3_5.adapter.Qwen38Engine</code></td>
+<td>the server's own, <code>_build_qwen3_5</code></td>
+</tr>
+<tr>
+<td><code>qwen4_exp</code></td>
+<td>Qwen3.8-Flash-Next</td>
+<td><code>engine.models.flashnext.engine.FlashNextEngine</code></td>
+<td><code>engine.models.flashnext.serving.serve</code></td>
+</tr>
+</tbody>
+</table>
+<p>An adapter is the engine object with a fixed set of verbs. The hot verbs run every round, so they are the engine's own bound methods and never a wrapper: a decode and a verify call the same kernels through the same Python frames as before the layering, and CUDA graphs capture the same launches.</p>
+<table>
+<thead>
+<tr>
+<th>hot verb</th>
+<th>what it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>forward(ids, start)</code></td>
+<td>a prompt chunk, a forced phrase or one decode token at the state's length</td>
+</tr>
+<tr>
+<td><code>forward_tree(block, parents, start)</code></td>
+<td>a draft block in depth-first order; logits of every row</td>
+</tr>
+<tr>
+<td><code>forward_block(block, start)</code></td>
+<td>a chain whose commit waits for <code>rollback_to</code> or the next call</td>
+</tr>
+<tr>
+<td><code>commit_tree(path)</code>, <code>rollback_to(keep)</code></td>
+<td>keep a verified path; cut a chain back</td>
+</tr>
+<tr>
+<td><code>picks</code>, <code>hidden_post_norm</code></td>
+<td>the verify's own greedy tokens; the rows a drafter syncs from</td>
+</tr>
+<tr>
+<td><code>kv.length</code>, <code>reset()</code></td>
+<td>where the sequence stands; start a new one in place (the KV rows stay)</td>
+</tr>
+</tbody>
+</table>
+<p>The cold verbs run between requests or around a cache copy. The 27B's are installed on its class by <code>engine/models/qwen3_5/adapter.py</code>, so <code>engine/model.py</code> keeps its bytes and its disk-tier fingerprint.</p>
+<table>
+<thead>
+<tr>
+<th>cold verb</th>
+<th>what it gives</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>caps</code></td>
+<td><code>Capabilities</code>: caches on or off, side slots, the cache grid (<code>anchor_grid</code>: 1,024 for the 27B, 4,096 for Flash-Next), the shadow reader, joint verify</td>
+</tr>
+<tr>
+<td><code>cost()</code></td>
+<td><code>CostModel</code>: section bytes, view bytes a token, and the prefill workspace (floor, bytes a token, cap)</td>
+</tr>
+<tr>
+<td><code>cache_state()</code></td>
+<td>the sequence's state as <code>ModelState</code> (below)</td>
+</tr>
+<tr>
+<td><code>resume_at(n)</code>, <code>settle()</code>, <code>discard_pending()</code>, <code>trim_pending(n)</code></td>
+<td>continue at n after a restore; land a pending commit; forget an uncommitted verify; cut a pending chain</td>
+</tr>
+<tr>
+<td><code>manifest()</code></td>
+<td>the files and tables its stored rows depend on (fingerprint v3, <a href="../caches/">caches.md</a>)</td>
+</tr>
+<tr>
+<td><code>memory_parts()</code>, <code>resident_files()</code></td>
+<td>the dashboard's memory split; files it keeps in the page cache on purpose</td>
+</tr>
+<tr>
+<td><code>precapture(drafter)</code></td>
+<td>the verify graphs it captures at load</td>
+</tr>
+</tbody>
+</table>
+<p>A model may offer more, and the server checks for each before it uses it: <code>draft_heads()</code> (Flash-Next's MTP layer), <code>side_slot()</code> (a slot over the same weights), <code>forward_tree_multi()</code> (several slots' blocks in one pass), <code>idle_captures()</code> (graphs to capture while the server is idle). Without them the server takes the 27B's path or leaves the feature off.</p>
+<h3 id="modelstate-sections-and-views">ModelState: sections and views<a class="headerlink" href="#modelstate-sections-and-views" title="Permanent link">&para;</a></h3>
+<p>The caches copy a sequence through <code>eng.cache_state()</code> (<code>engine/models/state.py</code>), and they know no model. A state has two parts:</p>
+<table>
+<thead>
+<tr>
+<th>part</th>
+<th>what</th>
+<th>the 27B</th>
+<th>Flash-Next</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>sections</td>
+<td>fixed-size tensors by name, copied whole</td>
+<td><code>gdn.S</code>, <code>gdn.conv</code></td>
+<td>36 GDN states and conv tails, the n-gram convolution and its token context, <code>mtp.h_last</code>: 115,662,864 bytes</td>
+</tr>
+<tr>
+<td>views</td>
+<td>position-indexed buffers with their token axis, sliced by length</td>
+<td>K and V (and their e4m3 scales when on)</td>
+<td>K, V and the indexer keys of 12 layers, the MTP layer's own: 29,952 bytes a token</td>
+</tr>
+</tbody>
+</table>
+<p>Every tier keeps sections in the state's order and views by length. A signature over names, shapes and dtypes refuses a restore across models. Derived buffers are not stored: Flash-Next's pooled indexer keys are rebuilt from the keys in <code>resume_at</code>. <code>tests/test_cache_any_model.py</code> runs a made-up state, whose sections and views have dtypes and shapes neither model uses, through four tiers with no edit in the cache code.</p>
+<h3 id="weight-formats">Weight formats<a class="headerlink" href="#weight-formats" title="Permanent link">&para;</a></h3>
+<p>Every weight the engine multiplies by implements <code>Linear</code> (<code>engine/linear.py</code>): a shape, the bytes a use reads, and <code>matmul</code>. The model calls <code>w.matmul(x)</code> and never asks the format. Today's classes: <code>FP8Block</code>, <code>NVFP4Block</code>, <code>FP8Head</code>, <code>BF16Block</code>, <code>EXL3Block</code> (<code>tools/exl3_linear.py</code>), and Flash-Next's <code>Int8Rows</code> for its mixers. Flash-Next's routed experts are not <code>Linear</code> objects: a layer's experts and its shared expert sit in one <code>MoEBank</code> (<code>tools/fn_kernels.py</code>), which the MoE kernels read directly. Each object holds its kernel, so a call costs nothing extra.</p>
+<p>The planned format plugin adds two verbs to that: <code>read</code> (one reader for every checkpoint: headers, byte ranges, row and column slices, expert ranges) and <code>bind</code> (set the object's kernel once from the registry below). Until then the 27B reads through <code>engine/loader.py</code> and Flash-Next through <code>engine/models/flashnext/pack.py</code>.</p>
+<h3 id="kernels-and-devices-then-the-mesh">Kernels and devices, then the mesh<a class="headerlink" href="#kernels-and-devices-then-the-mesh" title="Permanent link">&para;</a></h3>
+<p>The planned registry will describe each kernel as a <code>KernelImpl</code>: the op (<code>gemv</code>, <code>moe_experts</code>, <code>attention_rows</code> and so on), the weight format, the row regime, the device features it needs, whether it is row-invariant, and its entry point with its tile table and torch reference. A format will resolve its op once at load, keyed by <code>(op, fmt, device)</code>. A device without a kernel will get the reference, and an exact model there will serve plain decode until a row-invariant twin exists, because the load-time self-check gates speculation (<a href="../kernels/">kernels.md</a>).</p>
+<p>A device profile will hold what the memory governor and the Setup Guide read about a board (memory, reserve, floor, whether page cache counts as available) and what the kernel build reads (bandwidth, compute capability, features). Today the DGX Spark's numbers sit in each <code>model.yaml</code> and in the profiles, and <code>engine/methods/device.py</code> turns the GPU's name into the id price files are keyed by (<code>dgx-spark</code> for the GB10).</p>
+<p>The mesh marks where two boxes will split a model. At world 1, the only size built, it is absent from the code path: no collective runs and the graphs hold the same kernels. Its seams are ENG-259's and come before any work across boxes: weights read by slice, a shard tag on each state view, and the mesh in cache keys and price file names.</p>
+<h3 id="stages-one-model-in-two-processes">Stages: one model in two processes<a class="headerlink" href="#stages-one-model-in-two-processes" title="Permanent link">&para;</a></h3>
+<p>A model can be cut between two layers and run as two processes (ENG-307). The front stage holds the embedding and layers <code>[0, k)</code>. The tail stage holds layers <code>[k, layers)</code>, the head and the sampler, and it is the engine a client talks to. Each round the tail sends a step header: the block's tokens and parents, the length it starts at, and the commit path of the block before it. The front answers with the carry, the block's rows as they leave layer <code>k - 1</code>. Logits never cross. Each side keeps the KV rows and the recurrent sections of its own layers, under the names they have in one process.</p>
+<table>
+<thead>
+<tr>
+<th>part</th>
+<th>where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the link: typed frames over one TCP connection, a cap on a frame's size, a deadline on every receive, a 1 s heartbeat, an HMAC challenge handshake that compares both engines' identity blocks</td>
+<td><code>engine/methods/link.py</code></td>
+</tr>
+<tr>
+<td>the protocol: step header, carry, commit path, epochs, the <code>desync</code> answer, and the <code>StageAdapter</code> interface a family implements</td>
+<td><code>engine/methods/stages.py</code></td>
+</tr>
+<tr>
+<td>a family's stage code, and its tail stage in the server's engine interface</td>
+<td><code>engine/models/&lt;family&gt;/stages.py</code>, <code>tail.py</code></td>
+</tr>
+<tr>
+<td>what a stage keeps of its own half of a state under a key: sections, row segments, a folder</td>
+<td><code>engine/methods/stage_store.py</code></td>
+</tr>
+<tr>
+<td>the server's part: the flags, the key file, the front's process, the tail's link and its refusals</td>
+<td><code>server/stage.py</code></td>
+</tr>
+</tbody>
+</table>
+<p>Both families run their torch reference as stages on the CPU, and <code>tests/test_stages.py</code> holds two real processes to the single process at every cut of both tiny test models: logits, sections and KV rows are compared with <code>torch.equal</code>.</p>
+<p><code>lfm2_moe</code> also runs its engine as stages (<code>--stage</code>, <a href="../server/#one-model-as-two-stage-processes">server.md</a>). A stage's engine is the engine itself, built over a config whose layer lists hold the stage's own layers, so it loads, keeps and commits only those. Its two passes are the engine's row pass and prompt-chunk pass with the layer loop over <code>[lo, hi)</code>; <code>tests/test_lfm2_moe_stage.py</code> compares the loop bodies with the engine's as syntax trees and the rows with the engine's at every cut. The carry is what the engine holds at a layer boundary, the stream and the next layer's norm of it: <code>[rows, 2, hidden]</code> in bf16. Each block runs on the kernels the one process runs it on (a prompt chunk, a decode step, a verify block), eager. The tail checks the cut at load: decode steps against a verify block of the same tokens, bit for bit. A replay after a <code>desync</code> would run decode steps as prompt chunks, on other kernels, so the tail ends that request and drops the sequence instead.</p>
+<p><code>flashnext</code> runs its engine as stages too. The stage's engine is a subclass of the engine built over the same kind of config view. It cuts three passes to <code>[lo, hi)</code>: the trunk's layer loop, the row pass and the prompt-chunk pass. <code>tests/test_fn_stage.py</code> compares their statements with the engine's as syntax trees. The staging, <code>verify</code>, <code>commit</code>, the folded commit and the graph classes are the engine's own code, so a stage captures its decode, verify and commit graphs as the one process does. A graph's body ends at the cut: the carry enters it through static buffers and leaves it in the graph's own tensors, and the copy to and from the host runs outside the graph. The carry is the 4 streams and the next site's norm, <code>[rows, 2, 4 x hidden]</code> in bf16, and the streams alone in front of the PLE layer. The tail keeps the draft layer, which reads the streams of the last layer.</p>
+<p>Flash-Next's kernels are CUDA, so no kernel of it runs on the CPU. The CPU tests run the real loader, engine, graph classes and serving adapter on a small EXL3 pack in the served layout, with host stand-ins for the launches. There every cut gives the one engine's logits, streams and state bit for bit, eager and with graphs.</p>
+<p>On the CPU LFM2 MoE's kernels run under Triton's interpreter.</p>
+<p>Both families have run split on one GPU box, the two stages as two processes joined through <code>tools/linkrelay.py</code>. LFM2.5 2.5 bpw cut at layer 20 and Flash-Next 2.05 bpw cut at layers 12 and 24 wrote the single process's tokens on 20 greedy prompts; Flash-Next also on a prompt of 31,991 tokens. A stalled link ended the request with an error after 5 s, and a new link served the same tokens. No two-box speed is measured: on one box both stages share the GPU.</p>
+<p>A missed deadline (5 s for a block, 60 s for a prompt chunk) takes the link down, and the request ends with <code>stage_down</code>. A new connection gets a new epoch, and both sides start it from an empty state. A front whose length is not the tail's answers <code>desync</code>; the tail then replays the sequence's tokens. A front whose own pass fails answers <code>stage</code> with the reason and ends the link, so the request ends with that reason and not with a timeout. The link refuses a peer with another key, code, weights, family or layer range, and it has no second transport to fall back to. The handshake proves both ends hold the key; it does not encrypt frames, so the link belongs on a private network segment.</p>
+<p>State beyond the running sequence (ENG-423, Flash-Next with <code>--stage-caches on</code>). Each stage names a state by a key: a digest of the blocks that wrote it, in order, with each block's kind, shape and kept path. Both stages compute it from what they ran, and the tail sends it with every header, so a front that holds other rows is found by content. The tail's caches keep the tail's sections and rows with the key as one more section. Reading the sections asks the front to keep its half under that key; putting a state back sends the key to the front. The front keeps a state's sections as a copy and its rows as segments that stay in place until a pass would write over them. A front that does not hold a key is rebuilt from the tail's log of blocks, each sent again as the kind it was, with no carry coming back. A state that neither stage has a log of is refused before any length moves, and the cache that offered it falls back. Slots have a sequence each on both stages, each on a stage engine of its own over the one copy of the weights; a joint round is one request and one carry. <code>tests/test_stage_state.py</code> holds the protocol on a toy family and <code>tests/test_fn_split_state.py</code> holds Flash-Next with the caches as they are: the resident prefix, the end of a generation, a guest, the state store, the disk tier on both sides, a front that starts again, and joint rounds against the one engine's.</p>
+<h2 id="the-parts">The parts<a class="headerlink" href="#the-parts" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TB
+    subgraph server[server/]
+        API[OpenAI API, streaming, tool calls, structured outputs]
+        LIVE[Live activity, metrics, usage ledger]
+        DASH[Dashboard reads and the extension host]
+    end
+    subgraph engine[engine/]
+        LOOP[Decode loop and sampling]
+        METHODS[engine/methods: StairCut, MTP drafter, walk]
+        ROUTER[the 27B's StairCut, length router, tree router]
+        DRAFT[DFlash2 drafters and the lookup drafter]
+        MODELS[engine/models: registry, adapters, state]
+        MODEL[the 27B: forward, tree verify, commit]
+        FNX[Flash-Next: forward, verify, commit]
+        CACHE[Resident prefix, state store, disk tier, spill, suffix store]
+    end
+    subgraph kernels[tools/, CUDA and Triton kernels]
+        W4[NVFP4, FP8 and EXL3 matrix products]
+        GDN[Gated delta rule for one token, a block, a tree]
+        FNK[Flash-Next: MoE experts, row steps, prefill]
+    end
+    API --&gt; LOOP
+    LOOP --&gt; ROUTER --&gt; DRAFT
+    LOOP --&gt; METHODS
+    LOOP --&gt; MODELS
+    MODELS --&gt; MODEL
+    MODELS --&gt; FNX
+    LOOP --&gt; CACHE
+    MODEL --&gt; W4
+    MODEL --&gt; GDN
+    FNX --&gt; FNK
+    LOOP --&gt; LIVE</code></pre>
+<table>
+<thead>
+<tr>
+<th>part</th>
+<th>where</th>
+<th>page</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>checkpoint layout and loading</td>
+<td><code>engine/loader.py</code>, <code>engine/config.py</code>; Flash-Next <code>engine/models/flashnext/pack.py</code>, <code>load.py</code></td>
+<td><a href="../adding-a-model/">adding-a-model.md</a></td>
+</tr>
+<tr>
+<td>the model registry, adapters and state</td>
+<td><code>engine/models/</code></td>
+<td><a href="../adding-a-model/">adding-a-model.md</a></td>
+</tr>
+<tr>
+<td>the quantiser and its gate</td>
+<td><code>tools/quant_nvfp4.py</code>, <code>tools/quant_head.py</code>, <code>tools/quality_gate.py</code></td>
+<td><a href="../quantisation/">quantisation.md</a></td>
+</tr>
+<tr>
+<td>matrix-product kernels</td>
+<td><code>tools/nvfp4_*.py</code>, <code>tools/fp8_linear.py</code>, <code>tools/exl3_linear.py</code>, <code>tools/head_gemv.py</code>; Flash-Next <code>tools/fn_kernels.py</code></td>
+<td><a href="../kernels/">kernels.md</a></td>
+</tr>
+<tr>
+<td>C++ and CUDA sources</td>
+<td><code>tools/csrc/</code>, <code>engine/csrc/</code>, a family's <code>engine/models/&lt;family&gt;/csrc/</code>, read and built by <code>engine/native_build.py</code></td>
+<td><a href="../kernels/#where-the-source-lives">kernels.md</a></td>
+</tr>
+<tr>
+<td>recurrent-layer kernels</td>
+<td><code>tools/gdn_*_kernels.py</code>, <code>engine/gdn.py</code>; Flash-Next <code>tools/fn_seq_kernels.py</code>, <code>tools/fn_prefill_kernels.py</code></td>
+<td><a href="../kernels/">kernels.md</a></td>
+</tr>
+<tr>
+<td>the 27B, verify and commit</td>
+<td><code>engine/model.py</code>, <code>engine/tree.py</code></td>
+<td><a href="../speculative-decoding/">speculative-decoding.md</a></td>
+</tr>
+<tr>
+<td>Flash-Next, verify and commit</td>
+<td><code>engine/models/flashnext/engine.py</code>, <code>serving.py</code>, <code>mtp.py</code></td>
+<td><a href="../speculative-decoding/">speculative-decoding.md</a></td>
+</tr>
+<tr>
+<td>drafters</td>
+<td><code>engine/drafters/</code>, <code>engine/methods/mtp_drafter.py</code></td>
+<td><a href="../speculative-decoding/">speculative-decoding.md</a></td>
+</tr>
+<tr>
+<td>StairCut and the routers</td>
+<td><code>engine/methods/staircut.py</code>; the 27B's <code>engine/lenrouter.py</code>, <code>engine/router.py</code>, <code>engine/prices.py</code></td>
+<td><a href="../speculative-decoding/">speculative-decoding.md</a></td>
+</tr>
+<tr>
+<td>sampling and penalties</td>
+<td><code>engine/sample.py</code>, <code>engine/penalty.py</code></td>
+<td><a href="../exactness/">exactness.md</a></td>
+</tr>
+<tr>
+<td>structured outputs</td>
+<td><code>engine/grammar.py</code></td>
+<td><a href="../server/">server.md</a></td>
+</tr>
+<tr>
+<td>caches</td>
+<td><code>engine/cache.py</code>, <code>engine/disk_cache.py</code>, <code>engine/spill.py</code>, <code>engine/kvpool.py</code></td>
+<td><a href="../caches/">caches.md</a></td>
+</tr>
+<tr>
+<td>settings registry</td>
+<td><code>engine/settings.py</code></td>
+<td><a href="../operations/">operations.md</a></td>
+</tr>
+<tr>
+<td>the server</td>
+<td><code>server/app.py</code>, <code>server/stream.py</code>, <code>server/api/toolcall.py</code></td>
+<td><a href="../server/">server.md</a></td>
+</tr>
+<tr>
+<td>live activity, metrics, usage</td>
+<td><code>server/api/live.py</code>, <code>server/api/activity.py</code>, <code>server/api/metrics.py</code>, <code>server/api/ledger.py</code></td>
+<td><a href="https://github.com/TandemLLM/TandemEngine/blob/main/contracts/engine-api-v1/README.md">the API contract</a></td>
+</tr>
+<tr>
+<td>chat mode: the extension host</td>
+<td><code>server/ext.py</code></td>
+<td><a href="../server/#chat-mode-the-conductor-as-an-extension">server.md</a></td>
+</tr>
+<tr>
+<td>service scripts and gate</td>
+<td><code>ops/</code></td>
+<td><a href="../operations/">operations.md</a></td>
+</tr>
+<tr>
+<td>measurement tools</td>
+<td><code>tools/row3.py</code>, <code>tools/block_ab.py</code>, <code>tools/verify_spec.py</code>; Flash-Next <code>tools/fn_*.py</code></td>
+<td><a href="../measurement/">measurement.md</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="one-request-one-engine">One request, one engine<a class="headerlink" href="#one-request-one-engine" title="Permanent link">&para;</a></h2>
+<p>With <code>--parallel 1</code> the engine holds one sequence at a time; the shipped <code>ops/serve.env</code> runs 8 lanes since 0.15.0 (SRV-707, <code>QSE_PARALLEL=8</code>). Requests wait for the engine lock in a bounded queue (8 by default), and a request that waits longer than the queue timeout gets a 503. The numbers on this page describe that single-request loop. With <code>--parallel N</code> the engine holds N sequences over one copy of the weights and verifies them in one joint pass (<a href="../parallel-requests/">parallel-requests.md</a>), as <code>ops/serve.env</code> and the profiles of every family with side slots do, except Ornith's and Flint's, which keep one sequence.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../design-simple-setup/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Design: Simple mode for the Setup Guide">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Design: Simple mode for the Setup Guide
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../quantisation/" class="md-footer__link md-footer__link--next" aria-label="Next: Quantisation and profiles">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Quantisation and profiles
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

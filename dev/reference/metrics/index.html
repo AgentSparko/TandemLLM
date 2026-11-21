@@ -1,0 +1,2386 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/reference/metrics/">
+      
+      
+        <link rel="prev" href="../http/">
+      
+      
+        <link rel="next" href="../../troubleshooting/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Reference: metrics and the usage ledger - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#reference-metrics-and-the-usage-ledger" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Reference: metrics and the usage ledger
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#prometheus-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus metrics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prometheus metrics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#prometheus-families-the-engine-registers-the-extensions-are-in-tandemapps-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus families the engine registers (the extension's are in TandemApp's docs)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-usage-ledger" class="md-nav__link">
+    <span class="md-ellipsis">
+      The usage ledger
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The usage ledger">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-usage-ledgers-requests-table-schema-version-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      The usage ledger's requests table (schema version 12)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#prometheus-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus metrics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prometheus metrics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#prometheus-families-the-engine-registers-the-extensions-are-in-tandemapps-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus families the engine registers (the extension's are in TandemApp's docs)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-usage-ledger" class="md-nav__link">
+    <span class="md-ellipsis">
+      The usage ledger
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The usage ledger">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-usage-ledgers-requests-table-schema-version-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      The usage ledger's requests table (schema version 12)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="reference-metrics-and-the-usage-ledger">Reference: metrics and the usage ledger<a class="headerlink" href="#reference-metrics-and-the-usage-ledger" title="Permanent link">&para;</a></h1>
+<h2 id="prometheus-metrics">Prometheus metrics<a class="headerlink" href="#prometheus-metrics" title="Permanent link">&para;</a></h2>
+<p><code>GET /metrics</code> serves the families below in the Prometheus text format, to anyone while no token is set, else behind the metrics or admin token, or to a request from the machine itself. <code>ops/monitoring/</code> has a scrape configuration, alert rules with their tests, and a Grafana dashboard generated by <code>tools/grafana_dashboard.py</code>. With the metrics token set, a scrape job needs it as a bearer token:</p>
+<div class="highlight"><pre><span></span><code>- job_name: tandemllm
+  authorization: {type: Bearer, credentials_file: /etc/prometheus/tandem-metrics.token}
+  static_configs: [{targets: ['gpu-host:8000']}]
+</code></pre></div>
+<p>The engine's families never count a relayed request. The table lists every family the engine registers with a literal name in the code; families built at scrape time from a table (the cache families by <code>cache</code> label) are listed by their prefix in the help text of the page itself. The extension's families (<code>qse_conductor_*</code>, marked <code>"owner": "ext"</code> in <code>contracts/engine-api-v1/metrics-families.json</code>), the proxy's and the host collector's are in <a href="https://github.com/TandemLLM/TandemApp/blob/main/docs/README.md">TandemApp's docs</a>.</p>
+<!-- generated: metrics by tools/gen_reference.py; do not edit by hand -->
+
+<h3 id="prometheus-families-the-engine-registers-the-extensions-are-in-tandemapps-docs">Prometheus families the engine registers (the extension's are in TandemApp's docs)<a class="headerlink" href="#prometheus-families-the-engine-registers-the-extensions-are-in-tandemapps-docs" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type, labels</th>
+<th>What it counts</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>qse_requests_total</code></td>
+<td><code>counter, finish_reason</code></td>
+<td>generations that finished, by the reason they finished</td>
+</tr>
+<tr>
+<td><code>qse_request_success_total</code></td>
+<td><code>counter</code></td>
+<td>generations that finished on the model's own stop token or the caller's token budget</td>
+</tr>
+<tr>
+<td><code>qse_prompt_tokens_total</code></td>
+<td><code>counter</code></td>
+<td>prompt tokens accepted, including tokens served from a cache</td>
+</tr>
+<tr>
+<td><code>qse_generation_tokens_total</code></td>
+<td><code>counter</code></td>
+<td>tokens written by the engine</td>
+</tr>
+<tr>
+<td><code>qse_errors_total</code></td>
+<td><code>counter, type</code></td>
+<td>exceptions that ended a generation, by exception class</td>
+</tr>
+<tr>
+<td><code>qse_images_left_out_total</code></td>
+<td><code>counter</code></td>
+<td>a conversation's earlier images left out of a request over the image caps (server/images.py)</td>
+</tr>
+<tr>
+<td><code>qse_time_to_first_token_seconds</code></td>
+<td><code>histogram</code></td>
+<td>arrival of the request to its first token, queue wait included</td>
+</tr>
+<tr>
+<td><code>qse_time_per_output_token_seconds</code></td>
+<td><code>histogram</code></td>
+<td>gap between two tokens of one generation.</td>
+</tr>
+<tr>
+<td><code>qse_e2e_request_latency_seconds</code></td>
+<td><code>histogram</code></td>
+<td>arrival of the request to the end of its stream, queue wait included</td>
+</tr>
+<tr>
+<td><code>qse_spec_decode_num_accepted_tokens_total</code></td>
+<td><code>counter</code></td>
+<td>drafted tokens the target agreed with. The token the target writes itself is not counted here, so accepted over drafted is the draft acceptance rate</td>
+</tr>
+<tr>
+<td><code>qse_spec_decode_num_draft_tokens_total</code></td>
+<td><code>counter</code></td>
+<td>tokens proposed by the drafter, anchor excluded</td>
+</tr>
+<tr>
+<td><code>qse_spec_decode_num_drafts_total</code></td>
+<td><code>counter</code></td>
+<td>blocks the drafter proposed</td>
+</tr>
+<tr>
+<td><code>qse_spec_accept_per_block</code></td>
+<td><code>histogram</code></td>
+<td>tokens committed by one verified block, the target's own token included</td>
+</tr>
+<tr>
+<td><code>qse_draft_width_chosen_total</code></td>
+<td><code>counter, width</code></td>
+<td>blocks proposed at each width, anchor included.</td>
+</tr>
+<tr>
+<td><code>qse_verify_seconds</code></td>
+<td><code>histogram</code></td>
+<td>one verify pass over a draft block, as the decode loop paid for it</td>
+</tr>
+<tr>
+<td><code>qse_draft_seconds</code></td>
+<td><code>histogram</code></td>
+<td>one call to the drafter, lookup and block drafter together</td>
+</tr>
+<tr>
+<td><code>qse_ext_errors_total</code></td>
+<td><code>counter, hook</code></td>
+<td>extension hooks that failed (raised, a wrong shape, an act out of place); the request went on without them, by hook</td>
+</tr>
+<tr>
+<td><code>qse_requests_running</code></td>
+<td><code>gauge</code></td>
+<td>generations the engine is working on</td>
+</tr>
+<tr>
+<td><code>qse_requests_waiting</code></td>
+<td><code>gauge</code></td>
+<td>requests holding a socket and waiting for the engine</td>
+</tr>
+<tr>
+<td><code>qse_requests_refused_total</code></td>
+<td><code>counter, reason</code></td>
+<td>requests turned away with a Retry-After before the engine saw them</td>
+</tr>
+<tr>
+<td><code>qse_cache_misses_total</code></td>
+<td><code>counter, cache</code></td>
+<td>prefix lookups that found nothing</td>
+</tr>
+<tr>
+<td><code>qse_cache_evictions_total</code></td>
+<td><code>counter, cache</code></td>
+<td>entries dropped to stay inside the byte budget</td>
+</tr>
+<tr>
+<td><code>qse_cache_bytes</code></td>
+<td><code>gauge, cache</code></td>
+<td>bytes held by each cache</td>
+</tr>
+<tr>
+<td><code>qse_ngram_table_cache_hits_total</code></td>
+<td><code>counter</code></td>
+<td>n-gram table rows served from the hot-row cache</td>
+</tr>
+<tr>
+<td><code>qse_ngram_table_cache_misses_total</code></td>
+<td><code>counter</code></td>
+<td>n-gram table rows read from disk (O_DIRECT) for a hot-row cache miss</td>
+</tr>
+<tr>
+<td><code>qse_ngram_table_blocks_read_total</code></td>
+<td><code>counter</code></td>
+<td>4 KiB blocks read from disk for the n-gram table</td>
+</tr>
+<tr>
+<td><code>qse_ngram_table_cache_bytes</code></td>
+<td><code>gauge</code></td>
+<td>the n-gram table's hot-row cache, in bytes</td>
+</tr>
+<tr>
+<td><code>qse_ngram_table_file_bytes</code></td>
+<td><code>gauge</code></td>
+<td>the n-gram table's file size, in bytes</td>
+</tr>
+<tr>
+<td><code>qse_prepare_runs_total</code></td>
+<td><code>counter</code></td>
+<td>summaries the engine prepared ahead of a request</td>
+</tr>
+<tr>
+<td><code>qse_prepare_served_total</code></td>
+<td><code>counter</code></td>
+<td>prepared summaries a request went on from</td>
+</tr>
+<tr>
+<td><code>qse_prepare_yielded_total</code></td>
+<td><code>counter</code></td>
+<td>prepare runs that gave the engine to a client request</td>
+</tr>
+<tr>
+<td><code>qse_prepare_too_long_total</code></td>
+<td><code>counter</code></td>
+<td>prepare runs skipped: the conversation and the summary would not fit the context</td>
+</tr>
+<tr>
+<td><code>qse_memory_writer_runs_total</code></td>
+<td><code>counter</code></td>
+<td>memory writer turns the engine ran</td>
+</tr>
+<tr>
+<td><code>qse_memory_writer_notes_total</code></td>
+<td><code>counter</code></td>
+<td>memory notes the writer stored</td>
+</tr>
+<tr>
+<td><code>qse_memory_bytes</code></td>
+<td><code>gauge, part</code></td>
+<td>the engine's memory against its limits, by part</td>
+</tr>
+<tr>
+<td><code>qse_memory_shed_total</code></td>
+<td><code>counter, level</code></td>
+<td>caches given back to keep the engine under its ceiling or its peak, by level</td>
+</tr>
+<tr>
+<td><code>qse_cache_entries</code></td>
+<td><code>gauge, cache</code></td>
+<td>entries held by each cache</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_bytes</code></td>
+<td><code>gauge, part</code></td>
+<td>the disk tier: what its entries hold, its budget, the file system's free space and the floor it never crosses, the host staging buffer</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_entries</code></td>
+<td><code>gauge, kind</code></td>
+<td>the disk tier's files: anchors (one state each) and chunks (1,024 tokens of rows each)</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_lookups_total</code></td>
+<td><code>counter</code></td>
+<td>prefills the disk tier could have shortened by a chunk or more</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_hits_total</code></td>
+<td><code>counter</code></td>
+<td>prefills that started from the disk tier</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_misses_total</code></td>
+<td><code>counter</code></td>
+<td>lookups the disk tier did not answer</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_tokens_restored_total</code></td>
+<td><code>counter</code></td>
+<td>prompt tokens read back from the disk instead of prefilled</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_read_bytes_total</code></td>
+<td><code>counter</code></td>
+<td>bytes a restore read</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_written_bytes_total</code></td>
+<td><code>counter</code></td>
+<td>bytes the writer wrote</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_writes_total</code></td>
+<td><code>counter, kind</code></td>
+<td>files the writer wrote, by kind</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_evictions_total</code></td>
+<td><code>counter, reason</code></td>
+<td>entries the disk tier gave up, by reason (budget, floor, ttl, orphan)</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_dropped_total</code></td>
+<td><code>counter, reason</code></td>
+<td>writes not done, by reason (window: the next prefill came first; budget, floor, staging, aborted, too_big)</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_failed_restores_total</code></td>
+<td><code>counter</code></td>
+<td>restores that failed a check (checksum, layout) and took the cold path</td>
+</tr>
+<tr>
+<td><code>qse_disk_cache_last_restore_seconds</code></td>
+<td><code>gauge</code></td>
+<td>the last restore's wall time</td>
+</tr>
+<tr>
+<td><code>qse_cache_collisions_total</code></td>
+<td><code>counter, cache</code></td>
+<td>stored prefixes whose 64-bit hash matched and whose tokens did not</td>
+</tr>
+<tr>
+<td><code>qse_prefill_tokens_reused_total</code></td>
+<td><code>counter</code></td>
+<td>prompt tokens restored from a snapshot instead of forwarded</td>
+</tr>
+<tr>
+<td><code>qse_prefill_tokens_forwarded_total</code></td>
+<td><code>counter</code></td>
+<td>prompt tokens run through the 64 layers</td>
+</tr>
+<tr>
+<td><code>qse_gpu_memory_used_bytes</code></td>
+<td><code>gauge</code></td>
+<td>allocator bytes held by the engine</td>
+</tr>
+<tr>
+<td><code>qse_gpu_memory_reserved_bytes</code></td>
+<td><code>gauge</code></td>
+<td>bytes the allocator has taken from the driver and not given back</td>
+</tr>
+<tr>
+<td><code>qse_unified_memory_free_bytes</code></td>
+<td><code>gauge</code></td>
+<td>free bytes in the board's one memory pool</td>
+</tr>
+<tr>
+<td><code>qse_engine_uptime_seconds</code></td>
+<td><code>gauge</code></td>
+<td>seconds since the server started</td>
+</tr>
+<tr>
+<td><code>qse_engine_info</code></td>
+<td><code>gauge, version, model, drafter, width, tree, nvfp4, fp8_head, max_len, caches</code></td>
+<td>always 1. The labels are the configuration the numbers above were produced by</td>
+</tr>
+<tr>
+<td><code>qse_http_requests_total</code></td>
+<td><code>counter, route, code</code></td>
+<td>HTTP responses by route (a fixed set) and status code</td>
+</tr>
+<tr>
+<td><code>qse_prompt_tokens_cached_total</code></td>
+<td><code>counter</code></td>
+<td>prompt tokens restored from the state store (all of them on a response-cache replay)</td>
+</tr>
+<tr>
+<td><code>qse_reasoning_tokens_total</code></td>
+<td><code>counter</code></td>
+<td>committed tokens inside the reasoning block</td>
+</tr>
+<tr>
+<td><code>qse_suffix_store_drafts_total</code></td>
+<td><code>counter, outcome</code></td>
+<td>proposed blocks for which the persistent suffix store matched the context (hit) or did not (miss); counted once a block, never once a lookup</td>
+</tr>
+<tr>
+<td><code>qse_request_queue_seconds</code></td>
+<td><code>histogram</code></td>
+<td>arrival to the engine lock, per request</td>
+</tr>
+<tr>
+<td><code>qse_request_prefill_seconds</code></td>
+<td><code>histogram</code></td>
+<td>the engine lock to the first token (template, tokenise, prefill), per request</td>
+</tr>
+<tr>
+<td><code>qse_request_decode_tokens_per_second</code></td>
+<td><code>histogram</code></td>
+<td>per decoded request: (completion tokens - 1) / (last token - first token), the atlas row's convention, and the <code>predicted_per_second</code> a response carries</td>
+</tr>
+<tr>
+<td><code>qse_request_prefill_tokens_per_second</code></td>
+<td><code>histogram</code></td>
+<td>per request with a forwarded prompt: forwarded tokens / prefill seconds</td>
+</tr>
+<tr>
+<td><code>qse_request_prompt_tokens</code></td>
+<td><code>histogram</code></td>
+<td>prompt tokens per request, cached ones included</td>
+</tr>
+<tr>
+<td><code>qse_request_completion_tokens</code></td>
+<td><code>histogram</code></td>
+<td>completion tokens per request</td>
+</tr>
+<tr>
+<td><code>qse_suffix_store_tokens</code></td>
+<td><code>gauge</code></td>
+<td>token ids in the persistent suffix store</td>
+</tr>
+<tr>
+<td><code>qse_state_store_budget_bytes</code></td>
+<td><code>gauge</code></td>
+<td>the state cache's byte budget</td>
+</tr>
+<tr>
+<td><code>qse_process_resident_memory_bytes</code></td>
+<td><code>gauge</code></td>
+<td>resident set of the server process</td>
+</tr>
+<tr>
+<td><code>qse_engine_start_time_seconds</code></td>
+<td><code>gauge</code></td>
+<td>when the server started, unix seconds</td>
+</tr>
+<tr>
+<td><code>qse_log_subscribers</code></td>
+<td><code>gauge</code></td>
+<td>open /v1/dashboard/logs streams</td>
+</tr>
+<tr>
+<td><code>qse_usage_ledger_rows_total</code></td>
+<td><code>counter</code></td>
+<td>rows the usage ledger has written</td>
+</tr>
+<tr>
+<td><code>qse_usage_ledger_dropped_total</code></td>
+<td><code>counter</code></td>
+<td>rows the usage ledger lost: a full queue or a failed write</td>
+</tr>
+<tr>
+<td><code>qse_build_info</code></td>
+<td><code>gauge</code></td>
+<td>always 1. version, the git commit, the code hash row3 records (tools/row3.py::code_hash) and a hash of the effective flags</td>
+</tr>
+</tbody>
+</table>
+<!-- /generated -->
+
+<h2 id="the-usage-ledger">The usage ledger<a class="headerlink" href="#the-usage-ledger" title="Permanent link">&para;</a></h2>
+<p><code>server/api/ledger.py</code> writes one SQLite row per request: counts, timings, the finish reason, the cache source, a client id. Never the prompt, the answer, a tool name or argument, a conversation id, the <code>user</code> field, an IP address or a raw token. Refused requests (503, 429) and rejected ones (400) are rows too, with null token fields, so the request count is honest.</p>
+<p>It never slows or fails a request. A row is put on a bounded queue (10,000), a writer thread commits in batches at most every second, and a disk error drops that batch, counts it and logs it at most once a minute. Rows older than <code>--usage-retention-days</code> (at least 400) are deleted once a day, and once an ISO week an online backup goes beside the file, the newest 8 kept. The server takes the path from <code>--usage-ledger</code> only, never from the environment, so a benchmark server started with <code>serve.env</code> exported never writes the operator's ledger. Migrations are forward only and in place, and keep every row.</p>
+<!-- generated: ledger by tools/gen_reference.py; do not edit by hand -->
+
+<h3 id="the-usage-ledgers-requests-table-schema-version-12">The usage ledger's requests table (schema version 12)<a class="headerlink" href="#the-usage-ledgers-requests-table-schema-version-12" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type, since</th>
+<th>What it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ts_ms</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>when the request arrived, ms since the epoch</td>
+</tr>
+<tr>
+<td><code>request_id</code></td>
+<td><code>TEXT, v1</code></td>
+<td>the response id</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>TEXT, v1</code></td>
+<td>the model name the client sent</td>
+</tr>
+<tr>
+<td><code>client_id</code></td>
+<td><code>TEXT, v1</code></td>
+<td>k: and 12 hex digits of the bearer token's sha256, or anon</td>
+</tr>
+<tr>
+<td><code>client_kind</code></td>
+<td><code>TEXT, v1</code></td>
+<td>read from the User-Agent: open-webui, openai-sdk, opencode, hermes, curl, dashboard, other</td>
+</tr>
+<tr>
+<td><code>endpoint</code></td>
+<td><code>TEXT, v1</code></td>
+<td>the route</td>
+</tr>
+<tr>
+<td><code>stream</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>1 for a streamed request</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>the HTTP status</td>
+</tr>
+<tr>
+<td><code>finish_reason</code></td>
+<td><code>TEXT, v1</code></td>
+<td>stop, length, tool_calls, timeout, error, abandoned</td>
+</tr>
+<tr>
+<td><code>prompt_tokens</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>prompt tokens as the client sent them</td>
+</tr>
+<tr>
+<td><code>cached_tokens</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>prompt tokens served from a cache</td>
+</tr>
+<tr>
+<td><code>completion_tokens</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>tokens streamed to the client</td>
+</tr>
+<tr>
+<td><code>reasoning_tokens</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>visible reasoning tokens</td>
+</tr>
+<tr>
+<td><code>queue_ms</code></td>
+<td><code>REAL, v1</code></td>
+<td>time waiting for the engine</td>
+</tr>
+<tr>
+<td><code>prompt_ms</code></td>
+<td><code>REAL, v1</code></td>
+<td>prefill time</td>
+</tr>
+<tr>
+<td><code>ttft_ms</code></td>
+<td><code>REAL, v1</code></td>
+<td>time to the first token</td>
+</tr>
+<tr>
+<td><code>decode_ms</code></td>
+<td><code>REAL, v1</code></td>
+<td>time after the first token</td>
+</tr>
+<tr>
+<td><code>total_ms</code></td>
+<td><code>REAL, v1</code></td>
+<td>arrival to the end</td>
+</tr>
+<tr>
+<td><code>decode_tps</code></td>
+<td><code>REAL, v1</code></td>
+<td>(completion tokens - 1) / decode time; null for a replay</td>
+</tr>
+<tr>
+<td><code>prefill_tps</code></td>
+<td><code>REAL, v1</code></td>
+<td>forwarded prompt tokens a second</td>
+</tr>
+<tr>
+<td><code>blocks</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>verify rounds</td>
+</tr>
+<tr>
+<td><code>draft_tokens</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>tokens the drafters proposed</td>
+</tr>
+<tr>
+<td><code>draft_accepted</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>drafted tokens the model agreed with</td>
+</tr>
+<tr>
+<td><code>tool_calls</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>tool calls in the answer</td>
+</tr>
+<tr>
+<td><code>thinking</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>1 when the model thought</td>
+</tr>
+<tr>
+<td><code>cache_source</code></td>
+<td><code>TEXT, v1</code></td>
+<td>where the prompt resumed: resident, end, store, disk, spill, continuation, prepared, response, none</td>
+</tr>
+<tr>
+<td><code>max_tokens</code></td>
+<td><code>INTEGER, v1</code></td>
+<td>the output limit</td>
+</tr>
+<tr>
+<td><code>error_type</code></td>
+<td><code>TEXT, v1</code></td>
+<td>the exception class or the refusal</td>
+</tr>
+<tr>
+<td><code>engine_version</code></td>
+<td><code>TEXT, v1</code></td>
+<td>the VERSION file</td>
+</tr>
+<tr>
+<td><code>code_sha</code></td>
+<td><code>TEXT, v1</code></td>
+<td>a hash over the code folders</td>
+</tr>
+<tr>
+<td><code>model_served</code></td>
+<td><code>TEXT, v2</code></td>
+<td>TandemLLM with the conductor on</td>
+</tr>
+<tr>
+<td><code>profile</code></td>
+<td><code>TEXT, v2</code></td>
+<td>the conductor profile</td>
+</tr>
+<tr>
+<td><code>profile_version</code></td>
+<td><code>INTEGER, v2</code></td>
+<td>its version</td>
+</tr>
+<tr>
+<td><code>conductor_mode</code></td>
+<td><code>TEXT, v2</code></td>
+<td>raw, shadow or on</td>
+</tr>
+<tr>
+<td><code>conductor_acts</code></td>
+<td><code>INTEGER, v2</code></td>
+<td>the session monitor's executed acts</td>
+</tr>
+<tr>
+<td><code>conductor_hidden_tokens</code></td>
+<td><code>INTEGER, v2</code></td>
+<td>tokens the model saw that the client did not send</td>
+</tr>
+<tr>
+<td><code>conductor_acted</code></td>
+<td><code>INTEGER, v2</code></td>
+<td>1 when the conductor changed what the model saw or wrote</td>
+</tr>
+<tr>
+<td><code>lane</code></td>
+<td><code>TEXT, v2</code></td>
+<td>decode, prefill or self for a side-lane request</td>
+</tr>
+<tr>
+<td><code>backend</code></td>
+<td><code>TEXT, v3</code></td>
+<td>the backend id of a relayed request</td>
+</tr>
+<tr>
+<td><code>backend_kind</code></td>
+<td><code>TEXT, v3</code></td>
+<td>its kind</td>
+</tr>
+<tr>
+<td><code>backend_model</code></td>
+<td><code>TEXT, v3</code></td>
+<td>the id sent upstream</td>
+</tr>
+<tr>
+<td><code>public_model</code></td>
+<td><code>TEXT, v3</code></td>
+<td>the id the client sent</td>
+</tr>
+<tr>
+<td><code>usage_source</code></td>
+<td><code>TEXT, v3</code></td>
+<td>backend or none</td>
+</tr>
+<tr>
+<td><code>cache_write_tokens</code></td>
+<td><code>INTEGER, v3</code></td>
+<td>tokens a provider charged as a cache write</td>
+</tr>
+<tr>
+<td><code>cost_micros</code></td>
+<td><code>INTEGER, v3</code></td>
+<td>cost in micro-dollars at the model's price</td>
+</tr>
+<tr>
+<td><code>proxy_ms</code></td>
+<td><code>REAL, v3</code></td>
+<td>the proxy's own time</td>
+</tr>
+<tr>
+<td><code>retries</code></td>
+<td><code>INTEGER, v3</code></td>
+<td>tries again before the first byte</td>
+</tr>
+<tr>
+<td><code>fallback_from</code></td>
+<td><code>TEXT, v3</code></td>
+<td>the backend tried first</td>
+</tr>
+<tr>
+<td><code>upstream_status</code></td>
+<td><code>INTEGER, v3</code></td>
+<td>the backend's HTTP status</td>
+</tr>
+<tr>
+<td><code>user</code></td>
+<td><code>TEXT, v3</code></td>
+<td>the label of the proxy key</td>
+</tr>
+<tr>
+<td><code>preemptions</code></td>
+<td><code>INTEGER, v4</code></td>
+<td>preemptions (vLLM) or retractions (SGLang), from the plugin</td>
+</tr>
+<tr>
+<td><code>engine_finish</code></td>
+<td><code>TEXT, v4</code></td>
+<td>the backend engine's own finish reason</td>
+</tr>
+<tr>
+<td><code>corrupted</code></td>
+<td><code>INTEGER, v4</code></td>
+<td>vLLM's NaN check</td>
+</tr>
+<tr>
+<td><code>l2_join</code></td>
+<td><code>TEXT, v4</code></td>
+<td>exact or approximate join of the plugin's numbers</td>
+</tr>
+<tr>
+<td><code>wait_own_ms</code></td>
+<td><code>REAL, v5</code></td>
+<td>ms the request waited behind the engine's own work (the shadow reader, a summary written ahead, the conductor's question)</td>
+</tr>
+<tr>
+<td><code>parent_request</code></td>
+<td><code>TEXT, v6</code></td>
+<td>the turn an internal row served (the router's question names the turn it routes)</td>
+</tr>
+<tr>
+<td><code>slot</code></td>
+<td><code>INTEGER, v7</code></td>
+<td>the engine's sequence slot with --parallel N (0 the main slot, 1 and up a side slot); null without</td>
+</tr>
+<tr>
+<td><code>engine_cached</code></td>
+<td><code>INTEGER, v8</code></td>
+<td>the prompt tokens the engine read from a cache, the hidden notes included (cached_tokens counts the client's among them)</td>
+</tr>
+<tr>
+<td><code>forwarded_tokens</code></td>
+<td><code>INTEGER, v8</code></td>
+<td>what the prefill forwarded, hidden tokens included</td>
+</tr>
+<tr>
+<td><code>wait_mem_ms</code></td>
+<td><code>REAL, v8</code></td>
+<td>ms the parallel memory admission held the request (inside queue_ms)</td>
+</tr>
+<tr>
+<td><code>sampling</code></td>
+<td><code>TEXT, v9</code></td>
+<td>how the request sampled: null greedy, client (its own temperature), regenerate (TandemLLM sampled a regenerate)</td>
+</tr>
+<tr>
+<td><code>system_fingerprint</code></td>
+<td><code>TEXT, v9</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>node</code></td>
+<td><code>TEXT, v9</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>deployment</code></td>
+<td><code>TEXT, v9</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>upstream_request</code></td>
+<td><code>TEXT, v9</code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>The conductor's journal shares the file: <code>conductor_events</code> has 53 columns (<code>id</code>, <code>ts_ms</code>, <code>request_id</code>, <code>session_key</code>, <code>kind</code>, <code>task</code>, <code>tier</code>, <code>mode</code>, <code>sp</code>, <code>rule</code>, <code>trigger</code>, <code>score</code>, <code>decision</code>, <code>action</code>, <code>cap</code>, <code>tier1_model</code>, <code>question_id</code>, <code>probabilities</code>, <code>tier1_ms</code>, <code>hidden_text_id</code>, <code>hidden_tokens</code>, <code>tokens_at_cut</code>, <code>position</code>, <code>outcome</code>, <code>next_checker</code>, <code>policy_version</code>, <code>client_kind</code>, <code>model</code>, <code>profile</code>, <code>profile_version</code>, <code>router_version</code>, <code>class_id</code>, <code>confidence</code>, <code>source</code>, <code>kept</code>, <code>stages</code>, <code>classifier_ms</code>, <code>effort</code>, <code>budget</code>, <code>budget_source</code>, <code>thinking</code>, <code>decisions</code>, <code>injected</code>, <code>replayed</code>, <code>shadow</code>, <code>digest</code>, <code>label</code>, <code>label_note</code>, <code>labelled_at</code>, <code>acted</code>, <code>changed</code>, <code>detail</code>, <code>extra</code>), and <code>conductor_texts</code> keeps every hidden text once, by its hash.</p>
+<!-- /generated -->
+
+<p>A row's speed figures follow the benchmark row's formula, and a replay or a side-lane request has no decode rate. A relayed request has null queue, prefill, blocks, draft counts and cache source unless a plugin reported them, in which case <code>l2_join</code> says how the row was joined. A quick look:</p>
+<div class="highlight"><pre><span></span><code>sqlite3<span class="w"> </span>~/.qwen38-spark-engine/usage/ledger.sqlite3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">"select datetime(ts_ms/1000,'unixepoch','localtime'), finish_reason, prompt_tokens,</span>
+<span class="s2">          completion_tokens, round(decode_tps,1), cache_source from requests order by id desc limit 10"</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../http/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Reference: HTTP">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Reference: HTTP
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../troubleshooting/" class="md-footer__link md-footer__link--next" aria-label="Next: Troubleshooting">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Troubleshooting
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

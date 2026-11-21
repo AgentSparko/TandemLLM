@@ -1,0 +1,1826 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/exactness/">
+      
+      
+        <link rel="prev" href="../speculative-decoding/">
+      
+      
+        <link rel="next" href="../caches/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Exactness - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#exactness" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Exactness
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-promise" class="md-nav__link">
+    <span class="md-ellipsis">
+      The promise
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-exception-near-ties" class="md-nav__link">
+    <span class="md-ellipsis">
+      The one exception: near ties
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#parallel-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      Parallel requests
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stronger-than-the-promise-release-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stronger than the promise: release identity
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sampling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caches" class="md-nav__link">
+    <span class="md-ellipsis">
+      Caches
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-changes-output-on-purpose" class="md-nav__link">
+    <span class="md-ellipsis">
+      What changes output on purpose
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      The checks
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-promise" class="md-nav__link">
+    <span class="md-ellipsis">
+      The promise
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-exception-near-ties" class="md-nav__link">
+    <span class="md-ellipsis">
+      The one exception: near ties
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#parallel-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      Parallel requests
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stronger-than-the-promise-release-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stronger than the promise: release identity
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sampling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caches" class="md-nav__link">
+    <span class="md-ellipsis">
+      Caches
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-changes-output-on-purpose" class="md-nav__link">
+    <span class="md-ellipsis">
+      What changes output on purpose
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      The checks
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="exactness">Exactness<a class="headerlink" href="#exactness" title="Permanent link">&para;</a></h1>
+<p>Under greedy decoding, TandemLLM writes the text that its target model writes one token at a time, with one exception: at a near tie between the two best tokens, a batched verify can round the other way. Drafters, the lookup store and the caches change how fast the text arrives, not what it says; the shape of the verified tree can move a near tie. This page states the promise precisely, names the exception, and lists the checks that hold the engine to it.</p>
+<h2 id="the-promise">The promise<a class="headerlink" href="#the-promise" title="Permanent link">&para;</a></h2>
+<p>Our reference is plain greedy decoding on the same weights: one forward pass per token, take the highest-scoring token, repeat. For every greedy request, the engine's output tokens equal the reference's tokens up to the first near tie where the two paths choose differently.</p>
+<p>"The same weights" matters. A profile chooses the weights. The NVFP4 profile is held to NVFP4 plain decoding, not to the BF16 release or the FP8 checkpoint. The difference between weight sets is a quality question, and <a href="../quantisation/">quantisation.md</a> measures it with a separate gate. Speculation never adds to that difference.</p>
+<p>The promise, with the near-tie exception, covers:</p>
+<ul>
+<li>any drafter, including a drafter that is wrong on purpose on every token;</li>
+<li>chains and trees of any shape the router builds, and both block widths;</li>
+<li>a request resumed from the prefix cache or the resident prefix;</li>
+<li>request options that change the scores (penalties, <code>logit_bias</code>, structured-output masks), because the engine applies them to every verified row exactly as plain decoding applies them to its one row.</li>
+</ul>
+<h2 id="the-one-exception-near-ties">The one exception: near ties<a class="headerlink" href="#the-one-exception-near-ties" title="Permanent link">&para;</a></h2>
+<p>Two tokens can score the same up to one rounding step of the arithmetic. Then which one wins an argmax depends on the order of a floating-point sum. A batched verify and a one-token step do not always sum in the same order, so at such a position the two can pick different tokens. After that position the texts differ, and both are correct greedy continuations of their own prefixes.</p>
+<p>TandemLLM keeps this rare by design. The head returns fp32 logits, and every matrix-product kernel fixes its reduction order by the weight's shape and never by the row count (<a href="../kernels/">kernels.md</a>). Two differences remain between a batched verify and a one-token step: the output head uses one kernel for a single row and another for several rows, and the verify path of the recurrent and attention layers does the one-token arithmetic in a different order. A small fp32 difference that falls on a BF16 rounding boundary changes one value, and the recurrent state and the KV cache carry it forward, so over a long output the verify's logits drift from the one-token decode's. Where the two best tokens are closer than that drift, the two paths can choose differently.</p>
+<p>The agreement gate, <code>tools/verify_spec.py</code>, prints the gap between the top two logits in BF16 units (ulps) whenever outputs differ. A difference passes only when the gap at that position is within one ulp. Anything larger is a bug. The gate decodes a fixed number of tokens and does not stop at the model's end-of-turn token. A difference after that token is not part of any answer served with the default stop tokens, so it is judged separately: in the StairCut release's checks, the two differences above one ulp (1.46 and 1.73) both fall after the end of the answer.</p>
+<p>The paper measures how often this happens with StairCut in its served configuration on the published NVFP4 set. Of 30 prompts (held-out prose, code and chat, 256 new tokens), 17 outputs are identical to plain greedy decoding up to the end of the answer: 13 over all 256 tokens, and 4 more that differ only past the end of the answer (largest gap 1.46 ulp). The other 13 follow plain decoding up to a near tie inside the answer, with a gap of 0.04 to 0.76 ulp, take the other token and continue from there; in one of them the token taken is the end-of-answer token, so that answer ends early. No output differs inside the answer at a larger gap. The one-ulp rule names the condition under which the two decoders can differ; it does not show that the difference is harmless.</p>
+<p>The table below has a measurement on the 0.4.0 code (lookup store off, 2026-10-05): one raw greedy turn with a prompt of about 5,000 tokens at temperature 0, sent alone twice and once with 10 side-lane guests. Each parting is a near tie. Where the runs alone parted, the gap between the two best tokens was 0.022 and 0.029 nats at token 12, and 0.052 and 0.021 nats at token 504. Each text after the parting is a correct greedy continuation of its own prefix. <code>--no-learn-cost</code> takes out what earlier requests taught the router, not the timings inside the request.</p>
+<table>
+<thead>
+<tr>
+<th>runs compared</th>
+<th><code>--no-learn-cost</code></th>
+<th>learned costs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>alone, twice</td>
+<td>token 12</td>
+<td>token 504</td>
+</tr>
+<tr>
+<td>alone, and with 10 side-lane guests</td>
+<td>token 61</td>
+<td>token 573</td>
+</tr>
+</tbody>
+</table>
+<p><em>Where two runs of one 5,000-token raw greedy turn first wrote a different token. (measured), the 0.4.0 code, lookup store off.</em></p>
+<table>
+<thead>
+<tr>
+<th>against plain greedy, 30 prompts</th>
+<th>outputs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>identical over all 256 tokens</td>
+<td>13</td>
+</tr>
+<tr>
+<td>differ only after the answer ended</td>
+<td>4</td>
+</tr>
+<tr>
+<td>take the other token at a near tie in the answer</td>
+<td>13</td>
+</tr>
+</tbody>
+</table>
+<p><em>StairCut in its served configuration against plain greedy decoding on 30 prompts of held-out prose, code or chat (256 new tokens). 17 outputs are identical to the end of the answer. The 13 that diverge inside the answer do so at a gap of 0.04 to 0.76 ulp; no output differs inside the answer at a larger gap. Measured: the StairCut paper, published NVFP4 weights.</em></p>
+<h2 id="parallel-requests">Parallel requests<a class="headerlink" href="#parallel-requests" title="Permanent link">&para;</a></h2>
+<p>With <code>--parallel N</code> (<a href="../server/#parallel-requests-0338-test---parallel-n-off-by-default">server.md</a>) two or more decoding requests verify their trees in one pass. The promise is the same: each request writes its own greedy text up to a near tie. Two things can move a near tie that a request alone would not meet. A joint round verifies the request's tree cut to its share (16 nodes at two requests, 8 at four), another tree shape than the one it verifies alone. And the joint pass runs eagerly, or on the 27B from its own CUDA graphs once its shape has come <code>QWEN38_JOINT_GRAPHS_AFTER</code> (4) times, where a lone request's verify runs from the lone verify graphs; a graphed joint pass gives every lane's logits, state and KV bit for bit what the eager joint pass gives (<code>tools/joint_graph_check.py</code>). The batch itself is not one of them: every projection kernel keeps a row's result independent of the other rows up to the joint pass's row cap, which each model family sets for the weights it serves (<code>joint_policy</code>; 32 by default, 64 for the 27B on EXL3 weights, where the skinny kernel takes 33-64 rows as adjacent 32-row chunks and an 8 x 8-row joint pass measured each engine's rows bit for bit its own eager verify, SPD-159). The rows between the projections that are one program a row (the add-norms, the GDN gated norm) run once for all engines and keep their bits too (SPD-163); the GDN gate inputs stay per engine, because the library's bf16 GEMM does not keep a row's bits across row counts. On the box, <code>tools/parallel_verify_check.py</code> gives each slot's logits from the joint pass bit for bit what its own verify gives (with the lone verify eager too, as the joint one is), and on the CPU <code>tests/test_parallel_verify.py</code> holds two and three requests in lockstep to the tokens each writes alone.</p>
+<p>What a request writes beside others is measured against what it writes alone (<code>tools/parallel_bench.py</code>, agreement): where a text differs, the tool prints the first differing token and the gap between the two best tokens there in the alone run. On 30 prompts (10 held-out prose continuations, 10 held-out code continuations, 10 chat questions; 256 tokens, greedy, store off; 2026-10-05, single runs), 17 of 30 texts were identical to their alone text with two requests at once and 15 of 30 with four; every first difference sat at a top-2 logprob gap between 0.0019 and 0.118 nats, under one BF16 step of a logit of magnitude 16 to 32 (0.125; the logits' magnitude there was not recorded). The packed draft proposes bit for bit what each slot's own draft proposes (<code>tools/packed_draft_check.py</code>, two slots on either drafter arm, four on the narrow one). One request at a time takes the path it takes without <code>--parallel</code>.</p>
+<h2 id="stronger-than-the-promise-release-identity">Stronger than the promise: release identity<a class="headerlink" href="#stronger-than-the-promise-release-identity" title="Permanent link">&para;</a></h2>
+<p>Every release candidate is also held to the release before it. Before a change ships, 13 plain requests (the five benchmark workloads, streamed and not, one with thinking, one with tools, one under penalties, one seeded sampled request) must come back byte-identical to the current release (<code>tools/api_text_check.py</code>). The served configuration must also produce bit-identical logits with the new flags off (<code>tools/flagoff_identity.py</code>). A speed change that alters one token of text does not ship. StairCut (2026-09-29) is the one documented exception. Its verify shapes differ from rc10's, so at near ties its text can differ from rc10's. It is held to plain greedy decoding instead, under the near-tie rule above.</p>
+<p>0.15.0 moves the summation order in two places on purpose, each held by a gate against a reference instead of to 0.14.2's bits:</p>
+<ul>
+<li>The 27B's prompt reading (SPD-191, SPD-245). The GDN prep kernel (<code>QWEN38_GDN_PREP</code>: a chunk's convolution, SiLU and the l2 norm of q and k in one kernel) is held to an fp64 reference of the recurrence, teacher-forced over every prompt position: KL 3.9e-4 against 3.8e-4 for the path before it on code at 8K, 0.0086 against 0.0096 on repeated prose at 2K. Its scan at 16 x 4 and the chunk-64 GDN prefill walk value-block fastest (<code>QWEN38_GDN_CHUNKED</code>) keep the recurrent state's bits and round a few chunk outputs one bf16 ulp the other way; <code>tools/gdn_tile_gate.py</code> holds each against the path before it on prose, code and repeated text at 2K, 8K and 32K tokens, 64 teacher-forced steps: top-1 64 or 65 of 65 on every row, the KL of the GDN prep move's size. <code>QWEN38_GDN_CHUNKED=0</code>, <code>QWEN38_GDN_PREP_BV=32 QWEN38_GDN_PREP_WARPS=8</code> and <code>QWEN38_GDN_PREP=0</code> give the earlier orders.</li>
+<li>Flash-Next's mixer GEMV and mix_up on the tensor cores (SPD-241, <code>QWEN38_FN_MIXER_MMA=1</code>): every row independent of its call, top-1 agreement 99.6, 99.6 and 98.8 % against the CUDA-core kernels and KL 5e-4 to 1.7e-3 (<code>tools/fn_mma_agree.py</code>), the class of the accepted split-GEMV order change (97.7, 99.2 and 99.2 %). <code>QWEN38_FN_MIXER_MMA=0</code> gives the earlier kernels.</li>
+</ul>
+<p>Every family's arithmetic fingerprint moves once in 0.15.0 (<code>tests/test_adapter_guards.py</code>), so the disk tier's files and the spilled conversations 0.14.2 wrote are not read, and each conversation is read again once.</p>
+<h2 id="sampling">Sampling<a class="headerlink" href="#sampling" title="Permanent link">&para;</a></h2>
+<p>A sampled request (temperature above 0) is exact in distribution. At each verified node the engine draws the target's own token, and a drafted token survives exactly while the draw lands on it. When the draw lands elsewhere, that draw is the token. For a drafter that proposes one fixed token this is the standard rejection sampler, <code>accept with min(1, p/q)</code>, with no second draw. The output therefore follows the target's own sampled distribution. A drafter that samples its own proposal carries its proposal distribution, and the accept uses it.</p>
+<p>All sampling filters (<code>temperature</code>, <code>top_p</code>, <code>top_k</code>, <code>min_p</code>) run after the penalties, through one function in <code>engine/sample.py</code>. Drafted rows and plain rows see the same distribution.</p>
+<p>A sampled request that names none of <code>top_p</code>, <code>top_k</code> and <code>min_p</code> takes the model card's filters (SPD-245, <code>server/sampling_defaults.py</code>): the first of these that says is the request's own fields, then <code>--top-p</code> / <code>--top-k</code> given at start (<code>TOP_P</code>, <code>TOP_K</code>), then the checkpoint's <code>generation_config.json</code> (Qwen3.8-27B and its fine-tunes: top_k 20, top_p 0.95, min_p 0), then the whole vocabulary. Before 0.15.0 a request that sent <code>temperature</code> alone sampled the whole vocabulary. Only the filters move: the temperature is the request's, a greedy request is untouched and the logits are not touched. <code>/health</code> <code>sampling.unnamed_filters</code> shows what an unnamed request runs with.</p>
+<p>A request with a <code>seed</code> draws with noise keyed by its position in the sequence: the token at index t is the argmax of <code>log p_t + G_t</code>, where <code>G_t</code> is Gumbel noise from a generator seeded by <code>(seed, t)</code>. That is an exact sample from <code>p_t</code>, and it does not depend on how many draws the drafters made before. The same seed therefore gives the same text whatever the drafters proposed.</p>
+<p>A sampled request without a <code>seed</code> draws its own at admission (SPD-245, 63 bits of OS entropy) and takes the same keyed walk. The distribution is the same: Gumbel-max over <code>_filter</code>'s kept set is a draw from the filtered <code>p_t</code>, the draw the unseeded multinomial took. Only the noise differs, and two requests get two seeds, so a regenerate of the same prompt still differs. Under an active plan the seed is in the decision row (<code>extra.seed_drawn</code>). The response has no seed field, as for a client's seed. <code>QWEN38_FRESH_SEED</code>: <code>auto</code> (default) draws where the sampled verify carries no q (<code>--sampled-tree det</code>), <code>on</code> draws everywhere (the q-aware <code>min(1, p/q)</code> accept of a sampling drafter gives way to the keyed walk), <code>off</code> never draws. <code>/health</code> <code>sampling.unseeded</code> says which applies.</p>
+<p><code>tests/test_sample.py</code> checks the samplers statistically on the CPU, and <code>tools/sampled_dist.py</code> checks the served engine's sampled answers against the target sampled alone.</p>
+<h2 id="caches">Caches<a class="headerlink" href="#caches" title="Permanent link">&para;</a></h2>
+<p>A cache restore gives back bytes, not an approximation. The prefix cache, the resident prefix and the disk tier take their snapshots on the prefill chunk grid, and a resumed request forwards the rest of its prompt on the same grid. It therefore computes the same arithmetic as a cold prefill on that grid. <code>tests/test_cache.py</code>, <code>tests/test_resident.py</code> and <code>tests/test_disk_cache.py</code> check, on a small random model, that a resumed request's logits and state equal a cold prefill's bit for bit. The disk tier's files carry a fingerprint of the weights, the engine's code and the arithmetic flags; a file of another fingerprint is never read. Whether Triton's autotuning after a restart can pick another prefill configuration, so that rows written before it differ from a cold prefill after it, the tests cannot say; <code>tools/disk_restore_check.py</code> checks it on the served engine in a hold, in two processes. On 2026-10-02 (0.3.14-test's code, a 10,701-token opencode-shaped prompt) the second process's cold prefill was the first's bit for bit (logits, recurrent states, convolution tails, every row, the state at each 1,024 line), and the first process's disk files restored to it: the state at the line, then the resumed prefill's logits, states and all six position-indexed buffers, and 48 greedy tokens.</p>
+<p>The paper's long-context check sent a long prose prompt twice, cold and then resumed from the anchors. The two 256-token outputs were identical at 32k and 128k tokens and different at 64k, and that difference is not explained.</p>
+<p>Session resumes are one step weaker. A session resume continues a conversation from the state its last turn ended in, which verify rounds wrote rather than prefill chunks. That state produced the previous answer, but it is not the state a cold re-read would compute. It is held to the engine's greedy gate (same tokens) and not to bit equality. <a href="../caches/">caches.md</a> has the details.</p>
+<p>The resident prefix's end anchor (0.3.14-test, <code>--end-anchor</code>, on) is a session resume of the same kind: the recurrent state at the end of the last generation, which verify rounds wrote, with the rows in place, and the next turn forwards only its new messages from there. It is held to the greedy gate, as the session cache is, and so is every anchor a prefill that resumed there takes (the rows from the resident prefix's <code>taint</code> up). Two things keep the rest of the caches exact: the disk tier writes nothing of such a prompt and reads over those rows, and the state store takes no prefix snapshot of it; a grid anchor at or below <code>taint</code>, or a cold prefill, resumes bit for bit as before. The tokens the session monitor hid are put back into the client's copy where the rows hold them, so the prompt the engine continues is the context it really had, the hidden phrase included, as a router note is replayed; whitespace the re-rendered copy holds differently right next to a hidden span is the rows' own there too (0.3.15-test), and any other difference serves the copy as sent. <code>tests/test_end_anchor.py</code> checks, on the random model, that the turn after a generation resumed at its end writes the same greedy tokens as the same turn resumed at the prompt's last anchor (no drafter, wrong and right chains and trees), that a pending commit cut back is the shorter commit's state bit for bit, and that <code>--end-anchor off</code> leaves every prefill bit for bit as before. <a href="../caches/#after-a-long-generation">caches.md</a> has the details.</p>
+<p>An opt-in response cache (<code>--response-cache</code>) answers an identical greedy request from memory. It is off by default, so a benchmark can never be pointed at a dictionary.</p>
+<h2 id="what-changes-output-on-purpose">What changes output on purpose<a class="headerlink" href="#what-changes-output-on-purpose" title="Permanent link">&para;</a></h2>
+<p>Some features change the text because the client asked for it. They are not exceptions to the promise. Plain decoding with the same setting writes the same text.</p>
+<ul>
+<li>Penalties (<code>repetition_penalty</code>, <code>presence_penalty</code>, <code>frequency_penalty</code>) and <code>no_repeat_ngram_size</code>.</li>
+<li>Structured outputs and forced tool calls, which mask the tokens the constraint does not allow.</li>
+<li>
+<p>A reasoning budget or the stall close, which end the thinking block early (<a href="../speculative-decoding/">speculative-decoding.md</a>).</p>
+</li>
+<li>
+<p><strong>A regenerate under TandemLLM</strong> (0.4.4-test, SRV-241; the project's rule of 2026-10-07). This was the first place where TandemLLM samples without the client asking for it; the loop escape below is the second. Open WebUI's Regenerate sends the same conversation again and no sampling parameter, so under greedy it got the same answer word for word. <code>server/regenerate.py</code> recognises a regenerate: a chat request under an active TandemLLM plan whose conversation (every non-system message, ending with a user message) equals an earlier request of the same session that produced an answer. <code>X-Tandem-Regenerate: 1</code> also counts as a regenerate. That one request samples with temperature 0.7, top-p 0.95, top-k 20 and a fresh seed (<code>--regenerate-temperature</code>, <code>--regenerate-top-p</code>, <code>--regenerate-top-k</code>). The seed is in the journal row (<code>extra.regenerate</code>), so sending it reproduces the answer. The sampled path is the exact one above: the answer follows the target's own sampled distribution, drafter and tree included. Every other request is untouched and greedy, byte for byte as before. That covers the first answer, a follow-up, Continue, an edited message and a tool round. Also untouched: a request that names any sampling parameter (it gets the client's own), a raw or <code>bench</code> request, a side request and a compaction. <code>--regenerate off</code> (<code>QWEN38_REGENERATE=off</code>) turns detection off, and <code>X-Tandem-Regenerate: 0</code> turns it off for one request. The ledger column <code>sampling</code> is <code>regenerate</code> on these rows, and the dashboard's speed sample leaves them out.</p>
+</li>
+<li>
+<p><strong>The loop escape under TandemLLM</strong> (SRV-475, 2026-10-14). An agent turn that ends in a repeat or near-repeat of one tool call samples with the model card's settings (the checkpoint's <code>generation_config.json</code>) and a fresh seed, until the session makes progress; then it is greedy again (<a href="../server/#sampling-and-penalties">server.md</a>). A profile with <code>sampling.agentic_default: card</code> samples every agent turn; the shipped profiles keep <code>greedy</code>. The seed is in the journal row (<code>extra.loop_escape</code>). The same requests as for a regenerate are untouched, the client's own sampling included. The ledger column <code>sampling</code> is <code>loop_escape</code> or <code>card</code>, and the dashboard's speed sample leaves those rows out.</p>
+</li>
+</ul>
+<p>Two relaxed accept rules also exist (<code>--relax-tau</code>, <code>--relax-rank</code>) that accept a drafted token when it is close to the target's choice. They break the promise, exist only for measurement, and are off in every profile. When either is set, the server prints a warning line.</p>
+<h2 id="the-checks">The checks<a class="headerlink" href="#the-checks" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>check</th>
+<th>what it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tools/verify_spec.py</code></td>
+<td>greedy output with no drafter, an adversarial drafter, a half-right drafter and the served drafters must match, up to the one-ulp near-tie rule</td>
+</tr>
+<tr>
+<td><code>tools/flagoff_identity.py</code></td>
+<td>the served configuration with new flags off is bit-identical to the build it replaces</td>
+</tr>
+<tr>
+<td><code>tools/api_text_check.py</code></td>
+<td>13 plain requests byte-identical to the current release</td>
+</tr>
+<tr>
+<td><code>tools/cache_gate.py</code></td>
+<td>warm and cold runs agree (bit-identical on the chunk grid, same tokens for a session)</td>
+</tr>
+<tr>
+<td><code>tests/test_forward_tree.py</code>, <code>tests/test_tree.py</code></td>
+<td>tree verify equals chain verify on a tiny model, on the CPU</td>
+</tr>
+<tr>
+<td><code>tests/test_cache.py</code>, <code>tests/test_resident.py</code>, <code>tests/test_disk_cache.py</code></td>
+<td>restores are bit-exact, the disk tier's through a reopened tier and after a failed restore</td>
+</tr>
+<tr>
+<td><code>tests/test_end_anchor.py</code></td>
+<td>a resume at the end of the last generation writes the same greedy tokens as one at the prompt's line; off, every prefill as before</td>
+</tr>
+<tr>
+<td><code>tests/test_sample.py</code>, <code>tools/sampled_dist.py</code></td>
+<td>sampled output follows the target's distribution</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../speculative-decoding/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Drafters and tree verify">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Drafters and tree verify
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../caches/" class="md-footer__link md-footer__link--next" aria-label="Next: Caches">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Caches
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

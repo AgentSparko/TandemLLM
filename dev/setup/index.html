@@ -1,0 +1,2209 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/setup/">
+      
+      
+        <link rel="prev" href="../faq/">
+      
+      
+        <link rel="next" href="../operations/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>The setup guide - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-setup-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              The setup guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#setup-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setup mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-the-terminal-bintandem-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      In the terminal: bin/tandem setup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-from-the-command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advanced: from the command line
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-model-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      The model registry
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The model registry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-kv-bytes-a-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      The KV bytes a token
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-cuda-graphs-and-the-side-slots" class="md-nav__link">
+    <span class="md-ellipsis">
+      The CUDA graphs and the side slots
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-cards-slot-count" class="md-nav__link">
+    <span class="md-ellipsis">
+      The card's slot count
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#orniths-two-chats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ornith's two chats
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flash-next-the-second-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flash-Next, the second model
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-memory-estimate" class="md-nav__link">
+    <span class="md-ellipsis">
+      The memory estimate
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The memory estimate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-model-as-two-stages-the-split-block-srv-817" class="md-nav__link">
+    <span class="md-ellipsis">
+      One model as two stages: the split block (SRV-817)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wren" class="md-nav__link">
+    <span class="md-ellipsis">
+      Wren
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-install-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      The install job
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#removing-a-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Removing a model
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-answer-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      The answer limit
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reasoning-effort" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reasoning effort
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#benchmarks-and-the-overlay" class="md-nav__link">
+    <span class="md-ellipsis">
+      Benchmarks and the overlay
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-wizard-starts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where the wizard starts
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reset
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      The routes
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#setup-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setup mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-the-terminal-bintandem-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      In the terminal: bin/tandem setup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-from-the-command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advanced: from the command line
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-model-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      The model registry
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The model registry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-kv-bytes-a-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      The KV bytes a token
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-cuda-graphs-and-the-side-slots" class="md-nav__link">
+    <span class="md-ellipsis">
+      The CUDA graphs and the side slots
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-cards-slot-count" class="md-nav__link">
+    <span class="md-ellipsis">
+      The card's slot count
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#orniths-two-chats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ornith's two chats
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flash-next-the-second-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flash-Next, the second model
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-memory-estimate" class="md-nav__link">
+    <span class="md-ellipsis">
+      The memory estimate
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The memory estimate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-model-as-two-stages-the-split-block-srv-817" class="md-nav__link">
+    <span class="md-ellipsis">
+      One model as two stages: the split block (SRV-817)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wren" class="md-nav__link">
+    <span class="md-ellipsis">
+      Wren
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-install-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      The install job
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#removing-a-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Removing a model
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-answer-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      The answer limit
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reasoning-effort" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reasoning effort
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#benchmarks-and-the-overlay" class="md-nav__link">
+    <span class="md-ellipsis">
+      Benchmarks and the overlay
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-wizard-starts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where the wizard starts
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reset
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      The routes
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="the-setup-guide">The setup guide<a class="headerlink" href="#the-setup-guide" title="Permanent link">&para;</a></h1>
+<p>The Setup Guide walks through an install, on TandemApp's Setup page (<code>#/setup</code>) in a browser or with <code>bin/tandem setup</code> in a terminal; both run on the engine's Setup API. A new browser opens the simple guide, three pages: the model, its weights, and one page of folded settings. The switch at the top brings back all eight steps, from picking a model and its weights to the tools beside it, the parallel requests and the memory they take. The last two steps show what will change and then install it. A small assistant called Wren answers questions on the side and can change the page when you ask. The server half lives in <code>server/setup/</code> and <code>server/setup_api.py</code> and answers under <code>/v1/setup/*</code>. None of it is on the serving path: a chat request never reaches it, and the engine imports it only when a <code>/v1/setup</code> route is called.</p>
+<h2 id="setup-mode">Setup mode<a class="headerlink" href="#setup-mode" title="Permanent link">&para;</a></h2>
+<p>A new box has no configured engine yet. Two commands install TandemLLM and start setup mode, with no model loaded:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-fsSLO<span class="w"> </span>https://raw.githubusercontent.com/TandemLLM/TandemEngine/v0.16.0/install.sh
+bash<span class="w"> </span>install.sh<span class="w"> </span>--setup<span class="w"> </span>--yes
+</code></pre></div>
+<p><code>install.sh --setup</code> installs the code and the Python environment, downloads only Wren's model (Qwen3.5-2B, 4.3 GB) and the two Wikipedia shards of the lookup corpus (1.2 GB), writes the config with no weights, and starts setup mode. The corpus itself needs the model's tokenizer, so the install job builds it after the model's download (<a href="../speculative-decoding/#the-corpus-of-each-tokenizer">speculative-decoding.md</a>). Then pick a model with the Setup Guide. The engine serves its API, <code>/v1/setup/*</code>, and no page:</p>
+<ul>
+<li>In a terminal on the box: <code>~/TandemLLM/bin/tandem setup</code>, the same guide, step by step.</li>
+<li>In a browser: TandemApp's Setup page, pointed at the engine, <code>http://127.0.0.1:8000</code> on the box itself.</li>
+<li>From another computer: setup mode listens on 127.0.0.1 only, so open an SSH tunnel first, <code>ssh -L 8000:127.0.0.1:8000 &lt;user&gt;@&lt;box&gt;</code>, and then use <code>http://127.0.0.1:8000</code> on that computer.</li>
+<li>On your network: install with <code>--host 0.0.0.0</code> (<code>bash install.sh --setup --yes --host 0.0.0.0</code>) and use <code>http://&lt;box&gt;:8000</code> from any computer that reaches the box. Until an admin password is set, anyone who reaches the port can run the setup.</li>
+</ul>
+<p>The installer prints the addresses when it finishes. TandemApp's page opens on the Setup Guide by itself while the engine it points at is in setup mode.</p>
+<p>On a checkout, the same mode starts with <code>ops/start.sh --setup</code> (127.0.0.1 unless <code>--host</code> names another address). Setup mode runs <code>server/app.py --setup</code>: no served model, no caches, no state store, no drafters, no conductor and no ledger. It answers <code>/v1/setup/*</code>, <code>/health</code> (<code>"mode": "setup"</code>) and an empty <code>/v1/models</code>, the page's paths with 404 <code>no_ui</code>, loads Wren at the start, and gives every other route a 503 with the code <code>setup_mode</code>. The watchdog sees its <code>/health</code> answer 200 and leaves it alone.</p>
+<p>The installer writes the marker <code>run/setup-pending</code> (with the host to bind). While it exists, a plain <code>ops/start.sh</code> (the reboot's, the watchdog's) starts setup mode again. The install job removes it before it starts the configured engine, and puts it back if that engine does not come up. The engine runs no chatd in any mode, and TandemApp's TandemNode starts none while the box is in setup mode.</p>
+<p>Until an admin password is set, anyone who reaches the port can run the setup, apply it and reset the box. The review step says so. <code>ops/make-secrets.sh --admin</code> sets one; the setup page's "generate" option does the same on a box that has no <code>secrets.env</code> yet.</p>
+<h2 id="in-the-terminal-bintandem-setup">In the terminal: <code>bin/tandem setup</code><a class="headerlink" href="#in-the-terminal-bintandem-setup" title="Permanent link">&para;</a></h2>
+<p>An install with no page (engine only) runs the same guide in the terminal, over SSH too. It asks this engine's Setup API on <code>127.0.0.1:$PORT</code>, so every number, check and refusal is the one the page gets: the models, the box, the memory estimate, the review, the install job and its log, and Wren's answers (in words only).</p>
+<div class="highlight"><pre><span></span><code>~/TandemLLM/bin/tandem<span class="w"> </span>setup<span class="w">                                  </span><span class="c1"># the guide, step by step</span>
+~/TandemLLM/bin/tandem<span class="w"> </span>setup<span class="w"> </span>models<span class="w">                           </span><span class="c1"># the models; show MODEL for one of them</span>
+~/TandemLLM/bin/tandem<span class="w"> </span>setup<span class="w"> </span>plan<span class="w"> </span>MODEL<span class="w"> </span>--profile<span class="w"> </span>ID<span class="w"> </span>--on<span class="w"> </span>kv_fp8<span class="w"> </span>--window<span class="w"> </span><span class="m">131072</span>
+~/TandemLLM/bin/tandem<span class="w"> </span>setup<span class="w"> </span>apply<span class="w"> </span>MODEL<span class="w"> </span>--profile<span class="w"> </span>ID<span class="w"> </span>--yes<span class="w">   </span><span class="c1"># install it and follow the job</span>
+</code></pre></div>
+<p>Each choice has a flag (<code>--profile</code>, <code>--on</code>/<code>--off TOOL</code>, <code>--slots</code>, <code>--window</code>, <code>--kv-pool</code>, <code>--floor-gb</code>, <code>--set FIELD=VALUE</code>, <code>--selection FILE</code>); it starts from what the box runs now, as the page does. <code>--json</code> prints one JSON object for scripts, <code>--yes</code> answers the confirmations. An install restarts the engine, so on an engine that serves a model <code>apply</code> also needs <code>--restart</code>. With nothing on the port, <code>--start-setup</code> starts setup mode for the session and stops it again unless a job started. Exit codes: 0 done, 1 refused or failed, 2 a wrong command, 3 no engine answers, 4 not confirmed. <code>bin/tandem setup --help</code> lists the rest.</p>
+<h2 id="advanced-from-the-command-line">Advanced: from the command line<a class="headerlink" href="#advanced-from-the-command-line" title="Permanent link">&para;</a></h2>
+<p>Since 0.8.1 a new DGX Spark needs no files from anyone and no Hugging Face token. Every file a profile reads is public on Hugging Face. The Setup Guide runs <code>ops/use-profile.sh</code> for you; to pick the weights from a shell instead, install with the two commands above, then:</p>
+<div class="highlight"><pre><span></span><code>bash<span class="w"> </span>~/TandemLLM/run/ops/use-profile.sh<span class="w"> </span>--list<span class="w">                 </span><span class="c1"># every profile, the active one marked</span>
+bash<span class="w"> </span>~/TandemLLM/run/ops/use-profile.sh<span class="w"> </span>&lt;profile&gt;<span class="w"> </span>--dry-run<span class="w">    </span><span class="c1"># what it would download: each URL and size</span>
+bash<span class="w"> </span>~/TandemLLM/run/ops/use-profile.sh<span class="w"> </span>&lt;profile&gt;<span class="w">              </span><span class="c1"># download, check, leave setup mode, start</span>
+</code></pre></div>
+<p>Run the copy in <code>~/TandemLLM/run/ops/</code>, which reads the <code>serve.env</code> the installer wrote. The switch downloads what the profile needs, checks it, and starts the engine on port 8000. Two examples:</p>
+<table>
+<thead>
+<tr>
+<th>profile</th>
+<th>downloads</th>
+<th>size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>flashnext-3.05</code></td>
+<td>the pack's branch of <code>turboderp/Qwen3.8-Flash-Next-exl3</code> and the drafts' corrector (<code>0xBakeer/TandemLLM-Qwen3.8-Flash-Next-EXL3-3.05-corrector</code>, into <code>~/TandemLLM/src/ops/correctors/qwen3.8-flash-next</code>)</td>
+<td>85.1 + 0.035 GB</td>
+</tr>
+<tr>
+<td><code>exl3-4.5</code></td>
+<td><code>0xBakeer/TandemLLM-Qwen3.8-27B-EXL3-4.5</code>, the K3 drafters and the K4 draft head (<code>...-EXL3-drafters</code>, into <code>~/.qwen38-spark-engine/weights</code>), the BF16 drafters (<code>...-DFlash2-b8</code> and <code>-b16</code>, into <code>~/TandemLLM/src/train</code>) and the tensors of the base checkpoint <code>Qwen/Qwen3.8-27B-FP8</code> an EXL3 load reads (<code>base-plain</code>, into <code>~/.qwen38-spark-engine/weights/base-plain</code>; none when the full checkpoint is in the Hugging Face cache)</td>
+<td>18.4 + 1.9 + 7.7 + 3.54 GB</td>
+</tr>
+</tbody>
+</table>
+<p>The other EXL3 sizes download 12.0 to 23.3 GB of weights and share the rest. Before a download starts, the script checks that the disk keeps 60 GB free after it. It checks every weight file against the sha256 the hub lists, and a folder appears only when its files are all there. The corrector file is checked against the sha256 the profile pins. If its download fails, the switch prints a warning and goes on, and Flash-Next drafts without it: the same text, fewer drafts accepted. If a download stops, run the same command again: it continues and keeps the files that finished. The engine needs about 80 GiB free for a 27B profile and 70 GiB for <code>flashnext-3.05</code>. The switch stops setup mode first.</p>
+<p>On a box in setup mode the switch removes <code>run/setup-pending</code>, so the engine starts with the profile. If the profile does not come up, the marker comes back and setup mode starts again. The setup page does the same through its install job.</p>
+<p>The <code>curl</code> line fetches the installer from the tag <code>v0.16.0</code>, and the installer checks out the same tag from the repository <code>--repo</code> names, <code>https://github.com/TandemLLM/TandemEngine.git</code> by default. Where the tag is missing, <code>curl</code> fails with a 404, and <code>install.sh</code> stops at its clone step with "no tag, branch or commit 'v0.16.0'"; <code>--ref</code> picks another release. <a href="../install/">install.md</a> has the details.</p>
+<h2 id="the-model-registry">The model registry<a class="headerlink" href="#the-model-registry" title="Permanent link">&para;</a></h2>
+<p>Each model the guide offers is a folder under <code>models/</code> with a <code>model.yaml</code> (<a href="https://github.com/TandemLLM/TandemEngine/blob/main/models/README.md">models/README.md</a> lists the fields). The 27B's file, <code>models/qwen3.8-27b/model.yaml</code>, is the first; every number in it says where it comes from:</p>
+<ul>
+<li>The weights and the drafters per profile are the <code>[memory] load stages</code> lines of the 0.6.2 runs of 2026-10-10, GiB allocated, one run per EXL3 size. NVFP4's are from the 0.5.0 load of 2026-10-09.</li>
+<li>The tools' memory is the dashboard's live memory split of the same evening (the reference box on <code>exl3-6.0</code> with 4 slots, the narrator, Laya and the shadow reader loaded). The registry's parts add up to that split's 59.34 GiB in use within 0.1 GiB.</li>
+<li>The measured table is the 0.6.2 run itself; <code>models/qwen3.8-27b/measurements/0.6.2-summary.json</code> is its summary file, and a test holds the two equal. The NVFP4 row is from build 0.4.8 and is marked not comparable.</li>
+</ul>
+<p>Memory is in GiB (2^30 bytes) and disk in GB (10^9 bytes) everywhere in the registry and the API. <code>python -m server.setup.registry --check</code> checks a file.</p>
+<p>The Model step also shows the weight cards' speed rows of the current build (<code>parallel</code> in model.yaml, SPD-245): decode alone, the first token of a cold 2k, 8k and 32k prompt, and 1, 2, 4 and 8 requests at once, each row with its build, commit, date and setup. Each weight card, our own and a community pack's, shows its row's rate alone and with the most requests at once. <a href="../measurement/#the-weight-cards-speed-rows">measurement.md</a> says how a row is measured.</p>
+<p>Every weight profile names who made it (<code>made_by</code>): TandemLLM's own packs (0xBakeer), the vendor's release (NVIDIA, LiquidAI), or a community author with a GitHub login (turboderp for Qwen3.8-Flash-Next). Each weight card shows the pack's Hugging Face repository as owner/name, linked, and its maker.</p>
+<p>Packs that other people published sit beside our profiles as community packs, one JSON file each under <code>models/&lt;model&gt;/community/</code>. The weights step lists them after our own, as profiles named <code>community/&lt;id&gt;</code>. A pack that one of the model's own profiles serves names that profile (<code>profile</code>): turboderp's Flash-Next branches are community cards whose Use selects <code>flashnext-&lt;bpw&gt;</code>, and they come with the release in <code>models/community-builtin.json</code>, not from GitHub. The page fetches the list from GitHub when it opens and when you press Refresh, never on a timer, and an unchanged list costs one 304 answer. Without the network it shows the last list it fetched, or the one that came with the release. A 404 from GitHub means the public repository has published no list yet: the section shows the note "no published list yet" and the release's list, with no error. A real failure is one short line, such as "GitHub could not be reached", and the server's log has the URL. On the command line, <code>ops/use-profile.sh community/&lt;id&gt;</code> runs a pack as it runs our profiles, with <code>--dry-run</code> and the same disk, memory and smoke checks. <a href="../community-weights/">docs/community-weights.md</a> says how to add a pack.</p>
+<h3 id="the-kv-bytes-a-token">The KV bytes a token<a class="headerlink" href="#the-kv-bytes-a-token" title="Permanent link">&para;</a></h3>
+<p>One token of context window costs 106,752 bytes, which is 104.25 KiB or 106.75 kB: 64 KiB of the model's attention KV (16 attention layers, 4 KV heads of 256, K and V in BF16), 20 KiB for each of the two drafters' context KV (5 layers, 8 KV heads of 128) and 256 B of rotary table. At 262,144 tokens that is 28.0 GB, or 26.1 GiB. The docs said "106.5 KiB" until 0.6.2: that was the kB figure with the KiB unit. With the KV pool on (<code>QSE_KV_POOL=on</code>) a slot reserves its window as addresses and commits pages only for the rows its conversation writes.</p>
+<h3 id="the-cuda-graphs-and-the-side-slots">The CUDA graphs and the side slots<a class="headerlink" href="#the-cuda-graphs-and-the-side-slots" title="Permanent link">&para;</a></h3>
+<p>The 6.63 GiB of CUDA graphs belong to slot 0. A side slot captures its own verify graphs, about 7.5 GiB each, only with <code>QSE_SIDE_GRAPHS=on</code>; the guide always writes it off, as the reference box runs, and a side slot then costs 1.19 GiB beyond its KV (the load stage <code>side_slots</code> took 3.58 GiB for three on 2026-10-10).</p>
+<h3 id="the-cards-slot-count">The card's slot count<a class="headerlink" href="#the-cards-slot-count" title="Permanent link">&para;</a></h3>
+<p>Every card states the chats it serves at once, its <code>parallelism.slots</code>: 8 on the 27B, Flash-Next, Ornith, Flint, LFM2.5 and Nemotron-Bolt cards, 3 on the Nemotron Lightning and Super-VL cards, with <code>max</code> the most the card speaks for (above it the parallelism step says the count is untested; <a href="../measurement/#the-weight-cards-speed-rows">measurement.md</a> has the measured rows). The Weights step shows it beside every card's parallel line and the Model step's speed table above its foot, with what a request over it does: it waits in the queue until a lane frees (<a href="../parallel-requests/">parallel-requests.md</a>).</p>
+<p>The parallelism step writes the count as <code>QSE_PARALLEL</code> into <code>run/setup.env</code>, which <code>ops/serve.env</code> reads after the weight profile, so a fresh install runs the card's count. A start from a shipped profile alone keeps the profile's own value: 8 in the profiles of Flash-Next, LFM2.5 and Nemotron-Bolt, 1 in <code>ops/profiles/_ornith.env</code> and <code>ops/profiles/_flint.env</code>, and every other profile inherits <code>ops/serve.env</code>'s 8.</p>
+<h3 id="orniths-two-chats">Ornith's two chats<a class="headerlink" href="#orniths-two-chats" title="Permanent link">&para;</a></h3>
+<p>Two Ornith chats fit on one Spark. Its weights take 59.95 GiB in EXL3 4.0, 61.16 GiB with the MTP layer; the family runs with the KV pool off (<code>kv_pool.default: false</code>), so a lane's whole 262,144-token window is memory at load: 24 KiB a token, 6.00 GiB a lane, or 6.5 GiB with the MTP layer's 2 KiB a token. The estimate for 2 slots of 262,144 tokens comes to 90.05 GiB of the 106.63 GiB budget (121.63 GiB for the Spark less the 15 GiB floor): <code>fits</code> and <code>fits_worst</code> are true, both lanes hold their full window (<code>lanes_full</code> 2), and 16.58 GiB of the budget is left. The estimate counts the weights without the MTP layer; with its 1.21 GiB and its 0.5 GiB of KV a lane, 2 slots come to about 92.3 GiB and still fit. The card's default of 8 slots does not: 126.05 GiB, 19.42 GiB over the budget, and 4 lanes can hold the full window, so 8 lanes run a shorter window or with the pool on. What kept Ornith at one chat until 0.14.2 was the joint verify of several slots on its Qwen3.5 MoE trunk (SRV-653); SPD-217 built the side slots and their one joint pass, and the card's row then measured 8 lanes at 37.7 / 47.0 / 58.4 / 69.8 tok/s (SRV-711, 2026-10-24), so nothing blocks 2 slots now.</p>
+<h3 id="flash-next-the-second-model">Flash-Next, the second model<a class="headerlink" href="#flash-next-the-second-model" title="Permanent link">&para;</a></h3>
+<p><code>models/qwen3.8-flash-next/model.yaml</code> gives the models step its second tile. Its five profiles are the EXL3 packs (2.05 to 6.05 bits a weight). Fields the 27B's entry does not use, all optional:</p>
+<ul>
+<li><code>hf_revision</code>: the branch of the repo the pack is on.</li>
+<li><code>max_window</code>: the largest window the pack holds on the device preset; null when it fits none (6.05). The overview line and the window buttons follow the selected profile (buttons above it are disabled, with the reason), the estimate refuses a longer window (422 <code>out_of_range</code>), and the engine refuses one at start.</li>
+<li><code>table</code>: the pack's n-gram table, its size and policy. Warm adds the table as a fixed part ("n-gram table (page cache, kept warm)"); cold adds its row cache instead.</li>
+<li><code>components_gib</code>: a tool's memory under this profile, where it differs from the tool's own figure.</li>
+<li><code>memory.per_window_parts</code>: parts that grow with slot 0's window, each with an optional <code>max_gib</code> where it stops. Flash-Next's prefill workspace grows 76,309 bytes a context token up to 10.5 GiB (10.46 GiB measured at a 147,149-token prefill on 3.05, 10.47 at 261,549); its warm-up buffers, graphs and draft-layer cache take 32,230 bytes a token of window. With these and the engine's part calibrated on the SPD-99 runs, the estimate predicts the lowest MemAvailable of the 2.05, 3.05 and 4.05 runs at 262,144 tokens within 0.7 GiB.</li>
+</ul>
+<p>Rows of the measured table and every <code>max_window</code> come from runs on the box only.</p>
+<h2 id="the-memory-estimate">The memory estimate<a class="headerlink" href="#the-memory-estimate" title="Permanent link">&para;</a></h2>
+<p><code>server/setup/estimate.py</code> holds the one formula; <code>models/estimate-cases.json</code> pins it with 58 cases (47 for the 27B, 11 for Flash-Next), and the dashboard's TypeScript copy must give the same answers.</p>
+<ul>
+<li>The parts: the OS and other programs (the device's <code>reserved_gib</code>), the weights and the drafters of the profile, the CUDA graphs, the engine's warm-up workspace, the allocator's reserve, 1.19 GiB per side slot, and every tool that is on.</li>
+<li>The conversations (KV): with the pool, each slot at 32,768 tokens or its window if smaller (<code>typical_fill_tokens</code>); without it, every window in full, since it is allocated at load.</li>
+<li><code>budget_gb</code> is the device's memory less the floor (<code>QSE_PARALLEL_FLOOR_GB</code>, 15). <code>fits</code> is the total at or under the budget, compared to the cent. <code>fits_worst</code> asks the same with every slot at its full window; when it is false the engine makes a new request wait for memory instead of running out.</li>
+<li><code>context_tokens_fit</code> is what the room left after the fixed parts holds, in tokens, over all slots.</li>
+</ul>
+<h3 id="one-model-as-two-stages-the-split-block-srv-817">One model as two stages: the <code>split</code> block (SRV-817)<a class="headerlink" href="#one-model-as-two-stages-the-split-block-srv-817" title="Permanent link">&para;</a></h3>
+<p><code>POST /v1/setup/estimate</code> takes an optional <code>split</code> ask beside the selection (<code>{"selection": {...}, "split": {...}}</code>, or in a bare selection); without it the answer is the one above, byte for byte. Every field of the ask is optional: <code>cuts</code> (a list of layer numbers; every legal cut when left out), <code>caches</code> (<code>on</code> or <code>off</code>, the default), <code>side_window</code> (tokens, at most <code>window</code>; the window when left out), <code>table</code> (<code>warm</code> or <code>cold</code>; the profile's policy when left out), <code>snapshots_gb</code> (the front's kept states a slot, 2), <code>front_cache_gb</code> and <code>tail_disk_gb</code> (the front's cache folder and the tail's disk tier, 0). A field it does not know, or a value out of range, is 422 <code>invalid_split</code>. The selection's <code>window</code>, <code>slots</code> and <code>floor_gb</code> are the shape; a stage keeps its rows in place, so every window is memory at load whatever <code>kv_pool</code> says, and without caches a split serves one slot.</p>
+<p>The answer is <code>split</code> in the estimate's body (<code>server/setup/split.py</code>). The facts come from the model's family (<code>engine/models/&lt;family&gt;/stages.py</code> <code>split_facts</code>), read from the config and the files' headers of the profile's pack on this box: no weight is loaded, and nothing in the request names a path. For each legal cut, <code>candidates[]</code> gives the cut's <code>carry_bytes_per_row</code>, where the n-gram table sits (<code>table_on</code>), and for the <code>front</code> and the <code>tail</code>: their <code>layers</code>, <code>attention_layers</code>, <code>gb</code>, <code>headroom_gb</code> and <code>fits</code> against this preset's budget, <code>slot_gb</code> (one side slot's KV at the side window, sections and, on the tail, the draft layer's cache), <code>disk</code> (<code>pack_gb</code>: both stages open the pack's index and table, so each box keeps the whole pack; the front's <code>cache_dir_gb</code>, the tail's <code>disk_tier_gb</code>) and <code>parts</code>, each with its <code>basis</code>:</p>
+<table>
+<thead>
+<tr>
+<th>part</th>
+<th>side</th>
+<th>basis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>weights</code>: its layers, what both read (embedding, head, final mixer), the tail's own (the draft layer, the final norm), the norm the front reads of layer k</td>
+<td>both</td>
+<td><code>pack_headers</code></td>
+</tr>
+<tr>
+<td><code>table</code>: the warm table's file, or the cold table's row cache (the profile's, or the engine's setting when the profile reads it warm)</td>
+<td>the side that holds a layer reading it</td>
+<td><code>pack_headers</code>, <code>registry</code> or <code>setting</code></td>
+</tr>
+<tr>
+<td><code>kv</code>: slot 0 at the window, each side slot at the side window</td>
+<td>both</td>
+<td><code>config</code></td>
+</tr>
+<tr>
+<td><code>sections</code>: recurrent and conv states, a slot</td>
+<td>both</td>
+<td><code>config</code></td>
+</tr>
+<tr>
+<td><code>draft_kv</code>: the draft layer's own cache, a slot</td>
+<td>tail</td>
+<td><code>config</code></td>
+</tr>
+<tr>
+<td><code>snapshots</code>: <code>snapshots_gb</code> a slot, with caches on</td>
+<td>front</td>
+<td><code>ask</code></td>
+</tr>
+<tr>
+<td><code>engine</code>, <code>allocator</code> and the per-window parts</td>
+<td>both</td>
+<td><code>registry_whole_model</code>: the whole model's figures in one process, put on each stage as an upper bound</td>
+</tr>
+</tbody>
+</table>
+<p>Beside them: <code>legal_cuts</code>, <code>shape</code> (what was computed), <code>layer_gb[]</code>, <code>shared_gb</code>, <code>tail_only_gb</code>, <code>kv_bytes_per_token_layer[]</code>, <code>section_bytes_layer[]</code>, <code>table</code>, <code>budget_gb</code>, <code>best_cut</code> (the cut with the largest smaller headroom among those where both sides fit on two boxes of this preset; null when none fits, and a note names the closest and the side that lacks how much), <code>measured</code> (what a split of the family has been measured to cost on a GPU, each with its date and conditions) and <code>notes</code>. Every other number is computed: <code>computed</code> is true. A side slot's graphs and row buffers are not in <code>slot_gb</code>.</p>
+<p>A model that cannot be split here answers <code>splittable: false</code> with <code>reason</code> and <code>message</code>, never an error: <code>family</code> (its engine is not served as two stages), <code>pack</code> (the profile's weights are not on this box, or their headers do not read), <code>cuts</code> (no asked cut is legal; <code>legal_cuts</code> lists them), <code>caches</code> (caches asked of a family that keeps no state split: LFM2 MoE) or <code>slots</code> (more slots than the family serves split).</p>
+<p><code>exl3-4.5</code> with the recommended tools at 4 slots of 262,144: 67.35 GiB of a 106.63 GiB budget, 13.03 of it conversations at 32,768 tokens a slot. Every slot full would take 104.25 GiB of KV, so <code>fits_worst</code> is false.</p>
+<h2 id="wren">Wren<a class="headerlink" href="#wren" title="Permanent link">&para;</a></h2>
+<p>Wren is Qwen3.5-2B (Qwen3.5-0.8B when the 2B is not on disk) on the engine's own forward, in the plainest setup the engine has: one sequence, a window of 8,192 rows, thinking off, greedy, no caches. Its persona and rules are <code>server/setup/wren_system.md</code>.</p>
+<ul>
+<li>Each turn it reads the page's state (fields named like a secret arrive as <code>&lt;set&gt;</code>), the box's free memory and disk and the profile it runs, and the four best sections of a BM25 search over <code>docs/**/*.md</code>, <code>models/*/model.yaml</code> and the packages that describe TandemLLM. It also reads the current step: the ids a tool call may name there, and on the three steps that show the measured table, the table itself with the fastest profile for each task.</li>
+<li>It can ask the page to <code>set_field</code>, <code>toggle</code>, <code>select_profile</code>, <code>go_to_step</code>, <code>next</code>, <code>previous</code> and <code>explain</code>. <code>explain</code> takes only what the page can highlight, and a step's name is not one of them. The browser runs every call; the server checks each one against the step schema first. An invalid change never reaches the browser: Wren sees why and tries once more. If that fails too, Wren answers in words with no tools in the prompt, and the page shows one notice that nothing changed. A highlight it cannot make goes nowhere.</li>
+<li>A turn always ends in words. After a call the page sends the result back and asks again, at most 4 rounds. A change the page refuses gets one repair, and the last round asks for words only (<code>"tools": false</code> in the chat body), so the server gives the model no tools and drops any call it still writes.</li>
+<li>On a phone the sheet stays open while Wren works. A change shows in the sheet as a toast with Show me, which closes the sheet, scrolls to the field and highlights it. A refused call leaves the sheet alone.</li>
+<li>It cannot finish, apply, reset, load or unload anything.</li>
+<li>On a serving engine it loads only when asked (<code>POST /v1/setup/assistant/load</code>), through the residency planner. If the narrator is loaded with the same model, Wren borrows the narrator's copy and costs no memory. It is the first thing given back when the KV pool needs memory, and it unloads itself after 5 minutes without a poll or a chat.</li>
+<li>It generates in slices of 150 ms while no request runs or waits, so a request that arrives waits at most one slice.</li>
+<li>The chat's text is never logged.</li>
+</ul>
+<p>On the reference box (2026-10-11, <code>tests/gpu/setup_wren_gpu.py</code>) Wren's own copy loads in 22 s and holds 3.62 GiB on the device; MemAvailable drops 5.0 to 5.2 GiB at the first load, of which 1.1 to 1.5 GiB is the process's CUDA context, which stays. Later loads and unloads return within the box's own noise (0.2 to 0.4 GiB), with the process's RSS and the allocator flat. Borrowing the narrator costs 0.03 to 0.06 GiB, and the narrator's next line is the same to the token. A turn takes 1 to 3 s, the first words after 0.4 to 0.7 s. On ten plain requests and three questions, the 2B made the right call or answered 10 times of 13; Qwen3.5-4B (<code>QSE_WREN_MODEL=qwen3.5-4b</code>) 12 of 13, at about 2.5 times the time a turn. The 2B sometimes mixes the numbers of two profiles in an answer, so the page's own numbers stay the reference.</p>
+<p>0.7.1 on a phone (2026-10-11 10:13): after an answer on the Model step, the 2B called <code>explain("overview")</code>, the name of the step. The server took it as valid, the page refused it, and the page asked again four times. Each round brought two more refused calls. The question about coding tasks got eight notices and the 4-round stop instead of an answer, and the sheet dropped to a peek once per call. Measured again on the box with 0.7.2 (<code>tests/gpu/setup_wren_gpu.py cases</code>, the 2B at the narrator's 4,096 rows): 15 of 15 right on ten requests for a change and five questions, the two of the report among them. No call was invalid, Wren said what it changed after every change, and a turn took 0.7 to 1.6 s. The question about coding tasks now gets <code>exl3-2.5</code> at 124.17 tokens a second, in one round.</p>
+<h2 id="the-install-job">The install job<a class="headerlink" href="#the-install-job" title="Permanent link">&para;</a></h2>
+<p><code>POST /v1/setup/plan</code> returns the review step's facts: what is wrong, what changes against <code>ops/serve.env</code> (each key whose effective value differs, old and new; a key the current <code>run/setup.env</code> sets and the new one drops is <code>removed</code>), the commands that will run and the estimate. <code>POST /v1/setup/apply</code> checks the selection again and starts a job; <code>GET /v1/setup/jobs/{id}</code> streams it (SSE): the log lines on disk, the job as it is now, then each event as it comes; <code>Last-Event-ID</code> resumes, <code>?format=json</code> gives the job.</p>
+<p>The job runs a fixed list of steps from <code>server/setup/apply.py</code>, and nothing a client sends becomes a command:</p>
+<table>
+<thead>
+<tr>
+<th>step</th>
+<th>what it runs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>check</td>
+<td><code>tandem doctor</code> first (file modes, the <code>run/ops</code> copies, stale pid files, the marker; its report on the job as <code>doctor</code>, OPS-171), then the selection, the memory, the disk, the files the profile needs, the HF token (only a private repository needs one; every published profile is public), the box lock</td>
+</tr>
+<tr>
+<td>unload_assistant</td>
+<td>Wren is unloaded before the job starts</td>
+</tr>
+<tr>
+<td>fetch</td>
+<td><code>bash ops/use-profile.sh &lt;profile&gt; --fetch-only</code>: the profile's weights and the files it needs beside them (the <code>assets_required</code> with a <code>fetch</code> list in the registry), and the models of the tools the selection turns on (<code>QSE_FETCH_ASSETS</code>: the shadow reader's, the narrator's, Laya's; each once); skipped when all of them are on disk</td>
+</tr>
+<tr>
+<td>preflight</td>
+<td>before anything stops (OPS-169): the scripts the switch runs are there and parse (<code>bash -n</code>; the Python ones compile), <code>serve.env</code> with the profile and the overlay the job will write sources under <code>set -u</code> as <code>start.sh</code> sources it, the weights are complete (the folder's files and the hub manifest's sizes), memory (MemAvailable now and what the running engine gives back cover the profile's need), the new port is free, no box lock and no hold, the engine's and chatd's interpreters run; a failure ends the job here, in plain words, and the running setup keeps running</td>
+</tr>
+<tr>
+<td>write_config</td>
+<td>first <code>waiting</code> until no request runs or waits on the engine (10 minutes at most, else nothing changes); then <code>run/setup.env</code>, every value quoted, the old one kept as <code>run/setup.env.bak-&lt;time&gt;</code>; with a port change, <code>bash ops/stop.sh 120</code> first, and a failure after that stop goes through the rollback; with "generate", <code>bash ops/make-secrets.sh --admin</code></td>
+</tr>
+<tr>
+<td>switch</td>
+<td><code>bash ops/use-profile.sh &lt;profile&gt;</code> with <code>QSE_NO_ROLLBACK=1</code>: the drafts' corrector the profile names, when it is not on the box yet (<code>flashnext-3.05</code>; a failed download is a warning), then stop, start, smoke; a failure is this job's rollback, not the script's (which would start the old profile under the new overlay); in setup mode <code>run/setup-pending</code> goes first, a copy kept in the job's folder</td>
+</tr>
+<tr>
+<td>smoke</td>
+<td><code>/health</code> names the profile and one chat answers (512 tokens at most, as use-profile.sh asks); then the tools with a model of their own, from <code>/health</code> <code>roles</code> and the decision models, polled up to 90 s: one that failed to load is a warning on the job (<code>warnings</code>, with its error), one waiting for memory a note (<code>notes</code>); the job still ends <code>done</code></td>
+</tr>
+<tr>
+<td>rollback</td>
+<td>on a failed switch or smoke: with a port change the engine on the new port is stopped first, then the old <code>run/setup.env</code> comes back and the previous profile starts with its own served name in the smoke (in setup mode, the marker comes back unchanged, its HOST too, and setup mode starts again; a runner that crashes puts the marker back as well)</td>
+</tr>
+</tbody>
+</table>
+<p><code>ops/serve.env</code> is never edited. It reads <code>run/setup.env</code> after the weight profile, so the overlay never sets the weights. The overlay leaves out a key that serve.env leaves unset when its value is what the engine runs with anyway, so the engine's environment does not change for nothing: the disk tier's fingerprint counts every <code>QWEN38_*</code> variable that is set, and a new one sweeps that profile's saved heads and parked chats at the next start. A box whose <code>serve.env</code> predates the setup guide must get those last lines first; the plan says so.</p>
+<p>The Chat (beta) switch (the <code>conductor</code> component, OPS-260) is off by default: the guide sets up the engine alone (<code>QSE_MODE=engine</code>, <code>CONDUCTOR=raw</code>, <code>QSE_CONDUCTOR_CONFIG=off</code>). On, it writes <code>QSE_MODE=chat</code> with the conductor's directory and turns on the small models it ships with (<code>with_parent</code> in <code>model.yaml</code>: Laya's decision models on every model, the 27B's shadow reader too); the narrator stays a choice, and each of them can be switched off again. Off again, TandemNode stops a running chatd once the engine comes up in engine mode. A box that runs the chat starts the guide with the switch on, so an install from the guide keeps its mode. On a box set up in the guide this switch decides the mode: <code>run/setup.env</code> is read after the installer's <code>QSE_MODE</code>, so <code>install.sh --with-chat</code> or <code>--engine-only</code> there only warns.</p>
+<p>The job runs as a process of its own, because the switch replaces the server that started it. Its state is in <code>run/setup-jobs/&lt;id&gt;/</code>, and the status responder (<code>ops/engine_status.py</code>) answers <code>GET /v1/setup/jobs/{id}</code> (the same stream) and <code>GET /v1/setup/status</code> while the engine restarts: the page shows one restart card with the job's step and the load's phase, and the job's true end when the engine is back (OPS-175, VIS-209, VIS-211). Apply is refused while requests run (409 <code>busy</code>), while another job runs (409 <code>job_running</code>), when the selection does not fit (409 <code>over_budget</code>), and when the box lacks something (412 <code>missing_assets</code>, <code>missing_token</code>, <code>disk_full</code>, <code>no_overlay_hook</code>).</p>
+<p>A failed step says what broke in plain words, from the runner's reason and the command's last lines: a script that lost its execute bit (tandem doctor repairs the mode at once and the step says so), a hold, too little memory, an engine that did not answer in time with its log's last line, a download that stopped (VIS-213). The failed and rolled-back screens list what tandem doctor repaired, offer Retry and Copy diagnostics. <code>POST /v1/setup/jobs/{id}/retry</code> starts a new job from the failed one's selection (<code>retry_of</code>): the check and tandem doctor run again and a finished download is not repeated, because the plan finds the weights. <code>GET /v1/setup/jobs/{id}/diagnostics</code> is the job as text for a bug report: the versions, the steps, tandem doctor's reports, the selection and the last 200 log lines, passed through the secret filter; where the browser does not let a page copy (plain http on a phone), the page shows it to select.</p>
+<p>On a new box the fetch step downloads the 27B's K3 drafters, K4 draft head, BF16 drafters and base with the weights, and the plan's <code>download_gb</code> counts them (OPS-95). The NVFP4 profile's base is the FP8 checkpoint (30.4 GB). An EXL3 profile's is <code>base-plain</code> (OPS-133): the checkpoint's files fetched by range requests without the F8_E4M3 projections, their scales and <code>lm_head.weight</code>, which the EXL3 pack replaces, 3.54 GB; a box with the full checkpoint uses that. The review lists each download with its size (<code>downloads</code>), the tools' models too. Only a file nothing downloads fails the check with <code>missing_assets</code>, before anything changes; for a tool's model the error names the tool, and the fix is to turn it off in the Tools step.</p>
+<h2 id="removing-a-model">Removing a model<a class="headerlink" href="#removing-a-model" title="Permanent link">&para;</a></h2>
+<p>The weights step lists the weights on the box (<code>GET /v1/setup/weights</code>): each profile's folder with its size, the running one marked, a folder two profiles share as one row; the drafters, the draft head and the base checkpoint, which the models share, are listed apart and never removed here (SRV-560, VIS-215). Remove asks first, with the GB it frees and the line that downloads the weights again, then <code>POST /v1/setup/remove {profiles, confirm: true}</code> deletes the folder. It refuses the running profile (switch first, or tick "Remove ... after the switch" in the review step: <code>remove_after</code> of the apply, done once the new setup answers), a folder a kept profile shares, and any folder that is not a real folder under the home folder or the Hugging Face cache, holds the installation, or holds what something else reads; in the Hugging Face cache the repository's whole folder goes, only when nothing else reads from it. Each removal appends a line to <code>run/weights-removed.txt</code>: the time, the profile, its repository at its revision, the folder, the GB and <code>bash ops/use-profile.sh &lt;profile&gt; --fetch-only</code>. A download that does not fit is refused before it starts, with the GB too few and the weights that could be removed.</p>
+<h2 id="the-answer-limit">The answer limit<a class="headerlink" href="#the-answer-limit" title="Permanent link">&para;</a></h2>
+<p>A request that sends no <code>max_tokens</code> may write up to <code>DEFAULT_MAX_TOKENS</code> tokens. A request's own <code>max_tokens</code> always wins, clamped to what fits in the window. <code>ops/serve.env</code> sets 32,768. A weight profile sets its own value when the model's card names another limit, and the registry field <code>default_max_tokens</code> (Default answer length, in the Methods and advanced step) has the same number as its default. Today only Ornith does: its card evaluates with up to 131,072 new tokens, and an answer at effort <code>xhigh</code> can run past 32,768. Qwen3.8's cards name 131,072 for the final answer alone, with the reasoning counted apart in a 1M window; here reasoning and answer share <code>max_tokens</code>, so the Qwen profiles keep 32,768. <code>ops/use-profile.sh</code> and the Setup Guide both start Ornith at 131,072, and <code>/v1/models</code> shows the running value as <code>tandem.max_output</code>.</p>
+<p>To change it, set Default answer length in the Methods and advanced step and install. The guide writes the value into <code>run/setup.env</code>, which <code>ops/serve.env</code> reads after the profile. From a shell, put <code>DEFAULT_MAX_TOKENS=&lt;tokens&gt;</code> in <code>run/local.env</code> and restart. A box that the guide set up for Ornith before 0.14.2 keeps the 32,768 it wrote then, until you change the field and install again.</p>
+<h2 id="reasoning-effort">Reasoning effort<a class="headerlink" href="#reasoning-effort" title="Permanent link">&para;</a></h2>
+<p>A fresh install thinks at effort <code>medium</code> when a request says nothing about thinking: <code>REASONING_EFFORT=medium</code> in <code>ops/serve.env</code>, for every model. Each level caps the thinking: <code>low</code> at 1,024 tokens, <code>medium</code> at 8,192, <code>xhigh</code> not at all, and <code>none</code> turns thinking off. A client's own effort word, budget or thinking switch wins (<a href="../server/#thinking-budgets-from-the-client">server.md</a> has every shape). Under the conductor, the <code>tools</code> profile that tool clients get uses the server's level, and a profile that decides the effort by turn class (<code>chat</code>) sets its own level each turn.</p>
+<p>To change it, set Thinking effort in the Methods and advanced step and install, or put <code>REASONING_EFFORT=xhigh</code> in <code>run/local.env</code> and restart. <code>none</code> (thinking off) is the shell's value only.</p>
+<p>The published numbers name their effort. Speed rows run greedy with thinking off, since thinking changes what the model writes and so what a row measures. Quality rows against BF16 (KL, top-1, perplexity) read fixed text and have no effort. Each tool-eval-bench row names its effort and the server's default in its section (<a href="../tool-eval-bench/">tool-eval-bench.md</a>, <a href="../flint/#tool-calls">flint.md</a>). The 27B and Ornith tool-eval-bench runs used <code>xhigh</code> as the server's default, and the Flint runs the shipped <code>medium</code>. To match a row on a fresh install, set the effort the row names.</p>
+<h2 id="benchmarks-and-the-overlay">Benchmarks and the overlay<a class="headerlink" href="#benchmarks-and-the-overlay" title="Permanent link">&para;</a></h2>
+<p><code>tools/exl3_fastrun.py --env-file ops/serve.env</code> reads serve.env without <code>run/setup.env</code> (it sources it with <code>QSE_SETUP_ENV</code> pointing nowhere): a benchmark row is the file's knobs, not what the box was last set up with. Its report says <code>setup_overlay: &lt;path&gt; (ignored)</code> when an overlay was there. Pass a knob with <code>--env KEY=VALUE</code> to measure an overlay's value.</p>
+<h2 id="where-the-wizard-starts">Where the wizard starts<a class="headerlink" href="#where-the-wizard-starts" title="Permanent link">&para;</a></h2>
+<p>A model the browser has no progress for starts from what the box runs now (<code>GET /v1/setup/models/{id}/current</code>): the active profile and every registry knob as <code>ops/serve.env</code> resolves it, <code>run/setup.env</code> included, so host, port, served name and every hand-tuned value are the box's own, and Review lists only what the user changed. A key serve.env leaves unset counts as what the engine then runs with, when that is one of the tool's two values: the lookup store's default folder from <code>engine/settings.py</code> (on), or the <code>${KEY:-default}</code> of <code>ops/start.sh</code> (<code>VISION</code> on, <code>RESPONSE_CACHE</code> off, <code>SESSION_SPILL</code> on). A box whose serve.env predates these keys starts with the tools it runs. A value the registry has no option for (a HOST that is neither address) stays at the recommended one and is listed in <code>unmatched</code>. Review warns when HOST, PORT or SERVED_MODEL change, since every client notices. A box that still sets <code>QSE_BACKENDS</code> gets the plan error <code>backends_moved</code> instead of an install: the engine relays to no other backend since engine API 1.8 and would not start (<a href="../operations/#other-backends-moved-to-tandemapp">operations.md</a>). The models' "Other backends" tool went with it; TandemApp's Backends page has the feature, and a selection that names <code>proxy</code> gets the 400 <code>unknown_component</code> that says so. On an install.sh box the profiles and <code>active-profile</code> are read under serve.env's REPO, as <code>ops/use-profile.sh</code> reads them.</p>
+<h2 id="reset">Reset<a class="headerlink" href="#reset" title="Permanent link">&para;</a></h2>
+<p><code>GET /v1/setup/reset</code> lists the levels with what each removes and how big it is; <code>POST /v1/setup/reset {level, confirm, dry_run}</code> removes one.</p>
+<table>
+<thead>
+<tr>
+<th>level</th>
+<th>what goes</th>
+<th>confirm</th>
+<th>restart</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>the page's progress and Wren's chat (the browser's own storage)</td>
+<td>the page's</td>
+<td>no</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>run/setup.env</code> and its backups; the recommended profile starts</td>
+<td><code>true</code></td>
+<td>yes (a job, as apply)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>the disk caches of every profile, the parked chats, the RAM caches, the lookup store (a running one is emptied by the engine, its folder stays), the shadow reader's disk</td>
+<td><code>delete caches</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td>4</td>
+<td>the weights of every profile but the active one, and their HF cache copies; never what an engine on any port reads (its <code>--nvfp4</code>, <code>--fp8-head</code>, <code>QWEN38_EXL3</code>, <code>QWEN38_DRAFT_*</code>), nor <code>~/nvfp4-bf16</code> while <code>~/tandem-staircut</code> is there; nothing at all while the active profile is unknown (409 <code>active_unknown</code>)</td>
+<td><code>delete weights</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td>5</td>
+<td>the usage ledger file and its <code>-wal</code>, <code>-shm</code> and <code>-journal</code> files (not its folder), the conductor's settings and journal, the memory notes</td>
+<td><code>delete history</code></td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<p>Levels 2 to 4 never touch the active profile's weights, the K3 drafters, the K4 draft head, the base checkpoint, the small models, the HF token, the secrets file the engine reads (<code>QSE_SECRETS</code>, else <code>$QSE_STATE_DIR/secrets.env</code>, else <code>~/.qwen38-spark-engine/secrets.env</code>; an install's <code>DIR/state/secrets.env</code>) and its folder, the history (<code>QSE_USAGE_LEDGER</code>) or the conductor's data. Level 5 never touches the secrets file either. A cache the running engine holds is cleared by the engine's own function; the shadow reader's disk is kept while it runs. A symbolic link goes as a link and its target stays. Every reset is refused while requests run or a job runs, and every call writes one line to <code>run/setup-audit.log</code>.</p>
+<h2 id="the-routes">The routes<a class="headerlink" href="#the-routes" title="Permanent link">&para;</a></h2>
+<p>All of them are admin routes: open while no admin password is set, and the admin token, a dashboard session or a tool on the box itself once one is. Every POST must also be same-origin JSON: <code>Content-Type: application/json</code> (else 415 <code>json_only</code>), no <code>Sec-Fetch-Site: cross-site</code>, and an <code>Origin</code>, when sent, that names the server's <code>Host</code> or <code>X-Forwarded-Host</code> (else 403 <code>cross_site</code> / <code>cross_origin</code>). A page on another site cannot run apply or reset through a visitor's browser, even on an open box or through a tunnel's loopback. The shapes are TandemApp's <code>dashboard/src/api/types.ts</code>, contract 1.0.</p>
+<div class="highlight"><pre><span></span><code>GET  /v1/setup/models                  a tile per model
+GET  /v1/setup/models/{id}             model.yaml as JSON, with wizard_fields
+GET  /v1/setup/models/{id}/steps       the step schema and Wren's tools
+GET  /v1/setup/models/{id}/current     what the box runs now as a selection: the wizard's start
+GET  /v1/setup/device                  memory, GPU, disk, profiles on disk, Wren's state
+GET  /v1/setup/community               every model's community packs and where the list came from
+POST /v1/setup/community/sync          fetch the list from GitHub now (the page opened, Refresh)
+POST /v1/setup/estimate                {selection} -&gt; the estimate
+POST /v1/setup/plan                    {selection} -&gt; the review step's plan
+POST /v1/setup/apply                   {selection, dry_run?} -&gt; 202 {job}
+GET  /v1/setup/jobs/{id}               SSE of the job (?format=json: the job)
+GET  /v1/setup/reset                   the reset levels
+POST /v1/setup/reset                   {level, confirm, dry_run?}
+GET  /v1/setup/assistant/status        Wren's state; a poll keeps it loaded
+POST /v1/setup/assistant/load          load Wren
+POST /v1/setup/assistant/unload        unload Wren
+POST /v1/setup/assistant/chat          {messages, page, tools?} -&gt; SSE (/v1/setup/chat is the same)
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../faq/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Questions and answers">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Questions and answers
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../operations/" class="md-footer__link md-footer__link--next" aria-label="Next: Operations">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Operations
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

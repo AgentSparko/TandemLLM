@@ -1,0 +1,2041 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/adding-a-model/">
+      
+      
+        <link rel="prev" href="../quality-gate/">
+      
+      
+        <link rel="next" href="../shadow-reader/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Adding a model - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#adding-a-model" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Adding a model
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-adapter-path-in-ten-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      The adapter path in ten steps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-seams" class="md-nav__link">
+    <span class="md-ellipsis">
+      The seams
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The seams">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config" class="md-nav__link">
+    <span class="md-ellipsis">
+      Config
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      Layout
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weight-formats-the-linear-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      Weight formats: the Linear interface
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-drafter-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      What a drafter reads
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-tokenizer-and-the-chat-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      The tokenizer and the chat template
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-family-declares" class="md-nav__link">
+    <span class="md-ellipsis">
+      What a family declares
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-model-layer-architecture-registry-and-per-model-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      The model layer: architecture registry and per-model state
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-tests-a-new-model-must-pass" class="md-nav__link">
+    <span class="md-ellipsis">
+      The tests a new model must pass
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-still-specific-to-qwen38" class="md-nav__link">
+    <span class="md-ellipsis">
+      What is still specific to Qwen3.8
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#register-the-model-for-the-setup-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      Register the model for the setup guide
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-adapter-path-in-ten-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      The adapter path in ten steps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-seams" class="md-nav__link">
+    <span class="md-ellipsis">
+      The seams
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The seams">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config" class="md-nav__link">
+    <span class="md-ellipsis">
+      Config
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      Layout
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weight-formats-the-linear-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      Weight formats: the Linear interface
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-drafter-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      What a drafter reads
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-tokenizer-and-the-chat-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      The tokenizer and the chat template
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-family-declares" class="md-nav__link">
+    <span class="md-ellipsis">
+      What a family declares
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-model-layer-architecture-registry-and-per-model-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      The model layer: architecture registry and per-model state
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-tests-a-new-model-must-pass" class="md-nav__link">
+    <span class="md-ellipsis">
+      The tests a new model must pass
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-still-specific-to-qwen38" class="md-nav__link">
+    <span class="md-ellipsis">
+      What is still specific to Qwen3.8
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#register-the-model-for-the-setup-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      Register the model for the setup guide
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="adding-a-model">Adding a model<a class="headerlink" href="#adding-a-model" title="Permanent link">&para;</a></h1>
+<p>TandemLLM serves models of the Qwen3.8 family: the 27B, a hybrid of Gated DeltaNet and attention layers, and Flash-Next, a mixture of experts on the same hybrid, from turboderp's EXL3 packs. LiquidAI's LFM2.5-24B-A2B (short convolutions, attention and a mixture of 64 experts, <a href="../lfm2.5-24b-a2b/">lfm2.5-24b-a2b.md</a>), ships in 0.9.0 and is the first from another family. Flash-Next was the first model added through the adapter path below, and the path is written from what it took. This page lists the seams where a new model plugs in, what each one expects, and the tests a new model must pass before its numbers mean anything. Some of the engine is still specific to this family, and the last section says which parts.</p>
+<h2 id="the-adapter-path-in-ten-steps">The adapter path in ten steps<a class="headerlink" href="#the-adapter-path-in-ten-steps" title="Permanent link">&para;</a></h2>
+<p>A new architecture is a package under <code>engine/models/&lt;name&gt;/</code> with its own registry entry, and data files. Nothing under <code>server/</code>, <code>engine/cache.py</code>, <code>engine/disk_cache.py</code>, <code>engine/spill.py</code>, <code>engine/methods/</code> or <code>engine/settings.py</code> changes for it, and <code>tests/test_adapter_guards.py</code> holds every package to that: work on one model never moves another model's fingerprint. <a href="../architecture/#methods-written-once-models-plugged-in">architecture.md</a> shows the layers; Flash-Next's package (<code>engine/models/flashnext/</code>) is the worked example.</p>
+<ol>
+<li>Config. A reader that turns the checkpoint's <code>config.json</code> into the model's config object and stops on a field it does not know, naming it. Flash-Next's (<code>config.py</code>) keeps three lists: fields it reads, fields that only matter for training (<code>IGNORED</code>), and fields whose other values would change the arithmetic (<code>FIXED</code>).</li>
+<li>Weights. A reader for the checkpoint's files and a <code>Linear</code> object for every weight the model multiplies by (<a href="./#weight-formats-the-linear-interface">Weight formats</a>). A new format needs a new class and a row-invariant kernel (<a href="../kernels/">kernels.md</a>). Flash-Next's reader (<code>pack.py</code>) audits the pack before anything loads: a missing tensor, a truncated shard or a wrong sha256 stops it with the name.</li>
+<li>A reference forward in torch, checked against the published implementation layer by layer. Flash-Next's (<code>ref.py</code>) equals <code>transformers</code>' <code>qwen4_exp</code> in fp32 within 5e-6 on a tiny random model, and its engine equals the official decoder layer on the served pack within BF16 noise.</li>
+<li>The engine with the hot verbs: <code>forward</code>, <code>forward_tree</code>, <code>forward_block</code>, <code>commit_tree</code>, <code>rollback_to</code>, <code>picks</code>, <code>hidden_post_norm</code>, <code>kv.length</code>, <code>state</code> (the live state the cold verbs copy) and <code>reset</code>. Every verified row must equal the decode step's row bit for bit, or speculation is not lossless on it.</li>
+<li>The cold verbs: <code>caps</code>, <code>cost()</code>, <code>cache_state()</code> with its sections and views, <code>resume_at(n)</code>, <code>settle()</code>, <code>discard_pending()</code>, <code>trim_pending(n)</code>, <code>manifest()</code>, <code>memory_parts()</code>, <code>resident_files()</code> and <code>precapture()</code>; with joint verify also <code>tree_batchable(parents)</code> (which blocks share a joint pass), <code>forward_tree_multi(items)</code> (the joint pass itself: every lane's block over the weights once, each row its lone verify's bits) and, optionally, <code>joint_policy()</code> (the pass's row cap, cut and rows by lane count for the weights the family serves: what its kernels keep row-invariant; without it 32 rows and the share cut) and <code>joint_graphs_report()</code> (the joint pass's captured graphs for <code>/health</code>, when the family captures them), and <code>joint_attn(layer, payloads)</code> (the graphed lanes' attention of a layer: the shared default runs a launch a lane; a family may run every lane in one). The round runner also asks a family's engine for five optional hooks, each absent by default: <code>prefetch_rows(items)</code> (a static method: the round's drafted trees as <code>(engine, tokens, parents)</code>, handed over before the cuts so host reads such as Flash-Next's PLE rows can start), <code>host_blocks</code> (a class attribute: True when the joint pass reads a block on the host, so <code>QSE_RUNNER_HOST_BLOCKS</code> hands it host tensors), <code>joint_capture_ok</code> (an attribute the runner sets before each joint pass: True when a joint graph may be captured in it, on the runner's thread with no request waiting; the family reads it and sets it back to False) <code>joint_stats()</code> (the joint pass's measured shape, for <code>/health</code> <code>parallel.joint_stats</code> and the runner's line; None when nothing is counted) and <code>host_timers(timed)</code> (with <code>QSE_RUNNER_COUNTERS</code>: the family wraps its own host calls with the runner's timer, <code>timed(obj, attr, name)</code>). A family whose joint pass leaves the host idle while the GPU runs calls <code>engine.methods.busy.busy()</code> between the pass's issue and its wait: the runner's held work (<code>QSE_RUNNER_BUSY_WORK</code>, <code>QSE_RUNNER_GC</code>) runs there; a family that never calls it keeps the runner's work where it was. The server's prefill burst runs a family's own joint prefill when its engine has <code>prefill_joint_ok(rows, start)</code> and a static <code>prefill_joint(items)</code> (each prompt's logits, streams, KV and state its own prefill's bits; optional <code>prefill_joint_prepare(rows, start)</code> runs a member's own steps on its thread first, so a failure there fails that member alone). They are not part of <code>ServeSpec</code> yet. Flash-Next keeps them in <code>serving.py</code> (<code>FlashNextServing</code>); the 27B's are installed on its class by <code>engine/models/qwen3_5/adapter.py</code>.</li>
+<li>A draft head, if the checkpoint ships one. The shared MTP drafter (<code>engine/methods/mtp_drafter.py</code>) asks the head for <code>depth</code>, <code>reset()</code>, <code>prime()</code>, <code>capture_all()</code>, <code>launch()</code>, <code>read()</code> (the top-2 tokens and their probabilities a depth), <code>views()</code> and <code>resume(n)</code>; the engine offers it through <code>draft_heads()</code>. Flash-Next's head is <code>mtp.py</code>.</li>
+<li>A server builder, <code>serve(a, ctx) -&gt; dict</code>: load the weights, build the engine, the tokenizer and the drafter, and return them with the record <code>/health</code> shows.</li>
+<li>The registry entry, in the package's own <code>arch.py</code> (<a href="./#what-a-family-declares">What a family declares</a>): <code>register(Arch(name, architectures, model_types, config, engine, package, serve, manifest, ...))</code>. <code>engine/models/__init__.py</code> finds it; nothing else is edited.</li>
+<li>Data files: a StairCut price file for each profile and device (<code>ops/prices/&lt;model&gt;/&lt;profile&gt;.&lt;device&gt;.json</code>; without one the cut learns its prices online), the weight profiles (<code>ops/profiles/&lt;name&gt;.env</code>) and the Setup Guide's entry (<code>models/&lt;id&gt;/model.yaml</code>, <a href="./#register-the-model-for-the-setup-guide">below</a>).</li>
+<li>Pass the tests under <a href="./#the-tests-a-new-model-must-pass">The tests a new model must pass</a>.</li>
+</ol>
+<pre class="mermaid"><code>flowchart TD
+    m["methods, written once&lt;br/&gt;StairCut and its prices, the MTP drafter, the walk, every cache tier, the server, the governor"]
+    a["model adapters, one per architecture&lt;br/&gt;qwen3_5: the 27B · qwen4_exp: Flash-Next · hot and cold verbs, ModelState"]
+    f["weight formats&lt;br/&gt;the Linear protocol today; plugins with read and bind planned"]
+    h["hardware, planned&lt;br/&gt;KernelImpl keyed by op, format and device; device profiles"]
+    t["topology, planned&lt;br/&gt;Mesh at world 1: no collective on the code path"]
+    m --&gt; a --&gt; f --&gt; h --&gt; t
+    classDef planned stroke-dasharray: 5 5
+    class h,t planned</code></pre>
+<p><em>The engine's layers. A layer reads only the layers under it, and per-model numbers are data the adapter returns or files under <code>models/</code> and <code>ops/</code>. Filled: built; outlined: planned.</em></p>
+<h2 id="the-seams">The seams<a class="headerlink" href="#the-seams" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart LR
+    CFG[config.json] --&gt; TC[TextConfig, engine/config.py]
+    CK[checkpoint files] --&gt; LAY[Layout, engine/loader.py]
+    LAY --&gt; W[Weights]
+    W --&gt; LIN[Linear interface, engine/linear.py]
+    TC --&gt; MODEL[target model, engine/model.py]
+    LIN --&gt; MODEL
+    MODEL --&gt; DR[drafters declare what they read]
+    ENV[environment] --&gt; SET[EngineSettings, engine/settings.py]
+    SET --&gt; MODEL</code></pre>
+<h3 id="config">Config<a class="headerlink" href="#config" title="Permanent link">&para;</a></h3>
+<p><code>engine/config.py::load_config</code> reads <code>config.json</code> into a <code>TextConfig</code> with every size the engine needs, from the layer count to the rotary settings. It also answers which layers are recurrent (<code>is_linear</code>, <code>linear_layers</code>, <code>attention_layers</code>). It accepts a vision-language config (the text model under <code>text_config</code>) and a text-only config (the keys at the top level).</p>
+<p>A new family either fits <code>TextConfig</code> or extends it. The rest of the engine asks <code>TextConfig</code>, never the raw JSON.</p>
+<h3 id="layout">Layout<a class="headerlink" href="#layout" title="Permanent link">&para;</a></h3>
+<p><code>engine/loader.py::Layout</code> says how a checkpoint names its tensors, in one place. The engine addresses every tensor by a canonical name (<code>embed_tokens.weight</code>, <code>lm_head.weight</code>, <code>norm.weight</code>, <code>layers.N.&lt;module&gt;.&lt;proj&gt;</code>), which is the language model's own naming with the checkpoint's wrapper prefix taken off.</p>
+<table>
+<thead>
+<tr>
+<th>attribute</th>
+<th>what it says</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prefixes</code></td>
+<td>wrapper prefixes to strip, first match wins (<code>model.language_model.</code>, then <code>model.</code>)</td>
+</tr>
+<tr>
+<td><code>skip_inside</code>, <code>skip_start</code></td>
+<td>tensors the language model never reads, such as a vision tower (<code>engine/vision.py</code> reads that one itself)</td>
+</tr>
+<tr>
+<td><code>mtp_file</code></td>
+<td>where the checkpoint keeps its prediction head</td>
+</tr>
+<tr>
+<td><code>embed</code>, <code>head</code>, <code>final_norm</code></td>
+<td>canonical names of the three model-level tensors</td>
+</tr>
+<tr>
+<td><code>projections</code></td>
+<td>the projection names a checkpoint may store as FP8 pairs or as plain matrices</td>
+</tr>
+</tbody>
+</table>
+<p>A checkpoint without <code>lm_head.weight</code> reads the embedding as its head only when the config says the two are tied. <code>tests/test_layout.py</code> builds tiny checkpoints of both kinds on the CPU and checks that they read to the same canonical names. It also pins the served checkpoint's key set: 1,250 language-model keys read, 333 vision keys skipped.</p>
+<h3 id="weight-formats-the-linear-interface">Weight formats: the Linear interface<a class="headerlink" href="#weight-formats-the-linear-interface" title="Permanent link">&para;</a></h3>
+<p>Every weight the engine multiplies by implements one small interface (<code>engine/linear.py</code>):</p>
+<div class="highlight"><pre><span></span><code>class Linear(Protocol):
+    shape: (N, K)
+    nbytes: int                 # bytes read per use
+    def matmul(x[..., K]) -&gt; [..., N]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>class</th>
+<th>format</th>
+<th>file</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FP8Block</code></td>
+<td>e4m3 codes with one BF16 scale per 128 by 128 block, as the checkpoint stores them</td>
+<td><code>tools/fp8_linear.py</code></td>
+</tr>
+<tr>
+<td><code>NVFP4Block</code></td>
+<td>e2m1 codes, an e4m3 scale per 16 weights, one fp32 scale</td>
+<td><code>tools/nvfp4_linear.py</code></td>
+</tr>
+<tr>
+<td><code>FP8Head</code></td>
+<td>e4m3 with one fp32 scale per row, fp32 logits</td>
+<td><code>tools/head_gemv.py</code></td>
+</tr>
+<tr>
+<td><code>BF16Block</code></td>
+<td>a plain BF16 matrix</td>
+<td><code>engine/linear.py</code></td>
+</tr>
+</tbody>
+</table>
+<p>The model calls <code>w.matmul(x)</code> and never asks which format it holds. A new format is a new class with those three members, plus a kernel that keeps the row-invariance rule (<a href="../kernels/">kernels.md</a>). A BF16 checkpoint loads through the same path: its projections become <code>BF16Block</code>s. <code>tests/test_bf16_load.py</code> checks that a tiny BF16 checkpoint on disk gives the same forward, bit for bit, as plain tensors.</p>
+<h3 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h3>
+<p><code>engine/settings.py</code> is the registry of every <code>QWEN38_*</code> switch the engine reads: its default and the module that reads it. <code>SETTINGS.get(name)</code> is the only way engine code reads one, and <code>tests/test_settings.py</code> fails on any other read. <code>EngineSettings(env, prefix)</code> gives the same reads over another mapping or another prefix, which is how a profile file can be described or a second configuration built in a test.</p>
+<h3 id="what-a-drafter-reads">What a drafter reads<a class="headerlink" href="#what-a-drafter-reads" title="Permanent link">&para;</a></h3>
+<p>A drafter reads parts of the target: hidden states at some layers, the embedding, the head. Each drafter declares these through <code>Drafter.requires()</code>:</p>
+<table>
+<thead>
+<tr>
+<th>key</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hidden_size</code></td>
+<td>the width of the hidden states its taps read</td>
+</tr>
+<tr>
+<td><code>tap_layers</code></td>
+<td>the target layers it reads</td>
+</tr>
+<tr>
+<td><code>tensors</code></td>
+<td>target tensors it reads by name, such as the head</td>
+</tr>
+<tr>
+<td><code>vocab_size</code></td>
+<td>the id space of its proposals</td>
+</tr>
+</tbody>
+</table>
+<p>At load, <code>engine.drafters.check_target</code> compares these with the target and refuses a mismatch by name. A DFlash2 drafter trained for another model fails there instead of drafting garbage. The lookup drafter's stores record the tokenizer's sha256 (<code>engine/tokfp.py</code>). Under another tokenizer a read skips the store with one log line, and a write refuses it.</p>
+<p>A new model needs its own block drafter. DFlash2 drafters are trained against one target's hidden states, and a drafter from another model accepts nothing. The lookup drafter works for any model once its corpus is rebuilt with the new tokenizer (<code>tools/build_corpus.py</code>).</p>
+<h3 id="the-tokenizer-and-the-chat-template">The tokenizer and the chat template<a class="headerlink" href="#the-tokenizer-and-the-chat-template" title="Permanent link">&para;</a></h3>
+<p>The server renders prompts with the model's own chat template and reads the model's own tool-call and reasoning formats. For Qwen3.8 that means the <code>&lt;think&gt;</code> block, which the template opens in the prompt, and tool calls in the model's XML form (<code>server/api/toolcall.py</code>). A model with another format needs its own parser behind the same OpenAI output. <code>tests/fixtures/qwen38_chat_template.jinja</code> is the fixture the server tests render with.</p>
+<h3 id="what-a-family-declares">What a family declares<a class="headerlink" href="#what-a-family-declares" title="Permanent link">&para;</a></h3>
+<p>A family's <code>arch.py</code> registers its entry; <code>engine/models/__init__.py</code> imports every package's <code>arch.py</code> and keeps the entries in their <code>rank</code> order. Besides the import paths, an entry carries what the shared code needs to know, as data:</p>
+<table>
+<thead>
+<tr>
+<th>field</th>
+<th>what it says</th>
+<th>read by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>spec</code></td>
+<td><code>ServeSpec(tool_format, reasoning)</code>: the form the model writes tool calls in (a name in <code>server/api/toolformats/</code>) and <code>ReasoningSpec(opens_itself)</code>, a model that writes its own <code>&lt;think&gt;</code></td>
+<td>the request loop, the conductor's checks, the forced-call constraint</td>
+</tr>
+<tr>
+<td><code>shares</code>, <code>uses</code></td>
+<td>the package's files other families build on, and the other packages' files this family builds on</td>
+<td>the guards: a manifest or an import across packages must be declared, and a change to a shared file moves exactly its dependents' fingerprints</td>
+</tr>
+<tr>
+<td><code>hooks</code></td>
+<td><code>EngineHooks(pdl, side_stream)</code>: launch options the family turns on in the shared kernels, which take them as plain arguments</td>
+<td>the family's engine</td>
+</tr>
+<tr>
+<td><code>default</code></td>
+<td>the family a server without a checkpoint directory serves (one family is)</td>
+<td>the loader</td>
+</tr>
+</tbody>
+</table>
+<p>A family's own knobs go in its package's <code>knobs.py</code> (a <code>KNOBS</code> table of the same shape as <code>engine/settings.py</code>'s), which joins the shared table at import and belongs in the family's manifest. A family's own C++ or CUDA kernel is a source file in its package: a module <code>engine/models/&lt;family&gt;/&lt;name&gt;.py</code> that compiles it keeps the sources in <code>engine/models/&lt;family&gt;/csrc/&lt;name&gt;/</code> and builds through <code>engine/native_build.py</code> (<a href="../kernels/#where-the-source-lives">kernels.md</a>); the folder counts in the fingerprint with the module. A tool-call form the server does not know yet is a module in <code>server/api/toolformats/</code> behind the <code>ToolFormat</code> interface (rewrite to the JSON tier, a stream reader, the diagnosis of a broken block, the reminder's example line, the forced-call constraint); <code>tests/test_toolformats.py</code> runs the same contract on every form. TandemApp's conductor reads calls with its own copy (<code>tandemapp/toolformats/</code>), so a new form lands there too, with its cases in <code>contracts/engine-api-v1/toolcalls/</code>, which both copies must pass. A model that is the base of community packs says so in its <code>model.yaml</code> (<code>community_base</code>), and its package writes their weight profiles and checks their files (<code>community.py</code>, named by <code>community_base.hook</code>).</p>
+<h3 id="the-model-layer-architecture-registry-and-per-model-state">The model layer: architecture registry and per-model state<a class="headerlink" href="#the-model-layer-architecture-registry-and-per-model-state" title="Permanent link">&para;</a></h3>
+<p><code>engine/models/__init__.py</code> says which architecture a checkpoint is. Each entry names the checkpoint's <code>architectures</code> strings and <code>model_type</code>s, a config reader and an engine class by import path, so registering a model imports nothing. <code>architecture(raw_config)</code> returns the entry, or fails with a message that names the checkpoint's architecture and every registered one.</p>
+<table>
+<thead>
+<tr>
+<th>name</th>
+<th>selected by</th>
+<th>config</th>
+<th>engine</th>
+<th>server builder</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>qwen3_5</code></td>
+<td><code>Qwen3_5ForConditionalGeneration</code>, <code>qwen3_5_text</code></td>
+<td><code>engine.config.load_config</code></td>
+<td><code>engine.models.qwen3_5.adapter.Qwen38Engine</code> (engine/model.py's class with the adapter's cold verbs)</td>
+<td><code>engine.models.qwen3_5.serving.serve</code> (the default family)</td>
+</tr>
+<tr>
+<td><code>qwen4_exp</code></td>
+<td><code>Qwen4ExpForConditionalGeneration</code>, <code>qwen4_exp_text</code></td>
+<td><code>engine.models.flashnext.config.load_flashnext_config</code></td>
+<td><code>engine.models.flashnext.engine.FlashNextEngine</code></td>
+<td><code>engine.models.flashnext.serving.serve</code></td>
+</tr>
+<tr>
+<td><code>lfm2_moe</code></td>
+<td><code>Lfm2MoeForCausalLM</code>, <code>lfm2_moe</code></td>
+<td><code>engine.models.lfm2_moe.config.load_lfm2_moe_config</code></td>
+<td><code>engine.models.lfm2_moe.engine.Lfm2MoeEngine</code></td>
+<td><code>engine.models.lfm2_moe.serving.serve</code></td>
+</tr>
+<tr>
+<td><code>nemotron_h</code></td>
+<td><code>NemotronHForCausalLM</code>, <code>NemotronHPuzzleForCausalLM</code>, the Omni architectures, <code>nemotron_h</code>, <code>nemotron_h_puzzle</code></td>
+<td><code>engine.models.nemotron_h.config.load_nemotron_h_config</code></td>
+<td><code>engine.models.nemotron_h.engine.NemotronHEngine</code></td>
+<td><code>engine.models.nemotron_h.serving.serve</code></td>
+</tr>
+</tbody>
+</table>
+<p>The server has one loader (<code>server/app.py</code> <code>_load</code>, SRV-341). An entry's <code>serve</code> names the function that builds the model for it, <code>serve(a, ctx) -&gt; dict</code>: the engine in the server loop's interface, the tokenizer, the drafter, the snapshot path, the device, the tree mode and accept rule, and its own record for <code>/health</code> (<code>weights_info</code>); <code>ctx.keys(path, weights)</code> sets the tokenizer's and the weights' fingerprints, <code>ctx.mark(stage)</code> writes the load ledger, <code>ctx.log(line)</code> the log. The engine says what the server may ask of it beyond the loop's verbs in <code>caps</code> (<code>engine/models/adapter.py</code> <code>Capabilities</code>: the caches and the KV pool, side slots, the cache grid, the shadow reader, joint verify); the loader turns off, with a log line, what a model cannot hold yet. Its cold verbs are <code>cost()</code>, <code>manifest()</code>, <code>precapture(drafter)</code>, <code>settle()</code>, <code>discard_pending()</code>, <code>trim_pending(n)</code>; the walk of a verified block is <code>engine/methods/walk.py</code> for every model. A model registered this way starts and answers without an edit under <code>server/</code> (<code>tests/test_load_shared.py</code> registers a third one on CPU).</p>
+<p><code>engine/models/state.py</code> is the cache state interface (<code>ModelState</code>), and every cache tier reads a sequence through it (<code>eng.cache_state()</code>, ENG-157). Its sections are the recurrent state by name, copied whole; its views are the position-indexed buffers with their token axis, sliced by length. It has <code>nbytes</code>, <code>clone</code>, <code>restore</code> and a signature that refuses a restore across shapes. The 27B's state is <code>Qwen38State</code>: sections <code>gdn.S</code> and <code>gdn.conv</code> (the same tensors, so a restore lands in the buffers its graphs captured), views K and V. Flash-Next's is <code>FlashNextCacheState</code> (<code>serving.py</code>): 36 GDN states and conv tails, the n-gram convolution and its token context, and <code>mtp.h_last</code> as sections (110.3 MiB); K, V and the indexer keys of its 12 attention layers as views, with the MTP layer's own rows from its drafter (29,952 bytes a token). A model without recurrent state has no sections. <code>tests/test_cache_any_model.py</code> runs a made-up state through every tier with no edit in the cache code.</p>
+<p>A model's own code lives in its package under <code>engine/models/</code>. The disk tier's fingerprint v2 (<code>engine/disk_cache.py</code>) leaves <code>engine/models/</code> and <code>engine/methods/</code> out, together with knobs owned under <code>engine/models/</code> and <code>tools/fn_</code>, so adding a model sweeps none of the 27B's saved sessions (<code>tests/test_fn_fingerprint.py</code>). Fingerprint v3 (<code>engine/methods/manifest.py</code>) hashes what the adapter's <code>manifest()</code> lists: the model's files that compute stored rows, the knob registry, its own tile tables; the <code>tools/</code> kernels they import, every listed module's C++ and CUDA source files (<code>csrc/</code>) and the tables their knobs name follow. A new model writes its <code>manifest()</code> (Flash-Next: <code>engine/models/flashnext/serving.py</code>), and its fingerprint then moves with its kernels and tables and with nothing else (<code>tests/test_fp_v3.py</code>).</p>
+<h2 id="the-tests-a-new-model-must-pass">The tests a new model must pass<a class="headerlink" href="#the-tests-a-new-model-must-pass" title="Permanent link">&para;</a></h2>
+<p>In this order, each on the new model:</p>
+<ol>
+<li><code>tools/refcheck.py</code>: argmax agreement with the published reference implementation on teacher-forced positions. The reference runs in its own process, because only one model fits on the board at a time. On Qwen3.8 the engine agrees on 99.25 % of 400 positions and on all 242 confident ones.</li>
+<li><code>tools/quality_gate.py</code> for every quantised weight set (<a href="../quantisation/">quantisation.md</a>).</li>
+<li><code>tools/verify_spec.py</code>, the agreement gate with its near-tie rule, with every drafter (<a href="../exactness/">exactness.md</a>).</li>
+<li>The CPU suite, including <code>tests/test_refactor_gate.py</code>. That test records the exact bytes of a tiny model's run (every logit and every byte of state after a prefill, a decode, a block verify, a rollback, a tree verify and a commit) and fails if any byte moves. A change that is supposed to change arithmetic re-records the fixture and says why.</li>
+<li><code>ops/gate.sh</code> and the client smoke set before the numbers are published (<a href="../measurement/">measurement.md</a>).</li>
+</ol>
+<p>Flash-Next took the same gates in its own form, and a new model should take them too:</p>
+<ul>
+<li><code>tests/test_load_shared.py</code>: the model starts through the one loader, and no model name, <code>hasattr(eng</code> or <code>isinstance(eng</code> appears under <code>server/</code>.</li>
+<li><code>tests/test_cache_any_model.py</code> and the model's own cache test: a restore from every tier equals a cold prefill.</li>
+<li><code>tests/test_fp_v3.py</code>: the model's fingerprint v3 moves with its kernels and tables and with nothing else, and the 27B's does not move.</li>
+<li>The load-time self-check: a recorded decode replayed as chains and trees of every verify width, every row bit for bit (3,936 rows on Flash-Next 3.05). A difference turns speculation off for the process and names the layer and the row.</li>
+<li><code>tools/fn_spec_check.py</code> and <code>tools/fn_server_check.py --compare</code>: speculative greedy equals plain greedy, in the engine and through the server, and seeded sampled answers equal their plain twins (<code>--sampled</code>).</li>
+</ul>
+<h2 id="what-is-still-specific-to-qwen38">What is still specific to Qwen3.8<a class="headerlink" href="#what-is-still-specific-to-qwen38" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>engine/model.py</code> implements this family's forward: the Gated DeltaNet layer with its gated norm, attention with a gated output and partial rotary, and the dense MLP. A new family needs its own layer code behind the same verify, commit and cache interfaces. A model with a mixture of experts also needs expert routing inside the verify.</li>
+<li>The second family, Qwen3.8-Flash-Next (<code>engine/models/flashnext/</code>, turboderp's EXL3 packs), is served through the same server and request loop with its MTP drafter, the same caches, the KV pool and side slots (<a href="../server/#qwen38-flash-next-srv-87">server.md</a>, <a href="../caches/#what-a-state-is">caches.md</a>); it reads images through its own tower, which its builder hands to the server's image path (<code>ctx.vision</code>, VIS-97).</li>
+<li>The recurrent-layer kernels assume Gated DeltaNet's state shape (heads of 128 by 128).</li>
+<li>Tile tables and router prices are measured for each model's shapes on the GB10. A new model or a new board needs its own sweep (<code>tools/fp8_probe.py --sweep</code>, <code>tools/nvfp4_skinny.py</code>, Flash-Next's <code>tools/fn_tiles.py</code>) and its own price file. A kernel registry keyed by op, weight format and device (ENG-251) and device profiles (ENG-255) are planned, not built.</li>
+<li>Some modules read their switches into globals at import. Two engines with different settings cannot share one process yet.</li>
+<li>Runtime names still carry the old project name, from the <code>QWEN38_</code> and <code>QSE_</code> variable prefixes to the <code>Qwen38Engine</code> class. A later release renames them.</li>
+</ul>
+<h2 id="register-the-model-for-the-setup-guide">Register the model for the setup guide<a class="headerlink" href="#register-the-model-for-the-setup-guide" title="Permanent link">&para;</a></h2>
+<p>The dashboard's setup guide (<code>#/setup</code>, <a href="../setup/">setup.md</a>) lists one tile per <code>models/&lt;id&gt;/model.yaml</code>. The folder is named after the model's id, and the file follows schema 1: the weight profiles (one per <code>ops/profiles/&lt;name&gt;.env</code>), the measured table, the tools that run beside the model with their memory and serve.env keys, the parallelism limits, the methods and the device presets. <a href="https://github.com/TandemLLM/TandemEngine/blob/main/models/README.md">models/README.md</a> lists the fields; <code>models/qwen3.8-27b/model.yaml</code> is the worked example, with the source of every number next to it.</p>
+<div class="highlight"><pre><span></span><code>models/&lt;id&gt;/model.yaml                  the registry entry
+models/&lt;id&gt;/measurements/&lt;build&gt;-*.json the raw data the measured table came from (optional)
+models/schema/model.schema.json         the schema, for an editor (python -m server.setup.registry --schema)
+</code></pre></div>
+<p>Check a new file with <code>python -m server.setup.registry --check</code>. It refuses a file whose numbers do not add up (two recommended profiles, a tool that needs one that is off, a docs link that is not there), and <code>tests/test_setup_registry.py</code> fails when the file names a serve.env key nothing reads or when a profile in <code>ops/profiles/</code> has no entry. Memory is in GiB and comes from the engine's own <code>[memory] load stages</code> line and the dashboard's memory split, never from a guess.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../quality-gate/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Quality gate">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Quality gate
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../shadow-reader/" class="md-footer__link md-footer__link--next" aria-label="Next: The shadow reader">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                The shadow reader
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1806 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/remote-control/">
+      
+      
+        <link rel="prev" href="../community-weights/">
+      
+      
+        <link rel="next" href="../pairing/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Remote control - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#remote-control" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Remote control
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-keys-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      The key's line
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-verbs" class="md-nav__link">
+    <span class="md-ellipsis">
+      The verbs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-settings-overlay" class="md-nav__link">
+    <span class="md-ellipsis">
+      The settings overlay
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Extensions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      Upgrades
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-http-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      The HTTP token
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-journal" class="md-nav__link">
+    <span class="md-ellipsis">
+      The journal
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-keys-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      The key's line
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-verbs" class="md-nav__link">
+    <span class="md-ellipsis">
+      The verbs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-settings-overlay" class="md-nav__link">
+    <span class="md-ellipsis">
+      The settings overlay
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Extensions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      Upgrades
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-http-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      The HTTP token
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-journal" class="md-nav__link">
+    <span class="md-ellipsis">
+      The journal
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="remote-control">Remote control<a class="headerlink" href="#remote-control" title="Permanent link">&para;</a></h1>
+<p><code>tandem remote</code> is the engine's control CLI for a controller on another machine. The controller reaches the engine box over SSH with a key whose line in <code>authorized_keys</code> runs only <code>tandem remote</code>: the key can start, stop and restart the engine, switch its mode, change its settings, install extensions, upgrade the engine, set the HTTP token, read its logs and run its checks, and nothing else. No shell, no terminal, no port forward. No sudo is needed. The contract is <a href="https://github.com/TandemLLM/TandemEngine/blob/main/contracts/engine-ctl-v1/README.md">contracts/engine-ctl-v1</a>; the code is <code>server/remote/</code>. Pairing by code puts the key's line in place (<a href="../pairing/">pairing.md</a>).</p>
+<h2 id="the-keys-line">The key's line<a class="headerlink" href="#the-keys-line" title="Permanent link">&para;</a></h2>
+<p>One line in <code>~/.ssh/authorized_keys</code> of the user that installed the engine:</p>
+<div class="highlight"><pre><span></span><code>command="/bin/bash /home/u/TandemLLM/bin/tandem remote --key-id ctl-1",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAA... ctl-1
+</code></pre></div>
+<ul>
+<li><code>command=</code> is the forced command: sshd runs it whatever the client asks, and hands the client's command over in <code>SSH_ORIGINAL_COMMAND</code>. It goes through <code>bash</code>, as every call of the engine's scripts does.</li>
+<li><code>--key-id</code> names the key. <code>unpair</code> removes the line that carries it. Without it, <code>unpair</code> needs sshd's <code>ExposeAuthInfo yes</code>.</li>
+<li><code>from="192.0.2.0/24"</code> before <code>command=</code> narrows the addresses the key works from.</li>
+</ul>
+<p>A call:</p>
+<div class="highlight"><pre><span></span><code>ssh -i ctl-1 u@engine-box status
+ssh -i ctl-1 u@engine-box 'settings plan MAX_QUEUE=4'
+</code></pre></div>
+<p>By hand on the box, the same verbs: <code>bin/tandem remote status</code>.</p>
+<h2 id="the-verbs">The verbs<a class="headerlink" href="#the-verbs" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>verb</th>
+<th>what</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>status</code></td>
+<td>the engine's state (healthy, loading, draining, failed, down), its pid, port, release (<code>engine_version</code>), <code>engine_api</code>, the configured and the running mode, the overlay version, the last job; answers with the engine down</td>
+</tr>
+<tr>
+<td><code>start</code>, <code>stop</code></td>
+<td>a job that starts the engine (an install's <code>bin/tandem start</code>, else <code>ops/start.sh</code>) or stops it (<code>ops/stop.sh</code>); a stop stays a stop: <code>ops/watchdog.sh</code> leaves the engine down until the next start</td>
+</tr>
+<tr>
+<td><code>restart [--when now\|idle\|at=TIME] [--deadline S]</code></td>
+<td>stop, then start. <code>idle</code> waits until no request runs or waits (the Setup Guide's rule), at most <code>--deadline</code> seconds (600); past it the job fails with nothing changed. <code>at=2026-11-16T03:00:00Z</code> waits until then, then as idle. The default is now</td>
+</tr>
+<tr>
+<td><code>mode get</code></td>
+<td>the mode serve.env resolves, its source, and whether it was inferred from an empty <code>QSE_MODE</code></td>
+</tr>
+<tr>
+<td><code>mode set engine\|chat [--ext NAME] [--when ...]</code></td>
+<td>writes <code>QSE_MODE</code> and <code>QSE_EXT</code> into the overlay, never an empty mode, and restarts (default <code>idle</code>)</td>
+</tr>
+<tr>
+<td><code>settings get [KEY ...]</code></td>
+<td>every key with its value, its source (default, install, profile, setup, local, managed, mode), its type, its restart class and whether it feeds the disk cache's fingerprint</td>
+</tr>
+<tr>
+<td><code>settings plan KEY=VALUE ... [--unset KEY]</code></td>
+<td>checks the values, shows what the engine would see after the restart, and gives a confirm token; nothing is written</td>
+</tr>
+<tr>
+<td><code>settings apply KEY=VALUE ... --confirm T [--confirm-fingerprint T] [--when ...]</code></td>
+<td>the same changes as a new overlay version, made current by a restart job (default <code>idle</code>)</td>
+</tr>
+<tr>
+<td><code>settings versions</code>, <code>settings restore N --confirm T</code></td>
+<td>the versions; a restore is a new version with version N's keys</td>
+</tr>
+<tr>
+<td><code>logs [--follow] [--lines N] [--which engine\|launcher]</code></td>
+<td>the engine's log, or what the jobs' start and stop printed (<code>logs/launcher.log</code>); <code>--follow</code> streams one JSON line a log line</td>
+</tr>
+<tr>
+<td><code>doctor</code></td>
+<td><code>tandem doctor --check</code>: each finding with a code and a fix</td>
+</tr>
+<tr>
+<td><code>unpair</code></td>
+<td>removes the <code>authorized_keys</code> line of the key this call came with, and no other</td>
+</tr>
+<tr>
+<td><code>ext list</code></td>
+<td>the extensions in the engine's venv, each read as the engine reads it at load: its name, version and <code>EXT_API</code>, whether this engine takes it, and whether chat mode runs it (1.1)</td>
+</tr>
+<tr>
+<td><code>ext install --sha256 HEX --name FILE.whl [--module M] [--when ...]</code></td>
+<td>an extension's wheel, on stdin, into the venv (below) (1.1)</td>
+</tr>
+<tr>
+<td><code>ext remove DIST [--and-mode engine] [--when ...]</code></td>
+<td>the distribution out of the venv; the one chat mode runs only with <code>--and-mode engine</code> (1.1)</td>
+</tr>
+<tr>
+<td><code>upgrade plan --ref REF</code> or <code>upgrade plan --sha256 HEX</code></td>
+<td>the engine's tree at another release, from the origin or from an archive on stdin: what changes and a confirm token (1.1)</td>
+</tr>
+<tr>
+<td><code>upgrade apply ... --confirm T [--when ...]</code></td>
+<td>the upgrade as a job (default <code>idle</code>), rolled back when it fails (1.1)</td>
+</tr>
+<tr>
+<td><code>token rotate</code></td>
+<td>a new HTTP token, answered on this channel only (1.1)</td>
+</tr>
+</tbody>
+</table>
+<p>Every answer is one JSON document with <code>ok</code>, and the exit status says the same: 0 ok, 1 not ok (doctor found something, or the venv's installer failed), 2 usage, 3 refused, 4 busy (a job acts), 5 internal. Lifecycle verbs answer at once with their job; <code>status</code> follows it. One job acts at a time; a new one replaces a job that still waits.</p>
+<h2 id="the-settings-overlay">The settings overlay<a class="headerlink" href="#the-settings-overlay" title="Permanent link">&para;</a></h2>
+<p>The settings a controller changes live in their own file, <code>run/managed.env</code> of the engine's tree, read by <code>ops/serve.env</code> after an install's <code>run/local.env</code> and before the mode is applied. <code>ops/serve.env</code> and the profiles are never edited. Each apply writes a new version, <code>run/managed.d/&lt;n&gt;.env</code>; <code>manifest.json</code> names the current one and the good one, the last the engine reached <code>/health</code> with. A start with a new version that does not reach <code>/health</code> puts the good version back, starts the engine again, and the job reports both.</p>
+<p>The keys are the ones <code>ops/serve.env</code> sets or documents. The install's (paths, the address), the weight profile's (weights, drafters, corpus, the model's flags) and <code>QSE_BACKENDS</code> are not the overlay's. A value is letters, digits and <code>. _ , : = @ % + / -</code>, with <code>${HOME}</code> and <code>${REPO}</code> the only expansions; a path lies under the install or <code>~/.qwen38-spark-engine</code>.</p>
+<p>A key that feeds the disk cache's fingerprint (the <code>QWEN38_*</code> arithmetic switches, the weight and drafter arguments, <code>NARROW_ARM</code>, <code>FUSE_PROJ</code>) changes which saved prefixes and parked chats the engine can read: after the restart they all miss. Its plan says so and gives a second token, and the apply needs both. With an empty overlay, <code>ops/start.sh</code> starts the engine with the command line and environment it had before the overlay existed.</p>
+<p>An install whose <code>run/ops/serve.env</code> was written by an older release does not read the overlay; <code>settings plan</code> says so (<code>hook_missing</code>) until the installer runs again.</p>
+<h2 id="extensions">Extensions<a class="headerlink" href="#extensions" title="Permanent link">&para;</a></h2>
+<p>An extension is an engine-ext-v1 module the engine loads in chat mode (<code>QSE_EXT</code>). <code>ext install</code> takes its wheel on stdin:</p>
+<div class="highlight"><pre><span></span><code>ssh -i ctl-1 u@engine-box "ext install --sha256 $(sha256sum x-1.0-py3-none-any.whl | cut -d' ' -f1) --name x-1.0-py3-none-any.whl" &lt; x-1.0-py3-none-any.whl
+</code></pre></div>
+<ul>
+<li>The bytes are refused, with nothing written, when their sha256 is not <code>--sha256</code>, when they are more than 256 MiB, or when they are not a wheel whose METADATA names the file's distribution and version.</li>
+<li>The extension module is the one <code>--module</code> names, else the one the wheel's entry point group <code>tandemllm.engine_ext</code> names, else its one <code>&lt;package&gt;/engine_ext</code> module.</li>
+<li><code>ops/venv-wheel.sh</code> installs it into the install's venv, with the engine's pins (<code>run/requirements.lock</code>) as constraints, the same way <code>install.sh --with-chat --app-wheel</code> installs the chat's wheel. Only an install has a venv: a checkout is refused.</li>
+<li>The answer reads the module back as the engine's extension host does. <code>run/remote/extensions.json</code> keeps its distribution, module, wheel and sha256.</li>
+<li>The running engine keeps the code it loaded. The answer says a restart is needed; <code>--when now|idle|at=TIME</code> starts the restart job.</li>
+</ul>
+<p><code>ext remove DIST</code> uninstalls the distribution. If its module is the extension chat mode runs, the call is refused unless <code>--and-mode engine</code> is given; then the overlay gets <code>QSE_MODE=engine</code> and an empty <code>QSE_EXT</code>, as <code>mode set engine</code> writes them, and a restart job (default <code>idle</code>) makes them current.</p>
+<h2 id="upgrades">Upgrades<a class="headerlink" href="#upgrades" title="Permanent link">&para;</a></h2>
+<p><code>upgrade</code> puts the install's tree at another release. Only an install has one: <code>DIR/src</code> is the git checkout <code>install.sh</code> made, and it must have no local changes.</p>
+<div class="highlight"><pre><span></span><code>ssh -i ctl-1 u@engine-box 'upgrade plan --ref v0.16.0'
+git archive --format=tar.gz v0.16.0 | ssh -i ctl-1 u@engine-box "upgrade plan --sha256 $SHA"
+ssh -i ctl-1 u@engine-box "upgrade apply --sha256 $SHA --confirm $TOKEN --when idle"
+</code></pre></div>
+<ul>
+<li><code>--ref</code> fetches the install's origin and resolves REF as <code>install.sh</code> does (a tag, a branch, a commit). An archive comes on stdin, at most 512 MiB, the tree at its root (<code>git archive</code> without <code>--prefix</code>). Its sha256 must be <code>--sha256</code>. Absolute paths, <code>..</code>, links that leave the tree and macOS <code>._</code> files are refused. The plan keeps it as <code>run/remote/upgrades/&lt;sha256&gt;.tar</code> for the apply.</li>
+<li>The target must have <code>tandem remote</code> and an <code>install.sh</code> that takes <code>--update</code> and <code>--no-fetch</code>, so the key still reaches the engine afterwards.</li>
+<li>The plan names both trees (commit, version, engine API, this contract's version, the venv's pins), whether the venv is synced to new pins, what is kept and the steps, and gives a token bound to the current commit and the target.</li>
+<li>The job, once it acts:</li>
+<li>keeps the previous tree: its commit as <code>refs/tandem/previous</code>, and a copy of <code>run/ops</code>, <code>bin/tandem</code> and its <code>install.sh</code>;</li>
+<li>stops the engine;</li>
+<li>makes an archive a commit of <code>src</code>'s repository;</li>
+<li>runs the target's <code>install.sh --update --no-fetch --ref COMMIT</code>: the checkout, the venv synced to its pins, <code>run/ops</code> and <code>bin/tandem</code> written again with this install's keys, no weights, no start;</li>
+<li>starts the engine.</li>
+<li>A failed install or a start that does not reach <code>/health</code> rolls back: the previous commit checked out, the venv synced back with the previous <code>install.sh --update</code> when the pins changed, <code>run/ops</code> and <code>bin/tandem</code> put back byte for byte, the engine started again. The job fails and says <code>rolled_back</code>.</li>
+<li>The overlay, <code>run/local.env</code>, the weights, the logs and the engine's data are not touched.</li>
+</ul>
+<h2 id="the-http-token">The HTTP token<a class="headerlink" href="#the-http-token" title="Permanent link">&para;</a></h2>
+<p><code>token rotate</code> makes a random token and answers it on this SSH channel, and nowhere else: it is in no log and no journal. The engine box keeps only its sha256, in the tree's <code>run/http-token</code> (mode 600). The engine reads the file again within a second, so a rotation needs no restart and the old token stops working.</p>
+<p>Each paired key has a token of its own: pairing writes its hash on a line that names the key id (<code>sha256:&lt;hex&gt; ID</code>), <code>token rotate</code> over a key's channel replaces only that key's line, and <code>unpair</code> removes it with the key's line. By hand on the box (no key id), <code>token rotate</code> replaces the whole file. A token of any line passes. The line <code>sha256:&lt;hex&gt; *</code> is an install's lock before pairing: a token nobody holds (<a href="../pairing/">pairing.md</a>).</p>
+<p>While the file exists, a caller that is not on the engine's host needs <code>Authorization: Bearer &lt;token&gt;</code> on every route, inference included, or it gets 401. A caller on this host (loopback, without <code>X-Forwarded-For</code> or <code>X-Real-IP</code>) needs none, so the watchdog, the status checks and a controller on the same box keep working. <code>/health</code>, <code>/healthz</code>, <code>/v1/health</code>, <code>/readyz</code> and <code>/metrics/up</code> answer without it: a probe or a controller can tell a down engine from one that refuses it. Without the token, <code>/health</code> gives only its status; with it, the full body follows the admin rule (docs/server.md).</p>
+<p><code>QSE_ALLOW_FROM</code> (addresses and CIDRs, comma-separated; empty: every address) answers 403 to any other address on every route, the status included. Loopback always passes. It is a managed setting that changes live: <code>PATCH /v1/engine/settings</code> from this host, or with the token, or <code>settings apply</code> over SSH, which restarts. Engine API 1.9 has the details (<code>contracts/engine-api-v1</code>, "Access").</p>
+<p>The status responder (<code>ops/engine_status.py</code>), which answers while the engine restarts, takes no token. Set <code>QSE_STATUS_HOST=127.0.0.1</code> when nothing outside the host may read it.</p>
+<h2 id="the-journal">The journal<a class="headerlink" href="#the-journal" title="Permanent link">&para;</a></h2>
+<p>Every call, refused ones included, is one line of <code>run/remote/journal.jsonl</code>: the UTC time, the verb, its arguments (the value of a secret-looking key cut out), the exit status, the duration, the key id and the address it came from. <code>ext install</code> and <code>upgrade</code> add the sha256 of the bytes they checked (<code>checked</code>), and a <code>PATCH /v1/engine/settings</code> is a line too (<code>via</code> http). Past 4 MiB the file moves to <code>journal.jsonl.1</code>, up to three old files.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../community-weights/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Community weights">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Community weights
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../pairing/" class="md-footer__link md-footer__link--next" aria-label="Next: Pairing">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Pairing
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

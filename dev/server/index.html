@@ -1,0 +1,2927 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/server/">
+      
+      
+        <link rel="prev" href="../caches/">
+      
+      
+        <link rel="next" href="../parallel-requests/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Server and API - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#server-and-api" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Server and API
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Routes
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Routes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-admin-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      The admin rule
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-http-token-and-the-allow-from-list-engine-api-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      The HTTP token and the allow-from list (engine API 1.9)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-api-supports" class="md-nav__link">
+    <span class="md-ellipsis">
+      What the API supports
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What the API supports">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cache_prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      cache_prompt
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reasoning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reasoning
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reasoning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#thinking-budgets-from-the-client" class="md-nav__link">
+    <span class="md-ellipsis">
+      Thinking budgets from the client
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tool-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tool calls
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structured-outputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structured outputs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#streaming" class="md-nav__link">
+    <span class="md-ellipsis">
+      Streaming
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Streaming">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#speed-and-draft-fields-timings-and-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Speed and draft fields: timings and metrics
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-long-prefill-and-a-client-that-leaves" class="md-nav__link">
+    <span class="md-ellipsis">
+      A long prefill, and a client that leaves
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admission-and-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Admission and limits
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Admission and limits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-side-lane-0327-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      The side lane (0.3.27-test)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-turn-behind-a-running-turn-2026-10-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      A turn behind a running turn (2026-10-05)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parallel-requests-0338-test-parallel-n-off-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      Parallel requests (0.3.38-test, --parallel N, off by default)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-model-as-two-stage-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      One model as two stage processes
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="One model as two stage processes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-stage-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      The stage block
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#qwen38-flash-next-srv-87" class="md-nav__link">
+    <span class="md-ellipsis">
+      Qwen3.8-Flash-Next (SRV-87)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#images" class="md-nav__link">
+    <span class="md-ellipsis">
+      Images
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chat-mode-the-conductor-as-an-extension" class="md-nav__link">
+    <span class="md-ellipsis">
+      Chat mode: the conductor as an extension
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Chat mode: the conductor as an extension">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#probe-snapshots-and-the-probe-stage-eng-181" class="md-nav__link">
+    <span class="md-ellipsis">
+      Probe snapshots and the probe stage (ENG-181)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-models-stage-a" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decision models (stage A)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision models (stage A)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#session-addresses-0323-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      Session addresses (0.3.23-test)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#draining" class="md-nav__link">
+    <span class="md-ellipsis">
+      Draining
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logs-and-privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Logs and privacy
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-and-penalties" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sampling and penalties
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-tool-argument-loop-guard-0326-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      The tool-argument loop guard (0.3.26-test)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The tool-argument loop guard (0.3.26-test)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#three-copies-of-a-long-unit-0340-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      Three copies of a long unit (0.3.40-test)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-stopped-call-sent-back-and-the-retry-storm-0340-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      A stopped call sent back, and the retry storm (0.3.40-test)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Routes
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Routes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-admin-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      The admin rule
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-http-token-and-the-allow-from-list-engine-api-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      The HTTP token and the allow-from list (engine API 1.9)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-api-supports" class="md-nav__link">
+    <span class="md-ellipsis">
+      What the API supports
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What the API supports">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cache_prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      cache_prompt
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reasoning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reasoning
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reasoning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#thinking-budgets-from-the-client" class="md-nav__link">
+    <span class="md-ellipsis">
+      Thinking budgets from the client
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tool-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tool calls
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structured-outputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structured outputs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#streaming" class="md-nav__link">
+    <span class="md-ellipsis">
+      Streaming
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Streaming">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#speed-and-draft-fields-timings-and-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Speed and draft fields: timings and metrics
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-long-prefill-and-a-client-that-leaves" class="md-nav__link">
+    <span class="md-ellipsis">
+      A long prefill, and a client that leaves
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admission-and-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Admission and limits
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Admission and limits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-side-lane-0327-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      The side lane (0.3.27-test)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-turn-behind-a-running-turn-2026-10-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      A turn behind a running turn (2026-10-05)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parallel-requests-0338-test-parallel-n-off-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      Parallel requests (0.3.38-test, --parallel N, off by default)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-model-as-two-stage-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      One model as two stage processes
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="One model as two stage processes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-stage-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      The stage block
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#qwen38-flash-next-srv-87" class="md-nav__link">
+    <span class="md-ellipsis">
+      Qwen3.8-Flash-Next (SRV-87)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#images" class="md-nav__link">
+    <span class="md-ellipsis">
+      Images
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chat-mode-the-conductor-as-an-extension" class="md-nav__link">
+    <span class="md-ellipsis">
+      Chat mode: the conductor as an extension
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Chat mode: the conductor as an extension">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#probe-snapshots-and-the-probe-stage-eng-181" class="md-nav__link">
+    <span class="md-ellipsis">
+      Probe snapshots and the probe stage (ENG-181)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-models-stage-a" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decision models (stage A)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision models (stage A)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#session-addresses-0323-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      Session addresses (0.3.23-test)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#draining" class="md-nav__link">
+    <span class="md-ellipsis">
+      Draining
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logs-and-privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Logs and privacy
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-and-penalties" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sampling and penalties
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-tool-argument-loop-guard-0326-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      The tool-argument loop guard (0.3.26-test)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The tool-argument loop guard (0.3.26-test)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#three-copies-of-a-long-unit-0340-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      Three copies of a long unit (0.3.40-test)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-stopped-call-sent-back-and-the-retry-storm-0340-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      A stopped call sent back, and the retry storm (0.3.40-test)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="server-and-api">Server and API<a class="headerlink" href="#server-and-api" title="Permanent link">&para;</a></h1>
+<p><code>server/app.py</code> speaks the OpenAI HTTP API, so any OpenAI client can use the engine by changing its base URL. It is built on the Python standard library (<code>ThreadingHTTPServer</code>), with no web framework. This page covers the routes and the request fields, then tool calls and structured outputs, then how the service behaves under load.</p>
+<h2 id="routes">Routes<a class="headerlink" href="#routes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>route</th>
+<th>who may call it</th>
+<th>what</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /v1/chat/completions</code></td>
+<td>anyone</td>
+<td>chat, streamed or not</td>
+</tr>
+<tr>
+<td><code>POST /v1/completions</code></td>
+<td>anyone</td>
+<td>plain text completion</td>
+</tr>
+<tr>
+<td><code>GET /v1/models</code></td>
+<td>anyone</td>
+<td>the served model name, and <code>TandemLLM</code> when the conductor is on</td>
+</tr>
+<tr>
+<td><code>GET /v1/replica/identity</code></td>
+<td>as <code>/v1/models</code></td>
+<td>what two engines compare before they serve one model as replicas: the code, the model's family and layers, the weights, drafters, rows and tokenizer by content, the decode settings and the window (<code>server/identity.py</code>); 503 <code>identity_pending</code> until it is computed, once after the start</td>
+</tr>
+<tr>
+<td><code>GET /health</code></td>
+<td>anyone gets the status; the full body follows the admin rule</td>
+<td>status, queue counters, cache report, memory; on a stage process the <code>stage</code> block (<a href="#one-model-as-two-stage-processes">below</a>)</td>
+</tr>
+<tr>
+<td><code>GET /metrics</code></td>
+<td>the metrics token when one is set, else the admin rule</td>
+<td>Prometheus metrics (<a href="https://github.com/TandemLLM/TandemEngine/blob/main/contracts/engine-api-v1/metrics.md">metrics.md</a>)</td>
+</tr>
+<tr>
+<td><code>GET /v1/cache/stats</code></td>
+<td>the admin rule</td>
+<td>the caches' counters</td>
+</tr>
+<tr>
+<td><code>POST /v1/cache/clear</code></td>
+<td>the admin rule; with a password set, only as a bearer header</td>
+<td>empty the caches in RAM; <code>?tier=disk</code> the disk tier, <code>?tier=all</code> both</td>
+</tr>
+<tr>
+<td><code>POST /v1/cache/peek</code>, <code>/v1/cache/prewarm</code></td>
+<td>the admin rule</td>
+<td>a chat body's warm tokens and their tier before it is sent; the conversation read back from the NVMe while the engine is idle (<a href="../caches/#peek-and-prewarm">caches.md</a>)</td>
+</tr>
+<tr>
+<td><code>/v1/dashboard/*</code></td>
+<td>anyone by default; with a password set and <code>--dashboard-login on</code>, the admin token or a dashboard session</td>
+<td>the engine's own reads: live activity, the system, the log, parallel requests, usage and the request rows (<a href="https://github.com/TandemLLM/TandemEngine/blob/main/contracts/engine-api-v1/README.md#3-engine-dashboard-reads">the contract</a>)</td>
+</tr>
+<tr>
+<td><code>/v1/engine/*</code></td>
+<td>the admin rule</td>
+<td>the engine-only screens: the residency plan, the disk tier, the decision models, the narrator and the shadow reader (<a href="https://github.com/TandemLLM/TandemEngine/blob/main/contracts/engine-api-v1/README.md#9-engine-only-screens-since-15-eng-413-wp5">the contract</a>)</td>
+</tr>
+<tr>
+<td><code>GET</code>, <code>PATCH /v1/engine/settings</code></td>
+<td>reads as <code>/v1/dashboard/*</code>; a change from this box, with the HTTP token or the admin token</td>
+<td>the settings a running engine changes without a restart, today <code>QSE_ALLOW_FROM</code>: a change is a new overlay version, applied at once (engine API 1.9)</td>
+</tr>
+<tr>
+<td><code>POST /v1/systemone</code>, <code>/v1/predict</code></td>
+<td>the admin rule</td>
+<td>typed decisions from the engine's own decision models (below); only with <code>QWEN38_DECIDER_MODELS</code> set</td>
+</tr>
+<tr>
+<td><code>GET /readyz</code></td>
+<td>anyone</td>
+<td>whether a decision model is loaded and warm; only with <code>QWEN38_DECIDER_MODELS</code> set</td>
+</tr>
+<tr>
+<td><code>/v1/conductor/*</code>, <code>/v1/library*</code>, <code>/v1/laya*</code>, <code>/v1/memory*</code>, <code>/dashboard/</code></td>
+<td>reads as <code>/v1/dashboard/*</code>, writes and every memory route the admin rule, the library and Laya anyone</td>
+<td>the extension's routes in chat mode (<a href="#chat-mode-the-conductor-as-an-extension">below</a>); a headless engine answers 404 <code>not_on_engine</code>, and <code>/dashboard/</code> 404 <code>no_ui</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-admin-rule">The admin rule<a class="headerlink" href="#the-admin-rule" title="Permanent link">&para;</a></h3>
+<p>The admin password is the admin token, <code>QSE_ADMIN_TOKEN</code> in <code>secrets.env</code> (mode 600, never in the repository). It is the one switch, and by default it is not set.</p>
+<ul>
+<li>With no password set, the default, every route in the table answers anyone who reaches the port: the dashboard reads, the engine-only screens, the disk tier, the decision models, both cache routes and the full <code>/health</code>, and in chat mode the extension's writes and memory. Keep the server on a trusted network: anyone on it can read and change the configuration and the memory. Only <code>/metrics</code> keeps its own token when <code>QSE_METRICS_TOKEN</code> is set, for Prometheus.</li>
+<li>With a password set, the admin routes need the admin token as a bearer header or a dashboard session. <code>POST /v1/cache/clear</code> takes only the bearer header. Requests from the box itself (loopback, no proxy headers) need no token; the watchdog and the measurement tools depend on that. A bad password stops the start: it must be at least 32 characters.</li>
+</ul>
+<h3 id="the-http-token-and-the-allow-from-list-engine-api-19">The HTTP token and the allow-from list (engine API 1.9)<a class="headerlink" href="#the-http-token-and-the-allow-from-list-engine-api-19" title="Permanent link">&para;</a></h3>
+<p>Before any route, the server checks two things that are off by default (<a href="https://github.com/TandemLLM/TandemEngine/blob/main/server/api/access.py">server/api/access.py</a>):</p>
+<ul>
+<li>With the tree's <code>run/http-token</code> (made by <code>tandem remote token rotate</code>, which answers the token over SSH and keeps only its sha256 here), every caller that is not on this box needs <code>Authorization: Bearer &lt;token&gt;</code>, inference included. Calls from the box itself (loopback, no proxy headers) need none. <code>/health</code> gives its status without it; with it, the full body follows the admin rule as before; <code>/healthz</code>, <code>/v1/health</code>, <code>/readyz</code> and <code>/metrics/up</code> answer too. The admin token passes as well. A rotation counts within a second.</li>
+<li><code>QSE_ALLOW_FROM</code> (addresses and CIDRs): any other address gets 403 on every route; loopback always passes. It changes live through <code>PATCH /v1/engine/settings</code>.</li>
+</ul>
+<p>With neither, the server answers as before. <a href="../remote-control/#the-http-token">remote-control.md</a> has the details.</p>
+<p>The dashboard login (<code>--dashboard-login</code>, from <code>QSE_DASHBOARD_LOGIN</code>, off by default) matters only with a password set: then <code>on</code> makes <code>/v1/dashboard/*</code> need the token or a session too. With no password it changes nothing. Failed logins are throttled per client: a fronting proxy's <code>X-Real-IP</code> is believed only when the TCP peer is loopback (a proxy on this box) or names itself in <code>TANDEM_TRUSTED_PROXY</code> — the LAN shape, where every real client shares the one peer; any other peer is keyed as itself (server/api/auth.py). The proxy must set <code>X-Real-IP</code> itself (<code>proxy_set_header X-Real-IP $remote_addr;</code> in nginx): a proxy that passes the client's own header on lets the client pick its bucket. TandemApp's <a href="https://github.com/TandemLLM/TandemApp/blob/main/docs/dashboard.md#access">dashboard.md</a> says what the page shows.</p>
+<h2 id="what-the-api-supports">What the API supports<a class="headerlink" href="#what-the-api-supports" title="Permanent link">&para;</a></h2>
+<p><code>server/compat.py</code> gives every OpenAI request field one of three answers, and <code>tests/test_compat.py</code> pins the table.</p>
+<ul>
+<li>Honoured: <code>messages</code>, <code>model</code>, <code>stream</code>, <code>stream_options</code>, <code>max_tokens</code>, <code>max_completion_tokens</code>, <code>stop</code>, <code>temperature</code>, <code>top_p</code>, <code>seed</code>, <code>presence_penalty</code>, <code>frequency_penalty</code>, <code>logit_bias</code>, <code>logprobs</code>, <code>top_logprobs</code> (up to 20), <code>n</code> (up to 16, not streamed), <code>tools</code>, <code>tool_choice</code>, <code>parallel_tool_calls</code>, <code>reasoning_effort</code>, <code>response_format</code>, <code>modalities</code> (text output only). Messages may carry <code>image_url</code> parts (see Images below).</li>
+<li>Accepted and without effect by their own definition: <code>user</code>, <code>metadata</code>, <code>store</code>, <code>service_tier</code>, <code>prompt_cache_key</code>, <code>safety_identifier</code>, <code>prediction</code>.</li>
+<li>Refused with a 400 that names the field: <code>audio</code>, <code>functions</code>, <code>function_call</code> (use <code>tools</code>), <code>web_search_options</code>, <code>verbosity</code>, and for completions <code>suffix</code> and <code>echo</code>.</li>
+</ul>
+<p>Fields that are not OpenAI's pass through without a 400, because clients send extensions meant for other servers. The engine reads its own: <code>top_k</code>, <code>min_p</code>, <code>repetition_penalty</code>, <code>no_repeat_ngram_size</code>, <code>max_reasoning_tokens</code>, <code>reasoning_format</code>, <code>draft_temperature</code>, <code>chat_template_kwargs</code> and <code>cache_prompt</code>, and the other servers' thinking-budget shapes (<code>reasoning</code>, <code>thinking</code>, <code>thinking_budget</code>, <code>enable_thinking</code> and more, see Thinking budgets from the client).</p>
+<h3 id="cache_prompt"><code>cache_prompt</code><a class="headerlink" href="#cache_prompt" title="Permanent link">&para;</a></h3>
+<p>The prompt caches are on for every request (<a href="../caches/">caches.md</a>). A request that leaves out <code>cache_prompt</code>, or sends <code>true</code>, resumes from the longest prefix a cache holds, and <code>timings.cache_n</code> counts the tokens it reused. Any other value but <code>false</code> does the same.</p>
+<p><code>cache_prompt: false</code> reads the whole prompt: <code>timings.cache_n</code> is 0 and <code>timings.prompt_n</code> is the prompt's length. A benchmark that measures a cold prompt read sends it. The request also leaves every prompt cache as it was. It reads and writes no state-store entry, no disk-tier anchor and no end anchor, and the response cache neither answers it nor keeps its answer. A conversation already in place is set aside as for another client's. A prompt of up to <code>RESIDENT_GUEST_MAX</code> tokens (8,192 served) and under a quarter of that conversation runs as a guest, and the conversation's rows go back after it. A longer prompt parks the conversation, or writes it to the NVMe when the park cannot hold it. Its next request without the flag then finds it where it would have found it before. Nothing parks or keeps the rows a cold request wrote, since they belong to no conversation. One store stays on: the suffix store is the lookup's memory of text, not a prompt cache, and takes the request's tokens as it does for every request.</p>
+<h2 id="reasoning">Reasoning<a class="headerlink" href="#reasoning" title="Permanent link">&para;</a></h2>
+<p>The model thinks inside <code>&lt;think&gt;</code> tags. <code>--reasoning-format</code> (or <code>reasoning_format</code> in the request) picks how the thinking reaches the client:</p>
+<table>
+<thead>
+<tr>
+<th>value</th>
+<th>content</th>
+<th><code>reasoning_content</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tags</code> (default)</td>
+<td>thinking inside <code>&lt;think&gt;...&lt;/think&gt;</code>, then the answer</td>
+<td>empty</td>
+</tr>
+<tr>
+<td><code>reasoning_content</code></td>
+<td>the answer only</td>
+<td>the thinking, as OpenAI-style deltas</td>
+</tr>
+<tr>
+<td><code>both</code></td>
+<td>as <code>tags</code></td>
+<td>as <code>reasoning_content</code></td>
+</tr>
+</tbody>
+</table>
+<p>A client kind can have its own format when it names none and the server's is <code>tags</code>, under a conductor plan (<code>QWEN38_CLIENT_REASONING</code>, <code>kind=format,...</code>, <code>*</code> for every kind not named; default <code>*=reasoning_content,hermes=tags</code>; empty: <code>tags</code> for every client). On the raw path the same rule holds for a plain API client, an SDK, curl or an unnamed one such as a benchmark: the reasoning goes to <code>reasoning_content</code> and its stop strings read the answer alone. Every other kind keeps the server's format there (SRV-617; up to 0.11.4 every raw request kept it). Since 0.3.50-test every client but the Hermes agent gets <code>reasoning_content</code> by default: an OpenAI SDK or curl client printed <code>message.content</code> and showed the model's thinking as its answer, and opencode with the installer's provider config showed it as literal <code>&lt;think&gt;</code> text (SRV-245, SRV-219). A client that wants the tags inline sends <code>reasoning_format: tags</code>. The answer starts with its first character; the blank lines the template writes after <code>&lt;/think&gt;</code> are not sent. A small <code>max_tokens</code> counts the thinking: a response cut inside it has <code>finish_reason: length</code>, an empty <code>content</code> and the reasoning in <code>reasoning_content</code>.</p>
+<p>Under a conductor plan a request's <code>stop</code> strings apply to the answer, never inside the reasoning, and the blank lines that start the answer are not matched (0.3.50-test, SRV-245: <code>stop: ["\n\n"]</code> ended a response at the first blank line of the thinking, 55 tokens and no answer). The raw path matches them on the whole text, as the release did. State lines never go into a plain API client's <code>content</code> (curl, an OpenAI SDK, an unnamed client): they go to <code>reasoning_content</code>, or are left out with <code>tags</code>; a memory line still goes into the answer. Open WebUI 0.11.3 folds <code>&lt;think&gt;</code> blocks out of the content after the fact and forwards the piece that carries <code>&lt;/think&gt;</code> to its live view as the text of a new message, where it stays until the round's stream ends; in <code>reasoning_content</code> it has no tag to show, and every tool round's reasoning is its own block. For that client the template's blank lines go out as one content piece where the reasoning ends, so Open WebUI closes and times each round's block even when the round goes straight to a tool call (a blank message is not shown). A request's own <code>reasoning_format</code> always wins (0.3.45-test, SRV-193).</p>
+<p>Open WebUI's terminal tools end <code>run_command</code>'s description with the terminal's working directory (<code>The current working directory is: &lt;path&gt;</code>), which Open WebUI fetches again for every user message. The description sits in the system prompt's tool block, about 4,800 tokens into the prompt, so the first <code>cd</code> of an agent changed the prompt there and the next user message read the whole conversation again: 41,749 tokens, 56 s, live on 0.3.46-test, where the conversation's own rows matched only up to that line. Under a conductor plan that is on (0.3.47-test, SRV-209, <code>QWEN38_CLIENT_CWD</code>, default <code>note</code>), the sentence leaves the description and the same sentence goes into the turn as a router note, when the directory differs from the last one noted (the first turn, a <code>cd</code>, a <code>cd</code> back): the tool block stays the same for the whole session, and the note replays where it was put, like every router note. The model reads the same words, at the turn they became true. Shadow, off, raw and <code>QWEN38_CLIENT_CWD=off</code>: the tools as sent.</p>
+<p><img alt="Thinking in opencode with the live token count and rate" src="../media/thinking.gif" /></p>
+<p><em>Recorded against the served engine (published NVFP4 weights, StairCut on); sped-up parts are marked in the clip.</em></p>
+<p>The chat template opens the block in the prompt, so the model only ever writes <code>&lt;/think&gt;</code>. Our server re-emits <code>&lt;think&gt;</code> as the first delta so that clients which fold on a matched pair see one. <code>reasoning_effort</code> (low, medium, xhigh) goes into the chat template, and the served default is <code>medium</code>. At <code>xhigh</code>, one request spent all 8,192 of its tokens thinking and never answered. <code>--reasoning-effort none</code> (or <code>off</code>, SRV-477) turns thinking off for every request that says nothing about thinking (no switch, effort word or budget in any shape): such a request gets <code>chat_template_kwargs.enable_thinking: false</code> before anything reads it, and one that says anything keeps it. <code>/health</code> then reports <code>reasoning_effort: off</code> and <code>sampling.thinking_default: off</code>.</p>
+<h3 id="thinking-budgets-from-the-client">Thinking budgets from the client<a class="headerlink" href="#thinking-budgets-from-the-client" title="Permanent link">&para;</a></h3>
+<p>A client may cap the thinking in any of the shapes clients send, and <code>server/api/thinking.py</code> reads them all into one budget:</p>
+<table>
+<thead>
+<tr>
+<th>shape</th>
+<th>sent by</th>
+<th>read as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>max_reasoning_tokens</code>, <code>thinking_budget</code></td>
+<td>this engine, DashScope</td>
+<td>a cap in tokens</td>
+</tr>
+<tr>
+<td><code>chat_template_kwargs.thinking_budget</code>, <code>.max_thinking_tokens</code>, <code>.reasoning_budget</code>, <code>.thinking_token_budget</code></td>
+<td>template-argument clients</td>
+<td>a cap in tokens</td>
+</tr>
+<tr>
+<td><code>reasoning: {max_tokens, effort, enabled, exclude}</code></td>
+<td>OpenRouter-style clients</td>
+<td><code>max_tokens</code> a cap, <code>effort</code> a word, <code>enabled: true</code> alone medium, <code>enabled: false</code> off</td>
+</tr>
+<tr>
+<td><code>thinking: {type, budget_tokens}</code></td>
+<td>Anthropic-style clients</td>
+<td><code>enabled</code> with <code>budget_tokens</code> a cap, <code>enabled</code> or <code>adaptive</code> alone on without a cap, <code>disabled</code> off</td>
+</tr>
+<tr>
+<td><code>reasoning_budget</code>, <code>max_thinking_tokens</code>, <code>thinking_token_budget</code>, <code>thinking_budget_tokens</code> (top level)</td>
+<td>other servers' clients</td>
+<td>a cap in tokens</td>
+</tr>
+<tr>
+<td><code>reasoning_effort</code>, <code>reasoning.effort</code>, <code>chat_template_kwargs.reasoning_effort</code></td>
+<td>OpenAI SDK, opencode, Hermes agent</td>
+<td>the effort level's cap: <code>minimal</code> and <code>low</code> 1,024, <code>medium</code> 8,192, <code>high</code> 16,384, <code>xhigh</code> and <code>max</code> none; <code>none</code> is thinking off</td>
+</tr>
+<tr>
+<td><code>enable_thinking: false</code> (top level or in <code>chat_template_kwargs</code>)</td>
+<td>DashScope, template-argument clients</td>
+<td>thinking off</td>
+</tr>
+</tbody>
+</table>
+<p>Precedence: whether the model thinks is decided first, by <code>chat_template_kwargs.enable_thinking</code> when it is set, else by the top-level <code>enable_thinking</code>, else by any off form. The cap is then the first number in the table's order, else the first effort word's cap (<code>chat_template_kwargs</code> before <code>reasoning_effort</code> before <code>reasoning.effort</code>), else <code>enabled: true</code> or a <code>thinking.type</code>. A number beats a word. 0 is no cap. A word the template knows (low, medium, xhigh; <code>minimal</code> renders as low, <code>max</code> as xhigh) also goes into the template; <code>high</code> leaves the template at the server's default and is the cap alone. Before this, <code>high</code>, <code>none</code>, <code>minimal</code> and <code>max</code> reached the template, which raises on them, and the request got a 500. An unknown word or a negative number is a 400 that names the field. <code>reasoning.exclude</code> is read and not honoured: the reasoning goes out in the request's <code>reasoning_format</code>.</p>
+<p>Under TandemLLM's router, a client's number always wins. An effort word is a ceiling (0.3.22-test, decided 2026-10-03): where the router decides the effort (<code>decisions.effort: on</code>), the turn gets the router's level, but never a cap above the word's (<code>medium</code> holds an xhigh turn to 8,192 reasoning tokens; a low class under <code>medium</code> keeps its 1,024). The answer reserve still applies after. The journal row's <code>extra.client_word</code> says when the word held the router down. A profile's <code>thinking.client_word</code> (<code>ceiling</code>, the default, or <code>ignore</code>) decides it per client: the shipped coding and overnight profiles say <code>ignore</code>, because opencode sends <code>medium</code> on every turn whatever the user picked, and there the router's level alone is the turn's, as before. <code>enabled: true</code> without a word yields to the router. Elsewhere (the raw engine, <code>X-Tandem: raw</code>, a profile with the effort decision off or in shadow) the word is the cap.</p>
+<p>Thinking off is the client's (0.3.40-test). <code>none</code> and every other off form (<code>enable_thinking: false</code>, <code>reasoning.enabled: false</code>, <code>thinking.type: disabled</code>) close the thinking block in the template under every profile, the ceiling rule's lowest word. The router's journal row then says <code>thinking: off_client</code> with no budget, and <code>extra.client_thinking</code> names the field and the class's level that did not run ("client turned thinking off"); the dashboard reads "thinking off (client)". The class's effort sentence ("Reasoning effort is set to xhigh. Please think carefully …") is not added to such a turn (<code>effort_note_skipped:client_off</code> in the row's notes); the rest of the note (a package's rules, the class's rules) still is. Before, the row read <code>thinking: on</code> at the class's level and the prompt carried the xhigh sentence into a turn that could not think (Open WebUI's agent model sent <code>reasoning_effort: "none"</code>, 2026-10-06).</p>
+<p>The answer reserve: when a client asked for a budget in any shape and the reasoning would otherwise run into the output limit (<code>max_tokens</code>, <code>max_completion_tokens</code>, or the server's default), the reasoning closes early enough to leave the answer <code>--answer-reserve</code> tokens after the closing phrase (<code>QSE_ANSWER_RESERVE</code>; <code>auto</code>, the default, is min(2,048, a quarter of the limit); 0 turns it off). The phrase is counted in because it streams where no monitor hides it. An uncapped request gets the limit less the reserve and the phrase as its cap. The close is the session monitor's hidden one where a monitor acts (SP1: the vendor's phrase goes into the model's context, the client receives <code>&lt;/think&gt;</code> and the answer; the journal's <code>CLOSE_REASONING</code> has task <code>client</code>, or <code>reserve</code> when the reserve lowered the cap), and ThinkBudget's streamed phrase otherwise (no monitor, shadow, <code>X-Tandem: raw</code>, <code>n</code> &gt; 1). The server log has one <code>[think] &lt;id&gt; client budget ...</code> line per such request, and with the router its journal row has <code>extra.client_budget</code> (field, kind, asked, reserve, limit, cap). <code>usage.completion_tokens_details.reasoning_tokens</code> counts the visible reasoning through <code>&lt;/think&gt;</code>, the streamed phrase included and the hidden one not.</p>
+<p>A request with none of these fields is served as before, token for token: the template gets the same arguments and the loop the same budget. <code>enable_thinking</code> alone asks for no budget.
+| <code>thinking: {type, budget_tokens}</code> | <code>enabled</code> with <code>budget_tokens</code> a cap, <code>enabled</code> or <code>adaptive</code> alone on without a cap, <code>disabled</code> off |
+| <code>reasoning_budget</code>, <code>max_thinking_tokens</code>, <code>thinking_token_budget</code>, <code>thinking_budget_tokens</code> | a cap in tokens |
+| <code>reasoning_effort</code>, <code>reasoning.effort</code>, <code>chat_template_kwargs.reasoning_effort</code> | the level's cap: <code>minimal</code> and <code>low</code> 1,024, <code>medium</code> 8,192, <code>high</code> 16,384, <code>xhigh</code> and <code>max</code> none; <code>none</code> is thinking off |
+| <code>enable_thinking: false</code> (top level or in <code>chat_template_kwargs</code>) | thinking off |</p>
+<h2 id="tool-calls">Tool calls<a class="headerlink" href="#tool-calls" title="Permanent link">&para;</a></h2>
+<p>The request's <code>tools</code> go into the chat template, and the model answers a call in its own XML form:</p>
+<div class="highlight"><pre><span></span><code>&lt;tool_call&gt;
+&lt;function=read&gt;
+&lt;parameter=offset&gt;
+150
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;
+</code></pre></div>
+<p><img alt="A tool call in opencode next to the dashboard's live panel" src="../media/tool_call.gif" /></p>
+<p><em>Recorded against the served engine (published NVFP4 weights, StairCut on); sped-up parts are marked in the clip.</em></p>
+<p><code>server/api/toolcall.py</code> turns that into OpenAI <code>tool_calls</code> with <code>finish_reason: "tool_calls"</code>, on both the streamed and the JSON path. Under a conductor plan a request that offered no <code>tools</code> never gets <code>tool_calls</code>: a call the model writes anyway is read out of the answer and dropped, the finish stays <code>stop</code>, and the journal row names it in <code>extra.calls_refused</code> (0.3.50-test, SRV-247: a curl client with memory on received the model's own memory search as a call to a tool named <code>tool</code>, with the session's share address in its arguments). It reads the strict form, a lenient form and a JSON call object, and it reads only the answer, never the thinking. On a stream, a call goes out as argument deltas while the model writes it: the id and the name first, then each string value in pieces. A whole-file write therefore shows progress instead of minutes of silence.</p>
+<p>Argument values carry their schema's types. The model writes every value as text, so <code>offset</code> arrives as the characters <code>150</code>. Our parser looks up the request's own schema, and a parameter whose schema does not allow a string is returned as JSON: <code>150</code>, <code>true</code>, a list. A typed value is held back on the stream until it is complete, then sent whole. On an 8-task agent run, a strict client that validates arguments against the schema refused 58 of 80 calls before this change, and 0 of 26 after.</p>
+<p><code>tool_choice</code> works as OpenAI defines it. <code>none</code> renders the prompt without tools. <code>required</code> and a named function become a constraint on the answer, the same token masks structured outputs use, so the model cannot answer without the call. <code>parallel_tool_calls: false</code> keeps one call. Beside a <code>response_format</code>, auto is the calls or the document (Structured outputs below).</p>
+<h2 id="structured-outputs">Structured outputs<a class="headerlink" href="#structured-outputs" title="Permanent link">&para;</a></h2>
+<p><code>response_format</code> with <code>json_object</code> or <code>json_schema</code>, and <code>structured_outputs</code> with a <code>regex</code>, a <code>choice</code> list or a JSON schema, constrain the answer to a regular language. <code>engine/grammar.py</code> compiles each form to a finite automaton over bytes, because the tokenizer is byte-level and a token can end halfway through a character. A token is allowed in a state when walking its bytes never reaches the dead state. The engine computes that for the whole vocabulary at once per state and caches it, so a state costs a few milliseconds once.</p>
+<p>A <code>&lt;/think&gt;</code> the model writes again in its answer, alone on a line, is not sent (0.3.43-test, SRV-187): Open WebUI's parser closes a reasoning block at the first <code>&lt;/think&gt;</code> and showed the second one as the text <code>&lt;/think&gt;</code> between two tool rows. The tag in a sentence, in inline code, in a fenced code block, inside a <code>&lt;tool_call&gt;</code> or a <code>&lt;tandem_memory&gt;</code> block, or closing a <code>&lt;think&gt;</code> line the answer opened itself, stays; the stream holds back at most the start of a line that can still become the tag. Only under a conductor profile: the raw path sends what the model wrote. The journal row counts the tags taken out (<code>extra.stray_close</code>).</p>
+<p>The constraint applies to the answer, after the reasoning. A JSON answer (<code>json_object</code>, <code>json_schema</code>) is parsed whole by its client, so a request that names no <code>reasoning_format</code> gets <code>reasoning_content</code> for it: the thinking goes to <code>reasoning_content</code> and <code>message.content</code> (or the concatenated content deltas) is the JSON alone, which <code>json.loads</code> and the SDKs' structured-output helpers read as they are. A client that sends <code>reasoning_format: tags</code> (or <code>both</code>) keeps <code>&lt;think&gt;...&lt;/think&gt;</code> in the content. Such a request also gets the answer reserve a client's own thinking budget gets (see Thinking budgets from the client): the reasoning is closed early enough to leave the JSON its share of <code>max_tokens</code> (the journal's <code>extra.json_reserve</code>), and it carries no state lines. Until 0.3.41-test the content opened with the think block and a small <code>max_tokens</code> could end inside the JSON (SRV-169: a 270-token think block, then <code>finish_reason: length</code> at 300).</p>
+<p>With <code>tools</code> offered and <code>tool_choice</code> auto, a document (<code>json_schema</code>, <code>json_object</code>, a <code>structured_outputs</code> form) constrains the answer to the calls or the document alone (SRV-619): one automaton, the union of the tool-call language that <code>required</code> uses (any offered function, its required parameters in declared order, typed values; more than one call unless <code>parallel_tool_calls: false</code>) and the document's. The model thinks freely, then its own first answer token picks the branch: the automaton is the product of the two languages, and where both are still open the mask follows the row's argmax before the mask. A call's first token (the <code>&lt;tool_call&gt;</code> id, <code>&lt;</code>) commits to the calls; any other token (the document's <code>{</code>, a code fence, prose, the end token) commits to the document; whitespace leaves the choice open. The plain union let the masked-out fence's next best token decide, and that was the call marker, not <code>{</code>: on a first live run the model said "I can just output the JSON directly" and then answered with a <code>run_code</code> call that built the JSON (TC-65). Prose and code fences are outside the language. The mask stays a function of the prefix and the target's row, so speculation changes no token. The log line <code>[structured] &lt;id&gt; branch=calls|document</code> and the journal's <code>extra.structured_branch</code> say which branch an answer took. The call markers keep the model's own ids under this constraint (<code>&lt;tool_call&gt;</code> is one token; spelled out byte by byte it is off the model's distribution). A call goes out as <code>tool_calls</code>, the document as the content, with the thinking in <code>reasoning_content</code> as above. <code>tool_choice: none</code> is the document alone; <code>required</code> and a named function are the calls alone, the document checked and left out. An agent loop that asks for its final answer as JSON with its tools still attached (the OpenAI SDKs' structured-output helpers, tool-eval-bench's structured scenarios) was a 400 through 0.11.4 (<code>structured outputs with tools are not supported</code>) and fell back to prompt-only JSON, fenced or with prose around it. A model whose calls are not the XML format (<code>--tool-format pythonic</code>) keeps the 400.</p>
+<p>Each mask applies to every verified row of a draft tree, not only to one row per step. Constrained output under speculation is therefore the text plain constrained decoding writes, with the same near-tie exception as any greedy text (<a href="../exactness/">exactness.md</a>). JSON schemas with recursion (<code>$ref</code> cycles) are refused, and <code>json_object</code> allows a fixed nesting depth.</p>
+<p>An extension can ask for the same constraints (engine-ext-v1 3.2, <code>SET_CONSTRAINT</code> at the request's safe point): a regex, a choice list, a JSON schema or a logit bias, carried out by this grammar as the request field it is the same as (<code>structured_outputs</code> or <code>logit_bias</code>), so the act's answer is that field's answer token for token, under speculation too. The request's own constraint wins over the extension's. A constraint the engine cannot carry out leaves the request unconstrained, unless the extension marked it strict: then the client gets a 400 that names <code>SET_CONSTRAINT</code>. <a href="https://github.com/TandemLLM/TandemEngine/blob/main/contracts/engine-ext-v1/README.md#set_constraint-since-32">contracts/engine-ext-v1</a> has the rules.</p>
+<h2 id="streaming">Streaming<a class="headerlink" href="#streaming" title="Permanent link">&para;</a></h2>
+<p>A streamed response sends one chunk per token, carries <code>usage</code> on the last chunk when the client asks for it (<code>stream_options.include_usage</code>, and by default with <code>--usage-default on</code>), then a chunk with <code>finish_reason</code> and <code>data: [DONE]</code>. A verify round accepts several tokens at once, so they reach the socket together. Half the gaps between tokens are therefore microseconds, and the other half a whole round.</p>
+<p>By default, <code>usage</code> counts what the client sent and what it received. <code>prompt_tokens</code> is the client's messages (with its tools) as the chat template renders them; the conductor's notes (the router's note for the turn, the session's replayed notes, the closed think block of a turn it turned thinking off, the monitor's SP4 note, an earlier answer's hidden tokens put back) are not in it, and when there are any <code>prompt_tokens_details.hidden_tokens</code> says how many the model read besides (absent when none, so a raw request's <code>usage</code> has its old shape). <code>cached_tokens</code> is the client's tokens served from a cache: the cached span less the hidden tokens inside it, which the server tracks by position (the notes, the end anchor's replay, a reasoning the client left out, SP4's note); when the positions are not known it is at most <code>prompt_tokens</code>, as before. <code>timings.cache_n</code> and <code>prompt_n</code> stay the engine's own counts of the whole prompt, and the ledger keeps them as <code>engine_cached</code> and <code>forwarded_tokens</code> (schema 8). Until 0.3.50-test the hidden rows inside the cached span counted as client tokens: an opencode turn that re-read 3,827 of its 24,706 client tokens reported all 24,706 cached (SRV-233); it now reports 20,879. The ledger keeps the client's count in <code>prompt_tokens</code> and the conductor's in <code>conductor_hidden_tokens</code>. Until 0.3.41-test the router's notes were counted: a "hi" reported 238 prompt tokens under the chat profile (926 on 0.3.39-test), 11 raw (SRV-165).</p>
+<p><code>--usage-context engine</code> (or <code>QSE_USAGE_CONTEXT=engine</code>) makes <code>usage.prompt_tokens</code> count the occupied prompt after replay, alignment and image expansion, including retained reasoning and injected notes. Use it for clients that trigger context compaction from the API's prompt-token count: reasoning the client leaves out can otherwise fill the context while the reported count remains below the client's threshold. <code>prompt_tokens_details.cached_tokens</code> then counts the engine's cached rows, bounded by the occupied prompt, and <code>total_tokens</code> is that prompt plus <code>completion_tokens</code>. When the count differs, <code>prompt_tokens_details.client_tokens</code> carries the default client count and <code>client_cached_tokens</code> its cached share, the client mode's <code>cached_tokens</code>; chatd reads that pair, so the Context panel's warm and cold add up to the client prompt. <code>hidden_tokens</code> keeps its existing meaning. The default is <code>--usage-context client</code>. Both modes keep the ledger, <code>usage.tandem</code> breakdown and timings on their existing accounting basis; generation and cache replay are unchanged.</p>
+<h3 id="speed-and-draft-fields-timings-and-metrics">Speed and draft fields: <code>timings</code> and <code>metrics</code><a class="headerlink" href="#speed-and-draft-fields-timings-and-metrics" title="Permanent link">&para;</a></h3>
+<p>Every response carries two objects beside <code>usage</code>, with the engine's own counts of the request. A response without a stream has them in its body. A stream has them in one chunk only, the one that carries <code>usage</code>: the finish chunk when the client sends no <code>stream_options</code>, the separate <code>choices: []</code> chunk with <code>include_usage: true</code>, and none with <code>include_usage: false</code> or <code>--usage-default off</code>. <a href="https://github.com/TandemLLM/TandemEngine/blob/main/contracts/engine-api-v1/metrics.md#per-response-usage-and-timings">metrics.md</a> has an example with consistent numbers.</p>
+<table>
+<thead>
+<tr>
+<th>field</th>
+<th>what it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>timings.cache_n</code></td>
+<td>prompt tokens restored from a cache</td>
+</tr>
+<tr>
+<td><code>timings.prompt_n</code>, <code>prompt_ms</code>, <code>prompt_per_second</code></td>
+<td>prompt tokens forwarded, and the time from the engine lock to the first token</td>
+</tr>
+<tr>
+<td><code>timings.predicted_n</code></td>
+<td>tokens the engine committed, the end token included (<code>completion_tokens</code>)</td>
+</tr>
+<tr>
+<td><code>timings.predicted_ms</code>, <code>predicted_per_second</code></td>
+<td>the first token to the last, and <code>(predicted_n - 1) / predicted_ms</code></td>
+</tr>
+<tr>
+<td><code>timings.blocks</code></td>
+<td>decode forwards: each verify round is one block, and so is a plain step without a draft</td>
+</tr>
+<tr>
+<td><code>timings.tokens_per_block</code></td>
+<td><code>(completion_tokens - 1) / blocks</code></td>
+</tr>
+<tr>
+<td><code>timings.draft_n</code>, <code>draft_n_accepted</code></td>
+<td>drafted tokens the verify checked, and those it kept</td>
+</tr>
+<tr>
+<td><code>timings.reasoning_n</code></td>
+<td>committed tokens of the reasoning block</td>
+</tr>
+<tr>
+<td><code>timings.ttft_ms</code>, <code>queue_ms</code>, <code>total_ms</code></td>
+<td>arrival to the first token, arrival to the engine lock, arrival to the end</td>
+</tr>
+<tr>
+<td><code>metrics.speculative_decoding.mean_acceptance_length</code></td>
+<td>the same number as <code>tokens_per_block</code></td>
+</tr>
+<tr>
+<td><code>metrics.speculative_decoding.draft_acceptance_rate</code></td>
+<td><code>draft_n_accepted / draft_n</code>, to four decimals</td>
+</tr>
+</tbody>
+</table>
+<p>A block commits the drafted tokens the verify kept plus one token the verify decides itself. <code>tokens_per_block</code> counts that token too, so 1.0 means no drafted token was kept, and a round that kept 4 drafted tokens counts 5. The first token comes from the prefill, which is why both speeds subtract 1. As an example, a response with <code>completion_tokens</code> 412, <code>blocks</code> 90, <code>draft_n</code> 1,350 and <code>draft_n_accepted</code> 322 has a mean accepted length of <code>411 / 90 = 4.57</code> and an acceptance rate of <code>322 / 1350 = 0.2385</code>.</p>
+<p><code>finish_reason</code> is one of <code>stop</code> (end of text or a stop string), <code>length</code> (<code>max_tokens</code>), <code>tool_calls</code>, <code>timeout</code> (the request's wall-clock cap), or <code>error</code>. On <code>error</code> the partial text has already been sent and an <code>error</code> object sits beside the finish reason. A client that hung up is logged as <code>abandoned</code>, not as an error.</p>
+<p><code>server/stream.py</code> turns tokens into characters. A character can span tokens, because the tokenizer works on bytes, and a stream that sent every decoded prefix would send a replacement character (U+FFFD) that never goes away. Our detokenizer holds back a trailing partial character until the next token completes it. Every character it sends is final.</p>
+<h2 id="a-long-prefill-and-a-client-that-leaves">A long prefill, and a client that leaves<a class="headerlink" href="#a-long-prefill-and-a-client-that-leaves" title="Permanent link">&para;</a></h2>
+<p>A long prompt prefills for minutes: 208.3 s at 128k tokens on the published NVFP4 set (<a href="../caches/">caches.md</a>). After every prefill chunk the handler checks its socket. If the client has gone, the prefill stops there, the request ends <code>abandoned</code>, and the engine is free at once. Rows already prefilled stay in the resident prefix (<a href="../caches/">caches.md</a>), so a retry continues from there. A request whose client left while it waited in the queue is dropped before it runs.</p>
+<p>A streamed prefill that has run for 5 s (<code>--prefill-heartbeat-s</code>) also sends an SSE comment after each chunk, at most once a second:</p>
+<div class="highlight"><pre><span></span><code>: prefill 12288/95131
+</code></pre></div>
+<p>Clients ignore comment lines. Proxies see a live stream and do not time it out.</p>
+<h2 id="admission-and-limits">Admission and limits<a class="headerlink" href="#admission-and-limits" title="Permanent link">&para;</a></h2>
+<p>With one sequence (<code>QSE_PARALLEL=1</code>; the shipped profile runs 8 lanes, <a href="../parallel-requests/">parallel-requests.md</a>) requests wait for it in a bounded queue.</p>
+<table>
+<thead>
+<tr>
+<th>limit</th>
+<th>served value</th>
+<th>what happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--max-queue</code></td>
+<td>8</td>
+<td>the next request gets a 503 with <code>Retry-After: 5</code></td>
+</tr>
+<tr>
+<td><code>--queue-timeout</code></td>
+<td>240 s</td>
+<td>a request without a stream that waited that long gets a 429 with <code>Retry-After: 10</code>; a streamed chat request and a client's side request wait as long as <code>--request-timeout</code> (see "A turn behind a running turn")</td>
+</tr>
+<tr>
+<td><code>--request-timeout</code></td>
+<td>3,600 s</td>
+<td>a generation that runs that long ends with <code>finish_reason: "timeout"</code></td>
+</tr>
+<tr>
+<td><code>--max-len</code></td>
+<td>262,144 tokens</td>
+<td>a prompt that does not fit gets a 400; <code>max_tokens</code> is clamped to what fits</td>
+</tr>
+<tr>
+<td><code>--default-max-tokens</code></td>
+<td>32,768; 131,072 on Ornith</td>
+<td>used when the request sends no <code>max_tokens</code>; a request's own <code>max_tokens</code> wins</td>
+</tr>
+<tr>
+<td><code>QSE_MAX_BODY_MB</code></td>
+<td>512 MiB</td>
+<td>a body that promises more is a 413 before its first byte is read; a chunked body hits the same line as it passes it (server/api/http_body.py)</td>
+</tr>
+<tr>
+<td><code>QSE_HANDLER_TIMEOUT_S</code></td>
+<td>60 s</td>
+<td>a client that stalls inside the request body gets a 408 and the connection closes; a stall in the request line or the headers closes the connection with no answer; an answer the client stops reading ends there, logged as abandoned, and the connection closes; the clock restarts at every socket op that makes progress, as nginx's <code>*_read_timeout</code></td>
+</tr>
+</tbody>
+</table>
+<p>At load the server allocates the KV buffer for the whole context, so the context length is a memory decision taken before the first request (<a href="../operations/">operations.md</a>).</p>
+<p>The answer limit is <code>DEFAULT_MAX_TOKENS</code>. <code>ops/serve.env</code> sets 32,768, and a weight profile sets its own where the model's card names another number: Ornith's card names 131,072 new tokens, so its profile sets 131,072. <code>/v1/models</code> shows the running value as <code>tandem.max_output</code>. <a href="../setup/#the-answer-limit">setup.md</a> says how to change it.</p>
+<p>The memory gate (OPS-47) runs before every prefill: back under the ceiling, then the prompt's workspace under the declared peak, shedding caches cheapest first (<code>store</code>, <code>anchors</code>, <code>end</code>, <code>stash</code>, <code>park</code>, <code>pin</code>, and since 0.3.26-test <code>roles</code>), or a 503 with <code>Retry-After</code>. The store gives back only what the gate needs plus 256 MiB, in chunks, plain entries oldest first and the snapshots at a prompt head's mark last (SPD-249): a chunk whose bytes stay in the allocator's cache (the reserve falls by less than half of them) ends the store's shed and the gate goes on to the next level, and the heads go after a chunk that lowered the reserve, when nothing else is left in the store, or when the chunks before them were under 256 MiB (too small to show what the reserve does), and only when what the store still holds can cover what the gate still needs (else they stay and the next level goes). On 2026-10-04 it refused every request, 12-token ones included, at "needs 82.0 GiB, peak 77.0 GiB", until :8000 was restarted at 16:41. The cause was the shadow reader's model pool: it had read 123,000 rows of a 195,694-token conversation, and every KV growth and every chunk's attention temporaries (larger with each chunk, as the context grows) took a new segment of its own MemPool. A live MemPool never gives its free segments back (torch 2.13, measured: 556 MiB stayed reserved after every tensor in it was freed; <code>empty_cache</code> returned it only once the pool was deleted), so 17.6 GiB of free memory sat in it and counted as the engine's reserve. Now:</p>
+<ul>
+<li>After each idle-window burst, a shadow pool with more than <code>QWEN38_SHADOW_POOL_SLACK_GIB</code> (2) free parks its sessions on the disk and unloads the model, which drops the pool; the next turn loads it again and reads on from the disk.</li>
+<li><code>roles</code> is the gate's last level: the same release, then <code>empty_cache</code>.</li>
+<li>Before a refusal the gate runs <code>gc.collect()</code> and <code>empty_cache</code> once more. A prompt whose workspace fits in the free reserve of the engine's own allocator (free memory inside a role's pool does not count) is admitted (<code>stale_admit</code> in the memory events): the allocator serves it from blocks it already holds.</li>
+<li>Every refusal is an error line in the Dev tab's log, with allocated, reserved and how many refusals in a row.</li>
+</ul>
+<p>The abandoned 195,694-token prefill was not the cause: the log shows the shadow's ten reading bursts after it, and the first refusal right after them.</p>
+<p>Since 0.15.1 (2026-11-02, SRV-773) the gate charges a prefill the workspace of the rows it forwards, not of its whole context. Where the prompt resumes in place (the end anchor, the last prompt's end, the anchors) gives the rows, and the model's adapter prices them (<code>CostModel.workspace_rows</code>); a family without that model keeps the line through <code>workspace_per_token</code>, and a cold prompt is never charged under the line. On Flash-Next a resumed turn of 21 rows took 0.10 GiB at every context from 8k to 146k tokens, where the line charged 2.75 to 10.39 GiB: on 2026-11-02 slot 0's gate refused a 21-token follow-up at 62,886 tokens ten times. The <code>[req]</code> line shows <code>fwd=</code> (the rows forwarded) beside <code>ws_rows=</code> and <code>ws_gib=</code> (what the gate charged); <code>QSE_REQ_PEAK=1</code> adds <code>peak_gib=</code>, the allocator's peak over a request that ran alone.</p>
+<p>With <code>--parallel N</code> the gate runs for every slot, side slots too, on the live reserve, before the admission reserves the request's bytes (SRV-775). On a side slot it runs the peak stage only; the ceiling stage, which walks the allocator's pools, stays slot 0's. A prefill no reserve could ever take (the engine's load plus its workspace over the peak) gets its 503 at once. One the gate still refuses after shedding waits while another prefill runs, and runs alone over the peak when none does, counted: <code>/health</code> <code>memory.over_peak_admits</code>, <code>over_peak_slot</code> and <code>over_peak_gib</code> (the reserve over the peak now), a <code>[memory] over_peak_admit</code> log line. <code>QSE_PEAK_STRICT=1</code> makes a lone request wait too. The admission checks a lone request against its floor as well (<code>parallel.admission.lone_checked</code>); it caps the cache growth and the workspaces in flight at the engine's room to its peak, and a request admitted over the peak counts its workspace past that room, in full less the allocator's free default-pool blocks it takes before any new memory (<code>Budget.workspace_spare</code>), so the floor bounds it. Its line then names the part that is new memory, for example "this request over the peak 1.6 new (2.3 of its 3.9 in the allocator's free blocks)".</p>
+<pre class="mermaid"><code>flowchart LR
+    due["prefill due:&lt;br/&gt;workspace estimated"] --&gt; l1["state store"] --&gt; l2["body anchors"] --&gt; l3["end anchor"] --&gt; l4["guest stash"] --&gt; l5["parked session"] --&gt; l6["pinned head"] --&gt; l7["roles' pools"]
+    l7 -- still over --&gt; r503["503 + Retry-After"]
+    l1 -. "fits under the peak" .-&gt; run["the prefill runs"]</code></pre>
+<p>Cheapest first; each level only while the prompt's workspace does not fit.</p>
+<p><em>The memory gate before every prefill. Each level is given back only while the prompt's workspace does not fit under the declared peak (77 GiB); a cache given back costs a later cold read, never a different token.</em></p>
+<h3 id="the-side-lane-0327-test">The side lane (0.3.27-test)<a class="headerlink" href="#the-side-lane-0327-test" title="Permanent link">&para;</a></h3>
+<p>A short request no longer waits for a long turn to end. On 2026-10-04 between 16:43 and 16:48 one opencode turn thought for minutes. A second session's first turn queued behind it and got a 429 after 256 s, twice. Before queueing, the router asked Qwen its two questions for that turn (the package and the library choice, TandemApp's <code>tandemapp/conductor/classify.py</code>): both waited in the same queue and gave up at their 8 s timeout, so the ledger shows them as <code>abandoned</code> after 9.0 s, client <code>anon</code>, model <code>qwen38-spark-engine</code>.</p>
+<p>A request goes to the side lane (<code>server/preempt.py</code>) when it finds the engine busy and is short: at most <code>--side-lane-prompt-max</code> (2,048) prompt tokens and <code>--side-lane-new-max</code> (64) output tokens, one choice, no images, thinking off, and either a raw request (the router's questions are raw) or a client's side request (opencode's or Hermes' title). It becomes a job, and the generation that holds the engine serves it at its next safe point: between two decode blocks, or between two prefill chunks (<code>--side-lane decode</code> leaves the prefill out, <code>off</code> turns the lane off). The guest is prefilled from position 0 on the prefill's grid and decoded one token a forward, with no drafter. Its answer is plain greedy decoding of its prompt (or the client's sampling), so it follows the exactness promise (<a href="../exactness/">exactness.md</a>).</p>
+<p>The generation gets the engine back as it was. <code>engine/cache.py</code> <code>Borrow</code> copies what the guest can write: the KV rows below the guest's prompt plus its output plus 64, the recurrent state, the convolution tails, a walked chain state in its scratch buffer, and the references the next block reads (a pending commit is copied unsettled, so the next verify folds the same record into the same bytes). The drafter is never touched: the guest runs without one and with the drafter's tap off. A copy costs about 0.3 GB for a 2,000-token guest and is freed after it. <code>tests/test_side_lane.py</code> checks on the random model that the next block's logits, the state and every KV row are bit for bit an uninterrupted run's, after a guest between blocks, after a partial accept and between prefill chunks; <code>tools/lane_check.py</code> checks a long request on the real engine against runs without guests: its tokens are the runs' tokens up to the first fork, and a fork must be a near tie, each run taking the other's runner-up with a top-2 gap within <code>--tie-nats</code> (0.125), as <a href="../exactness/">exactness.md</a> judges one.</p>
+<p>Three guards. A job waits for a later safe point when the engine's reserved memory plus the guest's copy and workspace would pass the declared peak (a long prefill near its peak). A disk-tier write that has not copied the rows below the guest yet stops where it is (<code>DiskTier.guard_rows</code>); the head's chunks are copied seconds after a prefill, so during a decode nothing stops. A job no holder takes (the turn ended, or the lock is held outside a generation) is run by its own request thread under the lock, at the side rank, with the resident rows lent and given back the same way.</p>
+<p>The ledger row of such a request has <code>lane</code> (<code>decode</code>, <code>prefill</code> or <code>self</code>); its <code>queue_ms</code> is the wait for the safe point. The <code>[req]</code> line adds <code>lane=</code>, <code>wait_ms=</code> and <code>lent_ms=</code> (how long the turn waited). Side-lane rows are not speed samples: a short plain decode beside a turn says nothing about the engine's decode rate. A client's side request too long for the lane (opencode's summary) is never refused for its wait: it waits as long as a request may run.</p>
+<pre class="mermaid"><code>sequenceDiagram
+    participant G as guests
+    participant L as long turn
+    participant S as second turn
+    Note over L: prefill chunks
+    G-&gt;&gt;L: title request, served between two chunks
+    Note over L: decode blocks
+    G-&gt;&gt;L: router question, served between two blocks
+    S--&gt;&gt;S: arrives and waits in the queue
+    Note over S: the stream opens after 10 s, a waiting line every 10 s
+    L--&gt;&gt;S: the turn ends, the second turn runs</code></pre>
+<p><em>The scheduler. A long turn holds the engine. Short guests (a title request, the router's own question) are served at the turn's next safe point and the turn gets its state back bit for bit. A second full turn waits in the queue; its stream opens after 10 s and carries a comment every 10 s.</em></p>
+<h3 id="a-turn-behind-a-running-turn-2026-10-05">A turn behind a running turn (2026-10-05)<a class="headerlink" href="#a-turn-behind-a-running-turn-2026-10-05" title="Permanent link">&para;</a></h3>
+<p>The side lane serves short requests only. A second session's full turn still waits for the running turn to end, and until 0.3.31 it got a 429 after <code>--queue-timeout</code> (240 s), as on 2026-10-04 at 16:47: minutes of waiting, then a refusal, then the same again.</p>
+<p>A streamed chat request is no longer refused for its wait. It waits as long as one request may run (<code>--request-timeout</code>, 3600 s on :8000). After 10 s in the queue its stream opens (status 200, the headers) and an SSE comment goes out every 10 s: <code>: waiting, position 1, about 40 s, 30 s so far</code>. A comment is not an event, so no client reads it as a token, and a client or proxy with an idle-read timeout keeps the connection. When the profile shows progress lines, the waiting line carries the estimate: "waiting: another request is running, position 1, about 40 s" (kind <code>queue_eta</code>, switched with <code>queue</code>; the voice says "about 40 s left"). A new line goes out when the reason or the position changes, and once a minute otherwise. A request that has waited less than 2 s gets no line (<code>queue_wait.QUIET_S</code>). When TandemLLM's own work holds the engine the line says so in plain words ("TandemLLM finishes its background work first", "TandemLLM decides how to handle the request first"); the live view keeps the technical holder. That work (the shadow reader's burst, a summary prepared ahead) yields at its next chunk, so its estimate is the median of the waits requests really had behind it, longer than the wait so far, and there is none before five were measured; below 10 s an estimate reads in seconds ("about 3 s"). Each request's time behind that work is the ledger's <code>wait_own_ms</code> (schema version 5). Until 0.3.41-test such a holder counted 0 s and every estimate was rounded up to 10 s, so the line read "about 10 s left" every time while the ledger's waits were 0.1 to 3 s (SRV-177). At the limit the open stream ends with an <code>error</code> object (code 429) beside <code>finish_reason: "error"</code>, as any refusal after an early open does. A request without a stream cannot show that it is alive, so it keeps <code>--queue-timeout</code> and its 429. A full queue (<code>--max-queue</code>) is still refused at once with a 503.</p>
+<p>The estimate (<code>server/queue_wait.py</code>) comes from the hold times of the requests since the start, per rank (a turn, a side request). For the request that holds the engine, having run <code>e</code> seconds, it is the median of <code>d - e</code> over the recorded times <code>d</code> longer than <code>e</code>: how much longer requests that ran this long went on. Each waiter ahead adds its rank's median; the prepare and shadow jobs yield at their next chunk and add nothing. With fewer than 5 recorded times, or fewer than 3 that ran longer than the holder has, the line gives no estimate, only the position. The numbers are rounded (10 s steps, then minutes) so they do not read as exact.</p>
+<p>The holder's own work (0.3.51-test, SRV-249). The hold times know nothing about where the holder is: on 0.3.48-test a one-line question waited 35.8 s behind a thinking turn that had run 14.8 s, and the line said "about 20 s". Replayed over the box's ledger (3,716 client requests, the waiter arriving at 10, 25, 50, 75 and 90 % of each hold), the hold-time estimate was a median 0.52 of the real wait for waits of 10 to 60 s (78 % of them under it) and 0.17 for waits over a minute. When the handler sees the holder (<code>queue_wait.Live</code>: its prefill marks, the tokens it has written and its decode rate, whether it thinks, its <code>max_tokens</code>), the estimate is the prefill it still has to read at its live rate plus the tokens it still has to write at its own rate: the 75th percentile of what earlier requests of the same kind (thinking or not) wrote past the tokens it has written, never more than its <code>max_tokens</code> allows (before its first token, at the median rate of the earlier ones). In the same replay that is a median 1.06 of the real wait for 10 to 60 s (42 % under) and 0.59 over a minute; waits under 10 s read about twice their length, at most one line. Without that view, or with too few finished requests of its kind, the hold times stay.</p>
+<p>Not done in the single-sequence server: interleaving two full turns. <code>--parallel N</code> (below) serves them at once instead. The engine holds one sequence; serving a second turn between the first one's blocks means a prefill of its whole prompt (tens of thousands of tokens) and a copy of every KV row it can reach, each time it gets a slice. The side lane's <code>Borrow</code> does that for a 2,048-token guest (about 0.3 GB, seconds); for a full turn it would cost more than it saves and would hold two conversations' state in memory at once. The client is told how long the wait is instead.</p>
+<h3 id="parallel-requests-0338-test-parallel-n-off-by-default">Parallel requests (0.3.38-test, <code>--parallel N</code>, off by default)<a class="headerlink" href="#parallel-requests-0338-test-parallel-n-off-by-default" title="Permanent link">&para;</a></h3>
+<p>How to turn it on, what it costs and what was measured: <a href="../parallel-requests/">parallel-requests.md</a>. This section is how it works.</p>
+<p><code>--parallel N</code> (<code>QSE_PARALLEL</code> in <code>ops/serve.env</code>; unset or 1 is the server above, one sequence) builds N - 1 side slots beside the engine (<code>server/slots.py</code>). A slot is one sequence's complete state over the one copy of the weights: a <code>Qwen38Engine</code> with its own KV, recurrent state, verify scratch and verify graphs, and its own drafter stack over the same drafter checkpoints (their weights are shared), reading the same lookup corpus and suffix store. Slot 0 is the engine as it always was: the 262,144-token window, the resident prefix, the disk tier, the spill and the side lane. A side slot has slot 0's window (<code>--side-max-len</code> 0, SRV-707; a shorter value is kept) and none of slot 0's caches; it shares the state store.</p>
+<p>Which slot a request gets. A request queues for slot 0 the way it always did (the ranks above). While it waits, it takes a free side slot when its prompt plus <code>max_tokens</code> plus a margin (64 tokens, 8,192 more when the conductor shapes the request, for its note and package) fits the side slot's window (a request with images counts each image's rows, SRV-629), it is not a side-lane guest, and it does not continue slot 0's resident conversation (the next turn of that conversation waits for slot 0 and resumes there in place; on a side slot it would prefill its whole conversation again). A request on a side slot sees its slot's engine, drafter, window and per-request values through the same <code>STATE</code> the handler always reads (<code>SlotState</code>), so it is served by the same code: the conductor, the monitor, tool calls, structured outputs, streaming.</p>
+<p>The GPU turn. Every slot's GPU work runs in its turns (<code>Turn</code>): a request offers the turn back before every decode block and after every prefill chunk, and it is handed to a waiting slot that is one quantum (<code>--turn-quantum-ms</code>, 50) behind in GPU time, as Linux's CFS shares a CPU. Whoever holds the engine lock (a request on slot 0, the summary prepared ahead, the shadow reader, a decision model's batch) holds the turn as slot 0, so nothing that runs under the engine lock runs beside a side slot's work, a CUDA graph capture included. Before the turn changes hands the device is synchronized (<code>--parallel-settle on</code>), so the length routers' timings hold only their own slot's work.</p>
+<p>Lockstep rounds. While two or more slots decode, their draft calls run as one packed draft (<code>--parallel-draft on</code>, <code>engine/drafters/draft_graph.py</code> <code>packed_draft</code>: the drafter's projections and the head once over every slot's block, from CUDA graphs per set of drafters; slots on different drafter arms draft apart), and each one then submits its tree and waits; the last one to submit runs one verify pass for all of them (<code>engine/model.py</code> <code>forward_tree_multi</code>): every projection (the MLP, the head, the recurrent and attention layers' input and output projections) runs once over all the slots' rows, so the weights are read once; the convolutions, recurrences, attention over each slot's own KV, the norms and the commits stay each slot's own. Each slot's tree is cut to its share first, best nodes first with their ancestors (16 nodes at 2 slots, 10 at 3, 8 at 4), so a joint pass stays at or under 32 rows, where every projection kernel's result for a row does not depend on its neighbours (<a href="../kernels/">kernels.md</a>). A chain-shaped block keeps its chain kernel and verifies alone in the round. When the turn has been idle for <code>--batch-timeout-ms</code> (2) with blocks waiting, the round runs without a slot that is not drafting (a forced close, a single-token step). A slot that decodes alone never waits and verifies with its own graphs, so one request at a time takes the path it takes without <code>--parallel</code>. The length router is not told a joint pass's time (it would learn a cost no lone block pays).</p>
+<p>Admission by bytes. Before a request prefills, its worst case is reserved: its prefill's workspace (the memory policy's estimate for its length, at least 1.15 GiB). It waits, in one-second slices with its turn given up, while MemAvailable less what the caches may still grow into, the other requests' reservations and its own would fall under <code>--parallel-floor-gb</code> (15); after <code>--queue-timeout</code> without a stream, or <code>QSE_MEM_WAIT_S</code> (3 h) with one, it gets a 503 (<a href="../parallel-requests/#waiting-for-memory">parallel-requests.md</a>). That sum is capped by the engine's room to <code>--mem-peak-gib</code>: every cache asks the memory policy before it grows and every prefill, a side slot's too, passes the policy's gate, which keeps the reservation plus that prefill's workspace under the peak, so the engine as a whole never takes more than that room. The state store's snapshot is one of those caches, so it is no longer part of each request's need. Until 0.3.50-test a request counted the workspace floor plus a whole store entry (2.1 GiB for 576 tokens) against 6.4 to 8.4 GiB of cache budgets: at the box's idle MemAvailable (about 27 GiB) a 576-token title request waited 63 and 83 s beside a 9,000-token one (SRV-250). The wait is queue time: the ledger's <code>queue_ms</code> holds it and <code>wait_mem_ms</code> names it, <code>prompt_ms</code> starts at the admission; the client gets a waiting line ("waiting: memory for a second request, N GiB short, position 1"); the log says <code>waits for memory</code> and <code>admitted after N s</code>, and a request with nothing else in flight <code>admitted alone</code>. Since 0.15.1 a request with nothing else in flight is checked against the floor too (SRV-775), and the engine's memory policy (OPS-47) still gates it. A side slot is built at start only when the same floor holds with its bytes added: about 104 KiB a token of window and 7.5 GiB beyond it, most of that the pools of its 121 verify graphs (measured 6.9 to 7.5 GiB for an 8,192-token slot). The memory policy's ceiling and peak go up by what the side slots took, so slot 0's caches are not shed for them.</p>
+<p>What it shows. <code>/health</code> and the dashboard's System page carry <code>parallel</code> (the slots, the turn, the rounds by size, the admission) only when side slots exist; the Parallel view shows each engine lane's slot and the engine's slots with what each does and the passes they shared. The <code>[req]</code> line and the ledger rows are the request's own.</p>
+<p>The text. Each request writes what it writes alone up to a near tie: a joint round verifies the request's tree cut to its share, a different tree shape than the one it verifies alone, and the shape of the verified tree can move a near tie (<a href="../exactness/">exactness.md</a>). The rows of a batched projection are the bits they are alone (checked on the box: <code>tools/parallel_verify_check.py</code>, CPU: <code>tests/test_parallel_verify.py</code>).</p>
+<p>Limits of phase A: side slots were text only (they read images since SRV-629); the side lane serves only slot 0's safe points; a side slot does not resume from slot 0's resident prefix (it resumes from the state store); the joint pass runs without CUDA graphs; each slot's accept, commit and stream run one after the other on the host, and socket writes happen while the turn is held. A side slot captures its verify graphs at their first use (<code>--side-precapture off</code>), so its build takes seconds.</p>
+<p>Timing (<code>QSE_PARALLEL_TIMING=1</code>, for measurements: every joint pass is synchronized and timed): <code>/health</code>'s <code>parallel.meeting</code> carries, per number of slots decoding, a slot's round (<code>round_ms</code>, submit to submit), its draft (<code>draft_ms</code>), its work after the verify (<code>post_ms</code>), the verify as it sees it (<code>verify_wait_ms</code>) and the joint pass's GPU time by blocks (<code>pass_ms</code>), and its tokens a round (<code>accept</code>: <code>joint&lt;N&gt;</code> or <code>alone</code>). <code>tools/parallel_bench.py</code> reads them per window.</p>
+<h2 id="one-model-as-two-stage-processes">One model as two stage processes<a class="headerlink" href="#one-model-as-two-stage-processes" title="Permanent link">&para;</a></h2>
+<p><code>--stage LO:HI</code> starts the server as one of the two stage processes of a split model (ENG-307, <a href="../architecture/#stages-one-model-in-two-processes">architecture.md</a>). It serves the layers <code>[LO, HI)</code> of <code>--model</code>: <code>0:k</code> is the front stage, <code>k:layers</code> the tail. Built for the <code>lfm2_moe</code> and <code>qwen4_exp</code> (Flash-Next) families.</p>
+<table>
+<thead>
+<tr>
+<th>flag</th>
+<th>what</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--stage LO:HI</code></td>
+<td>the layer range this process serves</td>
+</tr>
+<tr>
+<td><code>--link-listen IP:PORT</code></td>
+<td>wait for the other stage on this address</td>
+</tr>
+<tr>
+<td><code>--link-peer IP:PORT</code></td>
+<td>connect to the other stage at this address</td>
+</tr>
+<tr>
+<td><code>--link-key-file PATH</code></td>
+<td>the key both stages share</td>
+</tr>
+<tr>
+<td><code>--stage-graphs on\|off</code></td>
+<td>Flash-Next: a stage captures its own decode, verify and commit graphs (<code>on</code>, the default) or runs every pass eager</td>
+</tr>
+<tr>
+<td><code>--stage-caches on\|off</code></td>
+<td>Flash-Next: keep state on both stages under one key: the prompt caches, the disk tier and side slots (<code>off</code>, the default: one sequence, nothing kept)</td>
+</tr>
+<tr>
+<td><code>--stage-snapshots-gb G</code></td>
+<td>the front, with <code>--stage-caches on</code>: memory for the states it keeps, a slot (2)</td>
+</tr>
+<tr>
+<td><code>--stage-cache-dir PATH</code></td>
+<td>the front, with <code>--stage-caches on</code>: the folder for its half of what the tail's disk tier keeps</td>
+</tr>
+<tr>
+<td><code>--stage-cache-gb G</code></td>
+<td>the front: that folder's size (32)</td>
+</tr>
+</tbody>
+</table>
+<p>Each side takes one of <code>--link-listen</code> and <code>--link-peer</code>. Addresses are IP literals, and a wildcard address is refused. The key file must be a regular file of the server's user, mode 0600, with at least 32 bytes. The key appears in no log line, message or route.</p>
+<p>The tail is the engine clients talk to. It serves the chat and completion routes, and its <code>GET /v1/replica/identity</code> names its range in <code>stage</code>. The front loads its layers and answers <code>/health</code>; every other route answers 409 <code>stage_front</code>. Start the front first: the tail waits 120 s for the link, then refuses to start. Stop the tail first (its planned stop drains the disk tier's writer), then the front. A link whose two ends differ in key, code, weights, family, layer range, caches (<code>--stage-caches</code>) or slots (<code>--parallel</code>) is refused with the reason (<code>auth</code>, <code>code</code>, <code>weights</code>, <code>family</code>, <code>stage</code>, <code>caches</code>, <code>slots</code>): a tail at its start refuses to start and says it, a running tail's <code>/health</code> says it in <code>stage.link.reason</code> while it keeps trying, and the front logs it and shows it in its own <code>stage.link.reason</code>.</p>
+<p>A front with <code>--stage-caches on</code> checks the box before any weight is read: MemAvailable must cover its weights, its attention layers' rows and its sections for every slot (from the pack's headers), <code>--stage-snapshots-gb</code> for every slot and the floor (<code>--parallel-floor-gb</code>), and the filesystem of <code>--stage-cache-dir</code> must hold <code>--stage-cache-gb</code> (its free space and the files already in it). Otherwise it refuses with the figures. A front never takes <code>--disk-cache</code>: the disk tier is the tail's, and the front's half goes to <code>--stage-cache-dir</code>.</p>
+<p>Limits, each refused at the start or at the request, never served another way:</p>
+<ul>
+<li>without <code>--stage-caches on</code>: one slot (<code>--parallel 1</code>), no disk tier, no prompt caches;</li>
+<li>no KV pool, no conductor, no backends, not in setup mode; the session spill is off;</li>
+<li>text only: a request with images gets 400 <code>stage_text_only</code>;</li>
+<li><code>LFM2_KV_FP8</code> and <code>FN_KV_FP8</code> are not served split;</li>
+<li>LFM2 MoE's passes run eager, without captured graphs, and it keeps no state split (<code>--stage-caches on</code> is refused).</li>
+</ul>
+<p>Flash-Next as two stages (<code>engine/models/flashnext/stages.py</code>, <code>tail.py</code>):</p>
+<ul>
+<li>The tail holds the last layers, the final mixer, the head, the draft layer and the sampler. The draft layer and its graphs are the one process's.</li>
+<li>The carry is the 4 streams and the next site's norm of them in bf16: 40,960 bytes a row at hidden 2,560. In front of the PLE layer it is the streams alone, 20,480 bytes a row.</li>
+<li>The stage that holds the PLE layer reads the n-gram table. The other stage opens the file and reads no row of it.</li>
+<li>Each stage reads the embedding, the head and the final mixer beside its own layers.</li>
+<li>A prompt runs chunk-major, one chunk of <code>FN_PREFILL_CHUNK</code> rows a round. The layer-major window and the joint prefill are off.</li>
+<li>The tail loads no vision tower.</li>
+<li><code>/health</code> lists these limits under <code>stage.options</code>.</li>
+</ul>
+<p>Flash-Next with <code>--stage-caches on</code> (both stages take the flag):</p>
+<ul>
+<li>The tail runs the server's caches as the one process does: the resident prefix with all it keeps (the end anchor, the pin, the park, the stash), the state store, and the disk tier with <code>--disk-cache</code>. They hold the tail's half of a state.</li>
+<li>The front keeps its half under the same key. The key is a digest of the blocks that wrote the state, computed on each stage from what it ran. The front's rows stay where they are until a pass would write over them; then they are copied out, within <code>--stage-snapshots-gb</code>.</li>
+<li>A state the caches put back whose front half is gone is rebuilt on the front alone: the tail sends its log of blocks again, each as the kind of block it was, and runs none of its own rows again. The tokens are the same; the cost is the front's share of a prefill.</li>
+<li>With <code>--stage-cache-dir</code> the front writes its half of every state the tail's disk tier keeps. After both stages start again a disk hit needs both halves; without the front's file the entry is given up and the prompt runs cold.</li>
+<li><code>--parallel N</code> (up to 8): each slot is a stage engine of its own over the one copy of the weights, on both stages. The blocks of a joint round cross the link as one request and one carry; on each stage every slot's block then runs on its own engine. A side slot's window is <code>--side-max-len</code>, at most slot 0's.</li>
+<li>When the link comes back the tail keeps its sequence. The front starts empty and is brought back from its own kept states, or from the tail's log, at the next request.</li>
+<li><code>/health</code> adds <code>stage.state</code>: on the tail the snapshots, restores, rebuilds and joint rounds; on the front each slot's kept states and bytes.</li>
+<li>Not served: images, the session spill, the layer-major window and the joint prefill. A joint round runs each slot's block on its own, so a round of N slots reads the weights N times.</li>
+</ul>
+<p><code>/health</code> on both stages carries a <code>stage</code> block (below). While the link is down the tail's status is <code>degraded</code>. A request in flight ends with an error that says <code>stage_down</code>, and a new one gets 503 <code>stage_down</code> with <code>Retry-After: 5</code>. The tail keeps dialing or listening. Without <code>--stage-caches on</code> a new link starts both stages empty under the next epoch, so the next request reads its prompt again.</p>
+<h3 id="the-stage-block">The stage block<a class="headerlink" href="#the-stage-block" title="Permanent link">&para;</a></h3>
+<p>A server that is not a stage has no <code>stage</code> key in <code>/health</code>. A stage's full <code>/health</code> answer carries this block on both sides, every field present (shape 1; a field added later is optional):</p>
+<table>
+<thead>
+<tr>
+<th>field</th>
+<th>type</th>
+<th>what</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>shape</code></td>
+<td>int</td>
+<td>the block's version: 1</td>
+</tr>
+<tr>
+<td><code>role</code></td>
+<td><code>front</code> | <code>tail</code></td>
+<td>which stage</td>
+</tr>
+<tr>
+<td><code>lo</code>, <code>hi</code></td>
+<td>int</td>
+<td>the layer range <code>[lo, hi)</code></td>
+</tr>
+<tr>
+<td><code>range</code></td>
+<td>string</td>
+<td>the same as <code>LO:HI</code></td>
+</tr>
+<tr>
+<td><code>layers</code></td>
+<td>int</td>
+<td>the model's layers</td>
+</tr>
+<tr>
+<td><code>cut</code></td>
+<td>int</td>
+<td><code>hi</code> on the front, <code>lo</code> on the tail</td>
+</tr>
+<tr>
+<td><code>identity</code></td>
+<td>string | null</td>
+<td>this stage's handshake identity block by content (16 hex digits); null on the tail before its first link</td>
+</tr>
+<tr>
+<td><code>options</code></td>
+<td>object</td>
+<td>the limits the stage serves with (<code>stage_options</code>: <code>slots</code>, <code>caches</code>, <code>graphs</code>, <code>kv_cache</code>, <code>images</code>, <code>prefill_chunk</code>, <code>max_len</code>, <code>carry</code>, and with caches on <code>snapshots_gb</code>, <code>cache_dir</code> (<code>set</code> or <code>none</code>), <code>cache_dir_gb</code>, <code>joint_round</code>)</td>
+</tr>
+<tr>
+<td><code>link.state</code></td>
+<td><code>up</code> | <code>down</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>link.epoch</code></td>
+<td>int</td>
+<td>counts the links; 0 before the first</td>
+</tr>
+<tr>
+<td><code>link.reason</code></td>
+<td>string | null</td>
+<td>null while up; else why: <code>no peer yet</code>, <code>refused (&lt;reason&gt;)</code>, <code>timeout</code>, <code>closed</code>, ...</td>
+</tr>
+<tr>
+<td><code>link.transport</code></td>
+<td>string | null</td>
+<td><code>tcp</code>; null before the first link</td>
+</tr>
+<tr>
+<td><code>link.bytes</code></td>
+<td>object | null</td>
+<td><code>tx</code>, <code>rx</code> of the current link; null before the first</td>
+</tr>
+<tr>
+<td><code>link.peer</code></td>
+<td>object | null</td>
+<td>the other stage of the last link: <code>role</code>, <code>lo</code>, <code>hi</code>, <code>identity</code> (equal to the other stage's own <code>identity</code>); null before the first link</td>
+</tr>
+<tr>
+<td><code>steps</code></td>
+<td>int</td>
+<td>the front: carries sent</td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td>object</td>
+<td>with <code>--stage-caches on</code> only: the tail's counters (<code>chunks</code>, <code>steps</code>, <code>trees</code>, <code>rounds</code>, <code>round_blocks</code>, <code>round_max</code>, <code>snapshots</code>, <code>restore_hits</code>, <code>restore_misses</code>, <code>quiet_steps</code>, <code>drops</code>, <code>marks</code>, <code>rebuilds</code>, <code>replays</code>, <code>slots</code>) or the front's (<code>snapshots</code>, <code>restores</code>, <code>restore_misses</code>, <code>quiet_steps</code>, <code>rounds</code>, and <code>slots</code>: each slot's store report)</td>
+</tr>
+</tbody>
+</table>
+<p><code>tools/stage_cut_cost.py</code> measures what the cut costs by itself on one device: the same blocks through the whole model and through front, host copy and tail, in one process with no link. A run reads its blocks once before the clock starts, changes which arm goes first every run, and times the uncut arm a second time; <code>baseline.clean</code> says whether that second pass is within 2 % of the first.</p>
+<h2 id="qwen38-flash-next-srv-87">Qwen3.8-Flash-Next (SRV-87)<a class="headerlink" href="#qwen38-flash-next-srv-87" title="Permanent link">&para;</a></h2>
+<p><code>--model &lt;an EXL3 pack of Qwen3.8-Flash-Next&gt;</code> serves Flash-Next through this same server. It picks the model by the checkpoint's own config (<code>engine/models</code>, <code>qwen4_exp</code>), and <code>server/app.py</code>'s loop drives it through an adapter in the 27B's engine interface (<code>engine/models/flashnext/serving.py</code>). Every route is this server's own code, and so are the reasoning split and the think budget, tool calls and grammar masks, penalties and <code>logit_bias</code>, logprobs, seeds, stop strings and pattern stops, the live view and the usage rows.</p>
+<p>Speculation is the pack's MTP layer as a tree drafter: StairCut over a 4-deep chain through the hot draft head (<code>QWEN38_FN_DRAFT_HOT</code>), with the lookup in the same tree (<code>QWEN38_FN_LOOKUP=1</code> in the profiles), gated by the load-time self-check. A sampled request walks the greedy tree (<code>--sampled-tree det</code> is implied). A verified row is the decode step's row bit for bit, so greedy and seeded answers are the plain-decode answers token for token (<code>tools/fn_server_check.py --compare</code> of a <code>--drafter none</code> and a <code>--drafter mtp</code> server: 19 of 20 requests the same; the 20th, a think budget at low effort, closes at a block boundary).</p>
+<p>Its caches are the 27B's (ENG-157): the resident prefix with its end anchor and its pinned and parked anchors, the state store, the disk tier and the session spill, on Flash-Next's grid of 4,096 tokens (its prefill chunk, <code>caps.anchor_grid</code>). A disk tier and a spill need a folder of their own per profile, since a file of another fingerprint is swept. Since ENG-241 the KV pool (<code>--kv-pool on</code>) and side slots (<code>--parallel N</code>) work on Flash-Next too, and its profiles turn them on: three slots over one engine, each answer its single-stream answer (<a href="../parallel-requests/#on-flash-next">parallel-requests.md</a>). Flash-Next reads images (VIS-97): the pack's own vision tower on the EXL3 kernels, the image rows and their three-axis rotary positions in the prompt, through the image path below; its profiles run with <code>VISION=on</code>, and a pack whose files hold no tower (the 4.05 branch keeps it in <code>vision_k6.safetensors</code>, which the reader takes) starts with vision off and says so. On 3.05 the image chats answered the same with the MTP drafter and without (5 of 5: two single-image chats, a two-image chat of 2,089 prompt tokens and a second turn from the caches), and a text-only answer is the same with the tower loaded and without. Against transformers' Qwen4ExpVisionModel on the dequantised weights the tower's outputs sit within the official model's own BF16 noise (0.048 to 0.090 from the fp32 model, against 0.046 to 0.104). In the language model the text rows after an image keep the text's own agreement (KL 0.019 after 140 image rows and 0.0025 after 2,184 with the sparse attention on, top-1 97.9 %; the text floor 0.022), and every verify pick equals the decode (<code>tools/fn_vision_check.py</code>, VIS-97). Not yet on Flash-Next: the conductor's shadow reader, which is validated on the 27B's reasoning only.</p>
+<p>Nothing in the server branches on the model (ENG-E8). One loader serves both models (<code>_load</code>, SRV-341): the model's builder brings its weights and engine with the tokenizer and the drafter, and the engine's <code>caps</code> say what it cannot hold yet. Both models share the walk down a verified block (<code>engine/methods/walk.py</code>). What the dashboard and the caches ask of an engine goes through the adapter's verbs: <code>cost()</code> (the snapshot bytes, <code>cache.snapshot_cost</code> on <code>/health</code>), <code>cache_state()</code>, <code>settle()</code>, <code>discard_pending()</code>, <code>trim_pending(n)</code>. For the 27B, <code>engine/models/qwen3_5/adapter.py</code> installs them on its class, so <code>engine/model.py</code> keeps its bytes. Flash-Next's package builds its own engine and drafter for the loader (<code>serving.serve</code>, named by its registry entry: the pack, the hot draft head, the self-check), and <code>/health</code>'s <code>weights</code> names the pack, its MTP drafter, the load time and the self-check.</p>
+<h2 id="images">Images<a class="headerlink" href="#images" title="Permanent link">&para;</a></h2>
+<p>A user, assistant or tool message may carry <code>{"type": "image_url", "image_url": {"url": ...}}</code> parts, where the URL is <code>https://</code> or <code>data:image/...;base64,</code>. The server fetches and decodes them before the request queues and runs the checkpoint's own image processor (<code>preprocessor_config.json</code>: 16-pixel patches, 2 × 2 merge, 65,536 to 16,777,216 pixels). The chat template writes one placeholder per image and the server expands it to one prompt row per merged patch: a 640 × 480 image is 300 rows, and those rows count as prompt tokens in <code>usage</code>. The vision tower (27 blocks, 0.92 GB, BF16 as the checkpoint stores it) runs inside the prefill, when the first chunk that holds the image runs; the live view reads "Encoding image 1 of 2" while it does.</p>
+<p>A bad image is a 400 that names the part, for example <code>messages[1].content[0].image_url</code>: a scheme other than https or data, a download that fails, broken base64, a body in none of the five formats it reads (PNG, JPEG, WEBP, GIF, BMP), more than <code>--image-max-mb</code> (20), a header that declares more than <code>--image-max-decode-pixels</code> (64 million), more than <code>--max-images</code> (16) in the newest message, images in the newest message that together take more than <code>--max-image-rows</code> (65,536) prompt rows (earlier messages' images over either cap are left out instead, below), an image in a system message, a video part, and any image when the server runs with <code>--vision off</code>. <code>--image-act-gb</code> (6) is the admission check: an image whose encode would need more memory than that, by the tower's byte math, is refused before it queues; the largest image the processor admits needs about 3.4 GiB. A waiting request keeps its images' patches on the host in the tower's dtype (BF16, 12 KiB a prompt row), so the row cap also bounds what a full queue holds.</p>
+<p>An https URL is a request the server makes for the client, so it is fenced. The host must resolve to public addresses only: loopback, private, link-local, shared (100.64/10), multicast and reserved ranges are refused, including IPv4 addresses inside IPv6. The connection goes to the address that was checked, with the certificate checked against the host name, so a second DNS answer cannot move it. A redirect is followed only to another https URL that passes the same check, at most 3 times. A URL with credentials in it is refused. <code>--image-fetch-timeout</code> (15 s) covers the whole download, redirects included. <code>--image-https-private on</code> lets URLs reach private addresses, for a server that should read images from its own network; <code>--image-https off</code> accepts data: URLs only.</p>
+<p>A long conversation is not refused for the images it has gathered. A coding agent that reads a screenshot every few turns sends every earlier image again on every turn, so once it had read 17 the 17-image request was a 400 and so was every request after it: the session could never continue (opencode, 2026-10-03, <code>17 images; the limit is 16 a request</code> on <code>messages[210]</code>). Since 0.3.21-test, when the images are over <code>--max-images</code> or <code>--max-image-rows</code> and the excess is in earlier messages, the oldest images are left out and the request is served. A left-out image is never fetched or decoded, and in the prompt it is the text <code>[an earlier image was left out: TandemLLM keeps the newest 16 images of a conversation]</code> in place of its placeholder, so no placeholder token is left without an image (the router, the session monitor and the transcripts still read the messages as the client sent them; only the rendered prompt changes). Images go in steps of half the cap (8 at the default), counted from the conversation's start: at 17 images the oldest 8 go, and the next 7 images change nothing before the prompt, so the prompt's head that the caches resume stays the same for several turns instead of moving at every turn. Over the row cap, the newest message's images are counted first, then the earlier ones newest first; the first that would go over the cap and everything older are left out, rounded up to a whole step. The choice is a function of the message list alone, so the same history always renders the same prompt. The newest message's own images are never left out: if they alone are over a cap, the request is the 400 it was (<code>17 images in the newest message; the limit is 16 a request</code>, naming the first image over). Each request that leaves images out says so: a log line <code>[images] &lt;request id&gt;: left out the oldest 8 of 17 images</code> (counts only, never a URL), the response header <code>X-Tandem-Images-Left-Out: 8</code>, the journal row's <code>extra.images_left_out</code> on a conductor request, and the counter <code>qse_images_left_out_total</code>.</p>
+<p>Text requests do not touch any of this: the engine's image state is empty for them and every forward is the text one, bit for bit.</p>
+<h2 id="chat-mode-the-conductor-as-an-extension">Chat mode: the conductor as an extension<a class="headerlink" href="#chat-mode-the-conductor-as-an-extension" title="Permanent link">&para;</a></h2>
+<p>A new install runs headless (<code>QSE_MODE=engine</code>): the routes above, under the served model's own name. In chat mode (<code>QSE_MODE=chat</code>) the engine also loads one extension, named by its module in <code>QSE_EXT</code>, through the engine extension interface (<a href="https://github.com/TandemLLM/TandemEngine/blob/main/contracts/engine-ext-v1/README.md">contracts/engine-ext-v1</a>, versioned on its own). TandemApp's conductor is that extension. It brings the <code>TandemLLM</code> model and everything that model does with a turn. Its code and its rules are TandemApp's (<a href="https://github.com/TandemLLM/TandemApp/blob/main/docs/chat-mode.md">chat-mode.md</a>).</p>
+<p>The engine looks the module up before the weights load. Chat mode without a module it can load refuses to start, and so does a module written against another major version, with one line (<code>[ext] REFUSING: ...</code>). Once the model is loaded, the engine hands the extension its state, the tokenizer and the metrics registry, the ledger's path, and the engine-only screens as calls.</p>
+<p>Each request then asks the extension at six points:</p>
+<table>
+<thead>
+<tr>
+<th>point</th>
+<th>what the extension gives back</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>before the request queues</td>
+<td>a plan, or none for a request it leaves alone</td>
+</tr>
+<tr>
+<td>before the prefill</td>
+<td>the prompt's token ids</td>
+</tr>
+<tr>
+<td>at each safe point of the decode loop</td>
+<td>an act: close the reasoning, continue hidden, repair or regenerate a call, give up</td>
+</tr>
+<tr>
+<td>while the answer streams</td>
+<td>the lines the stream carries</td>
+</tr>
+<tr>
+<td>at the end of the turn</td>
+<td>follow-up requests the engine schedules after the client's</td>
+</tr>
+<tr>
+<td>after the ledger row is written</td>
+<td>nothing: it writes its own journal rows</td>
+</tr>
+</tbody>
+</table>
+<p>The engine carries out every act itself, so the decode loop stays the engine's. A hook that raises is logged and counted in <code>qse_ext_errors_total</code>. The rest of that request runs as a headless engine would serve it.</p>
+<p>The box's mode decides what <code>ops/start.sh</code> starts (OPS-260). <code>QSE_MODE=engine</code>, a new install's default, starts the engine alone, with <code>--conductor raw</code> and none of the small models. <code>QSE_MODE=chat</code> comes from <code>install.sh --with-chat</code>, the Setup Guide's Chat (beta) switch or <code>run/local.env</code>. It sets <code>QSE_EXT=tandemapp.engine_ext</code> and the conductor's directory (<code>QSE_CONDUCTOR_CONFIG</code>), and starts the small models the profile names. Left empty, the mode is chat on a box whose conductor directory exists and engine everywhere else, so an upgrade keeps each box's mode; <code>QSE_CONDUCTOR_CONFIG=off</code> set by hand stays engine only. The last block of <code>ops/serve.env</code> applies the mode after the profile, <code>run/setup.env</code> and <code>run/local.env</code>. chatd is not the engine's: TandemApp's TandemNode runs it.</p>
+<p>Raw is a header, not a model name. On a chat box <code>X-Tandem: raw</code>, or the locked profile <code>raw</code> or <code>bench</code> in <code>X-Tandem-Profile</code>, serves the release's path byte for byte for one request. Benchmarks that measure the engine send it, and <code>tools/row3.py --no-server</code> refuses a server that lists <code>TandemLLM</code> (<a href="../benchmarks/">benchmarks.md</a> says which settings a score must name).</p>
+<p>The engine dispatches the extension's routes to it: <code>/v1/conductor/*</code>, <code>/v1/library*</code>, <code>/v1/laya*</code> and <code>/v1/memory*</code>, each also under a session address <code>/s/&lt;token&gt;</code>. A headless engine answers them 404 <code>not_on_engine</code>, and <code>/dashboard/</code> 404 <code>no_ui</code>. <code>/health</code> names the running extension under <code>extensions</code> (<code>[]</code> when headless) and what it loaded under <code>loaded</code>.</p>
+<h3 id="probe-snapshots-and-the-probe-stage-eng-181">Probe snapshots and the probe stage (ENG-181)<a class="headerlink" href="#probe-snapshots-and-the-probe-stage-eng-181" title="Permanent link">&para;</a></h3>
+<p><code>QWEN38_PROBE_SNAPSHOTS=on</code> (serve.env, off by default; approved 2026-10-01 for the reference box only, 30 days, tool requests only) copies Qwen's own rows at the router's three decision points, for linear probes trained on the CPU (<code>tools/probe_train.py</code>). Only a TandemLLM request that offered tools, with one choice and not a response-cache replay, is covered; raw never (it has no active plan), a chat without tools never. The points: <code>prompt</code>, the row of the last message's last token, the last row the turn shares with the prompt the client sent (the router's note and the thinking splice come after it, so a probe can read it before the router decides); <code>think</code>, every <code>QWEN38_PROBE_EVERY</code> (1,024) reasoning tokens, the mean of the rows the verified block that crossed the line committed; <code>finish</code>, the row that decided an end token (the last one of a turn that ended in tool calls is not kept: that turn claims nothing about being done). Each point is one row per layer the block drafters tap (5, 19, 33, 47, 61 through <code>eng.tap</code>) plus the <code>hidden_post_norm</code> row, 6 × 5,120 values, fp16: 61,440 bytes and a 420-byte index line. Nothing is forwarded for them: the prompt's row is taken in the prefill's chunk hook (or after its last chunk), the others where the loop already holds the forward's rows. On the device a point is a gather, a mean, a cast and one asynchronous copy into a pinned host slot (128 slots, allocated when the ring opens), queued behind the forward on the request's stream; the host never waits. A request takes at most 96 points; a point with no free slot is skipped and counted. <code>X-Tandem-Probe: off</code> takes a request out (<code>tools/probe_measure.py</code>, the live check: the same text and a decode rate within 3 % with and without).</p>
+<p>The ring is <code>~/.qwen38-spark-engine/probe/snapshots/&lt;yyyy-mm-dd&gt;/</code> (<code>QWEN38_PROBE_DIR</code>; a directory inside a git work tree is refused at start): <code>rows-&lt;weights&gt;-&lt;R&gt;x&lt;H&gt;.f16</code> (append-only records) and <code>index.jsonl</code> (one line a record: the request id, the router's journal row id, the session, the class, effort and source the router set, the profile and client, the point, its position or reasoning count, the rows' names, the weights key, and the finish reason and tool calls; never a text). A writer thread waits for a request's copies after the request ended, appends them, and journals one row a request (<code>kind = probe</code>, task <code>snapshot</code>: the counts by point and the bytes). A day stops taking records at <code>QWEN38_PROBE_DAY_MB</code> (100 MB, journaled <code>day_cap</code>); day directories older than 30 days go at start and at 04:00 (journaled <code>prune</code>). The weights key is the served weight files' names with their sizes and times; a probe trained on one key is refused on another. The labels are joined later from the journal (<code>tools/probe_train.py fit</code>): the class Qwen decided (its no-think or in-context answer) and the 216-prompt fixture run through the engine (<code>tools/probe_train.py fixture</code>), the D1 loop guard's acts for stuck, the next checker RESULT for done. Night 2's traffic (1,023 TandemLLM requests with tools, 400,229 reasoning tokens, 17 turns that ended without a call) writes 81.1 MB.</p>
+<p>The probe stage (<code>classifier.probe_stage</code> in the router document: <code>mode</code> <code>off</code>, <code>shadow</code> or <code>on</code>; <code>file</code>, a probe under <code>~/.qwen38-spark-engine/probe/probes/</code> or a full path; <code>accept</code>, 0.9). <code>shadow</code>: the probe answers the request's own <code>prompt</code> snapshot after the request (snapshots on), into the row's <code>extra.probe</code>, and decides nothing. <code>on</code>: where the plan decides under the engine lock (the in-context stage's follow-ups and long prompts) the probe answers first, on a prefill of the turn's prompt up to its insertion point (the turn then resumes at the grid line below it, as after the in-context stage); at or above <code>accept</code> it decides (stage <code>probe</code>, source <code>probe</code>) and the question is not asked, below it the question decides and both stages are journaled. A short first message keeps the decider and gets the probe in shadow. One answer is a GEMV over the standardisation and temperature folded in, 17 us on the box CPU at 6 × 5,120 rows and 9 classes. A probe of other weights, another width or rows the engine does not have is an error stage (<code>probe_weights</code>, <code>probe_dim</code>, <code>probe_rows</code>), never an answer.</p>
+<h2 id="decision-models-stage-a">Decision models (stage A)<a class="headerlink" href="#decision-models-stage-a" title="Permanent link">&para;</a></h2>
+<p>The engine can serve decision models itself (<code>engine/decision/</code>, ENG-179 and SRV-131): models that answer typed questions over a state in one forward pass with calibrated probabilities, <code>choice</code> (one of N options), <code>score</code> (an expected level) and <code>noul</code> (a probability that a statement holds). Laya's three checkpoints (<code>convaiinnovations/laya</code>, Apache-2.0) are the first: <code>laya-english</code> (ModernBERT-large, 512 tokens of state and question, 192 for the question), <code>laya-multilingual</code> (mmBERT-base, 1,024 and 256) and <code>laya-typed-decisions</code> (1,024 and 256). <code>QWEN38_DECIDER_MODELS</code> in serve.env names the ones this server serves and <code>QWEN38_DECIDER_DIR</code> where their files are; empty, nothing of it is imported and every route below is absent.</p>
+<p>The arithmetic is the Laya SDK's, through <code>transformers</code>' ModernBERT, so the answers are the SDK's (<code>tools/decider_equivalence.py</code>: 0.00 on 22 questions): fp32 parameters, on CUDA the forward under <code>torch.autocast(bf16)</code>, on the CPU plain fp32. Nothing is shared with Qwen: each decision model's tensors live in a CUDA memory pool of its own, its forwards run on a stream of its own, and in this stage a forward runs only while no request holds the engine (the lock every completion holds from its prefill to its last token). A completion that arrives during a decision waits at most one decision forward; a question asked while a completion runs waits for it up to its deadline and is dropped after. Callers that arrive together are answered in the same idle window, each with a forward of its own, the forward the SDK runs for that call, so an answer never depends on who else asked; <code>QWEN38_DECIDER_COLLATE=rows</code> collates them into one forward instead (arbiter's way, faster under many callers, and on the GB10 a probability then moved by up to 3.4e-3 with no choice changing).</p>
+<p>A model loads through the residency planner (the decider's claim, 3.0 GiB measured with Laya in the engine since 0.11.3, against MemAvailable less the engine's growth to its peak, floor 15 GiB and margin 6 GiB; never during a hold, never beside another load): <code>ops/start.sh</code> asks for the conductor's <code>deciders</code> document's <code>on_start</code> models once the engine is healthy and its page cache is dropped (<code>POST /v1/conductor/deciders/autoload</code>), an <code>on_demand</code> model loads when a question first needs it, and the dashboard (the Conductor view's Deciders screen) loads and unloads them by hand. A model whose forward fails three times in a minute is unloaded and marked failed; the engine serves on.</p>
+<p><code>POST /v1/systemone</code> (and <code>/v1/predict</code>, the same) takes arbiter's Jev request, <code>{state, model?, questions: {id: {type, instructions, criteria?}}, task?, lang?}</code>, and answers <code>{model, answers, usage, routing, latency_ms, path}</code>. <code>model</code> is <code>auto</code> or <code>jev-latest</code> (script and language detection picks the checkpoint), a model's name, or an alias (<code>en</code>, <code>multilingual</code>, <code>typed</code> and others). Errors keep arbiter's body, <code>{"type": "error", "error": {"type", "message"}}</code>: 422 <code>invalid_request_error</code>, 529 <code>overloaded_error</code>, and 503 with <code>Retry-After</code> for <code>warming</code>, <code>loading</code>, <code>refused</code> (the planner said no, with its decision), <code>failed</code>, <code>not_loaded</code> and <code>busy_decoding</code> (<code>X-Decider-Deadline-Ms</code>, 30 s by default, passed while a completion held the engine). <code>X-Decider-Window: in_decode</code> is refused until the low-priority stream and its governor exist (stage C). <code>GET /v1/models</code> keeps <code>data</code> as it is, <code>TandemLLM</code> alone with the conductor on, and lists the decision models beside it under <code>decision_models</code>, so an OpenAI client still sees one chat model (OPS-260: <code>mode</code> and <code>loaded</code> sit beside <code>data</code> too, as in <code>/health</code>: <code>engine</code> or <code>chat</code>, and the conductor, its monitor's mode, the decision models, the narrator, the loaded roles and whether chatd takes a connection, checked at most every 5 s); <code>GET /v1/models/{id}</code> answers a decision model's card, and <code>GET /readyz</code> is 200 once one is loaded and warm. The contract is <a href="https://github.com/TandemLLM/TandemEngine/blob/main/contracts/engine-api-v1/decision/systemone.schema.json">systemone.schema.json</a>.</p>
+<h3 id="session-addresses-0323-test">Session addresses (0.3.23-test)<a class="headerlink" href="#session-addresses-0323-test" title="Permanent link">&para;</a></h3>
+<p>The model calls the library and Laya with curl or a script from the user's machine, and those calls carry no session id. Every session the router plans therefore gets a 12-character random token, and <code>{tandem_url}</code> in its notes is the request's own address plus <code>/s/&lt;token&gt;</code> (<code>server/api/session_tokens.py</code>: the engine keeps the registry and strips the prefix, the extension's router issues the tokens). The server strips <code>/s/&lt;token&gt;</code> from <code>/v1/library...</code> and <code>/v1/laya...</code> (any other route under it is a 404), names the session in the call's journal row (<code>session_key</code>) and counts its calls (<code>calls</code> in the router's live sessions). An unknown token is served and attributed to nobody. <code>QWEN38_TANDEM_URL</code> (0.3.41-test, SRV-163) sets the address the notes give instead of the request's own (the token path is added to it), for a box whose clients reach it under a name its scripts cannot verify. <code>{tandem_scratch}</code> (SRV-171) is where the testing packages put their logs, the Laya helper, the playtest kit and its log: <code>.tandem</code> in the project by default, which the model adds to <code>.git/info/exclude</code> when it creates it and deletes as its last step before "done", so the deliverable never holds it (<code>QWEN38_TANDEM_SCRATCH</code> names another place; <code>{token}</code> in it is the session token, e.g. <code>/tmp/tandem-{token}</code> for a client without a directory sandbox; opencode asks before any path outside the project and its <code>run</code> mode rejects the request). A state hook (<code>tandem_state</code>, <code>/__state</code>, <code>--dump-state</code>) is scaffolding the model wraps in <code>tandem-test-hook</code> comments and removes before "done" unless the user asked for one, and the model never downloads a runtime or an executable. TandemApp's <code>tools/packages_migrate.py</code> applies these text edits to a box's saved packages document (a new version) and its skill copies. Tokens live 48 h after their last use and are kept in <code>session-tokens.json</code> next to the conductor's documents (0600), so a note already in a conversation keeps working after a restart. A client without a session id is keyed by its head (<code>h:</code>); after a compaction the engine wrote, a new head that carries the first 200 characters of that summary is the same session.</p>
+<h2 id="draining">Draining<a class="headerlink" href="#draining" title="Permanent link">&para;</a></h2>
+<p>A CUDA context that fails (SRV-671: after a device-side assert every CUDA call of the process fails until it exits) is seen by the request or the background job that met the error, or by <code>/health</code>'s own probe (<code>torch.cuda.mem_get_info</code> every 5 s, skipped while a graph capture holds the capture lock). From then on <code>/health</code> answers 500 with <code>status: failed</code>, the error's first line under <code>failed</code> and a sentence under <code>error</code>; <code>qse_up</code> is 0; a completion gets a 503 of type <code>engine_failed</code> with that sentence and <code>Retry-After: 60</code>, without touching the GPU. <code>server/gpu_health.py</code> has the rules; <code>ops/watchdog.sh</code> restarts such an engine.</p>
+<p>SIGTERM and SIGINT drain the server. It stops taking work, <code>/health</code> answers <code>draining</code> with a 503, new requests get a 503 with <code>Retry-After: 30</code>, the generation in flight finishes with its last chunk and <code>[DONE]</code>, and the process exits 0. <code>ops/stop.sh</code> sends SIGTERM and waits up to 60 s (its first argument) before it kills. From 0.3.22-test the drain then writes the resident conversation and the parked one to the NVMe (engine/spill.py, docs/caches.md "Live conversations on the NVMe"), about 3 s for 130,000 tokens, and the next start reads the resident one back before it serves, so the conversation's next turn resumes at its end anchor instead of reading it again.</p>
+<h2 id="logs-and-privacy">Logs and privacy<a class="headerlink" href="#logs-and-privacy" title="Permanent link">&para;</a></h2>
+<p>Each request leaves one log line with its token counts, its finish reason and its rate. No line carries the text of a prompt or an answer. <code>--log-content</code> lets exception messages that quote a request into the log, and <code>--log-request-keys</code> logs parameter names and scalar values, never messages. A usage ledger in SQLite, one row per request with counts and timings only, feeds the dashboard. The probe snapshots (off by default) hold activations, never text, on the box only, 30 days.</p>
+<h2 id="sampling-and-penalties">Sampling and penalties<a class="headerlink" href="#sampling-and-penalties" title="Permanent link">&para;</a></h2>
+<p>Every sampling field works on every path, speculative ones included, and a seeded request reproduces its text exactly (<a href="../exactness/">exactness.md</a>). Penalties apply to every row before sampling. None is set in the served profile, and a client that sends one gets it, with one exception under the conductor.</p>
+<p>A sampled request that names no filter (<code>top_p</code>, <code>top_k</code>, <code>min_p</code>) runs with <code>--top-p</code> / <code>--top-k</code> when they were given at start, else with the model card's (SPD-245; Qwen3.8-27B: top_k 20, top_p 0.95), else over the whole vocabulary; <code>/health</code> <code>sampling.unnamed_filters</code> shows which. A sampled request without a <code>seed</code> draws one at admission and takes the keyed walk (<code>QWEN38_FRESH_SEED</code>, <code>auto</code>), the same distribution; <code>/health</code> <code>sampling.unseeded</code> says where it applies (<a href="../exactness/#sampling">exactness.md</a>).</p>
+<p>Regenerate (0.4.4-test, SRV-241): under TandemLLM a regenerate samples, and every other request keeps the greedy default (<a href="../exactness/#what-changes-output-on-purpose">exactness.md</a>). Open WebUI sends no flag. Its 0.11.4 source (<code>Chat.svelte</code>) shows the shapes:</p>
+<table>
+<thead>
+<tr>
+<th>client action</th>
+<th>what the server receives</th>
+<th>here</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Regenerate</td>
+<td>the same messages as the request that produced the answer (the new, empty answer is left out)</td>
+<td>a regenerate: samples</td>
+</tr>
+<tr>
+<td>Continue</td>
+<td>the messages ending with the partial assistant answer</td>
+<td>greedy</td>
+</tr>
+<tr>
+<td>Regenerate with a suggestion ("Add details")</td>
+<td>the old answer and a new user message</td>
+<td>greedy (a new instruction)</td>
+</tr>
+<tr>
+<td>Edit a user message</td>
+<td>a new user message with the edited text</td>
+<td>greedy</td>
+</tr>
+<tr>
+<td>a follow-up, a tool round</td>
+<td>new messages</td>
+<td>greedy</td>
+</tr>
+</tbody>
+</table>
+<p>The match is by session: the conductor's key (<code>c:</code> from <code>X-OpenWebUI-Chat-Id</code>, <code>x-session-id</code> or a body id), or a hash of the conversation's head when there is none. It compares a hash of the non-system messages, so a re-rendered system prompt (a time variable) or a dropped reasoning field does not matter. A regenerate of any earlier answer counts, because Open WebUI can regenerate any answer. A regenerate after Stop counts too. Each session keeps its last 32 answered conversations for 24 hours. The sampling is <code>--regenerate-temperature 0.7</code>, <code>--regenerate-top-p 0.95</code>, <code>--regenerate-top-k 20</code> (env <code>QWEN38_REGEN_TEMPERATURE</code>, <code>QWEN38_REGEN_TOP_P</code>, <code>QWEN38_REGEN_TOP_K</code>). That is Qwen's recommendation for thinking mode with the temperature 0.1 warmer, plus a fresh seed per attempt. The class, the effort, the notes and the packages are the turn's as before. A client that sends <code>temperature</code>, <code>top_p</code>, <code>top_k</code>, <code>min_p</code> or <code>seed</code> gets exactly what it sent. The row still says the request was a regenerate (<code>client_params</code>). Other clients can send <code>X-Tandem-Regenerate: 1</code>, and <code>X-Tandem-Regenerate: 0</code> opts one request out. The server log has a <code>[regenerate]</code> line per request. <code>/health</code> <code>sampling.regenerate</code> has the settings and the counts, and the ledger has <code>sampling</code> (<code>regenerate</code>, <code>client</code>, or null for greedy). <code>--regenerate off</code> turns all of this off.</p>
+<p>Loop escape (SRV-475, <code>server/api/loopescape.py</code>). Greedy decoding in an agent loop can return to the same call after a result that did not help. Under a profile whose <code>sampling.loop_escape</code> is <code>on</code> (the shipped coding, chat-app, hermes, overnight and chat), a request that offers tools and whose turn ends in a repeat (C3's state: <code>repeats - 1</code> identical calls with identical results) or a near-repeat (3 calls of one tool with identical results, each earlier call's canonical arguments at least 0.8 similar to the newest's) decodes with the model card's sampling: <code>generation_config.json</code> of the checkpoint, read at the start (Qwen3.8-27B: temperature 1.0, top_p 0.95, top_k 20; without one, the regenerate's settings), with a fresh seed. C3's escape note (<code>escape_texts</code>) goes at the prompt's tail. Waits and user messages break the streak as for C3, and calls with different arguments and the same result are progress; no result text is read. Once the turn no longer ends in a repeat, the session is back on the profile's default. A client that names <code>temperature</code>, <code>top_p</code>, <code>top_k</code>, <code>min_p</code> or <code>seed</code> gets what it sent. <code>sampling.agentic_default: card</code> samples every request that offers tools (shipped: <code>greedy</code>). Raw, bench, side requests, compactions and regenerates are not looked at. The decision row has <code>extra.loop_escape</code> (<code>state</code> on with <code>why</code>, <code>name</code>, <code>since_turn</code>, <code>turn</code>, the sampling and seed; <code>back</code> with <code>since_turn</code> and <code>back_at_turn</code>), the ledger's <code>sampling</code> is <code>loop_escape</code> or <code>card</code>, the usage has <code>tandem.sampling</code>, the log a <code>[loop-escape]</code> line, <code>/health</code> <code>sampling.card</code> and <code>sampling.loop_escape</code>. Sampled requests keep the drafter: the q-aware chain, or with <code>--sampled-tree det</code> the greedy tree walked by drawing the target's token, so the answer follows the target's sampled distribution (<a href="../exactness/">exactness.md</a>).</p>
+<p><code>no_repeat_ngram_size</code> is HF's rule for prose sampling: every token that would complete an n-gram already in the conversation pays 4 nats (a finite penalty, never a ban). In code repeated n-grams are the text itself (indentation, <code>", "</code>, a sprite's pixel row, a tile map's blank row), so under the conductor (0.3.40-test) a client's <code>no_repeat_ngram_size</code> is dropped on the turns of the code classes (<code>code_edit</code>, <code>debug</code>, <code>design_ui</code>, <code>drawing</code>, <code>three_d</code>) and on every turn that offers tools, whose arguments are files. The server's own default (<code>--no-repeat-ngram</code>) stays; the journal row gets <code>extra.penalty_dropped</code> and the log a <code>[penalty] ... dropped</code> line. A raw request (<code>X-Tandem: raw</code>, or no conductor) gets the client's mask as before. Whether the mask caused any particular degeneration has not been measured (no A/B); the rule rests on what the mask does to code.</p>
+<h2 id="the-tool-argument-loop-guard-0326-test">The tool-argument loop guard (0.3.26-test)<a class="headerlink" href="#the-tool-argument-loop-guard-0326-test" title="Permanent link">&para;</a></h2>
+<p>On 2026-10-04 at 16:18 Qwen opened a <code>write</code> of a Mario game, wrote 3 KB of it, and then wrote the same 97-character row of a tile map (<code>"</code> + 94 spaces + <code>",</code>) 12,866 times: 65,536 tokens, 1.26 MB, 327 s at 200 tok/s, until the token limit. The lookup drafter copied the loop (all 31 draft tokens accepted in 2,007 of 2,209 blocks). The call never closed, nothing was written, and the cut text went back into the session's next prompt (157,806 tokens). D1 and D2 watch the reasoning block only.</p>
+<p>The guard (<a href="https://github.com/TandemLLM/TandemEngine/blob/main/server/api/argloop.py">server/api/argloop.py</a>) reads the open tool-call block as the stream's <code>ToolCallBuffer</code> holds it, every 64 tokens once the block has 1,024. It fires on either rule:</p>
+<ul>
+<li>periodic: the block's last 1,024 tokens are one unit of at most 4,096 characters repeated at least 6 times, exactly; a unit of 256 characters or more needs only 3 copies over 384 tokens (0.3.40-test). The tail's last 256 characters are looked up in the 4,096 before them; the nearest match gives the period, and one binary search of string compares gives how far back the text stays periodic with it.</li>
+<li>size: the block passed 32,768 tokens and 3 times the longest message of the request (at 3.5 characters a token), and its last 16 KB compress 16 times or more (zlib level 1).</li>
+</ul>
+<p>Calibration (<code>tools/argloop_fp.py</code>, every <code>write</code> content and <code>edit</code> new string in the opencode database, 4,748 texts, 517 over 1,024 tokens, the largest 31,137 tokens): none fires. The longest exactly periodic stretch in them is 307 tokens (7.3 repeats); the highest window ratio past 4,096 tokens is 25.4, in a 21,256-token file. On the incident's text the guard fires 2,176 tokens into the block, 1,055 tokens after the loop began (the first 1,121 tokens were the real file). A legit call cut by the token limit in the same database (9,619 tokens, ratio 2.9) does not fire.</p>
+<p>When it fires on a held call (a profile whose monitor holds calls: SP3 checks, coding, overnight), the generation stops there, the open block is dropped and nothing of it reaches the client, and the client gets one sentence as content with <code>finish_reason: "stop"</code> ("[TandemLLM stopped the <code>write</code> call after 2,176 tokens: its arguments repeated the same 98-character piece 211 times in a row. Nothing was run or written.]"). Calls the answer held before the block are checked and released as usual. The journal gets A1's GIVE_UP with the verdict; the ledger's stop detail is <code>tool_arg_loop</code>. The session's next request that offers tools carries a hidden note at the prompt's tail (A1's PROMPT_TAIL_NOTE, in place of the session tasks' note for that request): the call was stopped, write the file without the repetition, generate repeated structure with code, and write a large file in parts. A call that streamed live (since 0.3.27-test; the coding profile's tool gate is off, so opencode's calls stream live) has already sent its name and part of its arguments: the generation stops the same way, the rest of the block is never sent as content, and the client keeps a call whose arguments never close. opencode runs it as an <code>invalid</code> tool and answers with the parse error, so the model's next step starts at once, with the note. Without a monitor in mode on the guard only logs (<code>[argloop] ... would stop</code>). <code>--argloop log</code> logs everywhere, <code>--argloop off</code> turns it off.</p>
+<p><code>max_tokens</code> from opencode (65,536) is not capped per tool call: the database's largest legit write is 31,137 tokens and the guard stops a loop within about 2,000 tokens of its start.</p>
+<h3 id="three-copies-of-a-long-unit-0340-test">Three copies of a long unit (0.3.40-test)<a class="headerlink" href="#three-copies-of-a-long-unit-0340-test" title="Permanent link">&para;</a></h3>
+<p>On 2026-10-06 at 06:11 an Open WebUI agent chat looped in a <code>write_file</code> call on a 405-character unit (pixel rows of a sprite). The short rule needed 1,024 tokens of it: the call was stopped at 6,400 tokens, 1,087 tokens and 7.3 copies after the loop began. A unit of 256 characters or more now fires at 3 copies over at least 384 tokens. Measured with <code>tools/argloop_fp.py</code> (the served tokenizer, every check as the server makes it):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>before</th>
+<th>after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>that call, replayed (<code>--replay</code>, the loop began at token 5,312)</td>
+<td>token 6,336: 1,024 after the start, 6.9 copies</td>
+<td>token 5,760: 448 after the start, 3.0 copies</td>
+</tr>
+<tr>
+<td>synthetic loops after a real head, unit 405 / 600 / 1,000 / 2,000 / 4,000 characters (tokens after the start)</td>
+<td>1,418 / 1,994 / 3,466 / 6,730 / 13,642</td>
+<td>714 / 1,034 / 1,738 / 3,402 / 6,858</td>
+</tr>
+<tr>
+<td>units of 20, 98, 200 characters</td>
+<td>1,034</td>
+<td>1,034 (the short rule)</td>
+</tr>
+<tr>
+<td>opencode's legit writes and edits (4,780 texts, 526 over 1,024 tokens)</td>
+<td>0 fire</td>
+<td>0 fire (none has a unit of 256+ characters twice in a row)</td>
+</tr>
+<tr>
+<td>synthetic legit shapes (<code>--synthetic</code>: a 32 × 32 sprite with 10 identical sky rows, 48 rows of pixel runs, two and three identical 16 × 16 frames, a 100 × 60 tile map with 20 blank rows, 12 levels, a table, CSS, a 600-zero buffer)</td>
+<td>1 of 9 fires</td>
+<td>1 of 9 fires</td>
+</tr>
+</tbody>
+</table>
+<p>The one synthetic shape that fires both before and after the change is 600 zeros written out 16 to a line (38 identical lines, 1,058 tokens): a literal block of one line repeated for more than 1,024 tokens is a loop to the guard. Three identical 393-character frames in a row reach 2.7 copies over 353 tokens and do not fire; a fourth identical copy, or a texture whose rows cycle exactly, would. The stop costs the call, not the session: the model gets the note below and writes the repetition as code.</p>
+<h3 id="a-stopped-call-sent-back-and-the-retry-storm-0340-test">A stopped call sent back, and the retry storm (0.3.40-test)<a class="headerlink" href="#a-stopped-call-sent-back-and-the-retry-storm-0340-test" title="Permanent link">&para;</a></h3>
+<p>After that stop the client got the sentence and a call whose arguments never closed. Open WebUI's tool loop answered it with a tool error and sent the conversation again, with the stopped call's 6,400 tokens of arguments in the history. The model copied its own loop: the same 6,400 tokens, byte for byte, five times (about 55 s each), the prompt growing from 17,692 to 46,419 tokens, and the A1 note at the prompt's tail changed nothing (thinking was off; the client sent <code>reasoning_effort: "none"</code>).</p>
+<ul>
+<li>The history is cut before anything reads it (<code>server/api/argloop.py</code> <code>collapse_history</code>). An assistant tool call whose arguments do not parse (a call the guard or the token limit cut while it streamed), or a string value in opencode's <code>invalid</code> stand-in, whose tail is periodic (at least 2.5 copies over 512 characters, units up to 8,192 characters since JSON escaping makes them longer), keeps its first 1,500 characters and gets one marker: "[TandemLLM stopped this <code>write_file</code> call: its arguments repeated one 425-character piece 7 times, beginning "…"; 13,940 characters of the repetition are left out here. The call never ran.]". A call whose arguments parse closed and is never touched. The client's own list is not changed; <code>--argloop off</code> and <code>log</code> leave the history as sent. The incident's replayed arguments: 15,444 characters, 1,756 kept.</li>
+<li>The retry streak comes from the markers after the conversation's last user message (<code>trailing_stops</code>); a call that ran ends it, a new user message starts over.</li>
+<li>The retry's note names the tool and the piece and, after an identical stop, says the same loop came again and the approach must change. It goes at the prompt's tail once per request, as before.</li>
+<li>The router thinks one level up on the retry, at least medium, instead of a tool turn's lower level (<code>extra.argloop_retry</code>); a client that turned thinking off keeps it off (its word is a ceiling) and the row says <code>blocked: client turned thinking off</code>.</li>
+<li>After two identical stops in a row (same tool, same period) or three stops of one tool, the next request is not generated. A1 journals <code>GIVE_UP</code> (<code>tool_arg_loop_retries(n)</code>) and the client gets one sentence, finish <code>stop</code>, no call: "[TandemLLM stopped retrying: the last 2 attempts at the <code>write_file</code> call fell into the same loop (one 425-character piece written over and over) and were stopped before anything ran. Nothing more is tried automatically. Ask again with a smaller step, for example: write the file in parts, or generate the repeated rows with a loop, or turn thinking on (this chat has it off).]" A client's tool loop ends on a plain answer. The sentence is served the way a cached answer is, and nothing of it is remembered as the session's state.</li>
+</ul>
+<p><code>tests/test_argloop.py</code> replays the client's loop on the fake engine: five attempts become two generations and the sentence.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../caches/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Caches">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Caches
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../parallel-requests/" class="md-footer__link md-footer__link--next" aria-label="Next: Parallel requests">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Parallel requests
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

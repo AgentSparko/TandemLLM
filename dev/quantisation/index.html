@@ -1,0 +1,2563 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/quantisation/">
+      
+      
+        <link rel="prev" href="../architecture/">
+      
+      
+        <link rel="next" href="../kernels/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Quantisation and profiles - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#quantisation-and-profiles" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Quantisation and profiles
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-checkpoint-stores" class="md-nav__link">
+    <span class="md-ellipsis">
+      What the checkpoint stores
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nvfp4" class="md-nav__link">
+    <span class="md-ellipsis">
+      NVFP4
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-clip-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      The clip search
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-tensors-and-what-they-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      Which tensors, and what they cost
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-the-bf16-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      From the BF16 release
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mixing-nvfp4-and-fp8" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mixing NVFP4 and FP8
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      The gate
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-fp8-head" class="md-nav__link">
+    <span class="md-ellipsis">
+      The FP8 head
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-stays-at-full-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      What stays at full precision
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      Profiles
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Profiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#standalone-27b-exl3-checkpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      Standalone 27B EXL3 checkpoints
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-27b-in-exl3-sizes-and-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      The 27B in EXL3: sizes and quality
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Knobs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limits
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flash-next-on-turboderps-exl3-packs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flash-Next on turboderp's EXL3 packs
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Flash-Next on turboderp's EXL3 packs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-five-packs" class="md-nav__link">
+    <span class="md-ellipsis">
+      The five packs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-pack-holds-and-how-the-engine-reads-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      What a pack holds, and how the engine reads it
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-mixers-as-int8" class="md-nav__link">
+    <span class="md-ellipsis">
+      The mixers as int8
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-n-gram-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      The n-gram table
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exact-weights-where-the-prefill-needs-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exact weights where the prefill needs them
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-not-measured" class="md-nav__link">
+    <span class="md-ellipsis">
+      What is not measured
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#knobs_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Knobs
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-checkpoint-stores" class="md-nav__link">
+    <span class="md-ellipsis">
+      What the checkpoint stores
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nvfp4" class="md-nav__link">
+    <span class="md-ellipsis">
+      NVFP4
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-clip-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      The clip search
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-tensors-and-what-they-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      Which tensors, and what they cost
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-the-bf16-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      From the BF16 release
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mixing-nvfp4-and-fp8" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mixing NVFP4 and FP8
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      The gate
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-fp8-head" class="md-nav__link">
+    <span class="md-ellipsis">
+      The FP8 head
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-stays-at-full-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      What stays at full precision
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      Profiles
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Profiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#standalone-27b-exl3-checkpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      Standalone 27B EXL3 checkpoints
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-27b-in-exl3-sizes-and-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      The 27B in EXL3: sizes and quality
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Knobs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limits
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flash-next-on-turboderps-exl3-packs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flash-Next on turboderp's EXL3 packs
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Flash-Next on turboderp's EXL3 packs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-five-packs" class="md-nav__link">
+    <span class="md-ellipsis">
+      The five packs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-pack-holds-and-how-the-engine-reads-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      What a pack holds, and how the engine reads it
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-mixers-as-int8" class="md-nav__link">
+    <span class="md-ellipsis">
+      The mixers as int8
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-n-gram-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      The n-gram table
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exact-weights-where-the-prefill-needs-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exact weights where the prefill needs them
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-not-measured" class="md-nav__link">
+    <span class="md-ellipsis">
+      What is not measured
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#knobs_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Knobs
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="quantisation-and-profiles">Quantisation and profiles<a class="headerlink" href="#quantisation-and-profiles" title="Permanent link">&para;</a></h1>
+<p>Four-bit weights take a decode step from 26.93 GB to 15.01 GB, and on this board bytes are time. This page covers the formats the engine reads, the quantiser that writes the 4-bit copies, the gate that decides whether they ship, and the three profiles built from them.</p>
+<p>The served weights are the published set, <a href="https://huggingface.co/0xBakeer/TandemLLM-Qwen3.8-27B-NVFP4"><code>0xBakeer/TandemLLM-Qwen3.8-27B-NVFP4</code></a>: every projection in NVFP4, quantised once from Qwen's BF16 release with GPTQ, plus an e4m3 output head (<a href="./#from-the-bf16-release">From the BF16 release</a>). Against the BF16 model its held-out loss rises by +0.0221 nats on prose and +0.0426 on code, inside the gate's bar of +0.05. The sections below start with the first weight sets, quantised from the FP8 release with the clip search alone, because the published set uses the same format and the same search.</p>
+<p>The second model, Qwen3.8-Flash-Next, is not quantised here at all. It runs from turboderp's published EXL3 packs, read as they are; <a href="./#flash-next-on-turboderps-exl3-packs">the last section</a> covers them.</p>
+<h2 id="what-the-checkpoint-stores">What the checkpoint stores<a class="headerlink" href="#what-the-checkpoint-stores" title="Permanent link">&para;</a></h2>
+<p>Qwen ships the model as block-scaled FP8. Every large projection is a pair of tensors: <code>X.weight</code> holds e4m3 codes of shape <code>[N, K]</code>, and <code>X.weight_scale_inv</code> holds one BF16 scale per 128 by 128 block. A weight is <code>code * scale[n // 128, k // 128]</code>.</p>
+<p><code>engine/loader.py</code> keeps that pair as an <code>FP8Block</code> and never expands it in memory, because a decode step pays for exactly these bytes. <code>tools/fp8_linear.py</code> multiplies by it directly. Its tile is 128 by 128 on purpose: every step along K covers one scale block, so the scale is one number applied to the fp32 sum.</p>
+<p>Some tensors stay BF16 in the checkpoint: the output head, the embedding, every norm, the convolution weights and the two small projections <code>in_proj_a</code> and <code>in_proj_b</code>.</p>
+<h2 id="nvfp4">NVFP4<a class="headerlink" href="#nvfp4" title="Permanent link">&para;</a></h2>
+<p>NVFP4 stores a weight in three tensors, held by <code>tools/nvfp4_linear.py::NVFP4Block</code>:</p>
+<table>
+<thead>
+<tr>
+<th>tensor</th>
+<th>type</th>
+<th>shape</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>weight</code></td>
+<td>uint8</td>
+<td><code>[N, K/2]</code></td>
+<td>two e2m1 codes a byte, low nibble first</td>
+</tr>
+<tr>
+<td><code>weight_scale</code></td>
+<td>e4m3</td>
+<td><code>[N, K/16]</code></td>
+<td>one scale per 16 weights of a row</td>
+</tr>
+<tr>
+<td><code>weight_scale_2</code></td>
+<td>fp32</td>
+<td>one number</td>
+<td>the scale of the scales</td>
+</tr>
+</tbody>
+</table>
+<p>A weight is <code>e2m1(code) * weight_scale[n, k // 16] * weight_scale_2</code>. The e2m1 grid has eight sizes (0, 0.5, 1, 1.5, 2, 3, 4 and 6) and a sign. A weight costs 0.5625 bytes against 1.0 in FP8, and one layer's MLP drops from 267.4 MB to 150.4 MB.</p>
+<p>A group of 16 is what makes 4 bits usable. An FP8 block shares one scale across 16,384 weights, while an NVFP4 group shares it across 16, so the grid follows a row's local range.</p>
+<p>Our kernel is W4A16: it unpacks the 4-bit codes to 16-bit numbers in registers and multiplies on the ordinary tensor cores. On this board NVFP4 is a storage format and not a compute format. It saves bytes, and the arithmetic stays the same.</p>
+<h2 id="the-clip-search">The clip search<a class="headerlink" href="#the-clip-search" title="Permanent link">&para;</a></h2>
+<p>Rounding each group to nearest fails the quality gate on code by 0.007 nats. The same weights with a clip search pass it with 0.014 to spare.</p>
+<p><code>tools/quant_nvfp4.py</code> tries five scale multipliers per group (1.00, 0.95, 0.90, 0.85, 0.80). A smaller multiplier clips the group's largest weight and gives the rest a finer grid. It keeps the multiplier with the smallest error as the model sees it:</p>
+<div class="highlight"><pre><span></span><code>sum over k of  act_ms[k] * (w[k] - dequant(quant(w[k])))^2
+</code></pre></div>
+<p><code>act_ms[k]</code> is the mean square of input channel <code>k</code> over a calibration text. A channel the model never uses can take a coarse grid at no cost, and a channel it leans on cannot. The statistics come from running <code>bench/calib.txt</code> (63 KB, two thirds Python and one third package documentation, 8,192 tokens) through the engine and recording the input of every projection. Statistics for all 64 layers take 41 s, and quantising takes 120 s.</p>
+<h2 id="which-tensors-and-what-they-cost">Which tensors, and what they cost<a class="headerlink" href="#which-tensors-and-what-they-cost" title="Permanent link">&para;</a></h2>
+<p><code>tools/quant_nvfp4.py</code> has three targets, one output file each:</p>
+<table>
+<thead>
+<tr>
+<th>target</th>
+<th>projections</th>
+<th>count</th>
+<th>bytes saved a step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mlp</code></td>
+<td><code>gate_proj</code>, <code>up_proj</code>, <code>down_proj</code></td>
+<td>192</td>
+<td>7.49 GB</td>
+</tr>
+<tr>
+<td><code>gdn</code></td>
+<td><code>in_proj_qkv</code>, <code>in_proj_z</code>, <code>out_proj</code></td>
+<td>144</td>
+<td>2.43 GB</td>
+</tr>
+<tr>
+<td><code>attn</code></td>
+<td><code>q_proj</code>, <code>k_proj</code>, <code>v_proj</code>, <code>o_proj</code></td>
+<td>64</td>
+<td>0.74 GB</td>
+</tr>
+</tbody>
+</table>
+<p>These first sets were quantised from the FP8 release, and the gate scored each against that FP8 checkpoint on held-out text, as a change in loss per token:</p>
+<table>
+<thead>
+<tr>
+<th>weights</th>
+<th>prose</th>
+<th>code</th>
+<th>code argmax, confident positions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP8 as shipped</td>
+<td>1.5366 nats</td>
+<td>0.7900 nats</td>
+<td></td>
+</tr>
+<tr>
+<td>NVFP4 MLPs</td>
+<td>+0.0131</td>
+<td>+0.0356</td>
+<td>0.9754</td>
+</tr>
+<tr>
+<td>NVFP4 MLPs and GDN</td>
+<td>+0.0186</td>
+<td>+0.0436</td>
+<td>0.9694</td>
+</tr>
+<tr>
+<td>NVFP4 MLPs and attention</td>
+<td>+0.0185</td>
+<td>+0.0429</td>
+<td>0.9748</td>
+</tr>
+<tr>
+<td>NVFP4 everywhere</td>
+<td>+0.0211</td>
+<td>+0.0493</td>
+<td>0.9688</td>
+</tr>
+</tbody>
+</table>
+<p>Its bar is +0.05 nats on the worse of the two texts, and all four pass. All projections at NVFP4 pass by 0.0007 nats on a code file of 2,047 tokens, which is a thin margin. Re-run the gate before quantising anything more.</p>
+<p>Code costs about three times what prose costs in every row. One published NVFP4 export of this model, read through the same loader (its MLPs only), scored +0.0576 on code and fails the same bar.</p>
+<h2 id="from-the-bf16-release">From the BF16 release<a class="headerlink" href="#from-the-bf16-release" title="Permanent link">&para;</a></h2>
+<p>The set this section builds is the one the engine serves, published as <a href="https://huggingface.co/0xBakeer/TandemLLM-Qwen3.8-27B-NVFP4"><code>0xBakeer/TandemLLM-Qwen3.8-27B-NVFP4</code></a> with its calibration manifest and quality reports.</p>
+<p>The weight set above came from Qwen's FP8 release, so every weight in it was rounded twice: to e4m3 on a 128 by 128 grid by Qwen, then to NVFP4 by us. <code>tools/quant_nvfp4.py</code> also reads the BF16 release <code>Qwen/Qwen3.8-27B</code>, whose projections are plain BF16 matrices in 18 shards. <code>Source</code> finds each projection through the checkpoint's index in either layout and skips the vision tower and the MTP layer.</p>
+<p><code>quant_nvfp4.py build</code> loads the BF16 model once (about 50 GB) and does everything in that process:</p>
+<ol>
+<li>It runs a calibration text through the engine. <code>tools/calib_corpus.py</code> writes it: <code>bench/calib.txt</code> plus Python standard-library modules, English Wikipedia and German Wikipedia, 149,682 tokens in the build we shipped. Any document that shares a run of 12 words with a held-out file is dropped.</li>
+<li>It records each projection's mean square input, which the clip search weights by, and the full second moment of each input, <code>H = X^T X</code>. At fp32 the second moments are 101 GB for 64 layers, so the build takes them in passes of about 13 layers (<code>--h-budget-gb 22</code>).</li>
+<li>It quantises every projection twice: with the clip search, and with GPTQ on the NVFP4 grid. GPTQ rounds one input column at a time and pushes each column's error onto the columns not yet rounded, weighted by the inverse of <code>H</code>. At the first column of each group of 16 the clip search picks the group's scale from the weights as they stand. The format and the kernel do not change; only the stored codes do.</li>
+</ol>
+<p>On the calibration inputs, GPTQ leaves 0.0024 relative output error against 0.0044 for the clip search. On held-out text it is also the better set. Against the BF16 model, on the same tokens:</p>
+<table>
+<thead>
+<tr>
+<th>weights</th>
+<th>prose</th>
+<th>code (8,002 tokens)</th>
+<th>more code</th>
+<th>more prose</th>
+<th>GB a step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP8 release, BF16 head</td>
+<td>+0.0079</td>
+<td>+0.0032</td>
+<td>+0.0050</td>
+<td>+0.0028</td>
+<td>26.93</td>
+</tr>
+<tr>
+<td>NVFP4 everywhere, from FP8, clip</td>
+<td>+0.0304</td>
+<td>+0.0220</td>
+<td>+0.0530</td>
+<td>+0.0286</td>
+<td>15.01</td>
+</tr>
+<tr>
+<td>NVFP4 everywhere, from BF16, clip</td>
+<td>+0.0267</td>
+<td>+0.0198</td>
+<td>+0.0373</td>
+<td>+0.0233</td>
+<td>15.01</td>
+</tr>
+<tr>
+<td>NVFP4 everywhere, from BF16, GPTQ</td>
+<td>+0.0234</td>
+<td>+0.0184</td>
+<td>+0.0272</td>
+<td>+0.0174</td>
+<td>15.01</td>
+</tr>
+<tr>
+<td>NVFP4 MLPs, from FP8, clip</td>
+<td>+0.0239</td>
+<td>+0.0144</td>
+<td>+0.0372</td>
+<td>+0.0197</td>
+<td>18.17</td>
+</tr>
+<tr>
+<td>NVFP4 MLPs, from BF16, GPTQ</td>
+<td>+0.0136</td>
+<td>+0.0144</td>
+<td>+0.0245</td>
+<td>+0.0159</td>
+<td>18.17</td>
+</tr>
+</tbody>
+</table>
+<p>For the published set (GPTQ, from BF16, with the e4m3 head), the paper reports, against the BF16 model: +0.0221 nats on prose and +0.0426 on code on the 2,048-token gate files, within the +0.05 bar, and +0.0174 on 12k tokens of prose, +0.0184 on 8k tokens of code and +0.0272 on 10.5k tokens of code.</p>
+<p>"More code" and "more prose" are 10,500 and 11,999 tokens that neither the calibration nor anything else reads (<code>calib_corpus.py --eval-chars</code>). <code>quality_gate.py --plan</code> scores weight sets over one checkpoint against a reference loaded from another, which is how these rows compare against BF16 while the NVFP4 files load over the FP8 release as they do in serving.</p>
+<h2 id="mixing-nvfp4-and-fp8">Mixing NVFP4 and FP8<a class="headerlink" href="#mixing-nvfp4-and-fp8" title="Permanent link">&para;</a></h2>
+<p><code>tools/quant_sensitivity.py measure</code> swaps one piece of one layer to NVFP4 at a time and measures how far the next-token distribution moves (KL over the reference's top 256 tokens, on 8,192 held-out tokens). A piece is a whole fusion group: the MLP's gate and up projections, its down projection, the GDN input projections, the GDN output projection, the attention's input projections (<code>q_proj</code>, <code>k_proj</code>, <code>v_proj</code>), the attention output. Per byte kept, the GDN and attention output projections cost the most, and layers 35 to 41 are the most sensitive. <code>quant_sensitivity.py mix --keep-gb N</code> keeps the pieces with the highest cost per byte in FP8 until N GB a step are spent and writes the rest into one file.</p>
+<table>
+<thead>
+<tr>
+<th>weights</th>
+<th>prose</th>
+<th>code</th>
+<th>more code</th>
+<th>more prose</th>
+<th>GB a step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>mix, 0.99 GB kept in FP8</td>
+<td>+0.0144</td>
+<td>+0.0145</td>
+<td>+0.0211</td>
+<td>+0.0174</td>
+<td>16.00</td>
+</tr>
+<tr>
+<td>mix, 3.16 GB kept in FP8</td>
+<td>+0.0090</td>
+<td>+0.0084</td>
+<td>+0.0185</td>
+<td>+0.0132</td>
+<td>18.17</td>
+</tr>
+</tbody>
+</table>
+<p>The second mix reads the same bytes as NVFP4 MLPs alone and beats it on all four texts. The per-piece costs do not add: the 256 pieces sum to 3.4 times the cost of all of them at once. A mix is a ranking, and the gate decides what it costs.</p>
+<h2 id="the-gate">The gate<a class="headerlink" href="#the-gate" title="Permanent link">&para;</a></h2>
+<p><code>tools/quality_gate.py</code> reports three things, and a weight set ships only when all three hold.</p>
+<ol>
+<li>Held-out loss, teacher-forced, as a change against a reference on the same tokens in the same process. By default the reference is the FP8 engine (<code>--baseline fp8</code>); with <code>--plan</code> it is a model loaded from another checkpoint, which is how the published set is scored against BF16. The held-out texts are <code>bench/heldout_code.txt</code>, a Python file the calibration text does not contain, and <code>bench/heldout_prose.txt</code>, English prose on unrelated topics.</li>
+<li>Argmax agreement with the reference, overall and at the positions where the reference is confident (top-1 ahead of top-2 by at least 1.0 in the logits). Overall agreement for the full set from FP8 is 0.9101. On a flat distribution over 248,320 tokens the top choice is decided by rounding, so the confident number (0.9688) is the one to watch.</li>
+<li>A free generation of 900 greedy tokens on five prompts the calibration never saw, with repetition statistics. On the full set from FP8 the share of unique 4-grams was 0.939 to 1.000, and every generation stopped at its own end.</li>
+</ol>
+<p>Test 3 matters most. Teacher-forced loss never lets an error grow, so it cannot see a model that drifts off its own path. On an earlier engine on this board, loss rated a broken configuration better than a healthy one.</p>
+<table>
+<thead>
+<tr>
+<th>text</th>
+<th>held-out loss against BF16, nats/token</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>gate prose, 2,048 tokens</td>
+<td>0.0221</td>
+</tr>
+<tr>
+<td>gate code, 2,048 tokens</td>
+<td>0.0426</td>
+</tr>
+<tr>
+<td>prose, 12k tokens</td>
+<td>0.0174</td>
+</tr>
+<tr>
+<td>code, 8k tokens</td>
+<td>0.0184</td>
+</tr>
+<tr>
+<td>more code, 10.5k tokens</td>
+<td>0.0272</td>
+</tr>
+</tbody>
+</table>
+<p><em>The published NVFP4 set against Qwen's BF16 release: the change in held-out loss on the two gate files and on three wider texts that neither the calibration nor anything else reads. Measured: the StairCut paper's quality section.</em></p>
+<h2 id="the-fp8-head">The FP8 head<a class="headerlink" href="#the-fp8-head" title="Permanent link">&para;</a></h2>
+<p>As shipped, the output head is 248,320 by 5,120 in BF16, 2.54 GB, and every verify reads all of it. <code>tools/quant_head.py build</code> writes it as e4m3 with one fp32 scale per vocabulary row (1.27 GB), searching the multipliers 1.0, 0.95 and 0.90 of each row's largest weight. One scale per row, because rows are tokens and their sizes differ more than a block scale shared by 128 neighbouring ids can follow.</p>
+<p>This head decides what the engine writes, so it took the full gate: prose +0.0015 nats, code -0.0009, and agreement 1.0000 on all 2,618 confident positions. Its kernel returns fp32 logits at every row count. <code>--fp8-head build</code> builds the same head at load, without the file.</p>
+<h2 id="what-stays-at-full-precision">What stays at full precision<a class="headerlink" href="#what-stays-at-full-precision" title="Permanent link">&para;</a></h2>
+<p>The 48 recurrent states stay fp32. They are 151 MB, read and written once a step, about 1.5 ms of traffic. A recurrent state is a sum over the whole sequence carried across every step, so its rounding error grows with every step, and a weight's does not. The convolution weights, <code>A_log</code>, <code>dt_bias</code>, every norm and the drafters' own layers also keep their shipped precision.</p>
+<h2 id="profiles">Profiles<a class="headerlink" href="#profiles" title="Permanent link">&para;</a></h2>
+<p>A profile is a <code>serve.env</code> file. The three that ship differ only in their weights. Drafters, StairCut, caches and the exactness gate are the same in all of them. StairCut's verify prices (<code>ops/stair-tables-nvfp4.json</code>) were measured on the full-NVFP4 profile. The router corrects their level online, with its per-class block factor (<code>engine/lenrouter.py</code>), but the staircase's shape for the balanced and FP8 profiles is not measured, and neither is their speed on this release.</p>
+<table>
+<thead>
+<tr>
+<th>profile</th>
+<th>file</th>
+<th>MLP</th>
+<th>GDN and attention</th>
+<th>head</th>
+<th>bytes a step</th>
+<th>single request</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NVFP4 (served)</td>
+<td><code>ops/serve.env</code></td>
+<td>NVFP4</td>
+<td>NVFP4</td>
+<td>e4m3</td>
+<td>15.0 GB</td>
+<td>49.89 tok/s with StairCut (paper)</td>
+</tr>
+<tr>
+<td>balanced</td>
+<td><code>ops/serve-balanced.env</code></td>
+<td>NVFP4 (the published set's)</td>
+<td>checkpoint FP8</td>
+<td>e4m3 (the published set's)</td>
+<td>about 18.2 GB</td>
+<td>not measured on this release</td>
+</tr>
+<tr>
+<td>FP8</td>
+<td><code>ops/serve-fp8.env</code></td>
+<td>checkpoint FP8</td>
+<td>checkpoint FP8</td>
+<td>checkpoint BF16</td>
+<td>26.9 GB</td>
+<td>not measured on this release</td>
+</tr>
+</tbody>
+</table>
+<p>An FP8 profile reads nothing but the vendor's files, so its quality is the checkpoint's. Balanced keeps the recurrent and attention layers on the vendor's weights and quantises only the MLPs, which carry 70 % of a verify's projection bytes.</p>
+<p>Profiles and bytes interact with speculation. At one token a step, the full NVFP4 set is worth 14 % over NVFP4 MLPs alone. On a 16-node tree it is worth 0.2 %, because a round that commits 13 tokens has already spread its weight read over 13 tokens. Bytes and accepted tokens substitute for each other.</p>
+<p>The 27B also has weight profiles in EXL3 (<code>ops/profiles/exl3-&lt;bpw&gt;.env</code>, switched with <code>ops/use-profile.sh</code>, <a href="../operations/">operations.md</a>). The six sizes are public on Hugging Face, <code>0xBakeer/TandemLLM-Qwen3.8-27B-EXL3-{2.5,3.0,3.5,4.0,4.5,6.0}</code>, with the K3 drafters and the K4 draft head in <code>0xBakeer/TandemLLM-Qwen3.8-27B-EXL3-drafters</code>; the collection is <a href="https://huggingface.co/collections/0xBakeer/tandemllm-qwen38-27b-exl3-6acdd787008264fa4f35eab4">TandemLLM Qwen3.8-27B EXL3</a>. We quantised them with exllamav3 from Qwen's BF16 release. Each card lists every size's KL against BF16 on wikitext-2, from 0.1112 at 2.5 bits to 0.0018 at 6.0, and its speed on one DGX Spark. Running them needs nothing beyond those repositories, the BF16 drafters (<code>...-DFlash2-b8</code> and <code>-b16</code>) and the base checkpoint; <code>ops/use-profile.sh exl3-&lt;bpw&gt;</code> fetches all of it. This page does not cover how the EXL3 files were made.</p>
+<h3 id="standalone-27b-exl3-checkpoints">Standalone 27B EXL3 checkpoints<a class="headerlink" href="#standalone-27b-exl3-checkpoints" title="Permanent link">&para;</a></h3>
+<p>A complete BF16-origin, <code>mul1</code> EXL3 checkpoint of the supported 27B family can be passed directly as <code>--model</code>. 0xWhiteMage wrote this path in pull request #1 (0.8.2), and the first community pack runs on it (<a href="../community-weights/">community-weights.md</a>).
+The loader recognises <code>quantization_config.quant_method: exl3</code> in its config; a separate BF16/FP8
+base download is not needed when the pack includes the embedding, norms and GDN auxiliary tensors.
+For example, for a text-only run without speculation:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>server/app.py<span class="w"> </span>--model<span class="w"> </span>/path/to/exl3-pack<span class="w"> </span>--drafter<span class="w"> </span>none<span class="w"> </span>--vision<span class="w"> </span>off
+</code></pre></div>
+<p>The projected weights and output head retain their original EXL3 codes, channel scales and mixed
+bit widths, including indexed packs whose projection components span multiple shards. When a standalone
+pack declares a BF16 source through <code>dtype</code> or <code>torch_dtype</code>, the loader re-encodes its finite FP16
+plain tensors as BF16 only when every stored value survives an exact round trip. Comparisons use
+bounded chunks, including for a plain output head. Missing or non-BF16 source metadata, non-finite
+values and lossy conversions fail with a named error rather than silently changing precision.
+This preserves the pack's stored numerical values, not necessarily its pre-conversion BF16 source:
+precision already lost while creating the pack cannot be recovered. Source-equivalence needs the
+original checkpoint, and the original BF16 base plus an EXL3 overlay remains an alternative.
+The existing separate-base overlay precision path is unchanged, and explicit
+EXL3 paths take precedence over detection (an empty <code>exl3</code> setting disables detection).</p>
+<p>This does not add another codebook, model architecture or MTP format. The existing <code>mul1</code> reader
+and its validation still apply. A stock DFlash2 checkpoint can be supplied with <code>--drafter dflash2
+--dflash2-ckpt /path/to/drafter</code> for one sequence; speculative parallel serving still requires the
+engine's <code>lenrouter</code> configuration and a suitable block-16 drafter. Vision and quantised MTP
+loading are not qualified by this text-only path.</p>
+<h3 id="the-27b-in-exl3-sizes-and-quality">The 27B in EXL3: sizes and quality<a class="headerlink" href="#the-27b-in-exl3-sizes-and-quality" title="Permanent link">&para;</a></h3>
+<p>Since 0.5.0 the 27B also runs from EXL3 weights at six sizes, one weight profile each (<code>ops/profiles/exl3-&lt;bpw&gt;.env</code>, switched with <code>ops/use-profile.sh</code>, <a href="../operations/#one-model-at-a-time-the-27b-and-flash-next">One model at a time</a>). We quantised them with exllamav3 from Qwen's BF16 release, and all six are public on Hugging Face as <code>0xBakeer/TandemLLM-Qwen3.8-27B-EXL3-&lt;bpw&gt;</code>. The drafters for these profiles are in <code>0xBakeer/TandemLLM-Qwen3.8-27B-EXL3-drafters</code>: both DFlash2 drafters with their projections in EXL3 at 3 bits a weight (the K3 files) and a draft head at 4 bits (K4). The six sizes and the drafters form one collection, <a href="https://huggingface.co/collections/0xBakeer/tandemllm-qwen38-27b-exl3-6acdd787008264fa4f35eab4">TandemLLM Qwen3.8-27B EXL3</a>.</p>
+<table>
+<thead>
+<tr>
+<th>profile</th>
+<th>disk</th>
+<th>KL vs BF16</th>
+<th>top-1 agreement</th>
+<th>note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>exl3-2.5</code></td>
+<td>12.0 GB</td>
+<td>0.1112</td>
+<td>86.3 %</td>
+<td>the fastest</td>
+</tr>
+<tr>
+<td><code>exl3-3.0</code></td>
+<td>13.5 GB</td>
+<td>0.0621</td>
+<td>89.8 %</td>
+<td></td>
+</tr>
+<tr>
+<td><code>exl3-3.5</code></td>
+<td>15.2 GB</td>
+<td>0.0298</td>
+<td>93.1 %</td>
+<td></td>
+</tr>
+<tr>
+<td><code>exl3-4.0</code></td>
+<td>16.9 GB</td>
+<td>0.0171</td>
+<td>94.8 %</td>
+<td></td>
+</tr>
+<tr>
+<td><code>exl3-4.5</code></td>
+<td>18.4 GB</td>
+<td>0.0096</td>
+<td>96.1 %</td>
+<td>the default of a new box</td>
+</tr>
+<tr>
+<td><code>exl3-6.0</code></td>
+<td>23.3 GB</td>
+<td>0.0018</td>
+<td>98.5 %</td>
+<td>the closest to BF16</td>
+</tr>
+</tbody>
+</table>
+<p><em>The 27B's EXL3 sizes against the BF16 model on wikitext-2, where BF16's perplexity is 6.849. Measured: copied from the model cards on Hugging Face.</em></p>
+<p>Each card also has a speed table for every size on one DGX Spark (TandemLLM 0.6.2, one greedy request of 512 tokens, speculation on). An EXL3 profile needs four more downloads beside its weights: the K3 drafters and the K4 head (1.9 GB), the BF16 drafters <code>0xBakeer/TandemLLM-Qwen3.8-27B-DFlash2-b8</code> and <code>-b16</code> (7.7 GB, into the repository's <code>train/</code>), and the base checkpoint <code>Qwen/Qwen3.8-27B-FP8</code> (30.4 GB, without <code>mtp.safetensors</code>). Since 0.8.1 <code>ops/use-profile.sh</code> fetches all of them, checks each weight file against the hub's sha256, and needs no token. Each card's <code>calibration/</code> folder has the recipe; the calibration repository itself stays private, and no profile reads it.</p>
+<h2 id="knobs">Knobs<a class="headerlink" href="#knobs" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>knob</th>
+<th>what</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--nvfp4 a,b,c</code> or <code>QWEN38_NVFP4</code></td>
+<td>the NVFP4 files to load, one per target; empty means the checkpoint's FP8</td>
+</tr>
+<tr>
+<td><code>--fp8-head FILE</code>, <code>--fp8-head build</code> or <code>QWEN38_FP8_HEAD</code></td>
+<td>the e4m3 head; empty means the checkpoint's BF16 head</td>
+</tr>
+<tr>
+<td><code>tools/quant_nvfp4.py quant --mode rtn\|clip --targets --stats</code></td>
+<td>the quantiser</td>
+</tr>
+<tr>
+<td><code>tools/quant_head.py build --ratios</code></td>
+<td>the per-row scale search for the head</td>
+</tr>
+<tr>
+<td><code>tools/quant_nvfp4.py build --model &lt;BF16&gt; --corpus --methods clip,gptq --h-budget-gb</code></td>
+<td>the statistics and both quantisers (clip and GPTQ) from one load</td>
+</tr>
+<tr>
+<td><code>tools/calib_corpus.py --out DIR --eval-chars</code></td>
+<td>the calibration, sensitivity and wide-gate texts</td>
+</tr>
+<tr>
+<td><code>tools/quant_sensitivity.py measure</code> and <code>mix --keep-gb</code></td>
+<td>the per-piece costs and the FP8/NVFP4 mix file</td>
+</tr>
+<tr>
+<td><code>tools/quality_gate.py --plan plan.json --corpus name=path</code></td>
+<td>weight sets against a reference checkpoint, on extra texts</td>
+</tr>
+</tbody>
+</table>
+<h2 id="limits">Limits<a class="headerlink" href="#limits" title="Permanent link">&para;</a></h2>
+<p>The gate files are one held-out file per domain, 2,048 tokens each; the wider texts add 8k to 12k tokens per domain. No task benchmark ran against the quantised engine, so this page makes no claim about task accuracy. The clip search assumes that input channels are uncorrelated, which is a first-order model.</p>
+<h2 id="flash-next-on-turboderps-exl3-packs">Flash-Next on turboderp's EXL3 packs<a class="headerlink" href="#flash-next-on-turboderps-exl3-packs" title="Permanent link">&para;</a></h2>
+<p>Qwen3.8-Flash-Next comes in five sizes on Hugging Face, <code>turboderp/Qwen3.8-Flash-Next-exl3</code>, one branch each. The engine reads those packs as they are. It runs no quantiser of its own on them and adds no format. A pack is lossy against Qwen's BF16 release by design; speculation is still lossless against the pack that is served (<a href="../exactness/">exactness.md</a>).</p>
+<h3 id="the-five-packs">The five packs<a class="headerlink" href="#the-five-packs" title="Permanent link">&para;</a></h3>
+<p>The branch name says what is inside: <code>3.05bpw_h5_ng5</code> is 3.05 bits a weight on average, the output head at 5 bits, and the n-gram table at 5 bits a value. The figures below are the registry's (<code>models/qwen3.8-flash-next/model.yaml</code>). The weights are the GiB the engine holds on the device, the draft layer and the int8 mixers included: measured for 3.05 at load, and estimated from the file sizes for the other four.</p>
+<table>
+<thead>
+<tr>
+<th>profile</th>
+<th>branch</th>
+<th>disk, with the table</th>
+<th>weights on the device</th>
+<th>n-gram table</th>
+<th>largest window on one DGX Spark</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>flashnext-2.05</code></td>
+<td><code>2.05bpw_h4_ng4</code></td>
+<td>61.5 GB</td>
+<td>32.85 GiB (estimate)</td>
+<td>24.44 GiB, warm</td>
+<td>262,144</td>
+</tr>
+<tr>
+<td><code>flashnext-3.05</code> (recommended)</td>
+<td><code>3.05bpw_h5_ng5</code></td>
+<td>85.1 GB</td>
+<td>47.87 GiB (measured)</td>
+<td>30.4 GiB, cold</td>
+<td>262,144</td>
+</tr>
+<tr>
+<td><code>flashnext-4.05</code></td>
+<td><code>4.05bpw_h6_ng6</code></td>
+<td>106.1 GB</td>
+<td>62.47 GiB (estimate)</td>
+<td>36.36 GiB, cold</td>
+<td>208,896</td>
+</tr>
+<tr>
+<td><code>flashnext-5.05</code></td>
+<td><code>5.05bpw_h6_ng6</code></td>
+<td>121.9 GB</td>
+<td>77.16 GiB (estimate)</td>
+<td>36.36 GiB, cold</td>
+<td>load/generation unverified</td>
+</tr>
+<tr>
+<td><code>flashnext-6.05</code></td>
+<td><code>6.05bpw_h6_ng6</code></td>
+<td>137.7 GB</td>
+<td>91.87 GiB (estimate)</td>
+<td>36.36 GiB, cold</td>
+<td>none: it does not fit</td>
+</tr>
+</tbody>
+</table>
+<p>The windows come from the Setup Guide's estimate (<a href="../setup/">setup.md</a>), calibrated on one 260,800-token request each on 2.05, 3.05 and 4.05 (2026-10-12). It predicts the lowest MemAvailable of those three runs within 0.7 GiB. 2.05 and 3.05 hold the model's full 262,144 tokens. 4.05 ran a 260,800-token request with MemAvailable never under 17.8 GiB on a box whose other programs took 4.6 GiB; under the Setup Guide's frame of 10 GiB for the rest of the system, its window comes out at 208,896 with the vision tower on (0.31 GiB, up to 0.81 with the 512 MB image cache; VIS-97) and 212,992 without it.</p>
+<p>The 5.05 pack's earlier blocker was its 7-bit dense projections. The dense dispatch now covers K 2..8; the MoE kernels already supported 7-bit experts. Full-pack load and generation are still unverified. By the estimate its window would be 53,248 with the vision tower and 65,536 without. 6.05 needs about 92 GiB for its weights, which leaves too little under the 15 GiB floor at any window.</p>
+<p>The 4.05, 5.05 and 6.05 branches carry the same n-gram table file (the same sha256), so <code>ops/fetch_weights.py</code> hard-links it between packs instead of downloading 39 GB again (<a href="../operations/#one-model-at-a-time-the-27b-and-flash-next">operations.md</a>).</p>
+<h3 id="what-a-pack-holds-and-how-the-engine-reads-it">What a pack holds, and how the engine reads it<a class="headerlink" href="#what-a-pack-holds-and-how-the-engine-reads-it" title="Permanent link">&para;</a></h3>
+<p><code>engine/models/flashnext/pack.py</code> (<code>PackIndex</code>) reads every shard header and puts each tensor in one kind:</p>
+<table>
+<thead>
+<tr>
+<th>kind</th>
+<th>what</th>
+<th>how the engine holds it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>expert</code></td>
+<td>the routed experts' gate, up and down projections, 98 % of the bytes</td>
+<td>EXL3, one image a layer, through the MoE kernels</td>
+</tr>
+<tr>
+<td><code>exl3</code></td>
+<td>every other coded projection: GDN, attention, the sparse-attention indexer, the shared expert, the MTP layer's projections, the head</td>
+<td>EXL3</td>
+</tr>
+<tr>
+<td><code>mixer</code></td>
+<td>the hyper-connection mixers' projections</td>
+<td>fp16 in the pack; on the device int8 with one fp32 scale for each group of 128 weights</td>
+</tr>
+<tr>
+<td><code>plain</code></td>
+<td>norms, the router, <code>in_proj_a</code> and <code>in_proj_b</code>, the n-gram projections, conv weights, the embedding</td>
+<td>as stored</td>
+</tr>
+<tr>
+<td><code>table</code></td>
+<td>the n-gram table, its own file</td>
+<td>never on the device; read a row at a time</td>
+</tr>
+<tr>
+<td><code>vision</code></td>
+<td>the vision tower</td>
+<td>not loaded</td>
+</tr>
+</tbody>
+</table>
+<p>An EXL3 projection is four tensors. <code>X.trellis</code> (int16) holds the codes at K bits a weight, and K is read from each tensor's own shape, so a pack that mixes K inside a layer is described as it is. <code>X.suh</code> and <code>X.svh</code> (fp16) scale and sign the input and output sides, which are rotated, and <code>X.mul1</code> is the codebook's multiplier. On the 3.05 pack the header audit counted 303,121 tensors: every routed expert at K 3, the dense projections and the head at K 5, except the sparse-attention indexer's projection at K 3 and the MTP layer's projections at K 3 to 5. By those headers a plain decode token reads about 4.23 GB in all at 1k of context, with the mixers as int8 (<code>PackIndex.decode_bytes</code>).</p>
+<p><code>tools/fn_exl3_xcheck.py</code> holds our reading against the converter's own on the 3.05 pack. The trellis decode is equal bit for bit on 16 tensors (experts in layers 0, 11 and 47, GDN, attention, the indexer, a shared expert, a slice of the head). The dequantised weight agrees within 0.36 % of the largest weight, which is our BF16 rounding of the fp32 rotations. 4,096 n-gram rows are equal bit for bit.</p>
+<h3 id="the-mixers-as-int8">The mixers as int8<a class="headerlink" href="#the-mixers-as-int8" title="Permanent link">&para;</a></h3>
+<p>The pack stores the mixers in fp16, and every token reads them. The engine keeps them as int8 with one fp32 scale for each group of 128 weights of a row (gcd(128, K): 128 for the down and inject weights, 64 for the up weights). A weight is then off by at most its group's largest weight over 254, plus fp32 rounding. The kernels sum each 16-weight chunk's products and add them times the chunk's group scale, and the prefill dequantises with the same scales. <code>QWEN38_FN_MIX=int8rows</code> keeps one scale a row, the form before ENG-221, for an A/B; <code>fp16</code> keeps the pack's values.</p>
+<p><code>tools/fn_mix_quality.py</code> measures what that costs against the pack's fp16 mixers, on the same kernels. On 3.05 with 8,192 tokens, the groups gave a KL of 0.0031 on code and 0.0188 on prose. The arithmetic noise between the reference forward and the kernels is 0.0038 and 0.0255 on the same prompts, so both are inside it. One scale a row gave 0.267 on code and 0.047 on prose: a row whose largest weight is 10 to 420 times its median left its small weights coarse. Int4 gave 0.38 on prose (0.35 in groups of 128) and changed the continuation at its first token, so the mixers stay int8. The groups cost no decode speed (one run each at 1k, rows against groups: prose 41.91 and 41.76, code 42.64 and 43.24, chat 42.24 and 42.21 tok/s) and 0.02 GiB of device memory. Speculation stays lossless with them, and the load-time self-check passes.</p>
+<h3 id="the-n-gram-table">The n-gram table<a class="headerlink" href="#the-n-gram-table" title="Permanent link">&para;</a></h3>
+<p>For every position the model hashes the token and the one or two before it into 16 row indices (8 hash heads for the bigram, 8 for the trigram), reads those 16 rows of 160 values from one table of about 320 million rows, and joins them into a 2,560-wide feature. The table is coded too: each row is a ring of trellis codes at K bits a value (<code>ng4</code> to <code>ng6</code>), with one fp16 scale a row and one bias vector a hash head (<code>engine/models/flashnext/ple.py</code>).</p>
+<p>The table is 32.6 GB in the 3.05 pack, and it never sits in device memory. The engine reads the packed rows a step needs and decodes them on the device. Where the rows come from is the profile's table policy (<code>QWEN38_FN_TABLE</code>):</p>
+<ul>
+<li>warm: the file mapped and kept in the page cache. MemAvailable counts that page cache as free, so every floor check takes the table's resident bytes off first (<a href="../caches/#memory">caches.md</a>).</li>
+<li>cold: the rows read with O_DIRECT through a set-associative row cache of <code>QWEN38_FN_TABLE_CACHE_GB</code> (2) in host memory; nothing stays in the page cache.</li>
+</ul>
+<p>On 3.05, cold wrote the same greedy text as warm at 1k and 8k and decoded 40.9 tok/s against 42.0 (one run each). 2.05 keeps its table warm. 3.05 reads it cold: with the whole table resident, MemAvailable less the table fell to 8.4 GiB during a 146,400-token request at a 147,456-token window, under the 15 GiB floor. 4.05 and up read it cold because their weights and a warm table do not fit together.</p>
+<h3 id="exact-weights-where-the-prefill-needs-them">Exact weights where the prefill needs them<a class="headerlink" href="#exact-weights-where-the-prefill-needs-them" title="Permanent link">&para;</a></h3>
+<p>The prompt runs through other kernels than a decode step (<a href="../kernels/">kernels.md</a>). There the mixers, the router and the small projections take exact fp32 copies of their weights (<code>QWEN38_FN_PREFILL_MM=fp32</code>). With fp16 copies the prefill failed its agreement gate on a 3k-token code prompt (95.6 % against the 96.2 % the gate asked), so fp32 is the default.</p>
+<h3 id="what-is-not-measured">What is not measured<a class="headerlink" href="#what-is-not-measured" title="Permanent link">&para;</a></h3>
+<p>Nobody has measured a pack's quality against the BF16 model yet. The BF16 release is 360 GB and does not fit the box, and the reference run that would give KL a pack is not done, so the registry's quality fields are empty. What is measured is our arithmetic against the reference on the same pack: all 48 layers equal the official <code>transformers</code> decoder layer on the served weights within BF16 noise (relative error 0.19 to 1.49 %). Teacher-forced, the decode path picks the reference's top token at 64 of 64 positions at 3k of context and 63 of 64 at 8k, where the one miss is a near tie (a margin of 0.0095). No task benchmark has run on any pack.</p>
+<h3 id="knobs_1">Knobs<a class="headerlink" href="#knobs_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>knob</th>
+<th>what</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ops/use-profile.sh flashnext-&lt;bpw&gt;</code></td>
+<td>switch to a pack; fetches the branch when it is missing</td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MIX</code></td>
+<td><code>int8</code> (the default): int8 with an fp32 scale a group of 128 weights; <code>int8rows</code>: one scale a row; <code>fp16</code>: the pack's values</td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_TABLE</code>, <code>QWEN38_FN_TABLE_CACHE_GB</code></td>
+<td>the n-gram table's policy (<code>warm</code> or <code>cold</code>) and the cold row cache in GiB</td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PREFILL_MM</code></td>
+<td>the prefill's weights for the mixers, router and small projections: <code>fp32</code> (the default); <code>tc</code>, <code>tcn</code>: the int8 weights unrounded on the tensor cores, opt-in and not bit-identical to <code>fp32</code></td>
+</tr>
+<tr>
+<td><code>tools/fn_exl3_xcheck.py</code></td>
+<td>our reading of a pack against the converter's</td>
+</tr>
+<tr>
+<td><code>tools/fn_mix_quality.py</code></td>
+<td>a mixer weight form against the pack's fp16 mixers</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../architecture/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Architecture">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Architecture
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../kernels/" class="md-footer__link md-footer__link--next" aria-label="Next: Kernels">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Kernels
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

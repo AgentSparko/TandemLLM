@@ -1,0 +1,1910 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/measurement/">
+      
+      
+        <link rel="prev" href="../parallel-requests/">
+      
+      
+        <link rel="next" href="../benchmark-report/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Measurement - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#measurement" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Measurement
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-row" class="md-nav__link">
+    <span class="md-ellipsis">
+      The row
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-views-of-every-row" class="md-nav__link">
+    <span class="md-ellipsis">
+      Two views of every row
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#noise-and-what-a-row-can-decide" class="md-nav__link">
+    <span class="md-ellipsis">
+      Noise, and what a row can decide
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#same-hour-both-sides" class="md-nav__link">
+    <span class="md-ellipsis">
+      Same hour, both sides
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-block-ab-for-changes-that-keep-the-bits" class="md-nav__link">
+    <span class="md-ellipsis">
+      The block A/B, for changes that keep the bits
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-release-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      The release gate
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-teacher-forced-bench" class="md-nav__link">
+    <span class="md-ellipsis">
+      The teacher-forced bench
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-weight-cards-speed-rows" class="md-nav__link">
+    <span class="md-ellipsis">
+      The weight cards' speed rows
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#baselines" class="md-nav__link">
+    <span class="md-ellipsis">
+      Baselines
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-measuring-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      One measuring method
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#traps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Traps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measuring-flash-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      Measuring Flash-Next
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limits
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-row" class="md-nav__link">
+    <span class="md-ellipsis">
+      The row
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-views-of-every-row" class="md-nav__link">
+    <span class="md-ellipsis">
+      Two views of every row
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#noise-and-what-a-row-can-decide" class="md-nav__link">
+    <span class="md-ellipsis">
+      Noise, and what a row can decide
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#same-hour-both-sides" class="md-nav__link">
+    <span class="md-ellipsis">
+      Same hour, both sides
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-block-ab-for-changes-that-keep-the-bits" class="md-nav__link">
+    <span class="md-ellipsis">
+      The block A/B, for changes that keep the bits
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-release-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      The release gate
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-teacher-forced-bench" class="md-nav__link">
+    <span class="md-ellipsis">
+      The teacher-forced bench
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-weight-cards-speed-rows" class="md-nav__link">
+    <span class="md-ellipsis">
+      The weight cards' speed rows
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#baselines" class="md-nav__link">
+    <span class="md-ellipsis">
+      Baselines
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-measuring-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      One measuring method
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#traps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Traps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measuring-flash-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      Measuring Flash-Next
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limits
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="measurement">Measurement<a class="headerlink" href="#measurement" title="Permanent link">&para;</a></h1>
+<p>Speed claims for inference engines are easy to inflate by accident. Our lookup store once held the benchmark's own prompts and answers, and it added about 21 % to the benchmark row without the engine getting any faster. This page describes how TandemLLM measures itself, from the benchmark row and the teacher-forced bench to the release gate.</p>
+<h2 id="the-row">The row<a class="headerlink" href="#the-row" title="Permanent link">&para;</a></h2>
+<p>The benchmark row is <code>serve-single-i256-o256-v1</code>: one request at a time, 256 prompt tokens, 256 generated tokens, thinking off, temperature 0, seed 42, 50 requests after 3 warm-ups. Every configuration runs with the same runner and the same prompt set.</p>
+<p>Each request's speed is computed from its own record:</p>
+<div class="highlight"><pre><span></span><code>tok/s = (completion_tokens - 1) / (end-to-end seconds - time to first token)
+</code></pre></div>
+<p>The first token belongs to the prefill, so it is subtracted, and the decode time is the request's wall clock after its first token. A row reports the mean, p50, p90 and max over the 50 requests, with the median time to first token.</p>
+<p>The client measures the row's speed and time to first token itself. The server's own numbers come with every response, in <code>timings</code> and <code>metrics</code> (<a href="../server/#speed-and-draft-fields-timings-and-metrics">server.md</a> lists them), and its <code>[req]</code> log line holds the same record. The Setup Guide's card cells take two of them from that line: <code>tok_round</code> is <code>tokens_per_block</code>, the mean accepted length, and <code>ms_round</code> is the decode time over <code>blocks</code> (<code>tools/exl3_fastrun.py</code>). No row reports <code>draft_acceptance_rate</code>. It depends on how many tokens a round drafts, and StairCut sets that number again every round.</p>
+<p>Two readings of a row are easy to get wrong.</p>
+<ul>
+<li>The gaps between tokens. A verified round writes several tokens into the socket at once, so half the gaps are microseconds and the other half a whole round. The median inter-token latency therefore says nothing about round time.</li>
+<li>Mean against median. Some prompts ask the model to repeat text that is already in the context, and the drafters commit 15 tokens a round on them. That lifts the mean. The median reflects fresh text.</li>
+</ul>
+<h2 id="two-views-of-every-row">Two views of every row<a class="headerlink" href="#two-views-of-every-row" title="Permanent link">&para;</a></h2>
+<p>A row runs twice, in two views of the lookup store:</p>
+<ul>
+<li>Store off. The engine's persistent suffix store is off, so nothing the engine has seen before can help it.</li>
+<li>Clean store. The store is on but holds no text of the benchmark.</li>
+</ul>
+<p>A row with the benchmark's own text in the store measures the store, not the engine. Benchmarks also run with <code>--suffix-store-readonly</code> when they read a store of real traffic, so they cannot write themselves into it.</p>
+<h2 id="noise-and-what-a-row-can-decide">Noise, and what a row can decide<a class="headerlink" href="#noise-and-what-a-row-can-decide" title="Permanent link">&para;</a></h2>
+<p>Two server processes of the same configuration can differ by several per cent. StairCut learns its costs and copy rates online, and the earlier length router decided each request's block width from timing taken inside that request, so two runs can make different decisions on the same prompts. Under the length router, rows taken from three separate server processes spread 10.4 % on the mean and 6.7 % on the median, and three rows through one process spread 5.9 % and 3.1 %.</p>
+<p><code>tools/row3.py</code> runs N rows per configuration through one server, recomputes each from its own records, and reports the median with the spread of the runs. <code>--compare</code> calls a difference resolved only when it is larger than the noise and the run ranges of the two sides do not overlap. A change worth less than about 3 % of the median cannot be settled by the row at any number of repeats.</p>
+<p>Speed is a quotient: tokens a round over time a round. A change can trade one factor for the other and leave the quotient flat. The served loop therefore counts its own rounds, and every row reports tokens per round and milliseconds per round next to tok/s. Both are gated. A kernel change must not move tokens per round, and a drafter change must move it up.</p>
+<p>A server run can hold the costs still: <code>--no-learn-cost</code> (0.3.24-test) keeps the length router's served price table, so the same text gets the same choices whatever the blocks before it took. In 0.3.23's narrator A/B, with learning on, one prompt took 366, 468 and 504 blocks for the same 2,000 greedy tokens at 93.5 to 94.1 ms a block, and the off runs spread 37 %. With the flag the first two requests of a process still wrote other texts (398 and 505 blocks); the next six wrote one text in 514 blocks each, and the off runs spread 0.19 % (41.64 to 41.72 tok/s). So a server A/B gets the flag, two warm-ups an arm, and compares only runs that wrote the same text. A row pair with the flag on both sides (f0e4931 with only the flag added, and 0.3.24-test) read 50.21 and 49.37 tok/s, 2,288 and 2,297 blocks: the rows still differ a little between two processes.</p>
+<p>Every report names the code it measured with <code>code_sha256</code>, a hash over every file of the four code folders. The same commit hashes the same everywhere, so a report can be matched to a commit.</p>
+<h2 id="same-hour-both-sides">Same hour, both sides<a class="headerlink" href="#same-hour-both-sides" title="Permanent link">&para;</a></h2>
+<p>Nobody compares a candidate with a number from another day. It runs against the current release in the same session on the same box, alternated: base, candidate, base, candidate. A board drifts over hours (its temperature, its memory, whatever else runs), and alternation spreads that drift over both sides.</p>
+<p>The adoption rule is "never worse". A candidate ships only if nothing resolves worse against the same-hour base, in both store views: not the mean, p50, p90 or max, not time to first token, and not tokens or milliseconds per round.</p>
+<h2 id="the-block-ab-for-changes-that-keep-the-bits">The block A/B, for changes that keep the bits<a class="headerlink" href="#the-block-ab-for-changes-that-keep-the-bits" title="Permanent link">&para;</a></h2>
+<p>Most kernel changes are worth 0.5 to 3 ms of a round of about 93 ms, below what the row can resolve. For a change whose output is bit-identical, only time can differ. <code>tools/block_ab.py</code> loads the served engine once, switches each state's flags inside the process, warms each state, freezes the router's learned costs, and alternates base and candidate over three workloads for N pairs. Every run's tokens must equal the base's first run, and the rule is applied to milliseconds per round. Two states of the same code read "not resolved" with a spread of 0.35 to 0.87 %. Turning the verify graphs off resolved 3.15 ms worse on every workload.</p>
+<h2 id="the-release-gate">The release gate<a class="headerlink" href="#the-release-gate" title="Permanent link">&para;</a></h2>
+<p><code>ops/gate.sh</code> is the whole protocol in one command, run on the box inside a hold (<a href="../operations/">operations.md</a>). It stops at the first failing step:</p>
+<ol>
+<li>The engine's CPU tests (<code>tools/engine_tests.py</code>), in a clean environment; TandemApp's run in its own repository.</li>
+<li>Every GPU test, <code>tests/gpu/test_*.py</code>.</li>
+<li>Identity: the served configuration with the new flags off must be bit-identical to the build it replaces (<code>tools/flagoff_identity.py</code>).</li>
+<li>Agreement: <code>tools/verify_spec.py</code> with the served flags and the candidate's, under the near-tie rule (<a href="../exactness/">exactness.md</a>).</li>
+<li>Optionally, the block A/B above.</li>
+<li>Rows: two store-off rows and one clean-store row with the candidate's flags.</li>
+<li>Compare: <code>tools/gatecheck.py</code> against the base reports, with the never-worse rule.</li>
+</ol>
+<p>It writes a dated report with every command and its output to <code>results/gate/&lt;label&gt;/report.md</code>. <code>results/</code> is not under version control.</p>
+<p>Rows are not enough on their own. A release candidate once passed every row and broke a real client's request shape. Before a deploy the gate is followed by:</p>
+<ul>
+<li><code>tools/client_smoke.py</code>: the request shapes real clients send, through the official <code>openai</code> client. It covers an agent client's tools with arguments validated against their JSON schemas, a 12k-token prompt with penalties and tools, every <code>tool_choice</code> mode, streamed tool-call deltas, <code>n=2</code>, and prompts from 8k to over 100k tokens. It passes with zero failures.</li>
+<li><code>tools/api_text_check.py</code>: 13 plain requests byte-identical to the current release.</li>
+<li>A real agent session with its own tool calls, all of which must go through.</li>
+</ul>
+<h2 id="the-teacher-forced-bench">The teacher-forced bench<a class="headerlink" href="#the-teacher-forced-bench" title="Permanent link">&para;</a></h2>
+<p>A change of the verified tree's shape moves near ties (<a href="../exactness/">exactness.md</a>), so two configurations rarely write the same text on the same prompt, and their rows measure different texts. <code>tools/forced_bench.py</code> removes that. Each workload has one fixed reference text (the greedy output of the earlier length-router configuration; any fixed text would do), and every configuration drafts and verifies with the real kernels at the real context but accepts along the reference, so all of them commit the same tokens and differ only in rounds and time per round.</p>
+<p>The paper's run covers 25 workloads: prose, chat, code, a 48-token answer and a prose-then-code prompt; twelve prompts of the benchmark row; three edit tasks; a 256-token quotation and a 1,024-token copy; and, at 32k tokens of context, fresh text, a copy and a code edit. A workload's rate is the mean of three measured repeats after a warm-up. StairCut averages 90.45 tok/s against 81.95 for the fixed block 16 and 59.31 for the fixed block 8. It is above block 16 on 23 of the 25 workloads and above block 8 on 22. One router served every workload and repeat in that run; in a second run with a new router before every request, StairCut averages 89.88 tok/s against 91.16 for the kept router in that run.</p>
+<h2 id="the-weight-cards-speed-rows">The weight cards' speed rows<a class="headerlink" href="#the-weight-cards-speed-rows" title="Permanent link">&para;</a></h2>
+<p>Each weight card in the setup guide carries one speed row of the current build (SPD-245): the <code>parallel</code> rows of <code>models/&lt;id&gt;/model.yaml</code>. <code>tools/parallel_card.py</code> measures a row against the server running the profile and writes its raw file to <code>models/&lt;id&gt;/measurements/</code>. The file holds every request's record, the <code>/health</code> samples of every round, the server's limit knobs and the row itself. The registry refuses a row that differs from its raw file's <code>row</code>.</p>
+<p>A row measures the engine (SPD-249). Every request goes to <code>/v1/completions</code> with its prompt as text and <code>X-Tandem: raw</code>, so no conductor or chat-layer step runs. The prompt is the model's chat template over the card's messages with thinking off: the tool asks <code>/v1/tokenize</code> for the template's ids (<code>"ids": true</code>), turns them into text with the model's tokenizer (<code>--tokenizer</code>, the weights' directory), and checks that <code>/v1/tokenize</code> reads that text as the same ids, which are the ids <code>/v1/completions</code> reads. A prompt whose ids differ stops the run, and the raw file counts the prompts checked (<code>prompts_checked</code>). <code>/v1/chat/completions</code> works and is in beta; no published speed number comes from it.</p>
+<ul>
+<li>Prompts: <code>bench/card-prompts-v1.json</code>, a code and a prose workload of about 190 to 250 tokens. The prefill filler is <code>bench/heldout_prose.txt</code>, repeated to the length. Every request starts with a nonce line and sends <code>cache_prompt: false</code>, with thinking off and a seed of its own. The row records the prompt set's version and hash, and the prompt tokens of each workload.</li>
+<li>Decode: each workload alone, three runs after one warm-up each. A run's rate is (completion tokens - 1) / (last token - first token), and the row gives the median per workload.</li>
+<li>Prefill: cold prompts of 2,048, 8,192 and 32,768 tokens, counted with <code>/v1/tokenize</code> and checked against the request's own <code>prompt_tokens</code>, three runs each, one token out. The row gives the median time to first token and prompt tokens over that time.</li>
+<li>At once: 1, 2, 4 and 8 prose requests released together, one discarded warm-up round and three measured rounds a level, 512 tokens a request. The wall rate is all completion tokens over the time from the send to the last end, so it includes the first tokens. The decode rate counts the tokens after each request's first one, over the time from the first first token to the last token. The row gives the median of each over the rounds, and the median time to first token.</li>
+<li>Proof: <code>/health</code> every 0.2 s during every round. A round counts only when the most slots decoding at once equal N and no more than N requests ran (none came from elsewhere). An invalid round is run again. A level's <code>at_once</code> is the smallest maximum over its rounds, and the registry refuses a level whose <code>at_once</code> is not N or whose valid rounds are fewer than the row's. Before the levels the tool reads the server's live slot limit (<code>parallel.max_running</code>) and refuses to start when it is below the largest N.</li>
+<li>Setup: the row names the setup file, the lanes, the window, the tokens a request, the sampling, the suffix store and the response cache (both off for a card row), the build and the commit.</li>
+</ul>
+<h2 id="baselines">Baselines<a class="headerlink" href="#baselines" title="Permanent link">&para;</a></h2>
+<p>The paper compares StairCut with the same engine in two other configurations, on the same weights and the same box: plain greedy decoding (speculation off), and one drafter at a fixed block width (8 or 16) with its released tree budgets (<a href="../speculative-decoding/">speculative-decoding.md</a>). On the benchmark row with the store off that is 49.89 tok/s for StairCut, 47.13 for block 8, 44.80 for block 16 and 13.69 for plain greedy decoding.</p>
+<h2 id="one-measuring-method">One measuring method<a class="headerlink" href="#one-measuring-method" title="Permanent link">&para;</a></h2>
+<p>Release pages, weight cards and the quality gate measure the same things: decode at one request, prefill, requests at once, long prompts. <code>tools/measure</code> measures each of them once and keeps the result, so a number measured for one of them is never measured again for another.</p>
+<ul>
+<li>One row list, <a href="https://github.com/TandemLLM/TandemEngine/blob/main/tools/measure/rows.yaml">tools/measure/rows.yaml</a>. A row has a stable id (<code>length.32k</code>, <code>conc.card.c8</code>, <code>prefill.64k</code>, ...), what it measures, its request shape (prompt and its length, tokens out, requests at once, runs or rounds), the views that use it, and the server it runs on. Two rows of a different shape are two rows: the card's 1/2/4/8 at once use 169-246-token prompts, the report's requests at once use ~2k-token prompts with their prefill in the wall time; <code>prefill.32k</code> is one token out, <code>length.32k</code> is 512.</li>
+<li>One runner. <code>python -m tools.measure run --url URL --rows ... | --view report --out DIR</code> measures only the rows the record store at DIR does not hold for this server's key: the row, the build, the pack, the box and a hash of the server's limit knobs. <code>--force</code> measures a row again. Every request goes to <code>/v1/completions</code> with <code>X-Tandem: raw</code> and every answer's mode is checked; a row of N requests at once is invalid without the server's own count of N decoding together.</li>
+<li>A record store. One JSON per run under <code>DIR/runs/</code>, and <code>DIR/index.json</code> from the key to the run file. <code>python -m tools.measure merge</code> imports records that exist already (a gate report and its raw results, a report's data.json and the card tool's raw files). An imported record keeps its source, the tool, the date and the file, and the page shows it beside its rows.</li>
+<li>Three views, none of which measures anything. <code>render report</code> writes the HTML page (<a href="../benchmark-report/">benchmark-report.md</a>), for one pack or several packs of one model on one page. <code>render card</code> writes a weight card's numbers in the shape <code>tools/parallel_card.py</code> writes them. <code>render gate --base DIR --head DIR</code> gives the gate's verdict table from two stores, with the gate's own rules; every gate run writes its arms' records to <code>OUT/records/base</code> and <code>OUT/records/head</code> (<a href="../quality-gate/">quality-gate.md</a>). <code>compare --old A --new B</code> sets two builds' rows side by side with a noise band.</li>
+<li>A plan before the GPU. <code>python -m tools.measure plan --view report --pack P --build B --out DIR</code> lists every row with its record and source, or the hold that will measure it. Rows that need their own fresh server are grouped by server, and the groups are packed into holds of at most 62 minutes. It refuses when a row would be measured twice: a row asked by id that has a record, a warm row whose earlier rows already have records, or code that measures a recorded row beside the one asked.</li>
+</ul>
+<p><code>tools/parallel_card.py</code>, <code>python -m tools.release_report</code> and <code>python -m tools.gate run</code> keep working; their help says where the one method is.</p>
+<h2 id="traps">Traps<a class="headerlink" href="#traps" title="Permanent link">&para;</a></h2>
+<p>Each of these cost a wrong number once.</p>
+<ul>
+<li>A standalone kernel timing is a ranking, never a budget. The same configuration read 0.254 ms in one process and 0.627 ms in another.</li>
+<li>The first configuration in a fresh process pays for autotuning. It once read a verify of 260.2 ms against 115.5 ms for every later one, and the policy under test "won" by 35 %.</li>
+<li>A bandwidth-bound engine measured beside another engine measures the other engine. Two engines halve the bandwidth each one gets. Take the board lock.</li>
+<li>A speculative decoder judged on a short generation hides bugs. One drafter bug read 81 % acceptance at 48 tokens and 24 % at 128.</li>
+<li>Acceptance with the reasoning block open differs from acceptance with it closed, by up to 72 % on one prompt. Measure in the serving regime.</li>
+<li>A kernel probe whose working set fits in cache measures the cache. 266 GB/s on a 273 GB/s board is not a real reading.</li>
+<li>Two runs that agree to six decimals have not agreed. They are the same run: once, a test server had bound its port beside another.</li>
+<li>A quiet log is not a hung process. Python block-buffers into a pipe, so use <code>python -u</code>.</li>
+<li>A lane count past the pool's guarantee reads as a slow model. Requests that wait for a lane and for the turn look the same as slow decoding, and a Prometheus row of the decode rate alone cannot tell the two apart. Compare the <code>/health</code> <code>parallel.turn</code> waits with the lane count.</li>
+<li>A fresh engine can measure better than a used one. The resident conversation and the side slots keep their KV, and a long-lived session has more of it. Restart before comparing configurations.</li>
+<li>The engine's own turns look like a client's. The preparer and the memory writer run generations over the client's context; count them with <code>qse_prepare_runs_total</code> and <code>qse_memory_writer_runs_total</code> (server/METRICS.md), or measure raw with the conductor off.</li>
+<li>A first request after a restart is not a baseline. The pack's page cache is dropped at the start, so the first measurement runs on a busy disk.</li>
+</ul>
+<h2 id="measuring-flash-next">Measuring Flash-Next<a class="headerlink" href="#measuring-flash-next" title="Permanent link">&para;</a></h2>
+<p>Flash-Next's numbers in these docs come from tools of their own (<code>tools/fn_*.py</code>), each answering one question, and every one ran under the board's lock with one model loaded. Most are single runs of one request, labelled so where they appear; none is a benchmark row yet.</p>
+<table>
+<thead>
+<tr>
+<th>tool</th>
+<th>the question it answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fn_server_check.py --compare</code></td>
+<td>do 20 request shapes give the same text, tool calls and logprobs with and without speculation; <code>--sampled</code>: do seeded sampled answers</td>
+</tr>
+<tr>
+<td><code>fn_spec_check.py</code></td>
+<td>does speculative greedy equal plain greedy in the engine, with the state bit-equal after every run</td>
+</tr>
+<tr>
+<td><code>fn_fit_run.py</code></td>
+<td>does a pack hold its largest window: one long request, MemAvailable at 10 Hz, every limit knob the server reports</td>
+</tr>
+<tr>
+<td><code>fn_cache_check.py</code></td>
+<td>does a request restored from each cache tier answer as on a cold server</td>
+</tr>
+<tr>
+<td><code>fn_resume_check.py</code>, <code>fn_guest_check.py</code></td>
+<td>does a resumed prefill equal a cold one; does a short guest request leave the resident conversation's rows intact</td>
+</tr>
+<tr>
+<td><code>fn_lookup_ab.py</code></td>
+<td>one greedy request a class through a server, for an A/B of the drafters</td>
+</tr>
+<tr>
+<td><code>fn_memory_check.py</code></td>
+<td>memory after the load, the prefill workspace, the table's resident bytes under each policy</td>
+</tr>
+<tr>
+<td><code>fn_exl3_xcheck.py</code>, <code>fn_refcheck.py</code></td>
+<td>our reading of a pack against the converter's; our forward against <code>transformers</code>'</td>
+</tr>
+</tbody>
+</table>
+<p><em>The Flash-Next tools behind the numbers in <a href="../flash-next/">Qwen3.8-Flash-Next</a>.</em></p>
+<p>Every speculative rate in <a href="../flash-next/">Qwen3.8-Flash-Next</a> comes with the statement that its texts equalled plain decoding, because a rate whose text changed measures another answer. The runs by context length started a fresh server and report its second round, so the first round's one-time graph captures do not count in them. What Flash-Next has not had yet is the release gate: no row of <code>serve-single-i256-o256-v1</code>, no block A/B and no task suite.</p>
+<h2 id="limits">Limits<a class="headerlink" href="#limits" title="Permanent link">&para;</a></h2>
+<p>The published numbers come from one board, one model and one request at a time. Long prompts are measured separately (<a href="../caches/">caches.md</a>). Parallel requests are measured on the weight cards only (above). The quality gates are held-out loss, confident argmax agreement and free generation. No task benchmark suite has been run, so this repository makes no claim about task accuracy.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../parallel-requests/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Parallel requests">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Parallel requests
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../benchmark-report/" class="md-footer__link md-footer__link--next" aria-label="Next: The benchmark report">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                The benchmark report
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1916 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/shadow-reader/">
+      
+      
+        <link rel="prev" href="../adding-a-model/">
+      
+      
+        <link rel="next" href="../flash-next/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>The shadow reader - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-shadow-reader" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              The shadow reader
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-a-shadow-and-not-a-bridge" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why a shadow and not a bridge
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-sessions-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      One session's state
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exact-on-a-grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exact on a grid
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-it-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      When it reads
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-costs-qwen" class="md-nav__link">
+    <span class="md-ellipsis">
+      What it costs Qwen
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Read rate
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-asks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Who asks
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-and-the-disk" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory and the disk
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#switches" class="md-nav__link">
+    <span class="md-ellipsis">
+      Switches
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live" class="md-nav__link">
+    <span class="md-ellipsis">
+      Live
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-router-question-with-the-2b-and-the-4b-2026-10-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      The router question with the 2B and the 4B (2026-10-05)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open" class="md-nav__link">
+    <span class="md-ellipsis">
+      Open
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/variables/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-a-shadow-and-not-a-bridge" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why a shadow and not a bridge
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-sessions-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      One session's state
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exact-on-a-grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exact on a grid
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-it-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      When it reads
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-costs-qwen" class="md-nav__link">
+    <span class="md-ellipsis">
+      What it costs Qwen
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Read rate
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-asks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Who asks
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-and-the-disk" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory and the disk
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#switches" class="md-nav__link">
+    <span class="md-ellipsis">
+      Switches
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live" class="md-nav__link">
+    <span class="md-ellipsis">
+      Live
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-router-question-with-the-2b-and-the-4b-2026-10-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      The router question with the 2B and the 4B (2026-10-05)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open" class="md-nav__link">
+    <span class="md-ellipsis">
+      Open
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="the-shadow-reader">The shadow reader<a class="headerlink" href="#the-shadow-reader" title="Permanent link">&para;</a></h1>
+<p>A small Qwen3.5 model keeps its own state of each session: its KV rows and its Gated-DeltaNet state for every token the session holds, the served prompt and Qwen's output. It reads each turn's new tokens and nothing else, so a small model can answer a question about a 100,000-token session in one forward of the question.</p>
+<p>Code: <code>engine/shadow.py</code> (one session's state, the grid, forks, the disk), <code>server/conductor/shadow.py</code> (the service: feeding, scheduling, the cap, the questions), the wiring in <code>server/app.py</code>. Tests: <code>tests/test_shadow.py</code>. Measurements: <code>tools/shadow_measure.py</code>, <code>tools/shadow_fresh.py</code>, <code>tools/shadow_ab.py</code>.</p>
+<h2 id="why-a-shadow-and-not-a-bridge">Why a shadow and not a bridge<a class="headerlink" href="#why-a-shadow-and-not-a-bridge" title="Permanent link">&para;</a></h2>
+<p>Two cheaper ways to give a small model Qwen's context failed on 2026-10-04. Sixteen soft tokens made from Qwen3.8-27B's hidden rows (B2) answered at chance, 0.13 against 0.13. A per-layer map from the 27B's KV and GDN state into Qwen3.5-4B's (B3) reached a held-out R² of about 0.5, and its own oracle needs about 0.95 for 90 % agreement. The oracle also showed what does work: the small model's own state of the same tokens, which is exact.</p>
+<p>The Qwen3.5 small models (0.8B, 2B, 4B) use the same BPE vocabulary and merges as Qwen3.8-27B. Qwen's token ids pass to the small model as they are, with no detokenising. The engine's own Qwen3.5 forward runs them (<code>engine/generative/qwen35.py</code>); the reader is a second engine object over the same weights.</p>
+<h2 id="one-sessions-state">One session's state<a class="headerlink" href="#one-sessions-state" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>part</th>
+<th>0.8B</th>
+<th>2B</th>
+<th>4B</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>KV a token (6 or 8 attention layers)</td>
+<td>12 KiB</td>
+<td>12 KiB</td>
+<td>32 KiB</td>
+</tr>
+<tr>
+<td>recurrent and convolution state</td>
+<td>19.5 MB</td>
+<td>19.5 MB</td>
+<td>about 50 MB</td>
+</tr>
+<tr>
+<td>a 41,472-token session (measured)</td>
+<td>0.60 GiB</td>
+<td>0.60 GiB</td>
+<td></td>
+</tr>
+<tr>
+<td>a 57,856-token session (measured)</td>
+<td>0.88 GiB</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>The KV buffer grows in steps of 8,192 rows. A session also keeps up to six checkpoints of its recurrent state (19.5 MB each on the 0.8B), one at the end of each turn's prompt.</p>
+<h2 id="exact-on-a-grid">Exact on a grid<a class="headerlink" href="#exact-on-a-grid" title="Permanent link">&para;</a></h2>
+<p>The state advances only in whole chunks of 512 rows at absolute positions k × 512. A fresh prefill of the same ids on the same grid runs the same chunks on the same inputs, so the two states are equal bit for bit, however many turns it took. The ids past the last grid line (fewer than 512) wait as the pending tail. A question prefills the tail and its own tokens above the committed rows and puts the recurrent state back afterwards (a fork); nothing below the committed length changes.</p>
+<p>Measured on the GPU (2026-10-04, 0.8B, two real conversations of 41,802 and 58,278 tokens): the replayed state equals a fresh prefill on the same grid in every KV row, the recurrent state and the convolution state. Against a fresh prefill on a 2,048-row grid it is not bit-equal (largest difference 0.44 in a K row, 0.018 in the recurrent state, the rounding of another chunking), and 8 of 8 question probes give the same top token, KL at most 4.1e-5.</p>
+<p>When a new prompt differs from what was read (the chat template drops an earlier turn's reasoning once a new user message comes), the reader goes back to the newest checkpoint at or below the first differing token and reads from there. Without one it starts over. KV rows need no checkpoint: rows below the cut stay valid.</p>
+<h2 id="when-it-reads">When it reads<a class="headerlink" href="#when-it-reads" title="Permanent link">&para;</a></h2>
+<p>The bandwidth rule: while Qwen decodes, only Qwen and its drafters use the GPU. The reader has two windows.</p>
+<ul>
+<li>The idle window. <code>shadow_once</code> in <code>server/app.py</code> looks every 0.2 s. When no request runs or waits and no hold or box lock is on, it takes the engine lock behind every waiter (rank 4, after the summary written ahead) and the box lock without waiting, and reads for at most 2 s. Before every chunk it checks whether a request waits, so a request that arrives waits at most one chunk: 36 to 50 ms on the 0.8B at grid 512.</li>
+<li>Inside a turn, rationed. Between two of Qwen's rounds, on the request's thread, the reader may use 2 % of the time since Qwen's first token, in slices of at most 150 ms (whole chunks, the next one's cost estimated from the last). The device is synchronised first, so nothing of the small model runs beside Qwen. It reads the prompt first, then Qwen's output so far. The share counts from the first token on purpose: the first build counted it from the turn's start, so a 17 s prefill earned about 340 ms that the reader then spent inside a 9.6 s decode, and the decode lost 5.3 %.</li>
+</ul>
+<p>The idle window alone is not enough for an agent. On the usage ledger's 41 opencode sessions (1,624 turns, 2026-10-02 to 10-04) the median gap between the end of one request and the start of the next is 0.31 s: opencode runs the tool and sends the next request at once. Replaying those timelines with the measured read rate (87 ms per 1,000 tokens), the idle window alone leaves the shadow fresh (less than one grid chunk behind) at 41 % of turn starts, p90 49,000 tokens behind. With 2 % of each turn's decode time on top it is fresh at 84 % of turn starts, p50 307 and p90 4,347 tokens behind. A session's first long prompt is the exception: 40,000 tokens take about 3.5 s to read.</p>
+<h2 id="what-it-costs-qwen">What it costs Qwen<a class="headerlink" href="#what-it-costs-qwen" title="Permanent link">&para;</a></h2>
+<p><code>tools/shadow_ab.py</code> in a hold (2026-10-04, a candidate server on :8011, the served engine flags, one 16,350-token prompt, 346 tokens out, a new session each run so the shadow reads the whole prompt each time, 1.5 s between requests, the arms alternating). Qwen's decode rate, median of 6 runs an arm: shadow off 36.02 tok/s, shadow on 35.28 tok/s, -2.05 %; paired run by run the deltas are -2.2, -2.0, -1.9, -1.8, -2.2 and +0.5 %. That is the 2 % share, as designed. TTFT did not move (17.46 s off, 17.40 s on): the idle bursts stop before the next chunk once a request waits. The gate was 3 %.</p>
+<h2 id="read-rate">Read rate<a class="headerlink" href="#read-rate" title="Permanent link">&para;</a></h2>
+<p><code>tools/shadow_measure.py</code>, the served process's arithmetic flags, cold weights excluded, ms per grid chunk (median of 3):</p>
+<table>
+<thead>
+<tr>
+<th>model</th>
+<th>grid</th>
+<th>depth 0</th>
+<th>depth 16k</th>
+<th>depth 41k</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.8B</td>
+<td>256</td>
+<td>22.9</td>
+<td>24.4</td>
+<td>30.1</td>
+</tr>
+<tr>
+<td>0.8B</td>
+<td>512</td>
+<td>36.4</td>
+<td>41.1</td>
+<td>49.9</td>
+</tr>
+<tr>
+<td>0.8B</td>
+<td>1,024</td>
+<td>63.1</td>
+<td>74.5</td>
+<td>94.0</td>
+</tr>
+<tr>
+<td>0.8B</td>
+<td>2,048</td>
+<td>126.8</td>
+<td>149.5</td>
+<td>186.9</td>
+</tr>
+<tr>
+<td>2B</td>
+<td>512</td>
+<td>50.5</td>
+<td>56.1</td>
+<td>69.1 (33k)</td>
+</tr>
+</tbody>
+</table>
+<p>At grid 512 that is 71 to 97 ms per 1,000 tokens on the 0.8B and 99 to 135 ms on the 2B. A whole 58k conversation read in one go took 5.1 s. A larger grid reads faster per token but makes a waiting request wait longer; 512 is the default (<code>QWEN38_SHADOW_GRID</code>).</p>
+<h2 id="who-asks">Who asks<a class="headerlink" href="#who-asks" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>ask(session, question, choices)</code>, also <code>POST /v1/conductor/shadow/ask</code>: a typed decision of the small model over the whole session. Each choice is a letter; one forward of the question gives the letters' softmax, as the router's in-context stage asks Qwen (TandemApp's <code>tandemapp/conductor/incontext.py</code>). At the end of a 41k session the router's 9-class question (290 tokens plus a 330-token pending tail) took 68 ms on the 0.8B and 96 ms on the 2B.</li>
+<li>The router's class question, in shadow mode (<code>shadow.router: shadow</code>). For a turn whose prompt has at least <code>router_min_tokens</code> tokens (8,192 by default), the question the router's in-context stage asks Qwen goes to the shadow at the turn's insertion point (the prompt's last <code>&lt;|im_end|&gt;</code>). It is answered when the reader reaches that point and journaled in <code>&lt;conductor root&gt;/shadow.jsonl</code> beside the router's own class: the label, its probability, agreement, how far behind the shadow was when the turn began, and the lag. Nothing of the turn changes.</li>
+<li>The narrator's thought summary (<code>shadow.narrator: on</code> with <code>ui.narrator: thoughts</code>). The narrator's job reads what the shadow misses up to the end of the thought, then asks for the summary on top of the whole session instead of the last 1,500 ids of the thought. It runs in the narrator's slices (at most 3 % of Qwen's time). The fork decodes eagerly: 12 to 17 ms a token on the 0.8B (the narrator's own path has a CUDA graph at about 9.5 ms).</li>
+</ul>
+<h2 id="memory-and-the-disk">Memory and the disk<a class="headerlink" href="#memory-and-the-disk" title="Permanent link">&para;</a></h2>
+<p>Resident states are capped at <code>QWEN38_SHADOW_GB</code> (4 GiB). Past the cap, the least recently used session goes to the NVMe (<code>QWEN38_SHADOW_DISK</code>, one safetensors file a session, 48 h, at most <code>QWEN38_SHADOW_DISK_GB</code>) and comes back exact when the session is fed again; without a disk it is dropped and read again from the start. A planned stop writes every resident session after the work in flight. A file records the weights' hash and the grid; another model or grid does not read it.</p>
+<p>The model loads through the residency planner (role <code>shadow</code>: the model's claim plus <code>QWEN38_SHADOW_GB</code>): its first load in an idle window soon after the start, when some profile has <code>shadow.mode: on</code> and no other model is loading (0.3.34-test; before, the first turn of such a profile started it, waited behind it and landed it on full caches), and again with the next turn after a release. Its own pool, up to the claim the planner admitted, is left out of the engine's memory ceiling, as the narrator's (<code>server/memlimits.role_exclude</code>). A load that failed (its weights not on the box yet, a load error) is tried again in an idle window once <code>SHADOW_RETRY_S</code> (300 s) has passed, and <code>/health</code> <code>roles.shadow.error</code> says why it failed. When <code>QWEN38_SHADOW_MODEL</code> names the narrator's model, both share one slot and one copy of the weights.</p>
+<h2 id="switches">Switches<a class="headerlink" href="#switches" title="Permanent link">&para;</a></h2>
+<ul>
+<li>serve.env: <code>QWEN38_SHADOW_MODEL</code> (empty: off, nothing imported), <code>QWEN38_SHADOW_DIR</code>, <code>QWEN38_SHADOW_GB</code>, <code>QWEN38_SHADOW_GRID</code>, <code>QWEN38_SHADOW_DISK</code> (<code>auto</code>: <code>~/.qwen38-spark-engine/cache/shadow</code>), <code>QWEN38_SHADOW_DISK_GB</code>.</li>
+<li>A profile's <code>shadow</code> block (absent: off): <code>mode</code> (<code>off</code>, <code>on</code>), <code>narrator</code> (<code>off</code>, <code>on</code>), <code>router</code> (<code>off</code>, <code>shadow</code>), <code>router_min_tokens</code>.</li>
+<li><code>GET /v1/conductor/shadow/status</code>: the slot, every session's read position, backlog, bytes and checkpoints, the router's agreement, the last answers.</li>
+</ul>
+<h2 id="live">Live<a class="headerlink" href="#live" title="Permanent link">&para;</a></h2>
+<p>0.3.25-test runs it for the coding profile since 2026-10-04 16:05: <code>shadow: {mode: on, router: shadow, router_min_tokens: 8192, narrator: off}</code>, Qwen3.5-0.8B sharing the narrator's slot. A 5-turn test session of opencode's shape (prompts of 12,676 to 21,491 tokens): the shadow followed every turn, went back to a prompt-end checkpoint 3 times when an answer came back re-rendered (1,176 ids read again), and ended 83 ids behind. The router's question, asked of the 0.8B on all 5 turns, agreed with the router 0 times: it picked <code>debug</code> 4 times and <code>design_ui</code> once at 0.15 to 0.50, where the router said <code>chat</code> or <code>code_edit</code> at 0.72 to 0.997. As a router the 0.8B is not usable with this question; the journal will show whether that holds on real sessions, and a 2B or 4B shadow, or a narrower question, is the next thing to try.</p>
+<h2 id="the-router-question-with-the-2b-and-the-4b-2026-10-05">The router question with the 2B and the 4B (2026-10-05)<a class="headerlink" href="#the-router-question-with-the-2b-and-the-4b-2026-10-05" title="Permanent link">&para;</a></h2>
+<p><code>tools/shadow_router_eval.py</code> asked the router's question again, offline, at the places the live shadow asked it: 58 journaled turns of 6 opencode sessions (2026-10-04 16:30 to 22:00), rebuilt from each session's parked file. The live model is the control: its offline answers gave the journal's probabilities again within 0.02 on 46 of the 58 turns and the same label on 57. Two questions: <code>live</code> (the classes with their descriptions, as the shadow asks) and <code>labels</code> (the classes' short labels only).</p>
+<table>
+<thead>
+<tr>
+<th>model</th>
+<th>live question</th>
+<th>labels question</th>
+<th>read, ms per 1,000 tokens (offline, no graph)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>qwen3.5-0.8b</td>
+<td>8 of 58 (5 of 46 exact, 1 of 9 fresh)</td>
+<td>2 of 58</td>
+<td>146</td>
+</tr>
+<tr>
+<td>qwen3.5-2b</td>
+<td>25 of 58 (18 of 46, 3 of 9)</td>
+<td>8 of 58</td>
+<td>175</td>
+</tr>
+<tr>
+<td>qwen3.5-4b</td>
+<td>19 of 58 (16 of 46, 2 of 9)</td>
+<td>44 of 58 (34 of 46, 4 of 9)</td>
+<td>447</td>
+</tr>
+</tbody>
+</table>
+<p>"Fresh" are the 9 turns whose class Qwen decided on that turn; the others carry the session's class forward. The router said <code>code_edit</code> on 42 of the 58 turns, so a constant <code>code_edit</code> scores 42 of 58 and 4 of 9 fresh. The 4B with the short labels is at that baseline: it says <code>code_edit</code> 47 times. None of the three reads the class better than the constant does, so the shadow keeps the 0.8B (shared slot, 1.5 GiB of weights, the fastest read) and the question stays in shadow. A 2B shadow would share the voice's weights, but it buys nothing here. A useful next step is a question the small models can answer: two or three classes (code, chat, other), asked only where the router decides fresh.</p>
+<h2 id="open">Open<a class="headerlink" href="#open" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The read rate. The 0.8B reads only 1.3 times faster than the 2B, so its chunks are bound by kernel launches and small GEMMs, not by its weights. A graph per chunk shape or a fused GDN prefill for the small sizes would help.</li>
+<li>The fork decode has no CUDA graph: the session's KV buffer moves when it grows, and a graph holds its address.</li>
+<li>The first long prompt of a session is read in about 3.5 s per 40,000 tokens; until then a question about that session waits or is late.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../adding-a-model/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Adding a model">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Adding a model
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../flash-next/" class="md-footer__link md-footer__link--next" aria-label="Next: Qwen3.8-Flash-Next">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Qwen3.8-Flash-Next
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

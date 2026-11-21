@@ -1,0 +1,55 @@
+/* the house colours: cobalt and signal orange (the product site's) */
+:root {
+  --md-primary-fg-color: #2a64c9;
+  --md-primary-fg-color--light: #3987e5;
+  --md-primary-fg-color--dark: #1d4a99;
+  --md-accent-fg-color: #f2994a;
+}
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: #0b0f14;
+  --md-primary-fg-color: #0f1621;
+  --md-typeset-a-color: #6aa6f0;
+}
+.md-typeset table:not([class]) {
+  font-size: 0.72rem;
+}
+/* the support line above the top bar (overrides/main.html) */
+.md-banner {
+  background-color: #0f1621;
+  color: #c9d4e3;
+}
+[data-md-color-scheme="default"] .md-banner {
+  background-color: #eef3fb;
+  color: #1d2b3f;
+}
+.md-banner__inner {
+  margin-top: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+.tl-support {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 1rem;
+  font-size: 0.68rem;
+}
+.tl-support a.tl-support__link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tl-support a.tl-support__link:hover {
+  color: #f2994a;
+}
+.tl-support .btn-container {
+  margin: 0;
+}
+@media screen and (max-width: 44.9375em) {
+  .tl-support__text {
+    display: none;
+  }
+}
+.md-typeset table:not([class]) code {
+  word-break: break-word;
+}

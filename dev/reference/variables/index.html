@@ -1,0 +1,5115 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An inference engine for one GPU box: fast, exact, measured.">
+      
+      
+      
+        <link rel="canonical" href="https://tandemengine.0xbakeer.com/dev/reference/variables/">
+      
+      
+        <link rel="prev" href="../commands/">
+      
+      
+        <link rel="next" href="../http/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Reference: environment and configuration - TandemEngine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#reference-environment-and-configuration" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+<div class="tl-support" data-support>
+  <span class="tl-support__text">TandemLLM is free and open source. If it helps you, help keep it going:</span>
+  <span class="tl-support__kofi"><script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W8N326FMEQ');kofiwidget2.draw();</script></span>
+  <a class="tl-support__link" href="https://github.com/sponsors/0xBakeer">GitHub Sponsors</a>
+  <a class="tl-support__link" href="https://x.com/TandemLLM">@TandemLLM on X</a>
+  <a class="tl-support__link" href="https://x.com/0xBakeer">@0xBakeer on X</a>
+</div>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="TandemEngine" class="md-header__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TandemEngine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Reference: environment and configuration
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="TandemEngine" class="md-nav__button md-logo" aria-label="TandemEngine" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TandemEngine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/TandemLLM/TandemEngine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    TandemLLM/TandemEngine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Start here
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start here
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview: what TandemEngine is
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../install/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing TandemEngine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Questions and answers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Installing and running
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Installing and running
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The setup guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../community-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Community weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../remote-control/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Remote control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pairing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pairing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design-simple-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design: Simple mode for the Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How the engine works
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            How the engine works
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantisation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quantisation and profiles
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kernels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../speculative-decoding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Drafters and tree verify
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../exactness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Exactness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../caches/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Caches
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../server/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Server and API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parallel-requests/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parallel requests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../measurement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Measurement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The benchmark report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quality-gate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quality gate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adding-a-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shadow-reader/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    The shadow reader
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    The models
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            The models
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../flash-next/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Qwen3.8-Flash-Next
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../lfm2.5-24b-a2b/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LFM2.5-24B-A2B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../nemotron-h/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NemotronH (Nemotron 3.5 Lightning, Bolt, Super VL)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ornith/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ornith-1.5-122B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../flint/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Flint
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: commands
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Reference: environment and configuration
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-served-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      The served profile
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The served profile">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-keys-opsserveenv-sets-in-file-order-paths-not-shown" class="md-nav__link">
+    <span class="md-ellipsis">
+      The keys ops/serve.env sets, in file order (paths not shown)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-switches" class="md-nav__link">
+    <span class="md-ellipsis">
+      Engine switches
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Engine switches">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#every-qwen38_-switch-the-engine-reads-with-the-value-opsserveenv-sets-the-extensions-in-contractsengine-ext-v1knobsjson-are-in-tandemapps-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Every QWEN38_* switch the engine reads, with the value ops/serve.env sets (the extension's, in contracts/engine-ext-v1/knobs.json, are in TandemApp's docs)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#server-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Server variables
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Server variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#qse_-variables-the-servers-settings-from-the-environment-or-serveenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      QSE_* variables: the server's settings from the environment or serve.env
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tandem-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      TANDEM variables
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TANDEM variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tandem_-variables-the-engines-code-reads-the-installer-the-service-scripts-and-the-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      TANDEM_* variables the engine's code reads: the installer, the service scripts and the server
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-conductors-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      The conductor's documents
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: HTTP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../metrics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Reference: metrics and the usage ledger
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks with tool-eval-bench
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tool-eval-bench/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    tool-eval-bench results
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../labels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Labels
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/TandemLLM/TandemEngine/blob/main/CHANGELOG.md" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CHANGELOG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-served-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      The served profile
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The served profile">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-keys-opsserveenv-sets-in-file-order-paths-not-shown" class="md-nav__link">
+    <span class="md-ellipsis">
+      The keys ops/serve.env sets, in file order (paths not shown)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-switches" class="md-nav__link">
+    <span class="md-ellipsis">
+      Engine switches
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Engine switches">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#every-qwen38_-switch-the-engine-reads-with-the-value-opsserveenv-sets-the-extensions-in-contractsengine-ext-v1knobsjson-are-in-tandemapps-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Every QWEN38_* switch the engine reads, with the value ops/serve.env sets (the extension's, in contracts/engine-ext-v1/knobs.json, are in TandemApp's docs)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#server-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Server variables
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Server variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#qse_-variables-the-servers-settings-from-the-environment-or-serveenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      QSE_* variables: the server's settings from the environment or serve.env
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tandem-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      TANDEM variables
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TANDEM variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tandem_-variables-the-engines-code-reads-the-installer-the-service-scripts-and-the-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      TANDEM_* variables the engine's code reads: the installer, the service scripts and the server
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-conductors-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      The conductor's documents
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="reference-environment-and-configuration">Reference: environment and configuration<a class="headerlink" href="#reference-environment-and-configuration" title="Permanent link">&para;</a></h1>
+<p>TandemEngine reads four families of settings. Engine switches are <code>QWEN38_*</code> variables, read through one registry. Server settings are command-line flags (<a href="../commands/">Command-line reference</a>); <code>ops/start.sh</code> builds them from <code>ops/serve.env</code>, and a few <code>QSE_*</code> variables set flags' defaults or serve the scripts. The installer and the service scripts read a few <code>TANDEM_*</code> variables. And the conductor's behaviour lives in its versioned documents, which the dashboard edits. The <code>QWEN38_*</code> knobs the extension reads, and the variables of TandemApp's proxy, collector and plugins, are in <a href="https://github.com/TandemLLM/TandemApp/blob/main/docs/README.md">TandemApp's docs</a>.</p>
+<h2 id="the-served-profile">The served profile<a class="headerlink" href="#the-served-profile" title="Permanent link">&para;</a></h2>
+<p><code>ops/serve.env</code> is the served configuration. On an installed engine it is <code>~/TandemLLM/run/ops/serve.env</code>, rewritten by every run of the installer, and <code>local.env</code> beside it is read last for your own values.</p>
+<!-- generated: serve-env by tools/gen_reference.py; do not edit by hand -->
+
+<h3 id="the-keys-opsserveenv-sets-in-file-order-paths-not-shown">The keys ops/serve.env sets, in file order (paths not shown)<a class="headerlink" href="#the-keys-opsserveenv-sets-in-file-order-paths-not-shown" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Value</th>
+<th>Kind</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HOME_DIR</code></td>
+<td><code>(a path)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>REPO</code></td>
+<td><code>(a path)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>PY</code></td>
+<td><code>(a path)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>PYTHONPATH</code></td>
+<td><code>(a path)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>HOST</code></td>
+<td><code>0.0.0.0</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>PORT</code></td>
+<td><code>8000</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>SERVED_MODEL</code></td>
+<td><code>qwen38-spark-engine</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>NV</code></td>
+<td><code>(a path)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>HEAD</code></td>
+<td><code>(a path)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>CKPT8</code></td>
+<td><code>(a path)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>CKPT16</code></td>
+<td><code>(a path)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>CORPUS</code></td>
+<td><code>(a path)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>MAX_LEN</code></td>
+<td><code>262144</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>DEFAULT_MAX_TOKENS</code></td>
+<td><code>32768</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>PATTERN_STOP</code></td>
+<td><code>(empty)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QSE_MODE</code></td>
+<td><code>(empty)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>CONDUCTOR</code></td>
+<td><code>on</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>REASONING_FORMAT</code></td>
+<td><code>tags</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>REASONING_EFFORT</code></td>
+<td><code>medium</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>LEN_FIXED</code></td>
+<td><code>0</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>LEN_LATCH</code></td>
+<td><code>1</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>BUDGET</code></td>
+<td><code>16</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>MEM_CEILING_GIB</code></td>
+<td><code>70</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>MEM_PEAK_GIB</code></td>
+<td><code>77</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>RESERVE_SLACK_GIB</code></td>
+<td><code>2</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>RESIDENT_GB</code></td>
+<td><code>2.5</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>RESIDENT_STASH_GB</code></td>
+<td><code>1.0</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>RESIDENT_GUEST_MAX</code></td>
+<td><code>8192</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>RESIDENT_PIN_GB</code></td>
+<td><code>4.0</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>RESIDENT_PARK_GB</code></td>
+<td><code>4</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>CACHE_GB</code></td>
+<td><code>2</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>STORE_ENTRY_GB</code></td>
+<td><code>1</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>NARROW_ARM</code></td>
+<td><code>1</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>END_ANCHOR</code></td>
+<td><code>on</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>END_ALIGN</code></td>
+<td><code>on</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>DROP_PAGE_CACHE</code></td>
+<td><code>1</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>REQUEST_TIMEOUT</code></td>
+<td><code>3600</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>MAX_QUEUE</code></td>
+<td><code>8</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QUEUE_TIMEOUT</code></td>
+<td><code>240</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>FUSE_PROJ</code></td>
+<td><code>0</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_TREE_MODE</code></td>
+<td><code>nodes</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_ALIAS_STATE</code></td>
+<td><code>0</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>DROP_IDLE</code></td>
+<td><code>1</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_TEMP</code></td>
+<td><code>0.3</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>SAMPLED_TREE</code></td>
+<td><code>det</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_GDNPREFILL</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_DECODE_ATTN</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_NVFP4</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_PREFILL_V2</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_PREFILL_V2_UNTIL</code></td>
+<td><code>1025</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_SKINNY</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_TILES</code></td>
+<td><code>(a path)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_COMMIT</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_GDNVERIFY</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_FC_NVFP4</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_ADDNORM</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_HOST_DEPTH</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_HOST_WALK</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_VERIFY_GRAPH</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_COMMIT_IN_VERIFY</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_GRAPH</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_ONE_WARP</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_NODES_NARROW</code></td>
+<td><code>16</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_MS</code></td>
+<td><code>8:77.9,16:78.9,24:87.0,32:97.0</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_VERIFY_ROWS</code></td>
+<td><code>32</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_TILES_WIDE</code></td>
+<td><code>(a path)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_NODES</code></td>
+<td><code>24</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_WIDE_AFTER</code></td>
+<td><code>32</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_DEEP</code></td>
+<td><code>32</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_DEEP_AFTER</code></td>
+<td><code>2</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_LEN_SWITCH</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_LEN_MODE</code></td>
+<td><code>wide</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_STAIR_TABLES</code></td>
+<td><code>(a path)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_STAIR_RHO</code></td>
+<td><code>(a path)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_STAIR_SKIP</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_SRUN</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QSE_USAGE_LEDGER</code></td>
+<td><code>(a path)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_CONDUCTOR_CONFIG</code></td>
+<td><code>(a path)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_BACKENDS</code></td>
+<td><code>(empty)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL</code></td>
+<td><code>8</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_SIDE_MAX_LEN</code></td>
+<td><code>0</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_FLOOR_GB</code></td>
+<td><code>15</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_SIDE_GRAPHS</code></td>
+<td><code>off</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_SIDE_SLOT_CONST_GB</code></td>
+<td><code>1.5</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_KV_POOL</code></td>
+<td><code>on</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_KV_HARD_FLOOR_GB</code></td>
+<td><code>10</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_KV_RECOMPUTE</code></td>
+<td><code>on</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_KV_ADMIT_ROWS</code></td>
+<td><code>8192</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_BARRIER_IDLE_OWNER</code></td>
+<td><code>on</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_CONV_BLOCK</code></td>
+<td><code>32</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_CONV_WARPS</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY_FUSED</code></td>
+<td><code>1</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY_MAXT</code></td>
+<td><code>16</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY_CHAIN_MAXT</code></td>
+<td><code>16</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY_FUSED_MAXT</code></td>
+<td><code>16</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>LIVE_ACTIVITY</code></td>
+<td><code>on</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QSE_DASHBOARD_LOGIN</code></td>
+<td><code>off</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>ROLES_AUTOLOAD</code></td>
+<td><code>(empty)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QWEN38_DECIDER_MODELS</code></td>
+<td><code>(empty)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_DECIDER_DIR</code></td>
+<td><code>(a path)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_NARRATOR_MODEL</code></td>
+<td><code>(empty)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_NARRATOR_DIR</code></td>
+<td><code>(empty)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_MODEL</code></td>
+<td><code>(empty)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_DIR</code></td>
+<td><code>(empty)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_GB</code></td>
+<td><code>4</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_GRID</code></td>
+<td><code>512</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_DISK</code></td>
+<td><code>auto</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_DISK_GB</code></td>
+<td><code>20</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_PROBE_SNAPSHOTS</code></td>
+<td><code>off</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_PROBE_DIR</code></td>
+<td><code>(a path)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QSE_DISK_CACHE</code></td>
+<td><code>(a path)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>SESSION_SPILL</code></td>
+<td><code>on</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>SESSION_SPILL_GB</code></td>
+<td><code>64</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>SESSION_SPILL_CODEC</code></td>
+<td><code>zstd</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>DISK_WRITE_BUDGET_GB</code></td>
+<td><code>200</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>SESSION_SPILL_IDLE</code></td>
+<td><code>on</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>VISION</code></td>
+<td><code>on</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>RESPONSE_CACHE</code></td>
+<td><code>off</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QSE_STATUS_PORT</code></td>
+<td><code>(empty)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_PROFILE_NAME</code></td>
+<td><code>(a path)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_PACK_VISION</code></td>
+<td><code>(empty)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_SETUP_ENV_FILE</code></td>
+<td><code>(a path)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_VISION_ASKED</code></td>
+<td><code>(a path)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>VISION</code></td>
+<td><code>off</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QSE_VISION_ASKED</code></td>
+<td><code>(a path)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>VISION</code></td>
+<td><code>off</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QSE_MODE</code></td>
+<td><code>engine</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_MODE</code></td>
+<td><code>chat</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_CONDUCTOR_CONFIG</code></td>
+<td><code>(a path)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_EXT</code></td>
+<td><code>(a path)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_MODE</code></td>
+<td><code>engine</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>CONDUCTOR</code></td>
+<td><code>raw</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QSE_CONDUCTOR_CONFIG</code></td>
+<td><code>off</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QWEN38_DECIDER_MODELS</code></td>
+<td><code>(empty)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_NARRATOR_MODEL</code></td>
+<td><code>(empty)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_MODEL</code></td>
+<td><code>(empty)</code></td>
+<td>engine switch</td>
+</tr>
+<tr>
+<td><code>ROLES_AUTOLOAD</code></td>
+<td><code>(empty)</code></td>
+<td>read by ops/start.sh</td>
+</tr>
+<tr>
+<td><code>QSE_EXT</code></td>
+<td><code>(empty)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_CHATD_ASKED</code></td>
+<td><code>(a path)</code></td>
+<td>server setting</td>
+</tr>
+<tr>
+<td><code>QSE_CHATD</code></td>
+<td><code>off ;;</code></td>
+<td>server setting</td>
+</tr>
+</tbody>
+</table>
+<!-- /generated -->
+
+<h2 id="engine-switches">Engine switches<a class="headerlink" href="#engine-switches" title="Permanent link">&para;</a></h2>
+<p><code>engine/settings.py</code> lists every engine switch with its default and the module that reads it; <code>tests/test_settings.py</code> fails when a module reads one another way. The table shows each switch, its code default, and the value the served profile sets when it sets one.</p>
+<!-- generated: engine-knobs by tools/gen_reference.py; do not edit by hand -->
+
+<h3 id="every-qwen38_-switch-the-engine-reads-with-the-value-opsserveenv-sets-the-extensions-in-contractsengine-ext-v1knobsjson-are-in-tandemapps-docs">Every QWEN38_* switch the engine reads, with the value ops/serve.env sets (the extension's, in contracts/engine-ext-v1/knobs.json, are in TandemApp's docs)<a class="headerlink" href="#every-qwen38_-switch-the-engine-reads-with-the-value-opsserveenv-sets-the-extensions-in-contractsengine-ext-v1knobsjson-are-in-tandemapps-docs" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Code default</th>
+<th>Served value · read in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>QWEN38_ATTN_INV</code></td>
+<td><code>0</code></td>
+<td><code>tools/attn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ATTN_INV_NT</code></td>
+<td><code>4</code></td>
+<td><code>tools/attn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ATTN_INV_SPLIT</code></td>
+<td><code>1024</code></td>
+<td><code>tools/attn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ATTN_STAGES3</code></td>
+<td><code>1</code></td>
+<td><code>tools/attn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_BLOCKING_SYNC</code></td>
+<td><code>0</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_CLIENT_REASONING</code></td>
+<td><code>*=reasoning_content,hermes=tags</code></td>
+<td><code>server/compat.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_COMMIT_IN_VERIFY</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_CORPUS</code></td>
+<td><code>none</code></td>
+<td><code>engine/drafters/ngram.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DECIDER_COLLATE</code></td>
+<td><code>call</code></td>
+<td><code>server/decider_api.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DECIDER_DEVICE</code></td>
+<td><code>auto</code></td>
+<td><code>server/decider_api.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DECIDER_DIR</code></td>
+<td><code>~/.qwen38-spark-engine/deciders/laya</code></td>
+<td><code>(a path)</code> · <code>server/decider_api.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DECIDER_MAX_BATCH</code></td>
+<td><code>64</code></td>
+<td><code>server/decider_api.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DECIDER_MAX_QUEUE</code></td>
+<td><code>256</code></td>
+<td><code>server/decider_api.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DECIDER_MODELS</code></td>
+<td><code>none</code></td>
+<td><code>server/decider_api.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DECIDER_WAIT_MS</code></td>
+<td><code>2</code></td>
+<td><code>server/decider_api.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DECODE_ATTN</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DEEP</code></td>
+<td><code>0</code></td>
+<td><code>32</code> · <code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DEEP_AFTER</code></td>
+<td><code>2</code></td>
+<td><code>2</code> · <code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_DEFER_SYNC</code></td>
+<td><code>1</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_KV_WINDOW</code></td>
+<td><code>0</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_PACK_BATCH</code></td>
+<td><code>1</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_PACK_FOLD</code></td>
+<td><code>0</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_PACK_GQA</code></td>
+<td><code>0</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_PACK_HOST1</code></td>
+<td><code>1</code></td>
+<td><code>engine/drafters/draft_graph.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_PACK_KP</code></td>
+<td><code>1</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_PACK_TAIL</code></td>
+<td><code>0</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_PACK_TOPK</code></td>
+<td><code>0</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_SPAN_STEP</code></td>
+<td><code>256</code></td>
+<td><code>engine/drafters/draft_graph.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_TEMP</code></td>
+<td><code>1.0</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_TOPK_FAST</code></td>
+<td><code>1</code></td>
+<td><code>engine/drafters/topk_small.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DF2_TREE_MODE</code></td>
+<td><code>paths</code></td>
+<td><code>nodes</code> · <code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DFLASH2</code></td>
+<td><code>none</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_EXL3</code></td>
+<td><code>none</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_FC_NVFP4</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_GRAPH</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_HEAD</code></td>
+<td><code>none</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_HEAD_EXL3</code></td>
+<td><code>none</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_HEAD_NVFP4</code></td>
+<td><code>0</code></td>
+<td><code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_NVFP4</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DRAFT_TEMP</code></td>
+<td><code>1.0</code></td>
+<td><code>0.3</code> · <code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DSPARK</code></td>
+<td><code>none</code></td>
+<td><code>engine/drafters/dspark.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_DSPARK_NO_YARN</code></td>
+<td><code>none</code></td>
+<td><code>engine/drafters/dspark.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_END_ALIGN_CALLS</code></td>
+<td><code>on</code></td>
+<td><code>server/endalign.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_END_ALIGN_MOVED</code></td>
+<td><code>on</code></td>
+<td><code>server/endalign.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_END_ALIGN_REASONING</code></td>
+<td><code>on</code></td>
+<td><code>server/endalign.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_END_RESERVE</code></td>
+<td><code>on</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3</code></td>
+<td><code>none</code></td>
+<td><code>engine/loader.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3_CHUNK_UNTIL</code></td>
+<td><code>128</code></td>
+<td><code>tools/exl3_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3_FRAG</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/qwen3_5/frag.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3_FUSE</code></td>
+<td><code>1</code></td>
+<td><code>engine/loader.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3_MLP_BRIDGE</code></td>
+<td><code>1</code></td>
+<td><code>tools/exl3_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3_PDL</code></td>
+<td><code>0</code></td>
+<td><code>tools/exl3_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3_ROWGRID</code></td>
+<td><code>1</code></td>
+<td><code>tools/exl3_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3_SILU_FUSED</code></td>
+<td><code>1</code></td>
+<td><code>tools/exl3_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3_STAGES</code></td>
+<td><code>3</code></td>
+<td><code>tools/exl3_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3_TALL</code></td>
+<td><code>none</code></td>
+<td><code>engine/models/qwen3_5/tall.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_EXL3_TILES</code></td>
+<td><code>none</code></td>
+<td><code>tools/exl3_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FLINT_ANCHOR_BACKOFF</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flint/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FLINT_KV_FP8</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flint/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FLINT_LOOKUP</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flint/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FLINT_LOOK_BACKOFF</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flint/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FLINT_PDL</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flint/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FLINT_SIDE_STREAM</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flint/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_ATTN_MULTI</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_DENSE</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_DRAFT_FREEZE</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_DRAFT_HOT</code></td>
+<td><code>32768</code></td>
+<td><code>engine/models/flashnext/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_DROP_SHARD_CACHE</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/load.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_FOLD_COMMIT</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_GDN_DEFER</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_GDN_MULTI</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_GDN_PRE_MULTI</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_GEMV_MC</code></td>
+<td><code>0</code></td>
+<td><code>tools/fn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_GEMV_NB</code></td>
+<td><code>0</code></td>
+<td><code>tools/fn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_GEMV_SPLIT</code></td>
+<td><code>1</code></td>
+<td><code>tools/fn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_GROUP_ROWS</code></td>
+<td><code>64</code></td>
+<td><code>tools/fn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_JG_PLE_LATE</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_JOINT_GRAPH</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_JOINT_GRAPH_AFTER</code></td>
+<td><code>2</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_JOINT_GRAPH_MAX</code></td>
+<td><code>12</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_JOINT_MOE_GROUP</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_JOINT_PREFILL</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/joint_prefill.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_JOINT_ROWS8</code></td>
+<td><code>24</code></td>
+<td><code>engine/models/flashnext/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_JOINT_ROWWISE</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_JOINT_TIMING</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_KV_FP8</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_LOOKUP</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_LOOK_BACKOFF</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MIX</code></td>
+<td><code>int8</code></td>
+<td><code>engine/models/flashnext/pack.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MIXER_MMA</code></td>
+<td><code>1</code></td>
+<td><code>tools/fn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MIX_FUSED</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MOE_AS</code></td>
+<td><code>0</code></td>
+<td><code>tools/fn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MOE_GPAR</code></td>
+<td><code>0</code></td>
+<td><code>tools/fn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MOE_GR</code></td>
+<td><code>8</code></td>
+<td><code>tools/fn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MOE_GY</code></td>
+<td><code>0</code></td>
+<td><code>tools/fn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MOE_ST</code></td>
+<td><code>3</code></td>
+<td><code>tools/gpu/gb10.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MOE_STAGE</code></td>
+<td><code>0</code></td>
+<td><code>tools/fn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MOE_WARPS</code></td>
+<td><code>4</code></td>
+<td><code>tools/gpu/gb10.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MTP_CORRECTOR</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/corrector.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MTP_CORRECTOR_FILE</code></td>
+<td><code>auto</code></td>
+<td><code>engine/models/flashnext/corrector.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MTP_COUPLED</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/coupled.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MTP_COUPLED_CAL</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/coupled.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MTP_COUPLED_FILTER</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/coupled.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MTP_COUPLED_HOT</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/coupled.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MTP_COUPLED_HOT_LONE</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/coupled.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MTP_COUPLED_SIB</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/coupled.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MTP_COUPLED_SIB_MARGIN</code></td>
+<td><code>1.3</code></td>
+<td><code>engine/models/flashnext/coupled.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_MTP_COUPLED_TAU</code></td>
+<td><code>0.85</code></td>
+<td><code>engine/models/flashnext/coupled.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PACK_GRAPH</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PACK_GRAPH_AFTER</code></td>
+<td><code>2</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PDL</code></td>
+<td><code>1</code></td>
+<td><code>tools/fn_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PF_ATTN_STAGES</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PF_HC_FUSED</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PF_INJ_FUSED</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PF_NOCOPY</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PF_ROT_ROWS</code></td>
+<td><code>0</code></td>
+<td><code>tools/fn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PF_WINDOW</code></td>
+<td><code>8192</code></td>
+<td><code>engine/models/flashnext/layer_major.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PLE_BATCH</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PLE_LATE</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PLE_MULTI</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PLE_PREFETCH</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PLE_THREADS</code></td>
+<td><code>16</code></td>
+<td><code>engine/models/flashnext/ple.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_POOL_MULTI</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PREFILL</code></td>
+<td><code>kernels</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PREFILL_CHUNK</code></td>
+<td><code>4096</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_PREFILL_MM</code></td>
+<td><code>fp32</code></td>
+<td><code>tools/fn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_QSA_EPI_TORCH</code></td>
+<td><code>0</code></td>
+<td><code>tools/fn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_QSA_LIVE</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_QSA_TORCH_BIG</code></td>
+<td><code>0</code></td>
+<td><code>tools/fn_seq_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_ROUTE_FUSED</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_TABLE</code></td>
+<td><code>warm</code></td>
+<td><code>engine/models/flashnext/load.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_TABLE_CACHE_GB</code></td>
+<td><code>2</code></td>
+<td><code>engine/models/flashnext/load.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_TREE_PLAN</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_UNION_EVERY</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/flashnext/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FN_WARM_TABLE</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/flashnext/load.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FP8_HEAD</code></td>
+<td><code>none</code></td>
+<td><code>engine/loader.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FP8_TILES</code></td>
+<td><code>none</code></td>
+<td><code>tools/fp8_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FRESH_SEED</code></td>
+<td><code>auto</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_ADDNORM</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_ATTN</code></td>
+<td><code>0</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_ATTN_PREP</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_COMMIT</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_GDN</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_GDNBLOCK</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_GDNPRE</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_GDNPREFILL</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_GDNTREE</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_GDNVERIFY</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_HEAD</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSED_NORM</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_FUSE_PROJ</code></td>
+<td><code>0</code></td>
+<td><code>tools/nvfp4_linear_v2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_BV</code></td>
+<td><code>16</code></td>
+<td><code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_CONV_BLOCK</code></td>
+<td><code>256</code></td>
+<td><code>32</code> · <code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_CONV_WARPS</code></td>
+<td><code>4</code></td>
+<td><code>1</code> · <code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_ONE_WARP</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_TREE_PF</code></td>
+<td><code>0</code></td>
+<td><code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WARPS</code></td>
+<td><code>4</code></td>
+<td><code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY_CHAIN_MAXT</code></td>
+<td><code>32</code></td>
+<td><code>16</code> · <code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY_FUSED</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY_FUSED_MAXT</code></td>
+<td><code>32</code></td>
+<td><code>16</code> · <code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY_KC</code></td>
+<td><code>32</code></td>
+<td><code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDNV_WY_MAXT</code></td>
+<td><code>32</code></td>
+<td><code>16</code> · <code>tools/gdn_verify_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_AB</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_CHUNK</code></td>
+<td><code>64</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_CHUNKED</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_CHUNKED_BV</code></td>
+<td><code>16</code></td>
+<td><code>tools/gdn_chunked_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_CHUNKED_C</code></td>
+<td><code>64</code></td>
+<td><code>tools/gdn_chunked_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_CHUNKED_WARPS</code></td>
+<td><code>4</code></td>
+<td><code>tools/gdn_chunked_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_CHUNKED_WARPS_INTRA</code></td>
+<td><code>8</code></td>
+<td><code>tools/gdn_chunked_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_MM</code></td>
+<td><code>fp32</code></td>
+<td><code>engine/gdn.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_MM_FROM</code></td>
+<td><code>64</code></td>
+<td><code>engine/gdn.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREFILL_BV</code></td>
+<td><code>32</code></td>
+<td><code>tools/gdn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREFILL_NOREP</code></td>
+<td><code>0</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREFILL_PREC</code></td>
+<td><code>bf16x3</code></td>
+<td><code>tools/gdn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREFILL_PREC_A</code></td>
+<td><code>tf32</code></td>
+<td><code>tools/gdn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREFILL_PREC_SCAN</code></td>
+<td><code>none</code></td>
+<td><code>tools/gdn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREFILL_SERIES</code></td>
+<td><code>0</code></td>
+<td><code>tools/gdn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREFILL_STAGES</code></td>
+<td><code>1</code></td>
+<td><code>tools/gdn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREFILL_WARPS_INTRA</code></td>
+<td><code>8</code></td>
+<td><code>tools/gdn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREFILL_WARPS_SCAN</code></td>
+<td><code>8</code></td>
+<td><code>tools/gdn_prefill_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREP</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREP_BV</code></td>
+<td><code>16</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_PREP_WARPS</code></td>
+<td><code>4</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_SEQ</code></td>
+<td><code>0</code></td>
+<td><code>tools/gdn_seq_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_SEQ_BV</code></td>
+<td><code>16</code></td>
+<td><code>tools/gdn_seq_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_SEQ_BYNODE</code></td>
+<td><code>0</code></td>
+<td><code>tools/gdn_seq_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GDN_SEQ_WARPS</code></td>
+<td><code>1</code></td>
+<td><code>tools/gdn_seq_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GQA_FROM</code></td>
+<td><code>64</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GRAPH_MAX_CTX</code></td>
+<td><code>32768</code></td>
+<td><code>engine/verify_graph.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GRAPH_SHARE_FROM</code></td>
+<td><code>2</code></td>
+<td><code>engine/verify_graph.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_GRAPH_SHARE_OUT</code></td>
+<td><code>0</code></td>
+<td><code>engine/verify_graph.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_HEAD_GEMM</code></td>
+<td><code>none</code></td>
+<td><code>tools/head_gemv.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_HOST_ASYNC</code></td>
+<td><code>0</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_HOST_WALK</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/drafters/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_ATTN_GROUP</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/qwen3_5/attn_group.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_CHAINS</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/qwen3_5/adapter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_GDN</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_GRAPHS</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/qwen3_5/joint_graphs.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_GRAPHS_AFTER</code></td>
+<td><code>4</code></td>
+<td><code>engine/models/qwen3_5/joint_graphs.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_GRAPHS_MAX</code></td>
+<td><code>24</code></td>
+<td><code>engine/models/qwen3_5/joint_graphs.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_MAX_ROWS</code></td>
+<td><code>none</code></td>
+<td><code>engine/models/qwen3_5/adapter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_ROWS_AT_LANES</code></td>
+<td><code>4:8</code></td>
+<td><code>engine/models/qwen3_5/joint_graphs.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_ROWS_A_SLOT</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/qwen3_5/joint_graphs.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOINT_ROWWISE</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_JOIN_VIEWS</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_KV_FP8</code></td>
+<td><code>0</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_LATCH_PRICE</code></td>
+<td><code>0</code></td>
+<td><code>engine/lenrouter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_LAUNCH_FIRST</code></td>
+<td><code>0</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_LEN_MODE</code></td>
+<td><code>none</code></td>
+<td><code>wide</code> · <code>engine/lenrouter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_LEN_SWITCH</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/lenrouter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_LFM2_KV_FP8</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/lfm2_moe/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_LOWER_RIGHT_FROM</code></td>
+<td><code>64</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_MEMORY_PROXIES</code></td>
+<td><code>none</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_MEMORY_WRITER_TEXT</code></td>
+<td><code>none</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_MM_END</code></td>
+<td><code>on</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_MODEL</code></td>
+<td><code>none</code></td>
+<td><code>engine/config.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_MTP_BACKLOG_CAP</code></td>
+<td><code>2048</code></td>
+<td><code>engine/methods/mtp_drafter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NARRATOR_DEVICE</code></td>
+<td><code>auto</code></td>
+<td><code>server/conductor/inproc.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NARRATOR_DIR</code></td>
+<td><code>none</code></td>
+<td><code>server/conductor/inproc.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NH_KV_FP8</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/nemotron_h/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4</code></td>
+<td><code>none</code></td>
+<td><code>engine/loader.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_BLOCK_TILES</code></td>
+<td><code>0</code></td>
+<td><code>tools/nvfp4_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_DEQUANT_FROM</code></td>
+<td><code>512</code></td>
+<td><code>tools/nvfp4_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_PREFILL_V2</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>tools/nvfp4_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_PREFILL_V2_UNTIL</code></td>
+<td><code>1024</code></td>
+<td><code>1025</code> · <code>tools/nvfp4_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_SKINNY</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_SPLITK</code></td>
+<td><code>0</code></td>
+<td><code>tools/nvfp4_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_V2</code></td>
+<td><code>1</code></td>
+<td><code>tools/nvfp4_linear_v2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_V2_BN</code></td>
+<td><code>0</code></td>
+<td><code>tools/nvfp4_linear_v2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_V2_DOTS</code></td>
+<td><code>1</code></td>
+<td><code>tools/nvfp4_linear_v2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_V2_MAX</code></td>
+<td><code>32</code></td>
+<td><code>tools/nvfp4_linear_v2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_V2_MIN</code></td>
+<td><code>1</code></td>
+<td><code>tools/nvfp4_linear_v2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_V2_PREFETCH</code></td>
+<td><code>0</code></td>
+<td><code>tools/nvfp4_linear_v2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_NVFP4_V2_W</code></td>
+<td><code>0</code></td>
+<td><code>tools/nvfp4_linear_v2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_OWN_BURST_RATE</code></td>
+<td><code>peek</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_OWN_ETA</code></td>
+<td><code>on</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_OWN_RATE</code></td>
+<td><code>solo</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_OWN_SIDE</code></td>
+<td><code>on</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_OWN_UNITS</code></td>
+<td><code>prefill</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_POOL_SNAPSHOT_TTL_S</code></td>
+<td><code>5.0</code></td>
+<td><code>engine/decision/device.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_PREFILL_CAUSAL</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_PREFILL_WINDOW</code></td>
+<td><code>8192</code></td>
+<td><code>engine/cache.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_PREFILL_WINDOW_FREE</code></td>
+<td><code>32768</code></td>
+<td><code>engine/cache.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_PROBE_DAY_MB</code></td>
+<td><code>100</code></td>
+<td><code>server/probe.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_PROBE_DIR</code></td>
+<td><code>~/.qwen38-spark-engine/probe</code></td>
+<td><code>(a path)</code> · <code>server/probe.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_PROBE_EVERY</code></td>
+<td><code>1024</code></td>
+<td><code>server/probe.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_PROBE_SNAPSHOTS</code></td>
+<td><code>off</code></td>
+<td><code>off</code> · <code>server/probe.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_PROMPT_END</code></td>
+<td><code>1</code></td>
+<td><code>engine/cache.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_Q35M_ANCHOR_BACKOFF</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/qwen3_5_moe/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_Q35M_DFLASH2_HOT</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/qwen3_5_moe/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_Q35M_DFLASH2_NVFP4</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/qwen3_5_moe/dflash2.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_Q35M_KV_FP8</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/qwen3_5_moe/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_Q35M_LOOKUP</code></td>
+<td><code>1</code></td>
+<td><code>engine/models/qwen3_5_moe/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_Q35M_SIBLINGS</code></td>
+<td><code>0</code></td>
+<td><code>engine/models/qwen3_5_moe/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_RANKK</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_REGENERATE</code></td>
+<td><code>sample</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_REGEN_TEMPERATURE</code></td>
+<td><code>0.7</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_REGEN_TOP_K</code></td>
+<td><code>20</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_REGEN_TOP_P</code></td>
+<td><code>0.95</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_REREAD_SAY_TOKENS</code></td>
+<td><code>8192</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ROUND_LOG</code></td>
+<td><code>none</code></td>
+<td><code>server/roundlog.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ROUND_LOG_HIDDEN</code></td>
+<td><code>0</code></td>
+<td><code>server/roundlog.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ROUND_LOG_LATTICE</code></td>
+<td><code>0</code></td>
+<td><code>server/roundlog.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ROUND_PLAN</code></td>
+<td><code>off</code></td>
+<td><code>engine/models/qwen3_5/roundplan.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ROUND_PLAN_BUCKETS</code></td>
+<td><code>4,8,16</code></td>
+<td><code>engine/models/qwen3_5/roundplan.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ROUND_PLAN_PRICES</code></td>
+<td><code>none</code></td>
+<td><code>engine/models/qwen3_5/roundplan.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ROUND_PLAN_SAVE_EVERY</code></td>
+<td><code>512</code></td>
+<td><code>engine/models/qwen3_5/roundplan.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_ROUND_PLAN_STATE</code></td>
+<td><code>none</code></td>
+<td><code>engine/models/qwen3_5/roundplan.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SAMPLED_CUT</code></td>
+<td><code>0</code></td>
+<td><code>engine/router.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SAMPLE_BATCH</code></td>
+<td><code>1</code></td>
+<td><code>engine/sample.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SAMPLE_KEYED_KERNEL</code></td>
+<td><code>0</code></td>
+<td><code>engine/sample.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SAMPLE_NUCLEUS</code></td>
+<td><code>1</code></td>
+<td><code>engine/sample.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SAMPLE_SPARSE_KEYED</code></td>
+<td><code>1</code></td>
+<td><code>engine/sample.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SAMPLE_TOPP_K</code></td>
+<td><code>1024</code></td>
+<td><code>engine/sample.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SCALE_ON</code></td>
+<td><code>weight</code></td>
+<td><code>tools/fp8_linear.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_DIR</code></td>
+<td><code>none</code></td>
+<td><code>server/conductor/shadow.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_DISK</code></td>
+<td><code>none</code></td>
+<td><code>auto</code> · <code>server/conductor/shadow.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_DISK_GB</code></td>
+<td><code>20</code></td>
+<td><code>20</code> · <code>server/conductor/shadow.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_GB</code></td>
+<td><code>4</code></td>
+<td><code>4</code> · <code>server/conductor/shadow.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_GRID</code></td>
+<td><code>512</code></td>
+<td><code>512</code> · <code>server/conductor/shadow.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_MODEL</code></td>
+<td><code>none</code></td>
+<td><code>server/conductor/shadow.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SHADOW_POOL_SLACK_GIB</code></td>
+<td><code>2</code></td>
+<td><code>server/conductor/shadow.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_CARRY</code></td>
+<td><code>on</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_CONTINUE</code></td>
+<td><code>view</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_CONV</code></td>
+<td><code>on</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_DISK</code></td>
+<td><code>read</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_GUESTS</code></td>
+<td><code>on</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_GUEST_END</code></td>
+<td><code>promote</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_GUEST_IDLE_S</code></td>
+<td><code>300</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_HOME_WAIT_S</code></td>
+<td><code>10</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_IMAGES</code></td>
+<td><code>on</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_LRU</code></td>
+<td><code>on</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_MIN_ROOM</code></td>
+<td><code>16384</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_NEW_FIRST</code></td>
+<td><code>on</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_NEW_WAIT_S</code></td>
+<td><code>20</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_RESIDENT_GB</code></td>
+<td><code>0.5</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_SLOT0_WAIT_S</code></td>
+<td><code>3</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SIDE_STASH_GB</code></td>
+<td><code>1.0</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_LDW</code></td>
+<td><code>0</code></td>
+<td><code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_PDL</code></td>
+<td><code>0</code></td>
+<td><code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_SRUN</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_SSTUB</code></td>
+<td><code>0</code></td>
+<td><code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_TILES</code></td>
+<td><code>none</code></td>
+<td><code>(a path)</code> · <code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_TILES_B</code></td>
+<td><code>none</code></td>
+<td><code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_TILES_C</code></td>
+<td><code>none</code></td>
+<td><code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_TILES_WIDE</code></td>
+<td><code>none</code></td>
+<td><code>(a path)</code> · <code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_TILES_WIDE_B</code></td>
+<td><code>none</code></td>
+<td><code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SKINNY_XSTUB</code></td>
+<td><code>0</code></td>
+<td><code>tools/nvfp4_skinny.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SLAB_TRITON</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SLOT0_KEEP_S</code></td>
+<td><code>1800</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SPILL_PARK</code></td>
+<td><code>on</code></td>
+<td><code>engine/cache.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_STAIR_MAX_NODES</code></td>
+<td><code>none</code></td>
+<td><code>engine/lenrouter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_STAIR_RHO</code></td>
+<td><code>none</code></td>
+<td><code>(a path)</code> · <code>engine/lenrouter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_STAIR_SKIP</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/lenrouter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_STAIR_TABLES</code></td>
+<td><code>none</code></td>
+<td><code>(a path)</code> · <code>engine/lenrouter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_STAIR_TEMP_SAMPLED</code></td>
+<td><code>none</code></td>
+<td><code>engine/lenrouter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_SUFFIX_STORE</code></td>
+<td><code>~/.qwen38-spark-engine/suffix</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_ALIAS_STATE</code></td>
+<td><code>0</code></td>
+<td><code>0</code> · <code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_CHAIN_DELEGATE</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_HOST_DEPTH</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_MS</code></td>
+<td><code>none</code></td>
+<td><code>8:77.9,16:78.9,24:87.0,32:97.0</code> · <code>engine/router.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_NATIVE</code></td>
+<td><code>1</code></td>
+<td><code>engine/native_tree.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_NODES</code></td>
+<td><code>0</code></td>
+<td><code>24</code> · <code>engine/router.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_NODES_NARROW</code></td>
+<td><code>0</code></td>
+<td><code>16</code> · <code>engine/router.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_TREE_WIDE_AFTER</code></td>
+<td><code>0</code></td>
+<td><code>32</code> · <code>engine/lenrouter.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_TWO_STREAM</code></td>
+<td><code>0</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_UT_INVERSE</code></td>
+<td><code>1</code></td>
+<td><code>engine/gdn.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_VERIFY_GRAPH</code></td>
+<td><code>0</code></td>
+<td><code>1</code> · <code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_VERIFY_ROWS</code></td>
+<td><code>16</code></td>
+<td><code>32</code> · <code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_VERIFY_TILES</code></td>
+<td><code>1</code></td>
+<td><code>tools/nvfp4_verify_tiles.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_WARM_PREFILL_TOKENS</code></td>
+<td><code>2600</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_WINDOW_MLP</code></td>
+<td><code>0</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_WINDOW_NORM_ROT</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_WINDOW_ROWWISE</code></td>
+<td><code>1</code></td>
+<td><code>engine/model.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_WY_BLOCK</code></td>
+<td><code>8</code></td>
+<td><code>tools/gdn_wy_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_WY_BV</code></td>
+<td><code>16</code></td>
+<td><code>tools/gdn_wy_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_WY_DBG</code></td>
+<td><code>0</code></td>
+<td><code>tools/gdn_wy_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_WY_PREC</code></td>
+<td><code>ieee</code></td>
+<td><code>tools/gdn_wy_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_WY_WARPS</code></td>
+<td><code>4</code></td>
+<td><code>tools/gdn_wy_kernels.py</code></td>
+</tr>
+<tr>
+<td><code>QWEN38_WY_WARPS_PREP</code></td>
+<td><code>4</code></td>
+<td><code>tools/gdn_wy_kernels.py</code></td>
+</tr>
+</tbody>
+</table>
+<!-- /generated -->
+
+<h2 id="server-variables">Server variables<a class="headerlink" href="#server-variables" title="Permanent link">&para;</a></h2>
+<!-- generated: qse-vars by tools/gen_reference.py; do not edit by hand -->
+
+<h3 id="qse_-variables-the-servers-settings-from-the-environment-or-serveenv">QSE_* variables: the server's settings from the environment or serve.env<a class="headerlink" href="#qse_-variables-the-servers-settings-from-the-environment-or-serveenv" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Read in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>QSE_ADMIN_TOKEN</code></td>
+<td><code>ops/make-secrets.sh, ops/serve.env, ops/start.sh</code> and 5 more</td>
+</tr>
+<tr>
+<td><code>QSE_ADVERTISE</code></td>
+<td><code>ops/serve.env, server/pairing/mdns.py, server/remote/overlay.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ALLOW_FROM</code></td>
+<td><code>ops/serve.env, server/api/access.py, server/app.py</code> and 4 more</td>
+</tr>
+<tr>
+<td><code>QSE_ANSWER_RESERVE</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ASSETS</code></td>
+<td><code>engine/models/qwen3_5/community.py, ops/profiles/_flashnext.env, ops/profiles/_flint.env</code> and 16 more</td>
+</tr>
+<tr>
+<td><code>QSE_BACKENDS</code></td>
+<td><code>install.sh, ops/engines.sh, ops/serve.env</code> and 5 more</td>
+</tr>
+<tr>
+<td><code>QSE_BARRIER_IDLE_OWNER</code></td>
+<td><code>ops/serve.env, server/slots.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_CAPTURE_GUARD_DEBUG</code></td>
+<td><code>engine/capture_lock.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_CHATD</code></td>
+<td><code>install.sh, ops/engines.sh, ops/serve.env</code> and 5 more</td>
+</tr>
+<tr>
+<td><code>QSE_CHATD_ASKED</code></td>
+<td><code>install.sh, ops/serve.env, ops/start.sh</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_CHATD_ENV</code></td>
+<td><code>install.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_CHAT_DATA</code></td>
+<td><code>install.sh, server/setup/doctor.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_CHAT_FORWARD_KEY</code></td>
+<td><code>ops/make-secrets.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_CHAT_URL</code></td>
+<td><code>server/api/__init__.py, server/api/chat_url.py, server/mode.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_COMMUNITY_DIR</code></td>
+<td><code>server/setup/community.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_COMMUNITY_ENV_DIR</code></td>
+<td><code>ops/serve.env, ops/use-profile.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_COMMUNITY_URL</code></td>
+<td><code>ops/serve.env, server/setup/community.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_COMPACTION</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_COMPACTION_IDLE_S</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_COMPACTION_MIN_TOKENS</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_COMPACTION_PREPARE</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_CONDUCTOR_CONFIG</code></td>
+<td><code>ops/engines.sh, ops/serve.env, ops/start.sh</code> and 4 more</td>
+</tr>
+<tr>
+<td><code>QSE_CONDUCTOR_ROOT</code></td>
+<td><code>ops/roles.sh, server/conductor/residency.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_CORPUS_BUILD</code></td>
+<td><code>ops/use-profile.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_CORRECTOR_HF</code></td>
+<td><code>engine/models/flashnext/corrector.py, ops/fetch_weights.py, ops/profiles/_flashnext.env</code> and 2 more</td>
+</tr>
+<tr>
+<td><code>QSE_CORRECTOR_PATH</code></td>
+<td><code>engine/models/flashnext/corrector.py, ops/fetch_weights.py, ops/profiles/flashnext-3.05.env</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_CORRECTOR_REVISION</code></td>
+<td><code>engine/models/flashnext/corrector.py, ops/fetch_weights.py, ops/profiles/flashnext-3.05.env</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_CORRECTOR_SHA256</code></td>
+<td><code>engine/models/flashnext/corrector.py, ops/fetch_weights.py, ops/profiles/flashnext-3.05.env</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_DASHBOARD_LOGIN</code></td>
+<td><code>ops/serve.env, ops/start.sh, server/api/auth.py</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_DISK_ADOPT_FROM</code></td>
+<td><code>ops/serve.env, server/diskcache.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_DISK_CACHE</code></td>
+<td><code>engine/models/nemotron_h/community.py, engine/models/qwen3_5/community.py, ops/engines.sh</code> and 11 more</td>
+</tr>
+<tr>
+<td><code>QSE_ENGINE_ALLOC_CONF</code></td>
+<td><code>engine/cache.py, ops/profiles/_flashnext.env, ops/start.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_ENGINE_FLAGS</code></td>
+<td><code>engine/models/nemotron_h/community.py, engine/models/qwen3_5/community.py, ops/engines.sh</code> and 10 more</td>
+</tr>
+<tr>
+<td><code>QSE_ENGINE_PORT</code></td>
+<td><code>ops/engine_status.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_EXL3_BPW</code></td>
+<td><code>ops/profiles/_exl3.env, ops/profiles/exl3-2.5.env, ops/profiles/exl3-3.0.env</code> and 4 more</td>
+</tr>
+<tr>
+<td><code>QSE_EXT</code></td>
+<td><code>ops/serve.env, server/__init__.py, server/app.py</code> and 6 more</td>
+</tr>
+<tr>
+<td><code>QSE_EXT_ARGS</code></td>
+<td><code>server/app.py, server/ext.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_FAKE_CAPTURE_HOLD_S</code></td>
+<td><code>server/fake_engine.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_FAKE_CAPTURE_MARK</code></td>
+<td><code>server/fake_engine.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_FAKE_CARD_DIR</code></td>
+<td><code>server/fake_engine.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_FAKE_PROMPTS</code></td>
+<td><code>server/fake_engine.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_FETCH_ASSETS</code></td>
+<td><code>ops/use-profile.sh, server/setup/apply.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_FLINT_GROUPED</code></td>
+<td><code>engine/models/flint/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_FLINT_VARIANT</code></td>
+<td><code>ops/profiles/_flint.env, ops/profiles/flint-bf16.env, ops/profiles/flint-exl3-4.0.env</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_FN_BPW</code></td>
+<td><code>ops/profiles/_flashnext.env, ops/profiles/flashnext-2.05.env, ops/profiles/flashnext-3.05.env</code> and 3 more</td>
+</tr>
+<tr>
+<td><code>QSE_FN_TABLE</code></td>
+<td><code>ops/profiles/_flashnext.env, ops/profiles/flashnext-2.05.env, ops/profiles/flashnext-3.05.env</code> and 3 more</td>
+</tr>
+<tr>
+<td><code>QSE_FN_VISION_FILE</code></td>
+<td><code>ops/profiles/_flashnext.env, ops/profiles/flashnext-4.05.env</code></td>
+</tr>
+<tr>
+<td><code>QSE_GRAPH_POOL_GIB</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_GRAPH_SET_MIN_IDLE_S</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_GUARD_MARGIN_GB</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_HANDLER_TIMEOUT_S</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_HEALTH_TTL_MS</code></td>
+<td><code>ops/profiles/_flashnext.env, server/app.py, server/health_cache.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_IMAGE_BACKEND</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_KV_ADMIT_ROWS</code></td>
+<td><code>ops/serve.env, server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_KV_HARD_FLOOR_GB</code></td>
+<td><code>ops/profiles/_flashnext.env, ops/serve.env, server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_KV_MARGIN_ROWS</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_KV_POOL</code></td>
+<td><code>engine/kvpool.py, ops/engines.sh, ops/profiles/_flashnext.env</code> and 7 more</td>
+</tr>
+<tr>
+<td><code>QSE_KV_POOL_MIN_ROWS</code></td>
+<td><code>engine/kvpool.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_KV_RECOMPUTE</code></td>
+<td><code>ops/serve.env, server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_KV_TEST_REFUSE_AFTER</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_KV_TEST_REFUSE_SLOTS</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_LFM_VARIANT</code></td>
+<td><code>ops/profiles/_lfm25.env, ops/profiles/lfm25-bf16.env, ops/profiles/lfm25-exl3-2.5.env</code> and 5 more</td>
+</tr>
+<tr>
+<td><code>QSE_LIVE_DECODE_WARMUP_TOKENS</code></td>
+<td><code>ops/serve.env, server/api/live.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_LIVE_HZ</code></td>
+<td><code>ops/serve.env, ops/start.sh, server/api/live.py</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_LIVE_MOSTLY_CACHED_PCT</code></td>
+<td><code>ops/serve.env, server/api/live.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_LIVE_MOSTLY_CACHED_TOKENS</code></td>
+<td><code>ops/serve.env, server/api/live.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_LIVE_NOW_WINDOW_S</code></td>
+<td><code>ops/serve.env, server/api/live.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_LIVE_PREFILL_WARMUP_CHUNKS</code></td>
+<td><code>ops/serve.env, server/api/live.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_MANAGED_ENV</code></td>
+<td><code>ops/serve.env, server/remote/overlay.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_MAX_BODY_MB</code></td>
+<td><code>server/api/http_body.py, server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_MEMINFO</code></td>
+<td><code>ops/engines.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_MEM_NEED_GIB</code></td>
+<td><code>ops/profiles/flashnext-2.05.env, ops/profiles/flashnext-3.05.env, ops/profiles/flashnext-4.05.env</code> and 27 more</td>
+</tr>
+<tr>
+<td><code>QSE_MEM_WAIT_S</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_METRICS_TOKEN</code></td>
+<td><code>ops/make-secrets.sh, ops/start.sh, server/api/auth.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_MODE</code></td>
+<td><code>install.sh, ops/engines.sh, ops/serve.env</code> and 5 more</td>
+</tr>
+<tr>
+<td><code>QSE_NH_DENSE_ROWS</code></td>
+<td><code>engine/models/nemotron_h/engine.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_NH_DIR</code></td>
+<td><code>engine/models/nemotron_h/community.py, ops/profiles/_nemotron.env, ops/profiles/nemotron-super-vl-exl3-2.0.env</code> and 2 more</td>
+</tr>
+<tr>
+<td><code>QSE_NH_GGUF</code></td>
+<td><code>engine/models/nemotron_h/load.py, ops/profiles/nemotron-bolt-iq2.env, server/diskcache.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_NH_HEAD</code></td>
+<td><code>engine/models/nemotron_h/community.py, ops/profiles/_nemotron.env, ops/profiles/nemotron-bolt-exl3-2.0.env</code> and 10 more</td>
+</tr>
+<tr>
+<td><code>QSE_NH_JOINT_ROWS8</code></td>
+<td><code>engine/models/nemotron_h/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_NH_LILICORR</code></td>
+<td><code>engine/models/nemotron_h/serving.py, ops/profiles/nemotron-bolt-exl3-2.0.env, ops/profiles/nemotron-bolt-exl3-2.5.env</code> and 8 more</td>
+</tr>
+<tr>
+<td><code>QSE_NH_LILICORR_PACK</code></td>
+<td><code>engine/drafters/lilicorr.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_NH_LILICORR_PACK_GRAPHS</code></td>
+<td><code>engine/drafters/lilicorr.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_NH_LOOKUP</code></td>
+<td><code>engine/models/nemotron_h/serving.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_NH_MODEL</code></td>
+<td><code>engine/models/nemotron_h/serving.py, ops/profiles/_nemotron.env, ops/profiles/nemotron-bolt-exl3-2.0.env</code> and 11 more</td>
+</tr>
+<tr>
+<td><code>QSE_NH_VARIANT</code></td>
+<td><code>engine/models/nemotron_h/community.py, ops/profiles/_nemotron.env, ops/profiles/nemotron-bolt-exl3-2.0.env</code> and 11 more</td>
+</tr>
+<tr>
+<td><code>QSE_NO_ROLLBACK</code></td>
+<td><code>ops/use-profile.sh, server/setup/apply.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_OPS_DIR</code></td>
+<td><code>ops/start.sh, server/setup/apply.py, server/setup/device.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ORN_DFLASH2</code></td>
+<td><code>engine/models/qwen3_5_moe/serving.py, ops/profiles/_ornith.env, ops/profiles/ornith-1.5-122b-exl3-4.0.env</code></td>
+</tr>
+<tr>
+<td><code>QSE_ORN_DRAFTER</code></td>
+<td><code>ops/profiles/_ornith.env</code></td>
+</tr>
+<tr>
+<td><code>QSE_ORN_HEAD</code></td>
+<td><code>ops/profiles/_ornith.env, ops/profiles/ornith-1.5-122b-exl3-4.0.env</code></td>
+</tr>
+<tr>
+<td><code>QSE_ORN_VARIANT</code></td>
+<td><code>ops/profiles/_ornith.env, ops/profiles/ornith-1.5-122b-exl3-4.0.env</code></td>
+</tr>
+<tr>
+<td><code>QSE_PACK_VISION</code></td>
+<td><code>engine/models/nemotron_h/community.py, engine/models/qwen3_5/community.py, ops/serve.env</code> and 2 more</td>
+</tr>
+<tr>
+<td><code>QSE_PAGE_CACHE_DROP</code></td>
+<td><code>engine/models/nemotron_h/community.py, ops/profiles/_flashnext.env, ops/profiles/_flint.env</code> and 6 more</td>
+</tr>
+<tr>
+<td><code>QSE_PAGE_CACHE_KEEP</code></td>
+<td><code>ops/profiles/_flashnext.env, ops/serve.env, server/remote/overlay.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL</code></td>
+<td><code>ops/engines.sh, ops/profiles/_flashnext.env, ops/profiles/_flint.env</code> and 6 more</td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_AUTO_N</code></td>
+<td><code>server/app.py, server/slots.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_BATCH</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_BUSY_WAIT_MS</code></td>
+<td><code>server/slots.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_CUT</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_DRAFT</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_DRAFT_ROWS</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_FLOOR_GB</code></td>
+<td><code>engine/kvpool.py, ops/profiles/_flashnext.env, ops/serve.env</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_LAYER_YIELD</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_MAX_ROWS</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_ROW_CAP</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_SWITCH_MS</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_TIMING</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PARALLEL_WINDOW_ROWS</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PEAK_STRICT</code></td>
+<td><code>engine/cache.py, server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PEER</code></td>
+<td><code>ops/engines.sh, ops/start.sh, ops/stop.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_PEER_DISK_CACHE</code></td>
+<td><code>ops/engines.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_PEER_ENGINE_FLAGS</code></td>
+<td><code>ops/engines.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_PEER_FLOOR_GB</code></td>
+<td><code>ops/engines.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_PEER_HOST</code></td>
+<td><code>ops/engines.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_PEER_NEED_GB</code></td>
+<td><code>ops/engines.sh, ops/start.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_PEER_PORT</code></td>
+<td><code>ops/engines.sh, ops/start.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_PREFILL_BURST</code></td>
+<td><code>server/app.py, server/prefill_burst.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PREFILL_BURST_ASKING</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PREFILL_BURST_WAIT_S</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PRICE_TABLE</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_PROFILE_NAME</code></td>
+<td><code>ops/serve.env, ops/start.sh, server/remote/cli.py</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_PROFILE_OVERRIDE</code></td>
+<td><code>ops/serve.env, ops/use-profile.sh, server/setup/apply.py</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_RECLAIM_GRAPHS</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_REQ_PEAK</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ROLES_DYNAMIC</code></td>
+<td><code>ops/serve.env, server/rolemem.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ROLE_MAX_HOLD_S</code></td>
+<td><code>ops/serve.env, server/rolemem.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ROLE_RELOAD_MARGIN_GB</code></td>
+<td><code>ops/serve.env, server/rolemem.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ROLE_RELOAD_S</code></td>
+<td><code>ops/serve.env, server/rolemem.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ROLE_THRASH_S</code></td>
+<td><code>ops/serve.env, server/rolemem.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ROLE_TICK_FAKE</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ROLE_TICK_S</code></td>
+<td><code>server/rolemem.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ROLE_UNLOAD_LAYA</code></td>
+<td><code>ops/serve.env, server/app.py, server/rolemem.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ROUND_RUNNER</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_ROUND_WALK</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_BUSY_WORK</code></td>
+<td><code>ops/profiles/_flashnext.env, server/api/live.py, server/health_cache.py</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_COMMIT_MULTI</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_COUNTERS</code></td>
+<td><code>engine/models/flashnext/serving.py, server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_GC</code></td>
+<td><code>engine/cache.py, ops/profiles/_flashnext.env, server/app.py</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_GC_FULL_ROUNDS</code></td>
+<td><code>ops/profiles/_flashnext.env, server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_HOST_BLOCKS</code></td>
+<td><code>engine/models/flashnext/serving.py, server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_JOINT1</code></td>
+<td><code>engine/model.py, engine/models/qwen3_5/joint_graphs.py, server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_JOINT_PRICE</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_LANE_MARGIN</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_LANE_PLAIN</code></td>
+<td><code>engine/models/nemotron_h/serving.py, server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_LANE_PROBE</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_MTP_PACK</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_PIPE</code></td>
+<td><code>engine/models/flashnext/engine.py, server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_PRICED_CUT</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_PRICED_EXPLORE</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_ROWCAP</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_ROWCOPY</code></td>
+<td><code>engine/rowcopy.py, server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_SUPERVISED</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_RUNNER_VERDICT_WAIT_MS</code></td>
+<td><code>server/round_runner.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_SECRETS</code></td>
+<td><code>install.sh, ops/make-secrets.sh, ops/start.sh</code> and 3 more</td>
+</tr>
+<tr>
+<td><code>QSE_SESSION_S</code></td>
+<td><code>server/api/auth.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_SETUP_ENV</code></td>
+<td><code>ops/serve.env, server/setup/apply.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_SETUP_ENV_FILE</code></td>
+<td><code>ops/serve.env, server/remote/overlay.py, server/setup/doctor.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_SETUP_MODE</code></td>
+<td><code>ops/start.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_SIDE_GRAPHS</code></td>
+<td><code>ops/serve.env, server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_SIDE_MAX_LEN</code></td>
+<td><code>ops/profiles/_flashnext.env, ops/serve.env, server/app.py</code> and 2 more</td>
+</tr>
+<tr>
+<td><code>QSE_SIDE_RESIDENT_GB</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_SIDE_SLOT_CONST_GB</code></td>
+<td><code>ops/serve.env, server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_SSH_PORT</code></td>
+<td><code>ops/serve.env, server/pairing/hostkey.py, server/remote/overlay.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_STACK_SAMPLE</code></td>
+<td><code>server/app.py, server/stack_sampler.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_STATE_DIR</code></td>
+<td><code>ops/make-secrets.sh, ops/start.sh, server/setup/apply.py</code> and 2 more</td>
+</tr>
+<tr>
+<td><code>QSE_STATUS_FILE</code></td>
+<td><code>ops/engine_status.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_STATUS_HOST</code></td>
+<td><code>ops/engine_status.py, ops/hold.sh, ops/serve.env</code> and 1 more</td>
+</tr>
+<tr>
+<td><code>QSE_STATUS_KEEP</code></td>
+<td><code>ops/hold.sh, ops/stop.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_STATUS_PORT</code></td>
+<td><code>install.sh, ops/engine_status.py, ops/engines.sh</code> and 4 more</td>
+</tr>
+<tr>
+<td><code>QSE_STATUS_TREE</code></td>
+<td><code>install.sh, ops/engine_status.py, ops/hold.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_SUFFIX_RAW</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_TEST</code></td>
+<td><code>server/api/ledger.py, server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_USAGE_CONTEXT</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_USAGE_DEFAULT</code></td>
+<td><code>server/app.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_USAGE_LEDGER</code></td>
+<td><code>install.sh, ops/engines.sh, ops/serve.env</code> and 4 more</td>
+</tr>
+<tr>
+<td><code>QSE_VISION_ASKED</code></td>
+<td><code>ops/serve.env, ops/start.sh, server/remote/overlay.py</code></td>
+</tr>
+<tr>
+<td><code>QSE_WEIGHTS</code></td>
+<td><code>engine/models/flashnext/corrector.py, engine/models/flashnext/coupled.py, engine/models/flashnext/serving.py</code> and 20 more</td>
+</tr>
+<tr>
+<td><code>QSE_WEIGHTS_ALSO</code></td>
+<td><code>ops/profiles/_flashnext.env, ops/use-profile.sh</code></td>
+</tr>
+<tr>
+<td><code>QSE_WEIGHTS_DIR</code></td>
+<td><code>engine/models/nemotron_h/community.py, engine/models/qwen3_5/community.py, ops/profiles/_exl3.env</code> and 12 more</td>
+</tr>
+<tr>
+<td><code>QSE_WEIGHTS_FILES</code></td>
+<td><code>engine/models/nemotron_h/community.py, engine/models/qwen3_5/community.py, ops/profiles/_exl3.env</code> and 9 more</td>
+</tr>
+<tr>
+<td><code>QSE_WEIGHTS_GB</code></td>
+<td><code>engine/models/nemotron_h/community.py, engine/models/qwen3_5/community.py, ops/profiles/exl3-2.5.env</code> and 35 more</td>
+</tr>
+<tr>
+<td><code>QSE_WEIGHTS_HF</code></td>
+<td><code>engine/models/nemotron_h/community.py, engine/models/qwen3_5/community.py, ops/profiles/_exl3.env</code> and 27 more</td>
+</tr>
+<tr>
+<td><code>QSE_WEIGHTS_REVISION</code></td>
+<td><code>engine/models/nemotron_h/community.py, engine/models/qwen3_5/community.py, ops/profiles/_flashnext.env</code> and 30 more</td>
+</tr>
+<tr>
+<td><code>QSE_WREN_MODEL</code></td>
+<td><code>server/setup/wren.py</code></td>
+</tr>
+</tbody>
+</table>
+<!-- /generated -->
+
+<p>The most used: <code>QSE_CONDUCTOR_CONFIG</code>, <code>QSE_USAGE_LEDGER</code>, <code>QSE_DISK_CACHE</code> and <code>QSE_BACKENDS</code> name the conductor's directory, the ledger, the disk tier's directory and the proxy's config database; <code>ops/start.sh</code> passes them to the service only, so a benchmark server started with <code>serve.env</code> exported never writes them. <code>QSE_DASHBOARD_LOGIN</code> turns the dashboard login on. <code>QSE_ADMIN_TOKEN</code> and <code>QSE_METRICS_TOKEN</code> live in <code>secrets.env</code>, which <code>ops/make-secrets.sh</code> writes.</p>
+<p>The wait for memory (<a href="../../server/">Waiting for memory</a>) reads these, with their code defaults: <code>QSE_MEM_WAIT_S</code> (10,800) is the longest wait in seconds of a streamed request, or of one that sends <code>wait_for_memory: true</code>; <code>QSE_PARALLEL_FLOOR_GB</code> (15) is the floor the admission keeps MemAvailable at, the same as <code>--parallel-floor-gb</code>; <code>QSE_KV_HARD_FLOOR_GB</code> (10) is the floor the KV pool's commits keep, the same as <code>--kv-hard-floor-gb</code>; <code>QSE_GUARD_MARGIN_GB</code> (5) is the margin each floor holds under the largest step the engine takes between two checks; <code>QSE_KV_ADMIT_ROWS</code> (8,192) is the part of <code>max_tokens</code> the admission reserves KV pages for, 0 for all of it; <code>QSE_KV_RECOMPUTE</code> (<code>on</code>) lets a lane the pool refuses give way and go on later; <code>QSE_PEAK_STRICT</code> (0) set to 1 makes a lone request that the memory gate refuses wait too.</p>
+<h2 id="tandem-variables">TANDEM variables<a class="headerlink" href="#tandem-variables" title="Permanent link">&para;</a></h2>
+<!-- generated: tandem-vars by tools/gen_reference.py; do not edit by hand -->
+
+<h3 id="tandem_-variables-the-engines-code-reads-the-installer-the-service-scripts-and-the-server">TANDEM_* variables the engine's code reads: the installer, the service scripts and the server<a class="headerlink" href="#tandem_-variables-the-engines-code-reads-the-installer-the-service-scripts-and-the-server" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Read in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TANDEM_ADMIN_TOKEN</code></td>
+<td>read in <code>server/api/auth.py, server/setup/cli.py</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_DIR</code></td>
+<td>read in <code>install.sh, server/setup/cli.py</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_HEALTH_TIMEOUT</code></td>
+<td>read in <code>install.sh</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_HOST</code></td>
+<td>read in <code>install.sh</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_LINK_KEY</code></td>
+<td>read in <code>ops/engines.sh, ops/serve.env</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_LINK_LISTEN</code></td>
+<td>read in <code>ops/engines.sh, ops/serve.env</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_LINK_PEER</code></td>
+<td>read in <code>ops/engines.sh, ops/serve.env</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_MIN_FREE_GIB</code></td>
+<td>read in <code>install.sh</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_MODEL_NAME</code></td>
+<td>read in <code>install.sh</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_NODE_BIN</code></td>
+<td>read in <code>install.sh</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_NODE_PORT</code></td>
+<td>read in <code>install.sh, ops/start.sh</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_PORT</code></td>
+<td>read in <code>install.sh</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_REF</code></td>
+<td>read in <code>install.sh</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_REPO</code></td>
+<td>read in <code>install.sh</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_SKIP_MEMCHECK</code></td>
+<td>read in <code>install.sh, server/remote/lifecycle.py</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_STAGE</code></td>
+<td>read in <code>install.sh, ops/engines.sh</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_STAGE_CACHES</code></td>
+<td>read in <code>ops/engines.sh, ops/serve.env</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_STAGE_CACHE_DIR</code></td>
+<td>read in <code>ops/engines.sh, ops/serve.env</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_STAGE_CACHE_GB</code></td>
+<td>read in <code>ops/engines.sh, ops/serve.env</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_STAGE_SNAPSHOTS_GB</code></td>
+<td>read in <code>ops/engines.sh, ops/serve.env</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_TRUSTED_PROXY</code></td>
+<td>read in <code>server/api/auth.py, server/app.py</code></td>
+</tr>
+<tr>
+<td><code>TANDEM_URL</code></td>
+<td>read in <code>server/setup/cli.py</code></td>
+</tr>
+</tbody>
+</table>
+<!-- /generated -->
+
+<h2 id="the-conductors-documents">The conductor's documents<a class="headerlink" href="#the-conductors-documents" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>document</th>
+<th>what it holds</th>
+<th>edited on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>profiles</code></td>
+<td>one document per profile: mode, decisions, task modes and caps, thinking, <code>ui</code>, outcomes, library, memory, shadow</td>
+<td>Profiles</td>
+</tr>
+<tr>
+<td><code>router</code></td>
+<td>the classes and their policy, the classifier stages and thresholds, the structural rules, side shapes, outcomes, library</td>
+<td>Routing</td>
+</tr>
+<tr>
+<td><code>packages</code></td>
+<td>every package: source, switch, limits, flags</td>
+<td>Packages</td>
+</tr>
+<tr>
+<td><code>roles</code></td>
+<td>every role's contract</td>
+<td>Profiles, Roles</td>
+</tr>
+<tr>
+<td><code>settings</code></td>
+<td>the default profile, transcripts, the disk tier, memory notes and the writer</td>
+<td>Memory, Profiles</td>
+</tr>
+<tr>
+<td><code>deciders</code></td>
+<td>the decision models, their questions, Laya for scripts</td>
+<td>Deciders</td>
+</tr>
+<tr>
+<td><code>residency</code></td>
+<td>the floor, the margin, the settle time, the load order, the claims</td>
+<td>Profiles, Residency</td>
+</tr>
+<tr>
+<td><code>monitor</code></td>
+<td>the session monitor's policy (version 0 is <code>ops/supervisor.yaml</code>)</td>
+<td>Monitor</td>
+</tr>
+<tr>
+<td><code>harness</code></td>
+<td>the harness's settings per backend, behind the proxy</td>
+<td>Backends</td>
+</tr>
+</tbody>
+</table>
+<p><em>The conductor's versioned documents.</em></p>
+<p>A document is JSON, checked against the conductor's schema (<code>GET /v1/conductor/meta</code> serves it, and TandemApp's <code>contracts/conductor-v1/</code> holds a copy). A version stored by an older release loads with defaults for every field it lacks, and the journal says so once.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../commands/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Reference: commands">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Reference: commands
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../http/" class="md-footer__link md-footer__link--next" aria-label="Next: Reference: HTTP">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Reference: HTTP
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      The documentation is CC BY 4.0. The code has its own license.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>
