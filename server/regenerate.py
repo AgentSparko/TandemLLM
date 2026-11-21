@@ -53,6 +53,16 @@ WHAT NEVER CHANGES.
 OTHER CLIENTS. `X-Tandem-Regenerate: 1` asks for a regenerate outright; `X-Tandem-Regenerate: 0`
 turns the detection off for that request (a client that re-sends one prompt on purpose and wants
 the greedy answer each time). Off for the server: `--regenerate off` (`QWEN38_REGENERATE=off`).
+
+DEGENERATE RETRIES (2026-11-21). An agent client that gets a reasoning-only answer (finish=stop,
+no visible content, no tool call) retries by re-sending the SAME conversation, whose tail is a
+tool result — `signature` cannot match it (the rule above needs a user tail), and greedy replay
+returns the identical degenerate continuation forever (observed: three byte-identical retries,
+request chatcmpl-6d21296b94bb48f5b802af7d). So a completion that wrote reasoning and nothing
+else is remembered by the conversation's retry signature (a user OR tool tail), and the next
+request with that signature samples like a regenerate. A request that answers clears the mark:
+a deliberate re-send after a good answer stays greedy, and `X-Tandem-Regenerate: 0` never
+matches it either.
 """
 
 from __future__ import annotations
@@ -100,6 +110,31 @@ def signature(messages) -> str | None:
     return hashlib.sha256(raw.encode("utf-8", "surrogatepass")).hexdigest()
 
 
+def retry_signature(messages) -> str | None:
+    """The fingerprint for the degenerate-retry match: the same canonical hash as `signature`,
+    but the tail may be the user's OR a tool result — an agent loop retries on its tool round.
+    None when there are no messages or the tail is an assistant row (a Continue is not a retry)."""
+    if not isinstance(messages, list):
+        return None
+    conv = [_norm(m) for m in messages if isinstance(m, dict) and m.get("role") not in
+            ("system", "developer")]
+    if not conv or conv[-1].get("role") not in ("user", "tool"):
+        return None
+    raw = json.dumps(conv, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8", "surrogatepass")).hexdigest()
+
+
+def degenerate_completion(finish_reason, tool_calls, reasoning_tokens,
+                          completion_tokens) -> bool:
+    """A completion that thought and wrote nothing the client can use: stop, no tool call,
+    reasoning tokens but no visible content (the closing/EOS token beside the block is not
+    content). This is what a greedy replay of the same conversation returns forever, so the
+    next identical request must sample instead."""
+    return (finish_reason == "stop" and not tool_calls
+            and int(reasoning_tokens or 0) > 0
+            and int(completion_tokens or 0) - int(reasoning_tokens or 0) <= 2)
+
+
 def head_key(messages) -> str:
     """The fallback session key: the conversation up to and including its first user message."""
     head = []
@@ -137,10 +172,11 @@ def client_sampling(body: dict) -> bool:
 
 
 class Decision:
-    __slots__ = ("key", "sig", "how", "of", "client")
+    __slots__ = ("key", "sig", "rsig", "how", "of", "client")
 
-    def __init__(self, key, sig, how=None, of=None, client=False):
-        self.key, self.sig, self.how, self.of, self.client = key, sig, how, of, client
+    def __init__(self, key, sig, how=None, of=None, client=False, rsig=None):
+        self.key, self.sig, self.rsig = key, sig, rsig
+        self.how, self.of, self.client = how, of, client
 
     @property
     def sample(self) -> bool:
@@ -165,8 +201,12 @@ class Regenerates:
         self.temperature, self.top_p, self.top_k = float(temperature), float(top_p), int(top_k)
         self.sessions_max, self.per, self.ttl_s, self.clock = sessions, per, ttl_s, clock
         self._s: collections.OrderedDict = collections.OrderedDict()
+        # per session: conversations whose last completion was reasoning-only, waiting for the
+        # client's identical re-send to sample instead of replaying the degenerate continuation
+        self._d: collections.OrderedDict = collections.OrderedDict()
         self._lock = threading.Lock()
-        self.counts = {"detected": 0, "header": 0, "client_params": 0, "answered": 0}
+        self.counts = {"detected": 0, "header": 0, "client_params": 0, "answered": 0,
+                       "degenerate": 0}
 
     def report(self) -> dict:
         with self._lock:
@@ -181,30 +221,50 @@ class Regenerates:
         msgs = body.get("messages")
         sig = signature(msgs)
         key = session_of(body, headers)
-        d = Decision(key, sig, client=client_sampling(body))
+        d = Decision(key, sig, client=client_sampling(body), rsig=retry_signature(msgs))
         if hv in ("0", "false", "off", "no"):
             d.sig = None                     # not detected, and not remembered either
+            d.rsig = None                    # ... nor as a degenerate retry
             return d
         if hv in ("1", "true", "on", "yes"):
             d.how = "header"
-        elif sig is not None:
+        elif sig is not None or d.rsig is not None:
             now = self.clock()
             with self._lock:
                 sess = self._s.get(key)
-                hit = sess.get(sig) if sess is not None else None
+                hit = sess.get(sig) if (sess is not None and sig is not None) else None
                 if hit is not None and now - hit[0] <= self.ttl_s:
                     d.how, d.of = "detected", hit[1]
+                elif d.rsig is not None:
+                    # the same conversation the last request degenerated on: sample, or greedy
+                    # replays the identical reasoning-only continuation (the retry is byte-
+                    # identical by construction -- an agent re-sends its tool round verbatim)
+                    dsess = self._d.get(key)
+                    dhit = dsess.get(d.rsig) if dsess is not None else None
+                    if dhit is not None and now - dhit[0] <= self.ttl_s:
+                        d.how, d.of = "degenerate", dhit[1]
         if d.how is not None:
             with self._lock:
                 self.counts["client_params" if d.client else d.how] += 1
         return d
 
     def answered(self, d: Decision | None, request_id: str) -> None:
-        """The request produced an answer: its conversation counts as answered from now on."""
-        if d is None or d.sig is None:
+        """The request produced an answer: its conversation counts as answered from now on, and
+        any degenerate-retry mark on the same conversation is cleared — a deliberate re-send
+        after a good answer is greedy again, only a re-send after a reasoning-only answer
+        samples."""
+        if d is None or (d.sig is None and d.rsig is None):
             return
         now = self.clock()
         with self._lock:
+            if d.rsig is not None:
+                dsess = self._d.get(d.key)
+                if dsess is not None:
+                    dsess.pop(d.rsig, None)
+                    if not dsess:
+                        del self._d[d.key]
+            if d.sig is None:
+                return
             sess = self._s.pop(d.key, None) or collections.OrderedDict()
             sess.pop(d.sig, None)
             sess[d.sig] = (now, request_id)
@@ -214,6 +274,21 @@ class Regenerates:
             while len(self._s) > self.sessions_max:
                 self._s.popitem(last=False)
             self.counts["answered"] += 1
+
+    def degenerate(self, d: Decision | None, request_id: str) -> None:
+        """The request wrote reasoning and nothing usable: remember its retry signature so the
+        client's identical re-send samples instead of replaying the degenerate continuation."""
+        if d is None or d.rsig is None:
+            return
+        now = self.clock()
+        with self._lock:
+            sess = self._d.pop(d.key, None) or collections.OrderedDict()
+            sess[d.rsig] = (now, request_id)
+            while len(sess) > self.per:
+                sess.popitem(last=False)
+            self._d[d.key] = sess
+            while len(self._d) > self.sessions_max:
+                self._d.popitem(last=False)
 
     def sampling(self) -> dict:
         """The regenerate's sampling parameters, a fresh seed each call."""

@@ -10116,10 +10116,15 @@ class Handler(BaseHTTPRequestHandler):
             if rec.finish_reason is None and rec.status in (429, 503):
                 rec.finish_reason = "refused"
             rec.end()
-            if rec.regen is not None and STATE.get("regenerate") is not None and \
-                    regenerate_mod.answered_ok(rec.status, rec.finish_reason,
-                                               rec.completion_tokens):
-                STATE["regenerate"].answered(rec.regen, rec.request_id)   # SRV-241
+            if rec.regen is not None and STATE.get("regenerate") is not None:
+                if regenerate_mod.answered_ok(rec.status, rec.finish_reason,
+                                              rec.completion_tokens):
+                    STATE["regenerate"].answered(rec.regen, rec.request_id)   # SRV-241
+                if (rec.status or 0) < 400 and regenerate_mod.degenerate_completion(
+                        rec.finish_reason, rec.tool_calls, rec.reasoning_tokens,
+                        rec.completion_tokens):
+                    # reasoning-only: the agent's byte-identical retry must sample, not replay
+                    STATE["regenerate"].degenerate(rec.regen, rec.request_id)
             live_registry().finish(rec)
             if rec.sup is not None:
                 EXT.ask("turn_ended", rec.sup)     # the watch's idle time starts here
