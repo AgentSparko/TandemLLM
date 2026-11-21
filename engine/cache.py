@@ -133,19 +133,26 @@ def extend_hashes(hashes: list[int], tokens) -> list[int]:
 class _PrefixHashMemo:
     """`prefix_hashes` for the prompt of each prefill, reusing the previous prompt's list over the
     head the two share: a growing conversation hashes only its new tokens (a full pass is ~20 ms
-    at 190k tokens). The list returned is the one a full pass computes."""
+    at 190k tokens). The list returned is the one a full pass computes.
+
+    One memo, every slot: two prefills hashing at once interleave between reading the keys and
+    reading the hashes, and the first gets a list sliced from another prompt's hashes — too short
+    mid-prefill, or wrong hashes under these keys. The lock answers one prefill at a time; it
+    costs an uncontended acquire on a path that then runs a whole prefill."""
 
     def __init__(self):
         self.keys: list = []
         self.hashes: list[int] = prefix_hashes([])
+        self._lk = threading.Lock()
 
     def __call__(self, keys) -> list[int]:
-        keys = list(keys)
-        c = _common_prefix(keys, self.keys)
-        h = self.hashes[:c + 1]
-        extend_hashes(h, keys[c:])
-        self.keys, self.hashes = keys, h
-        return h
+        with self._lk:
+            keys = list(keys)
+            c = _common_prefix(keys, self.keys)
+            h = self.hashes[:c + 1]
+            extend_hashes(h, keys[c:])
+            self.keys, self.hashes = keys, h
+            return h
 
 
 _hash_memo = _PrefixHashMemo()
