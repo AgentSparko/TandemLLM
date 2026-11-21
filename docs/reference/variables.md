@@ -359,6 +359,8 @@ TandemEngine reads four families of settings. Engine switches are `QWEN38_*` var
 | `QWEN38_GRAPH_SHARE_FROM` | `2` | `engine/verify_graph.py` |
 | `QWEN38_GRAPH_SHARE_OUT` | `0` | `engine/verify_graph.py` |
 | `QWEN38_HEAD_GEMM` | `none` | `tools/head_gemv.py` |
+| `QWEN38_HOME_WAIT_MAX_S` | `600` | `server/app.py` |
+| `QWEN38_HOP_READ_TOK_S` | `500` | `server/app.py` |
 | `QWEN38_HOST_ASYNC` | `0` | `engine/model.py` |
 | `QWEN38_HOST_WALK` | `0` | `1` · `engine/drafters/dflash2.py` |
 | `QWEN38_JOINT_ATTN_GROUP` | `1` | `engine/models/qwen3_5/attn_group.py` |
