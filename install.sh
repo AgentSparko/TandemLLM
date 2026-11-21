@@ -1181,7 +1181,9 @@ else
         # and what the setup guide's apply job runs beside them (server/setup/apply.py); roles.sh is
         # what start.sh runs after /health, watchdog.sh the cron line of docs/operations.md, hold.sh
         # a box-alone command (OPS-161). No chatd launcher: chatd is TandemApp's, run by its
-        # TandemNode (ENG-413 WP7). Not copied: gate.sh is the release gate of a development checkout.
+        # TandemNode (ENG-413 WP7). Not copied: gate.sh is the release gate of a development
+        # checkout, and engine-exec.sh is a unit supervisor's reference -- a box's unit is its
+        # own file, like ops/qwen38-engine.service.
         # tests/test_install_ops_copy.py keeps this list and their "$HERE/" calls in step.
         for s in start.sh stop.sh engines.sh use-profile.sh make-secrets.sh engine_status.py \
                  fetch_weights.py roles.sh watchdog.sh hold.sh; do install -m 755 "$SRC/ops/$s" "$RUN/ops/$s"; done
